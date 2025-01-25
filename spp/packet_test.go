@@ -2,6 +2,7 @@ package spp_test
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ravisuhag/astro/spp"
 	"testing"
 )
@@ -35,6 +36,7 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 	}
 
 	decoded, err := spp.Decode(encoded)
+	fmt.Print(decoded.Humanize())
 	if err != nil {
 		t.Fatalf("Failed to decode space packet: %v", err)
 	}

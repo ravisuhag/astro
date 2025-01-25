@@ -3,6 +3,8 @@ package spp
 import (
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 )
 
 /*
@@ -201,4 +203,27 @@ func ReceivePacket(reader io.Reader) (*SpacePacket, error) {
 	}
 
 	return Decode(buffer[:n])
+}
+
+// Humanize generates a human-readable representation of the SpacePacket.
+func (sp *SpacePacket) Humanize() string {
+	var builder strings.Builder
+	builder.WriteString("SpacePacket Information:\n")
+	builder.WriteString("Primary Header:\n")
+	builder.WriteString(sp.PrimaryHeader.Humanize())
+
+	if sp.SecondaryHeader != nil {
+		builder.WriteString("\nSecondary Header:\n")
+		builder.WriteString(sp.SecondaryHeader.Humanize())
+	}
+
+	builder.WriteString("\nUser Data Length: ")
+	builder.WriteString(strconv.Itoa(len(sp.UserData)))
+
+	if sp.ErrorControl != nil {
+		builder.WriteString("\nError Control: ")
+		builder.WriteString(strconv.Itoa(int(*sp.ErrorControl)))
+	}
+
+	return builder.String()
 }

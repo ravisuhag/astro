@@ -4,36 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"strconv"
+	"strings"
 )
-
-/*
-the Space Packet Protocol (SPP):
-
-+----------------+----------------+----------------+----------------+
-| Version (3b)  | Type (1b)      | SecondaryHeader| APID (11b)     |
-|               |                | Flag (1b)      |                |
-+----------------+----------------+----------------+----------------+
-| Sequence Flags| Sequence Count (14b)                            |
-| (2b)          |                                                 |
-+----------------+----------------+----------------+----------------+
-| Packet Length (16b)                                             |
-+----------------+----------------+----------------+----------------+
-| Secondary Header (Optional, mission-specific)                  |
-|                                                                |
-+----------------+----------------+----------------+----------------+
-| User Data Field (Variable Length)                              |
-|                                                                |
-|                                                                |
-+----------------+----------------+----------------+----------------+
-| Error Control Field (Optional, 16b CRC)                       |
-+----------------+----------------+----------------+----------------+
-
-Legend:
-- b = bits
-- APID = Application Process Identifier
-- Sequence Flags: 00 (continuation), 01 (start), 10 (end), 11 (standalone)
-- Packet Length: Total length of the packet minus the primary header (6 bytes)
-*/
 
 // PrimaryHeader represents the mandatory header section of a space packet.
 type PrimaryHeader struct {
@@ -98,6 +71,19 @@ func (ph *PrimaryHeader) Decode(data []byte) error {
 	ph.PacketLength = uint16(data[4])<<8 | uint16(data[5])
 
 	return nil
+}
+
+// Humanize generates a human-readable representation of the PrimaryHeader.
+func (ph *PrimaryHeader) Humanize() string {
+	return strings.Join([]string{
+		"  Version: " + strconv.Itoa(int(ph.Version)),
+		"  Type: " + strconv.Itoa(int(ph.Type)),
+		"  Secondary Header Flag: " + strconv.Itoa(int(ph.SecondaryHeaderFlag)),
+		"  APID: " + strconv.Itoa(int(ph.APID)),
+		"  Sequence Flags: " + strconv.Itoa(int(ph.SequenceFlags)),
+		"  Sequence Count: " + strconv.Itoa(int(ph.SequenceCount)),
+		"  Packet Length: " + strconv.Itoa(int(ph.PacketLength)),
+	}, "\n")
 }
 
 // SecondaryHeader represents the optional customizable secondary header of a space packet.
@@ -193,4 +179,12 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 		}
 	}
 	return nil
+}
+
+// Humanize generates a human-readable representation of the SecondaryHeader.
+func (sh *SecondaryHeader) Humanize() string {
+	return strings.Join([]string{
+		"  Timestamp: " + strconv.FormatUint(sh.Timestamp, 10),
+		"  Other Fields: " + mapToString(sh.OtherFields),
+	}, "\n")
 }
