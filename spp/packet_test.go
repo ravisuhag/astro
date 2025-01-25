@@ -2,7 +2,6 @@ package spp_test
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ravisuhag/astro/spp"
 	"testing"
 )
@@ -36,7 +35,6 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 	}
 
 	decoded, err := spp.Decode(encoded)
-	fmt.Print(decoded.Humanize())
 	if err != nil {
 		t.Fatalf("Failed to decode space packet: %v", err)
 	}
@@ -77,32 +75,5 @@ func TestSpacePacketWithErrorControl(t *testing.T) {
 
 	if packet.ErrorControl == nil || *packet.ErrorControl != crc {
 		t.Errorf("Error control does not match. Got %v, want %v", packet.ErrorControl, crc)
-	}
-}
-
-func TestSendReceivePacket(t *testing.T) {
-	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
-	if err != nil {
-		t.Fatalf("Failed to create new space packet: %v", err)
-	}
-
-	var buf bytes.Buffer
-	err = spp.SendPacket(packet, &buf)
-	if err != nil {
-		t.Fatalf("Failed to send space packet: %v", err)
-	}
-
-	receivedPacket, err := spp.ReceivePacket(&buf)
-	if err != nil {
-		t.Fatalf("Failed to receive space packet: %v", err)
-	}
-
-	if packet.PrimaryHeader != receivedPacket.PrimaryHeader {
-		t.Errorf("Primary header does not match. Got %+v, want %+v", receivedPacket.PrimaryHeader, packet.PrimaryHeader)
-	}
-
-	if !bytes.Equal(packet.UserData, receivedPacket.UserData) {
-		t.Errorf("User data does not match. Got %v, want %v", receivedPacket.UserData, packet.UserData)
 	}
 }

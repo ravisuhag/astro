@@ -2,7 +2,6 @@ package spp
 
 import (
 	"errors"
-	"io"
 	"strconv"
 	"strings"
 )
@@ -58,7 +57,7 @@ func NewSpacePacket(apid uint16, data []byte, options ...PacketOption) (*SpacePa
 		APID:                apid,
 		SequenceFlags:       3, // Default sequence flag (standalone packet)
 		SequenceCount:       0,
-		PacketLength:        uint16(len(data)),
+		PacketLength:        uint16(len(data)) - 1, // Subtract 1 to represent the packet length in a 0-based manner
 	}
 
 	// Initialize SpacePacket
@@ -162,10 +161,9 @@ func Decode(data []byte) (*SpacePacket, error) {
 	// Extract user data
 	userDataEnd := len(data)
 	if primaryHeader.PacketLength+6 < uint16(len(data)) {
-		userDataEnd = int(primaryHeader.PacketLength) + 6
+		userDataEnd = int(primaryHeader.PacketLength) + 1 + 6
 	}
 	userData := data[offset:userDataEnd]
-
 	offset += len(userData)
 
 	// Parse error control if present
@@ -183,28 +181,6 @@ func Decode(data []byte) (*SpacePacket, error) {
 	}, nil
 }
 
-// SendPacket writes a SpacePacket to an io.Writer.
-func SendPacket(packet *SpacePacket, writer io.Writer) error {
-	data, err := packet.Encode()
-	if err != nil {
-		return err
-	}
-
-	_, err = writer.Write(data)
-	return err
-}
-
-// ReceivePacket reads a SpacePacket from an io.Reader.
-func ReceivePacket(reader io.Reader) (*SpacePacket, error) {
-	buffer := make([]byte, 65542) // Maximum possible packet size
-	n, err := reader.Read(buffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return Decode(buffer[:n])
-}
-
 // Humanize generates a human-readable representation of the SpacePacket.
 func (sp *SpacePacket) Humanize() string {
 	var builder strings.Builder
@@ -216,9 +192,6 @@ func (sp *SpacePacket) Humanize() string {
 		builder.WriteString("\nSecondary Header:\n")
 		builder.WriteString(sp.SecondaryHeader.Humanize())
 	}
-
-	builder.WriteString("\nUser Data Length: ")
-	builder.WriteString(strconv.Itoa(len(sp.UserData)))
 
 	if sp.ErrorControl != nil {
 		builder.WriteString("\nError Control: ")
