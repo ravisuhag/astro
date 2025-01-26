@@ -73,6 +73,11 @@ func NewSpacePacket(apid uint16, data []byte, options ...PacketOption) (*SpacePa
 		}
 	}
 
+	// Validate the packet
+	if err := packet.Validate(); err != nil {
+		return nil, err
+	}
+
 	return packet, nil
 }
 
@@ -173,12 +178,51 @@ func Decode(data []byte) (*SpacePacket, error) {
 		errorControl = &crc
 	}
 
-	return &SpacePacket{
+	packet := &SpacePacket{
 		PrimaryHeader:   primaryHeader,
 		SecondaryHeader: secondaryHeader,
 		UserData:        userData,
 		ErrorControl:    errorControl,
-	}, nil
+	}
+
+	// Validate the packet
+	if err := packet.Validate(); err != nil {
+		return nil, err
+	}
+
+	return packet, nil
+}
+
+// Validate checks the integrity and correctness of the SpacePacket.
+func (sp *SpacePacket) Validate() error {
+	// Validate primary header
+	if err := sp.PrimaryHeader.Validate(); err != nil {
+		return err
+	}
+
+	// Validate secondary header if present
+	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
+		if sp.SecondaryHeader == nil {
+			return errors.New("secondary header flag is set but secondary header is missing")
+		}
+		if err := sp.SecondaryHeader.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate user data length
+	expectedLength := int(sp.PrimaryHeader.PacketLength) + 1
+	actualLength := len(sp.UserData)
+	if actualLength != expectedLength {
+		return errors.New("user data length does not match packet length")
+	}
+
+	// Validate error control field if present
+	if sp.ErrorControl != nil {
+		// TODO: Add error control validation logic
+	}
+
+	return nil
 }
 
 // Humanize generates a human-readable representation of the SpacePacket.

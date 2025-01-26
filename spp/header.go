@@ -21,14 +21,8 @@ type PrimaryHeader struct {
 
 // Encode serializes the PrimaryHeader into a 6-byte array.
 func (ph *PrimaryHeader) Encode() ([]byte, error) {
-	if ph.SecondaryHeaderFlag > 1 {
-		return nil, errors.New("SecondaryHeaderFlag must be 0 or 1")
-	}
-	if ph.APID > 0x07FF {
-		return nil, errors.New("APID exceeds 11 bits")
-	}
-	if ph.SequenceCount > 0x3FFF {
-		return nil, errors.New("SequenceCount exceeds 14 bits")
+	if err := ph.Validate(); err != nil {
+		return nil, err
 	}
 
 	buf := make([]byte, 6)
@@ -70,6 +64,30 @@ func (ph *PrimaryHeader) Decode(data []byte) error {
 	// Decode the PacketLength (2 bytes)
 	ph.PacketLength = uint16(data[4])<<8 | uint16(data[5])
 
+	return ph.Validate()
+}
+
+// Validate method for PrimaryHeader
+func (ph *PrimaryHeader) Validate() error {
+	if ph.Version > 7 {
+		return errors.New("invalid Version: must be in range 0-7 (3 bits)")
+	}
+	if ph.Type > 1 {
+		return errors.New("invalid Type: must be 0 or 1 (1 bit)")
+	}
+	if ph.SecondaryHeaderFlag > 1 {
+		return errors.New("invalid SecondaryHeaderFlag: must be 0 or 1 (1 bit)")
+	}
+	if ph.APID > 2047 {
+		return errors.New("invalid APID: must be in range 0-2047 (11 bits)")
+	}
+	if ph.SequenceFlags > 3 {
+		return errors.New("invalid SequenceFlags: must be in range 0-3 (2 bits)")
+	}
+	if ph.SequenceCount > 16383 {
+		return errors.New("invalid SequenceCount: must be in range 0-16383 (14 bits)")
+	}
+	// PacketLength is already a uint16, no need for further validation
 	return nil
 }
 
@@ -94,6 +112,9 @@ type SecondaryHeader struct {
 
 // Encode serializes the SecondaryHeader into a byte slice.
 func (sh *SecondaryHeader) Encode() ([]byte, error) {
+	if err := sh.Validate(); err != nil {
+		return nil, err
+	}
 	buf := new(bytes.Buffer)
 
 	// Encode Timestamp
@@ -178,6 +199,16 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 			return errors.New("unsupported field value type")
 		}
 	}
+	return sh.Validate()
+}
+
+// Validate method for SecondaryHeader
+func (sh *SecondaryHeader) Validate() error {
+	// Example validation: ensure timestamp is not zero
+	if sh.Timestamp == 0 {
+		return errors.New("invalid Timestamp: cannot be zero")
+	}
+	// Add more secondary header validation logic if needed
 	return nil
 }
 
