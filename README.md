@@ -32,25 +32,27 @@ progress on GitHub.
 ## Roadmap
 Implementation of all CCSDS protocols, including:
 
-- [ ] [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) - Lossless Data Compression
-- [ ] [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) - Image Data Compression
-- [ ] [CCSDS 122.1-B-1](https://public.ccsds.org/Pubs/122x1b1e1.pdf) -	Spectral Preprocessing Transform for Multispectral and Hyperspectral Image Compression
-- [ ] [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) - Low-Complexity Lossless and Near-Lossless Multispectral and Hyperspectral Image Compression
-- [ ] [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) - Robust Compression of Fixed-Length Housekeeping Data
-- [ ] [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) - TM Synchronization and Channel Coding
-- [ ] [CCSDS 131.2-B-2](https://public.ccsds.org/Pubs/131x2b2.pdf) - Flexible Advanced Coding and Modulation Scheme for High Rate Telemetry Applications
-- [ ] [CCSDS 131.3-B-2](https://public.ccsds.org/Pubs/131x3b2e1.pdf) - CCSDS Space Link Protocols over ETSI DVB-S2 Standard
-- [ ] [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) - TM Space Data Link Protocol
-- [ ] [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) - Space Packet Protocol
-- [ ] [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) - Encapsulation Packet Protocol
-- [ ] [CCSDS 141.0-B-1](https://public.ccsds.org/Pubs/141x0b1.pdf) - Optical Communications Physical Layer
-- [ ] [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) - Optical Communications Coding and Synchronization
-- [ ] [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) - Proximity-1 Space Link Protocol-Data Link Layer
-- [ ] [CCSDS 211.1-B-4](https://public.ccsds.org/Pubs/211x1b4e1.pdf) - Proximity-1 Space Link Protocol--Physical Layer
-- [ ] [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) - Proximity-1 Space Link Protocol--Coding and Synchronization Sublayer
-- [ ] [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) - TC Synchronization and Channel Coding
-- [ ] [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) - TC Space Data Link Protocol
-- [ ] [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) - Time Code Formats
+| Protocol                                                                                 | Status |
+|------------------------------------------------------------------------------------------|:------:|
+| [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) - Lossless Data Compression |        |
+| [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) - Image Data Compression
+| [CCSDS 122.1-B-1](https://public.ccsds.org/Pubs/122x1b1e1.pdf) -	Spectral Preprocessing Transform for Multispectral and Hyperspectral Image Compression
+| [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) - Low-Complexity Lossless and Near-Lossless Multispectral and Hyperspectral Image Compression
+| [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) - Robust Compression of Fixed-Length Housekeeping Data
+| [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) - TM Synchronization and Channel Coding
+| [CCSDS 131.2-B-2](https://public.ccsds.org/Pubs/131x2b2.pdf) - Flexible Advanced Coding and Modulation Scheme for High Rate Telemetry Applications
+| [CCSDS 131.3-B-2](https://public.ccsds.org/Pubs/131x3b2e1.pdf) - CCSDS Space Link Protocols over ETSI DVB-S2 Standard
+| [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) - TM Space Data Link Protocol
+| [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) - Space Packet Protocol |   ✅    |
+| [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) - Encapsulation Packet Protocol
+| [CCSDS 141.0-B-1](https://public.ccsds.org/Pubs/141x0b1.pdf) - Optical Communications Physical Layer
+| [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) - Optical Communications Coding and Synchronization
+| [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) - Proximity-1 Space Link Protocol-Data Link Layer
+| [CCSDS 211.1-B-4](https://public.ccsds.org/Pubs/211x1b4e1.pdf) - Proximity-1 Space Link Protocol--Physical Layer
+| [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) - Proximity-1 Space Link Protocol--Coding and Synchronization Sublayer
+| [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) - TC Synchronization and Channel Coding
+| [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) - TC Space Data Link Protocol
+| [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) - Time Code Formats
 
 ## License
 
