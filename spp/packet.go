@@ -217,11 +217,6 @@ func (sp *SpacePacket) Validate() error {
 		return errors.New("user data length does not match packet length")
 	}
 
-	// Validate error control field if present
-	if sp.ErrorControl != nil {
-		// TODO: Add error control validation logic
-	}
-
 	return nil
 }
 
