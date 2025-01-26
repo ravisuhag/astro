@@ -44,7 +44,7 @@ type SpacePacket struct {
 }
 
 // NewSpacePacket creates a new SpacePacket instance.
-func NewSpacePacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacket, error) {
+func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...PacketOption) (*SpacePacket, error) {
 	if apid > 2047 {
 		return nil, errors.New("invalid APID: must be in range 0-2047")
 	}
@@ -52,7 +52,7 @@ func NewSpacePacket(apid uint16, data []byte, options ...PacketOption) (*SpacePa
 	// Default primary header
 	primaryHeader := PrimaryHeader{
 		Version:             0,
-		Type:                0,
+		Type:                packetType,
 		SecondaryHeaderFlag: 0,
 		APID:                apid,
 		SequenceFlags:       3, // Default sequence flag (standalone packet)
@@ -79,6 +79,14 @@ func NewSpacePacket(apid uint16, data []byte, options ...PacketOption) (*SpacePa
 	}
 
 	return packet, nil
+}
+
+func NewTMPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacket, error) {
+	return NewSpacePacket(apid, 0, data, options...)
+}
+
+func NewTCPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacket, error) {
+	return NewSpacePacket(apid, 1, data, options...)
 }
 
 // PacketOption defines a function type for configuring SpacePacket options.

@@ -50,19 +50,3 @@ func ReadPacket(reader io.Reader) (*SpacePacket, error) {
 	// Decode the packet
 	return Decode(buffer)
 }
-
-// EncapsulateOctetString encapsulates raw data (Octet String) into a Space Packet.
-func EncapsulateOctetString(apid uint16, data []byte) (*SpacePacket, error) {
-	if apid > 2047 {
-		return nil, errors.New("invalid APID: must be in range 0-2047")
-	}
-	return NewSpacePacket(apid, data)
-}
-
-// DecapsulateOctetString decapsulates a Space Packet to extract the Octet String (raw data).
-func DecapsulateOctetString(packet *SpacePacket) ([]byte, error) {
-	if packet == nil {
-		return nil, errors.New("invalid packet: cannot decapsulate nil packet")
-	}
-	return packet.UserData, nil
-}

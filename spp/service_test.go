@@ -6,42 +6,9 @@ import (
 	"testing"
 )
 
-func TestEncapsulateOctetString(t *testing.T) {
-	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.EncapsulateOctetString(100, data)
-	if err != nil {
-		t.Fatalf("Failed to encapsulate octet string: %v", err)
-	}
-
-	if packet.PrimaryHeader.APID != 100 {
-		t.Errorf("Expected APID 100, got %d", packet.PrimaryHeader.APID)
-	}
-
-	if !bytes.Equal(packet.UserData, data) {
-		t.Errorf("User data does not match. Got %v, want %v", packet.UserData, data)
-	}
-}
-
-func TestDecapsulateOctetString(t *testing.T) {
-	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
-	if err != nil {
-		t.Fatalf("Failed to create new space packet: %v", err)
-	}
-
-	userData, err := spp.DecapsulateOctetString(packet)
-	if err != nil {
-		t.Fatalf("Failed to decapsulate octet string: %v", err)
-	}
-
-	if !bytes.Equal(userData, data) {
-		t.Errorf("User data does not match. Got %v, want %v", userData, data)
-	}
-}
-
 func TestWritePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
+	packet, err := spp.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -59,7 +26,7 @@ func TestWritePacket(t *testing.T) {
 
 func TestSendPacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
+	packet, err := spp.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}

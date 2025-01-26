@@ -8,7 +8,7 @@ import (
 
 func TestNewSpacePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
+	packet, err := spp.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestNewSpacePacket(t *testing.T) {
 
 func TestSpacePacketEncodeDecode(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, data)
+	packet, err := spp.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	secondaryHeader := spp.SecondaryHeader{Timestamp: 1234567890}
-	packet, err := spp.NewSpacePacket(100, data, spp.WithSecondaryHeader(secondaryHeader))
+	packet, err := spp.NewSpacePacket(100, 0, data, spp.WithSecondaryHeader(secondaryHeader))
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with secondary header: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 func TestSpacePacketWithErrorControl(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	crc := uint16(0xABCD)
-	packet, err := spp.NewSpacePacket(100, data, spp.WithErrorControl(crc))
+	packet, err := spp.NewSpacePacket(100, 0, data, spp.WithErrorControl(crc))
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with error control: %v", err)
 	}
