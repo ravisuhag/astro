@@ -24,6 +24,15 @@ func CalculatePacketSize(header []byte) (int, error) {
 	return totalPacketSize, nil
 }
 
+// IsIdlePacket determines if a given Space Packet is an idle packet.
+// For CCSDS Space Packets, idle packets are identified by the APID being 0x7FF (2047 in decimal).
+func IsIdlePacket(packet *SpacePacket) bool {
+	if packet == nil {
+		return false
+	}
+	return packet.PrimaryHeader.APID == 0x7FF
+}
+
 // ComputeCRC computes the CRC checksum for the given data.
 func ComputeCRC(data []byte) uint16 {
 	checksum := crc32.ChecksumIEEE(data)

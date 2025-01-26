@@ -7,24 +7,9 @@ import (
 
 const PrimaryHeaderSize = 6 // CCSDS Packet Header is 6 bytes
 
-// EncapsulateOctetString encapsulates raw data (Octet String) into a Space Packet.
-func EncapsulateOctetString(apid uint16, data []byte) (*SpacePacket, error) {
-	if apid > 2047 {
-		return nil, errors.New("invalid APID: must be in range 0-2047")
-	}
-	return NewSpacePacket(apid, data)
-}
-
-// DecapsulateOctetString decapsulates a Space Packet to extract the Octet String (raw data).
-func DecapsulateOctetString(packet *SpacePacket) ([]byte, error) {
-	if packet == nil {
-		return nil, errors.New("invalid packet: cannot decapsulate nil packet")
-	}
-	return packet.UserData, nil
-}
-
-// SendPacket writes a pre-formatted Space Packet to an io.Writer.
-func SendPacket(packet *SpacePacket, writer io.Writer) error {
+// WritePacket writes a single pre-formatted Space Packet to an io.Writer.
+// This function only writes one packet at a time.
+func WritePacket(packet *SpacePacket, writer io.Writer) error {
 	if packet == nil {
 		return errors.New("invalid packet: cannot send nil packet")
 	}
@@ -37,8 +22,11 @@ func SendPacket(packet *SpacePacket, writer io.Writer) error {
 	return err
 }
 
-// ReceivePacket reads a Space Packet from an io.Reader.
-func ReceivePacket(reader io.Reader) (*SpacePacket, error) {
+// ReadPacket reads a single Space Packet from an io.Reader.
+// It reads the primary header first to determine the total packet size
+// and then reads the rest of the packet based on that size.
+// This function only reads one packet at a time.
+func ReadPacket(reader io.Reader) (*SpacePacket, error) {
 	header := make([]byte, PrimaryHeaderSize)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return nil, err
@@ -61,4 +49,20 @@ func ReceivePacket(reader io.Reader) (*SpacePacket, error) {
 	}
 	// Decode the packet
 	return Decode(buffer)
+}
+
+// EncapsulateOctetString encapsulates raw data (Octet String) into a Space Packet.
+func EncapsulateOctetString(apid uint16, data []byte) (*SpacePacket, error) {
+	if apid > 2047 {
+		return nil, errors.New("invalid APID: must be in range 0-2047")
+	}
+	return NewSpacePacket(apid, data)
+}
+
+// DecapsulateOctetString decapsulates a Space Packet to extract the Octet String (raw data).
+func DecapsulateOctetString(packet *SpacePacket) ([]byte, error) {
+	if packet == nil {
+		return nil, errors.New("invalid packet: cannot decapsulate nil packet")
+	}
+	return packet.UserData, nil
 }

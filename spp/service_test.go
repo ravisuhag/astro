@@ -39,7 +39,7 @@ func TestDecapsulateOctetString(t *testing.T) {
 	}
 }
 
-func TestSendPacket(t *testing.T) {
+func TestWritePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	packet, err := spp.NewSpacePacket(100, data)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestSendPacket(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = spp.SendPacket(packet, &buf)
+	err = spp.WritePacket(packet, &buf)
 	if err != nil {
 		t.Fatalf("Failed to send space packet: %v", err)
 	}
@@ -57,21 +57,21 @@ func TestSendPacket(t *testing.T) {
 	}
 }
 
-func TestReceivePacket(t *testing.T) {
+func TestSendPacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	packet, err := spp.NewSpacePacket(100, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
 	var buf bytes.Buffer
-	err = spp.SendPacket(packet, &buf)
+	err = spp.WritePacket(packet, &buf)
 	if err != nil {
 		t.Fatalf("Failed to send space packet: %v", err)
 	}
 	if buf.Len() == 0 {
 		t.Fatalf("Buffer is empty after sending packet")
 	}
-	receivedPacket, err := spp.ReceivePacket(&buf)
+	receivedPacket, err := spp.ReadPacket(&buf)
 	if err != nil {
 		t.Fatalf("Failed to receive space packet: %v", err)
 	}
