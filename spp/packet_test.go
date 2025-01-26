@@ -77,3 +77,52 @@ func TestSpacePacketWithErrorControl(t *testing.T) {
 		t.Errorf("Error control does not match. Got %v, want %v", packet.ErrorControl, crc)
 	}
 }
+
+func TestSpacePacketValidate(t *testing.T) {
+	// Test case: Valid SpacePacket
+	data := []byte{0x01, 0x02, 0x03}
+	packet, err := spp.NewSpacePacket(100, 0, data)
+	if err != nil {
+		t.Fatalf("Failed to create new space packet: %v", err)
+	}
+
+	if err := packet.Validate(); err != nil {
+		t.Errorf("Expected packet to be valid, but got error: %v", err)
+	}
+
+	// Test case: Invalid APID
+	packet.PrimaryHeader.APID = 3000
+	if err := packet.Validate(); err == nil {
+		t.Errorf("Expected error for invalid APID, but got none")
+	}
+	packet.PrimaryHeader.APID = 100 // Reset to valid APID
+
+	// Test case: Invalid user data length
+	packet.UserData = []byte{0x01, 0x02}
+	if err := packet.Validate(); err == nil {
+		t.Errorf("Expected error for mismatched user data length, but got none")
+	}
+	packet.UserData = data // Reset to valid user data
+
+	// Test case: Invalid packet length
+	packet.PrimaryHeader.PacketLength = 65535
+	if err := packet.Validate(); err == nil {
+		t.Errorf("Expected error for packet length exceeding maximum, but got none")
+	}
+	packet.PrimaryHeader.PacketLength = uint16(len(data)) - 1 // Reset to valid packet length
+
+	// Test case: Secondary header flag set but no secondary header
+	packet.PrimaryHeader.SecondaryHeaderFlag = 1
+	if err := packet.Validate(); err == nil {
+		t.Errorf("Expected error for missing secondary header, but got none")
+	}
+	packet.PrimaryHeader.SecondaryHeaderFlag = 0 // Reset to valid state
+
+	// Test case: Valid secondary header
+	secondaryHeader := spp.SecondaryHeader{Timestamp: 1234567890}
+	packet.SecondaryHeader = &secondaryHeader
+	packet.PrimaryHeader.SecondaryHeaderFlag = 1
+	if err := packet.Validate(); err != nil {
+		t.Errorf("Expected packet to be valid with secondary header, but got error: %v", err)
+	}
+}

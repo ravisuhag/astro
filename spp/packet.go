@@ -49,6 +49,11 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 		return nil, errors.New("invalid APID: must be in range 0-2047")
 	}
 
+	packetLength := len(data) + PrimaryHeaderSize
+	if packetLength < 7 || packetLength > 65542 {
+		return nil, errors.New("packet length must be between 7 and 65542 octets")
+	}
+
 	// Default primary header
 	primaryHeader := PrimaryHeader{
 		Version:             0,
@@ -223,6 +228,11 @@ func (sp *SpacePacket) Validate() error {
 	actualLength := len(sp.UserData)
 	if actualLength != expectedLength {
 		return errors.New("user data length does not match packet length")
+	}
+
+	packetLength := PrimaryHeaderSize + actualLength
+	if packetLength < 7 || packetLength > 65542 {
+		return errors.New("packet length must be between 7 and 65542 octets")
 	}
 
 	return nil
