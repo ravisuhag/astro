@@ -2,19 +2,19 @@ package spp_test
 
 import (
 	"bytes"
-	"github.com/ravisuhag/astro/spp"
+	spp2 "github.com/ravisuhag/astro/pkg/spp"
 	"testing"
 )
 
 func TestWritePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, 0, data)
+	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
 
 	var buf bytes.Buffer
-	err = spp.WritePacket(packet, &buf)
+	err = spp2.WritePacket(packet, &buf)
 	if err != nil {
 		t.Fatalf("Failed to send space packet: %v", err)
 	}
@@ -26,19 +26,19 @@ func TestWritePacket(t *testing.T) {
 
 func TestSendPacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, 0, data)
+	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
 	var buf bytes.Buffer
-	err = spp.WritePacket(packet, &buf)
+	err = spp2.WritePacket(packet, &buf)
 	if err != nil {
 		t.Fatalf("Failed to send space packet: %v", err)
 	}
 	if buf.Len() == 0 {
 		t.Fatalf("Buffer is empty after sending packet")
 	}
-	receivedPacket, err := spp.ReadPacket(&buf)
+	receivedPacket, err := spp2.ReadPacket(&buf)
 	if err != nil {
 		t.Fatalf("Failed to receive space packet: %v", err)
 	}

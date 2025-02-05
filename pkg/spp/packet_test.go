@@ -2,13 +2,13 @@ package spp_test
 
 import (
 	"bytes"
-	"github.com/ravisuhag/astro/spp"
+	spp2 "github.com/ravisuhag/astro/pkg/spp"
 	"testing"
 )
 
 func TestNewSpacePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, 0, data)
+	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestNewSpacePacket(t *testing.T) {
 
 func TestSpacePacketEncodeDecode(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, 0, data)
+	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 		t.Fatalf("Failed to encode space packet: %v", err)
 	}
 
-	decoded, err := spp.Decode(encoded)
+	decoded, err := spp2.Decode(encoded)
 	if err != nil {
 		t.Fatalf("Failed to decode space packet: %v", err)
 	}
@@ -50,8 +50,8 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 
 func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	secondaryHeader := spp.SecondaryHeader{Timestamp: 1234567890}
-	packet, err := spp.NewSpacePacket(100, 0, data, spp.WithSecondaryHeader(secondaryHeader))
+	secondaryHeader := spp2.SecondaryHeader{Timestamp: 1234567890}
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(secondaryHeader))
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with secondary header: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 func TestSpacePacketWithErrorControl(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	crc := uint16(0xABCD)
-	packet, err := spp.NewSpacePacket(100, 0, data, spp.WithErrorControl(crc))
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithErrorControl(crc))
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with error control: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSpacePacketWithErrorControl(t *testing.T) {
 func TestSpacePacketValidate(t *testing.T) {
 	// Test case: Valid SpacePacket
 	data := []byte{0x01, 0x02, 0x03}
-	packet, err := spp.NewSpacePacket(100, 0, data)
+	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
 		t.Fatalf("Failed to create new space packet: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestSpacePacketValidate(t *testing.T) {
 	packet.PrimaryHeader.SecondaryHeaderFlag = 0 // Reset to valid state
 
 	// Test case: Valid secondary header
-	secondaryHeader := spp.SecondaryHeader{Timestamp: 1234567890}
+	secondaryHeader := spp2.SecondaryHeader{Timestamp: 1234567890}
 	packet.SecondaryHeader = &secondaryHeader
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
 	if err := packet.Validate(); err != nil {

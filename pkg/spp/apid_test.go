@@ -1,7 +1,7 @@
 package spp_test
 
 import (
-	"github.com/ravisuhag/astro/spp"
+	"github.com/ravisuhag/astro/pkg/spp"
 	"testing"
 )
 
