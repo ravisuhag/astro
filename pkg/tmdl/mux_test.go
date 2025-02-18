@@ -101,13 +101,19 @@ func TestMultiplexerHasPendingFrames(t *testing.T) {
 	}
 
 	frame := &tmdl.TMTransferFrame{}
-	vc.AddFrame(frame)
+	err := vc.AddFrame(frame)
+	if err != nil {
+		t.Errorf("Failed to add frame: %v", err)
+	}
 
 	if !mux.HasPendingFrames() {
 		t.Errorf("Expected HasPendingFrames to be true, got false")
 	}
 
-	mux.GetNextFrame()
+	_, err = mux.GetNextFrame()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
 
 	if mux.HasPendingFrames() {
 		t.Errorf("Expected HasPendingFrames to be false, got true")
