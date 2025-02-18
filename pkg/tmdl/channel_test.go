@@ -65,8 +65,16 @@ func TestGetNextFrame(t *testing.T) {
 
 	frame1 := &tmdl.TMTransferFrame{}
 	frame2 := &tmdl.TMTransferFrame{}
-	vc.AddFrame(frame1)
-	vc.AddFrame(frame2)
+
+	err := vc.AddFrame(frame1)
+	if err != nil {
+		t.Errorf("Failed to add frame1: %v", err)
+	}
+
+	err = vc.AddFrame(frame2)
+	if err != nil {
+		t.Errorf("Failed to add frame2: %v", err)
+	}
 
 	retrievedFrame, err := vc.GetNextFrame()
 	if err != nil {
@@ -102,13 +110,19 @@ func TestHasFrames(t *testing.T) {
 	}
 
 	frame := &tmdl.TMTransferFrame{}
-	vc.AddFrame(frame)
+	err := vc.AddFrame(frame)
+	if err != nil {
+		t.Errorf("Failed to add frame: %v", err)
+	}
 
 	if !vc.HasFrames() {
 		t.Errorf("Expected HasFrames to be true, got false")
 	}
 
-	vc.GetNextFrame()
+	_, err = vc.GetNextFrame()
+	if err != nil {
+		t.Errorf("Failed to retrieve frame: %v", err)
+	}
 
 	if vc.HasFrames() {
 		t.Errorf("Expected HasFrames to be false, got true")
