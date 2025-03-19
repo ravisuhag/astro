@@ -87,7 +87,7 @@ func (ph *PrimaryHeader) Validate() error {
 	if ph.SequenceCount > 16383 {
 		return errors.New("invalid SequenceCount: must be in range 0-16383 (14 bits)")
 	}
-	// PacketLength is already a uint16, no need for further validation
+	// PacketLength is already uint16, no need for further validation
 	return nil
 }
 
