@@ -1,93 +1,162 @@
 package tmdl_test
 
 import (
-	"github.com/ravisuhag/astro/pkg/tmdl"
+	"bytes"
+	"encoding/binary"
 	"testing"
+
+	"github.com/ravisuhag/astro/pkg/tmdl"
 )
 
+// TestHeaderEncoding ensures header values are encoded correctly.
+func TestHeaderEncoding(t *testing.T) {
+	header := tmdl.PrimaryHeader{
+		VersionNumber:    0b01,
+		SpacecraftID:     933,
+		VirtualChannelID: 2,
+		OCFFlag:          true,
+		FSHFlag:          false,
+		MCFrameCount:     15,
+		VCFrameCount:     8,
+		SyncFlag:         false,
+		PacketOrderFlag:  false,
+		SegmentLengthID:  1,
+		FirstHeaderPtr:   1024,
+	}
+
+	expectedMCID := uint16(header.VersionNumber)<<8 | header.SpacecraftID
+	expectedGVCID := expectedMCID + uint16(header.VirtualChannelID)
+
+	if header.GetMCID() != expectedMCID {
+		t.Errorf("Expected MCID: %d, Got: %d", expectedMCID, header.GetMCID())
+	}
+
+	if header.GetGVCID() != expectedGVCID {
+		t.Errorf("Expected GVCID: %d, Got: %d", expectedGVCID, header.GetGVCID())
+	}
+}
+
+// TestNewTMTransferFrame validates frame creation and size constraints.
 func TestNewTMTransferFrame(t *testing.T) {
-	scid := uint16(0x3FF)
-	vcid := uint8(0x3F)
-	data := []byte{0x01, 0x02, 0x03, 0x04}
-	secondaryHeader := []byte{0x05, 0x06}
-	ocf := []byte{0x07, 0x08, 0x09, 0x0A}
+	data := make([]byte, 65535) // Max-length payload
+	secondaryHeader := []byte{0xAA, 0xBB}
+	ocf := []byte{0x00, 0x00, 0x00, 0xFF}
 
-	frame, err := tmdl.NewTMTransferFrame(scid, vcid, data, secondaryHeader, ocf)
+	// Valid frame creation
+	frame, err := tmdl.NewTMTransferFrame(933, 2, data, secondaryHeader, ocf)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to create TM Transfer Frame: %v", err)
 	}
 
-	if frame.SpacecraftID != scid&0x03FF {
-		t.Errorf("Expected SpacecraftID %v, got %v", scid&0x03FF, frame.SpacecraftID)
-	}
-
-	if frame.VirtualChannelID != vcid&0x3F {
-		t.Errorf("Expected VirtualChannelID %v, got %v", vcid&0x3F, frame.VirtualChannelID)
-	}
-
-	expectedLength := uint16(5 + len(secondaryHeader) + len(data) + len(ocf) + 2)
-	if frame.FrameLength != expectedLength {
-		t.Errorf("Expected FrameLength %v, got %v", expectedLength, frame.FrameLength)
+	// Validate header fields
+	if frame.Header.SpacecraftID != 933 {
+		t.Errorf("Expected SCID 933, Got: %d", frame.Header.SpacecraftID)
 	}
 }
 
-func TestTMTransferFrame_Encode(t *testing.T) {
-	scid := uint16(0x3FF)
-	vcid := uint8(0x3F)
-	data := []byte{0x01, 0x02, 0x03, 0x04}
-	secondaryHeader := []byte{0x05, 0x06}
-	ocf := []byte{0x07, 0x08, 0x09, 0x0A}
+// TestFrameEncoding checks if encoding produces the correct length and byte sequence.
+func TestFrameEncoding(t *testing.T) {
+	data := []byte("Telemetry Data")
+	frame, _ := tmdl.NewTMTransferFrame(1285, 3, data, nil, nil)
+	encodedFrame := frame.Encode()
 
-	frame, err := tmdl.NewTMTransferFrame(scid, vcid, data, secondaryHeader, ocf)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	bytes := frame.Encode()
-	if len(bytes) != int(frame.FrameLength) {
-		t.Errorf("Expected byte slice length %v, got %v", frame.FrameLength, len(bytes))
+	expectedLength := 6 + len(data) + 2 // PrimaryHeader + SecondaryHeader + Data + CRC
+	if len(encodedFrame) != expectedLength {
+		t.Errorf("Encoded frame length mismatch: expected %d, got %d", expectedLength, len(encodedFrame))
 	}
 }
 
-func TestDecodeTMTransferFrame(t *testing.T) {
-	scid := uint16(0x3FF)
-	vcid := uint8(0x3F)
-	data := []byte{0x01, 0x02, 0x03, 0x04}
-	secondaryHeader := []byte{0x05, 0x06}
-	ocf := []byte{0x07, 0x08, 0x09, 0x0A}
+// TestFrameDecoding verifies if decoding reconstructs correct values.
+func TestFrameDecoding(t *testing.T) {
+	encodedFrame := []byte{
+		0x7A, 0x5A, 0x00, 0x00, 0x00, 0x00, // Header
+		'T', 'e', 'l', 'e', 'm', 'e', 't', 'r', 'y', ' ', 'D', 'a', 't', 'a', // Data
+	}
 
-	frame, err := tmdl.NewTMTransferFrame(scid, vcid, data, secondaryHeader, ocf)
+	// Compute the correct CRC for the frame
+	crc := tmdl.ComputeCRC(encodedFrame)
+	crcBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(crcBytes, crc)
+	encodedFrame = append(encodedFrame, crcBytes...)
+
+	frame, err := tmdl.DecodeTMTransferFrame(encodedFrame)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to decode TM Transfer Frame: %v", err)
 	}
 
-	bytes := frame.Encode()
-	decodedFrame, err := tmdl.DecodeTMTransferFrame(bytes)
+	expectedData := []byte("Telemetry Data")
+	if !bytes.Equal(frame.DataField, expectedData) {
+		t.Errorf("Expected data: %s, got: %s", expectedData, frame.DataField)
+	}
+}
+
+// TestCRCValidation ensures CRC detects errors correctly.
+func TestCRCValidation(t *testing.T) {
+	data := []byte("Test Data")
+	expectedCRC := tmdl.ComputeCRC(data)
+
+	modifiedData := append(data, 0x01) // Introduce a change
+	modifiedCRC := tmdl.ComputeCRC(modifiedData)
+
+	if expectedCRC == modifiedCRC {
+		t.Errorf("CRC did not detect error; expected change but got identical CRC")
+	}
+}
+
+// TestFrameRoundTrip verifies that encoding and decoding produce identical results.
+func TestFrameRoundTrip(t *testing.T) {
+	data := []byte("Round Trip Test  ")
+	frame, _ := tmdl.NewTMTransferFrame(933, 5, data, nil, nil)
+	encodedFrame := frame.Encode()
+	// print encoded frame in hex format
+	decodedFrame, err := tmdl.DecodeTMTransferFrame(encodedFrame)
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("Failed to decode frame in round-trip test: %v", err)
 	}
 
-	if decodedFrame.SpacecraftID != frame.SpacecraftID {
-		t.Errorf("Expected SpacecraftID %v, got %v", frame.SpacecraftID, decodedFrame.SpacecraftID)
+	// Compare all relevant fields
+	if frame.Header != decodedFrame.Header {
+		t.Errorf("Header mismatch: expected %+v, got %+v", frame.Header, decodedFrame.Header)
+	}
+	if frame.FrameErrorControl != decodedFrame.FrameErrorControl {
+		t.Errorf("Frame error control mismatch: expected %x, got %x",
+			frame.FrameErrorControl, decodedFrame.FrameErrorControl)
+	}
+	if !bytes.Equal(frame.DataField, decodedFrame.DataField) {
+		t.Errorf("Data field mismatch: expected %x, got %x", frame.DataField, decodedFrame.DataField)
 	}
 
-	if decodedFrame.VirtualChannelID != frame.VirtualChannelID {
-		t.Errorf("Expected VirtualChannelID %v, got %v", frame.VirtualChannelID, decodedFrame.VirtualChannelID)
+}
+
+// TestMalformedFrame verifies handling of corrupted frame structures.
+func TestMalformedFrame(t *testing.T) {
+	// Corrupt header (too short)
+	corruptFrame := []byte{0x68, 0x05}
+	_, err := tmdl.DecodeTMTransferFrame(corruptFrame)
+	if err == nil {
+		t.Error("Expected error for malformed frame but got none")
 	}
 
-	if decodedFrame.FrameLength != frame.FrameLength {
-		t.Errorf("Expected FrameLength %v, got %v", frame.FrameLength, decodedFrame.FrameLength)
+	// Corrupt CRC
+	validFrame := []byte{
+		0x68, 0x05, 0x03, 0x00, 0x16, // Header
+		'T', 'e', 'l', 'e', 'm', 'e', 't', 'r', 'y', ' ', 'D', 'a', 't', 'a', // Data
+		0xA1, 0xB2, // Mocked CRC
 	}
+	validFrame[len(validFrame)-1] ^= 0xFF // Corrupt the last byte (CRC)
 
-	if string(decodedFrame.DataField) != string(frame.DataField) {
-		t.Errorf("Expected DataField %v, got %v", frame.DataField, decodedFrame.DataField)
+	_, err = tmdl.DecodeTMTransferFrame(validFrame)
+	if err == nil {
+		t.Error("Expected CRC error but decoding succeeded")
 	}
+}
 
-	if string(decodedFrame.FrameSecondaryHeader) != string(frame.FrameSecondaryHeader) {
-		t.Errorf("Expected FrameSecondaryHeader %v, got %v", frame.FrameSecondaryHeader, decodedFrame.FrameSecondaryHeader)
-	}
+// TestUninitializedFrame ensures defaults are handled correctly.
+func TestUninitializedFrame(t *testing.T) {
+	frame := &tmdl.TMTransferFrame{}
 
-	if string(decodedFrame.OperationalControl) != string(frame.OperationalControl) {
-		t.Errorf("Expected OperationalControl %v, got %v", frame.OperationalControl, decodedFrame.OperationalControl)
+	encodedFrame := frame.Encode()
+	if len(encodedFrame) == 0 {
+		t.Error("Encoded empty frame should not be zero-length")
 	}
 }
