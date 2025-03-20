@@ -11,7 +11,7 @@ import (
 // TestHeaderEncoding ensures header values are encoded correctly.
 func TestHeaderEncoding(t *testing.T) {
 	header := tmdl.PrimaryHeader{
-		VersionNumber:    0b01,
+		VersionNumber:    0b00,
 		SpacecraftID:     933,
 		VirtualChannelID: 2,
 		OCFFlag:          true,
@@ -69,7 +69,7 @@ func TestFrameEncoding(t *testing.T) {
 // TestFrameDecoding verifies if decoding reconstructs correct values.
 func TestFrameDecoding(t *testing.T) {
 	encodedFrame := []byte{
-		0x7A, 0x5A, 0x00, 0x00, 0x00, 0x00, // Header
+		0x3A, 0x5A, 0x00, 0x00, 0x18, 0x00, // Header
 		'T', 'e', 'l', 'e', 'm', 'e', 't', 'r', 'y', ' ', 'D', 'a', 't', 'a', // Data
 	}
 

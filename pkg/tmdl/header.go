@@ -16,7 +16,7 @@ type PrimaryHeader struct {
 	MCFrameCount     uint8  // 8 bits (16-23) - Master Channel Frame Count
 	VCFrameCount     uint8  // 8 bits (24-31) - Virtual Channel Frame Count
 	FSHFlag          bool   // 1 bit (32)     - Frame Secondary Header Flag
-	SyncFlag         bool   // 1 bit (33)     - Synchronization Flag (Always 0 for TM)
+	SyncFlag         bool   // 1 bit (33)     - Synchronization Flag
 	PacketOrderFlag  bool   // 1 bit (34)     - Packet Order Flag
 	SegmentLengthID  uint8  // 2 bits (35-36) - Segment Length Identifier
 	FirstHeaderPtr   uint16 // 11 bits (37-47) - First Header Pointer
@@ -78,32 +78,25 @@ func (h *PrimaryHeader) Decode(data []byte) (*PrimaryHeader, error) {
 	}
 
 	// Extract fields
-	version := (data[0] >> 6) & 0x03
-	scid := (uint16(data[0]&0x3F) << 4) | uint16(data[1]>>4)
-	vcid := (data[1] >> 1) & 0x07
-	ocfFlag := (data[1] & 1) != 0
-	mcfc := data[2]
-	vcfc := data[3]
-	flags := data[4]
-	fshFlag := (flags & (1 << 7)) != 0
-	syncFlag := (flags & (1 << 6)) != 0
-	packetOrderFlag := (flags & (1 << 5)) != 0
-	segmentLengthID := (flags >> 3) & 0x03
-	firstHeaderPtr := (uint16(flags&0x07) << 8) | uint16(data[5])
+	header := &PrimaryHeader{
+		VersionNumber:    (data[0] >> 6) & 0x03,
+		SpacecraftID:     (uint16(data[0]&0x3F) << 4) | uint16(data[1]>>4),
+		VirtualChannelID: (data[1] >> 1) & 0x07,
+		OCFFlag:          (data[1] & 1) != 0,
+		MCFrameCount:     data[2],
+		VCFrameCount:     data[3],
+		FSHFlag:          (data[4] & (1 << 7)) != 0,
+		SyncFlag:         (data[4] & (1 << 6)) != 0,
+		PacketOrderFlag:  (data[4] & (1 << 5)) != 0,
+		SegmentLengthID:  (data[4] >> 3) & 0x03,
+		FirstHeaderPtr:   (uint16(data[4]&0x07) << 8) | uint16(data[5]),
+	}
 
-	return &PrimaryHeader{
-		VersionNumber:    version,
-		SpacecraftID:     scid,
-		VirtualChannelID: vcid,
-		OCFFlag:          ocfFlag,
-		MCFrameCount:     mcfc,
-		VCFrameCount:     vcfc,
-		FSHFlag:          fshFlag,
-		SyncFlag:         syncFlag,
-		PacketOrderFlag:  packetOrderFlag,
-		SegmentLengthID:  segmentLengthID,
-		FirstHeaderPtr:   firstHeaderPtr,
-	}, nil
+	if err := header.Validate(); err != nil {
+		return nil, err
+	}
+
+	return header, nil
 }
 
 // Validate checks if the header values are within valid ranges.
@@ -111,14 +104,26 @@ func (h *PrimaryHeader) Validate() error {
 	if h.VersionNumber > 0b11 {
 		return errors.New("invalid VersionNumber: must be in range 0-3 (2 bits)")
 	}
+	if h.VersionNumber != 0 {
+		return errors.New("invalid VersionNumber: must be 0 for TM Transfer Frame")
+	}
 	if h.SpacecraftID > 0x03FF {
 		return errors.New("invalid SpacecraftID: must be in range 0-1023 (10 bits)")
 	}
 	if h.VirtualChannelID > 0x07 {
 		return errors.New("invalid VirtualChannelID: must be in range 0-7 (3 bits)")
 	}
+	if !h.SyncFlag && h.PacketOrderFlag {
+		return errors.New("invalid PacketOrderFlag: must be 0 when SyncFlag is 0")
+	}
+	if !h.SyncFlag && h.SegmentLengthID != 0b11 {
+		return errors.New("invalid SegmentLengthID: must be 3 (0b11) when SyncFlag is 0")
+	}
 	if h.SegmentLengthID > 0x03 {
 		return errors.New("invalid SegmentLengthID: must be in range 0-3 (2 bits)")
+	}
+	if h.SyncFlag && h.FirstHeaderPtr != 0xFFFF {
+		return errors.New("invalid FirstHeaderPtr: must be 0xFFFF when SyncFlag is 1")
 	}
 	return nil
 }

@@ -26,7 +26,7 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 
 	frame := &TMTransferFrame{
 		Header: PrimaryHeader{
-			VersionNumber:    0b01,          // Default CCSDS TM version
+			VersionNumber:    0b00,          // Default CCSDS TM version
 			SpacecraftID:     scid & 0x03FF, // Mask to 10 bits
 			VirtualChannelID: vcid & 0x3F,   // Mask to 6 bits
 			OCFFlag:          len(ocf) > 0,  // Set OCF flag if present
@@ -35,8 +35,8 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 			VCFrameCount:     0, // To be set dynamically
 			SyncFlag:         false,
 			PacketOrderFlag:  false,
-			SegmentLengthID:  0, // Default segment length ID
-			FirstHeaderPtr:   0, // Default "no packet start" pointer
+			SegmentLengthID:  0b11, // Default segment length ID
+			FirstHeaderPtr:   0,    // Default "no packet start" pointer
 		},
 		SecondaryHeader:    secondaryHeader,
 		DataField:          data,

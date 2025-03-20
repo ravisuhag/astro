@@ -10,7 +10,7 @@ import (
 
 func TestPrimaryHeader_EncodeDecode(t *testing.T) {
 	original := &tmdl.PrimaryHeader{
-		VersionNumber:    1,
+		VersionNumber:    0,
 		SpacecraftID:     0x3FF,
 		VirtualChannelID: 0x07,
 		OCFFlag:          true,
@@ -18,7 +18,7 @@ func TestPrimaryHeader_EncodeDecode(t *testing.T) {
 		VCFrameCount:     0xFF,
 		FSHFlag:          true,
 		SyncFlag:         false,
-		PacketOrderFlag:  true,
+		PacketOrderFlag:  false,
 		SegmentLengthID:  0x03,
 		FirstHeaderPtr:   0x07FF,
 	}
@@ -42,7 +42,7 @@ func TestPrimaryHeader_EncodeDecode(t *testing.T) {
 
 func TestPrimaryHeader_Validate(t *testing.T) {
 	validHeader := &tmdl.PrimaryHeader{
-		VersionNumber:    1,
+		VersionNumber:    0,
 		SpacecraftID:     0x3FF,
 		VirtualChannelID: 0x07,
 		SegmentLengthID:  0x03,
@@ -67,7 +67,7 @@ func TestPrimaryHeader_Validate(t *testing.T) {
 func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 	// Create a fully populated Header
 	original := &tmdl.PrimaryHeader{
-		VersionNumber:    1,     // 01
+		VersionNumber:    0,     // 00
 		SpacecraftID:     0x3A5, // 933 (11 1010 0101)
 		VirtualChannelID: 5,     // 101
 		OCFFlag:          true,  // 1
@@ -75,8 +75,8 @@ func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 		VCFrameCount:     40,    // 0010 1000
 		FSHFlag:          true,  // 1
 		SyncFlag:         false, // 0
-		PacketOrderFlag:  true,  // 1
-		SegmentLengthID:  2,     // 10
+		PacketOrderFlag:  false, // 0
+		SegmentLengthID:  3,     // 10
 		FirstHeaderPtr:   500,   // 001 1111 0100
 	}
 	// Encode the header
@@ -84,7 +84,7 @@ func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 
 	// Convert to hex for readability
 	hexEncoded := hex.EncodeToString(encoded)
-	expectedHex := "7a5b1428b1f4"
+	expectedHex := "3a5b142899f4"
 	if hexEncoded != expectedHex {
 		t.Errorf("Expected encoded header to be %s, got %s", expectedHex, hexEncoded)
 	}
