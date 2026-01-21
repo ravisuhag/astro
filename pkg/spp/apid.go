@@ -1,7 +1,6 @@
 package spp
 
 import (
-	"errors"
 	"sync"
 )
 
