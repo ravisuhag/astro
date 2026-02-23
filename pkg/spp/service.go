@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-const PrimaryHeaderSize = 6 // CCSDS Packet Header is 6 bytes
-
 // WritePacket writes a single pre-formatted Space Packet to an io.Writer.
 // This function only writes one packet at a time.
 func WritePacket(packet *SpacePacket, writer io.Writer) error {

@@ -78,6 +78,57 @@ func TestSpacePacketWithErrorControl(t *testing.T) {
 	}
 }
 
+func TestSpacePacketWithSecondaryHeaderEncodeDecode(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	sh := spp2.SecondaryHeader{Timestamp: 1234567890}
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode: %v", err)
+	}
+
+	decoded, err := spp2.Decode(encoded)
+	if err != nil {
+		t.Fatalf("Failed to decode: %v", err)
+	}
+
+	if !bytes.Equal(packet.UserData, decoded.UserData) {
+		t.Errorf("UserData mismatch. Got %v, want %v", decoded.UserData, packet.UserData)
+	}
+	if decoded.SecondaryHeader == nil {
+		t.Fatal("Expected secondary header, got nil")
+	}
+	if decoded.SecondaryHeader.Timestamp != sh.Timestamp {
+		t.Errorf("Timestamp mismatch. Got %d, want %d", decoded.SecondaryHeader.Timestamp, sh.Timestamp)
+	}
+}
+
+func TestPacketLengthIncludesAllFields(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	sh := spp2.SecondaryHeader{Timestamp: 1234567890}
+	crc := uint16(0xABCD)
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl(crc))
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode: %v", err)
+	}
+
+	// Per CCSDS: total packet = PrimaryHeader(6) + PacketLength + 1
+	expectedTotal := 6 + int(packet.PrimaryHeader.PacketLength) + 1
+	if len(encoded) != expectedTotal {
+		t.Errorf("Encoded size %d != expected %d (6 + PacketLength(%d) + 1)",
+			len(encoded), expectedTotal, packet.PrimaryHeader.PacketLength)
+	}
+}
+
 func TestSpacePacketValidate(t *testing.T) {
 	// Test case: Valid SpacePacket
 	data := []byte{0x01, 0x02, 0x03}
@@ -122,6 +173,7 @@ func TestSpacePacketValidate(t *testing.T) {
 	secondaryHeader := spp2.SecondaryHeader{Timestamp: 1234567890}
 	packet.SecondaryHeader = &secondaryHeader
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
+	packet.PrimaryHeader.PacketLength = uint16(len(data)+8) - 1 // user data (3) + secondary header timestamp (8)
 	if err := packet.Validate(); err != nil {
 		t.Errorf("Expected packet to be valid with secondary header, but got error: %v", err)
 	}

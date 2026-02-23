@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 )
+
+const PrimaryHeaderSize = 6 // CCSDS primary header is 6 bytes
 
 // PrimaryHeader represents the mandatory header section of a space packet.
 type PrimaryHeader struct {
@@ -48,7 +51,7 @@ func (ph *PrimaryHeader) Encode() ([]byte, error) {
 // Decode deserializes a 6-byte array into a PrimaryHeader.
 func (ph *PrimaryHeader) Decode(data []byte) error {
 	if len(data) < 6 {
-		return errors.New("data too short to decode primary header")
+		return ErrDataTooShort
 	}
 
 	// Decode the first byte (Version, Type, SecondaryHeaderFlag, first 3 bits of APID)
@@ -70,24 +73,23 @@ func (ph *PrimaryHeader) Decode(data []byte) error {
 // Validate method for PrimaryHeader
 func (ph *PrimaryHeader) Validate() error {
 	if ph.Version > 7 {
-		return errors.New("invalid Version: must be in range 0-7 (3 bits)")
+		return ErrInvalidHeader
 	}
 	if ph.Type > 1 {
-		return errors.New("invalid Type: must be 0 or 1 (1 bit)")
+		return ErrInvalidHeader
 	}
 	if ph.SecondaryHeaderFlag > 1 {
-		return errors.New("invalid SecondaryHeaderFlag: must be 0 or 1 (1 bit)")
+		return ErrInvalidHeader
 	}
 	if ph.APID > 2047 {
-		return errors.New("invalid APID: must be in range 0-2047 (11 bits)")
+		return ErrInvalidAPID
 	}
 	if ph.SequenceFlags > 3 {
-		return errors.New("invalid SequenceFlags: must be in range 0-3 (2 bits)")
+		return ErrInvalidHeader
 	}
 	if ph.SequenceCount > 16383 {
-		return errors.New("invalid SequenceCount: must be in range 0-16383 (14 bits)")
+		return ErrInvalidHeader
 	}
-	// PacketLength is already uint16, no need for further validation
 	return nil
 }
 
@@ -122,8 +124,15 @@ func (sh *SecondaryHeader) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	// Encode the OtherFields
-	for key, value := range sh.OtherFields {
+	// Encode the OtherFields in sorted key order for deterministic output
+	keys := make([]string, 0, len(sh.OtherFields))
+	for key := range sh.OtherFields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := sh.OtherFields[key]
 		keyLen := uint16(len(key))
 		if err := binary.Write(buf, binary.BigEndian, keyLen); err != nil {
 			return nil, errors.New("failed to encode field key length")
@@ -156,7 +165,7 @@ func (sh *SecondaryHeader) Encode() ([]byte, error) {
 // Decode deserializes a byte slice into a SecondaryHeader.
 func (sh *SecondaryHeader) Decode(data []byte) error {
 	if len(data) < 8 {
-		return errors.New("data too short to decode secondary header")
+		return ErrDataTooShort
 	}
 
 	buf := bytes.NewReader(data)
@@ -204,11 +213,6 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 
 // Validate method for SecondaryHeader
 func (sh *SecondaryHeader) Validate() error {
-	// Example validation: ensure timestamp is not zero
-	if sh.Timestamp == 0 {
-		return errors.New("invalid Timestamp: cannot be zero")
-	}
-	// Add more secondary header validation logic if needed
 	return nil
 }
 

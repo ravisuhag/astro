@@ -3,7 +3,7 @@ package spp
 import (
 	"encoding/binary"
 	"errors"
-	"hash/crc32"
+	"fmt"
 	"strings"
 )
 
@@ -33,17 +33,28 @@ func IsIdlePacket(packet *SpacePacket) bool {
 	return packet.PrimaryHeader.APID == 0x7FF
 }
 
-// ComputeCRC computes the CRC checksum for the given data.
+// ComputeCRC computes the CRC-16-CCITT checksum per CCSDS specification.
+// Uses polynomial 0x1021 with initial value 0xFFFF.
 func ComputeCRC(data []byte) uint16 {
-	checksum := crc32.ChecksumIEEE(data)
-	return uint16(checksum & 0xFFFF) // Return lower 16 bits of the checksum
+	crc := uint16(0xFFFF)
+	for _, b := range data {
+		crc ^= uint16(b) << 8
+		for i := 0; i < 8; i++ {
+			if crc&0x8000 != 0 {
+				crc = (crc << 1) ^ 0x1021
+			} else {
+				crc <<= 1
+			}
+		}
+	}
+	return crc
 }
 
 // mapToString converts a map to a string representation.
 func mapToString(m map[string]interface{}) string {
 	var sb strings.Builder
 	for k, v := range m {
-		sb.WriteString(k + ": " + string(v.(string)) + "\n")
+		sb.WriteString(k + ": " + fmt.Sprintf("%v", v) + "\n")
 	}
 	return sb.String()
 }

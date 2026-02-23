@@ -72,9 +72,10 @@ func TestDescribeAPID(t *testing.T) {
 		apid     uint16
 		expected string
 	}{
-		{0, "Idle Packet"},
+		{0, "Time Code Packet"},
 		{1, "Telemetry Packet"},
 		{2, "Command Packet"},
+		{0x7FF, "Idle Packet"},
 		{999, "Unknown or Custom Packet"},
 	}
 

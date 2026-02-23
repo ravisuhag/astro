@@ -31,7 +31,7 @@ Legend:
 - b = bits
 - APID = Application Process Identifier
 - Sequence Flags: 00 (continuation), 01 (start), 10 (end), 11 (standalone)
-- Packet Length: Total length of the packet minus the primary header (6 bytes)
+- Packet Length: (Packet Data Field size) - 1, where Data Field = Secondary Header + User Data + Error Control
 */
 
 // SpacePacket represents a complete space packet as per CCSDS standards.
@@ -45,12 +45,11 @@ type SpacePacket struct {
 // NewSpacePacket creates a new SpacePacket instance.
 func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...PacketOption) (*SpacePacket, error) {
 	if apid > 2047 {
-		return nil, errors.New("invalid APID: must be in range 0-2047")
+		return nil, ErrInvalidAPID
 	}
 
-	packetLength := len(data) + PrimaryHeaderSize
-	if packetLength < 7 || packetLength > 65542 {
-		return nil, errors.New("packet length must be between 7 and 65542 octets")
+	if len(data) < 1 {
+		return nil, ErrDataTooShort
 	}
 
 	// Default primary header
@@ -61,7 +60,7 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 		APID:                apid,
 		SequenceFlags:       3, // Default sequence flag (standalone packet)
 		SequenceCount:       0,
-		PacketLength:        uint16(len(data)) - 1, // Subtract 1 to represent the packet length in a 0-based manner
+		PacketLength:        0, // Calculated after options are applied
 	}
 
 	// Initialize SpacePacket
@@ -76,6 +75,27 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 			return nil, err
 		}
 	}
+
+	// Calculate PacketLength per CCSDS: (packet data field size) - 1
+	// Packet data field = secondary header + user data + error control
+	dataFieldSize := len(packet.UserData)
+	if packet.SecondaryHeader != nil {
+		shBytes, err := packet.SecondaryHeader.Encode()
+		if err != nil {
+			return nil, err
+		}
+		dataFieldSize += len(shBytes)
+	}
+	if packet.ErrorControl != nil {
+		dataFieldSize += 2
+	}
+
+	totalPacketSize := PrimaryHeaderSize + dataFieldSize
+	if totalPacketSize < 7 || totalPacketSize > 65542 {
+		return nil, ErrPacketTooLarge
+	}
+
+	packet.PrimaryHeader.PacketLength = uint16(dataFieldSize) - 1
 
 	// Validate the packet
 	if err := packet.Validate(); err != nil {
@@ -150,7 +170,7 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 
 // Decode parses a byte slice into a SpacePacket.
 func Decode(data []byte) (*SpacePacket, error) {
-	if len(data) < 6 {
+	if len(data) < 7 {
 		return nil, ErrDataTooShort
 	}
 
@@ -160,12 +180,20 @@ func Decode(data []byte) (*SpacePacket, error) {
 		return nil, ErrInvalidHeader
 	}
 
-	offset := 6
+	// Per CCSDS: total packet = primary header + packet data field
+	dataFieldSize := int(primaryHeader.PacketLength) + 1
+	totalPacketSize := PrimaryHeaderSize + dataFieldSize
+	if len(data) < totalPacketSize {
+		return nil, ErrDataTooShort
+	}
+
+	offset := PrimaryHeaderSize
+	remainingDataField := dataFieldSize
 	var secondaryHeader *SecondaryHeader
 
 	// Decode secondary header if flag is set
 	if primaryHeader.SecondaryHeaderFlag == 1 {
-		if len(data) < offset+8 {
+		if remainingDataField < 8 {
 			return nil, ErrDataTooShort
 		}
 		secondaryHeader = &SecondaryHeader{}
@@ -173,28 +201,16 @@ func Decode(data []byte) (*SpacePacket, error) {
 			return nil, ErrInvalidHeader
 		}
 		offset += 8
+		remainingDataField -= 8
 	}
 
-	// Extract user data
-	userDataEnd := len(data)
-	if primaryHeader.PacketLength+6 < uint16(len(data)) {
-		userDataEnd = int(primaryHeader.PacketLength) + 1 + 6
-	}
-	userData := data[offset:userDataEnd]
-	offset += len(userData)
-
-	// Parse error control if present
-	var errorControl *uint16
-	if len(data) >= offset+2 {
-		crc := uint16(data[offset])<<8 | uint16(data[offset+1])
-		errorControl = &crc
-	}
+	// Remaining data field is user data
+	userData := data[offset : offset+remainingDataField]
 
 	packet := &SpacePacket{
 		PrimaryHeader:   primaryHeader,
 		SecondaryHeader: secondaryHeader,
 		UserData:        userData,
-		ErrorControl:    errorControl,
 	}
 
 	// Validate the packet
@@ -215,23 +231,35 @@ func (sp *SpacePacket) Validate() error {
 	// Validate secondary header if present
 	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
 		if sp.SecondaryHeader == nil {
-			return errors.New("secondary header flag is set but secondary header is missing")
+			return ErrSecondaryHeaderMissing
 		}
 		if err := sp.SecondaryHeader.Validate(); err != nil {
 			return err
 		}
 	}
 
-	// Validate user data length
-	expectedLength := int(sp.PrimaryHeader.PacketLength) + 1
-	actualLength := len(sp.UserData)
-	if actualLength != expectedLength {
-		return errors.New("user data length does not match packet length")
+	// Calculate total packet data field size per CCSDS
+	// Packet data field = secondary header + user data + error control
+	dataFieldSize := len(sp.UserData)
+	if sp.SecondaryHeader != nil {
+		shBytes, err := sp.SecondaryHeader.Encode()
+		if err != nil {
+			return err
+		}
+		dataFieldSize += len(shBytes)
+	}
+	if sp.ErrorControl != nil {
+		dataFieldSize += 2
 	}
 
-	packetLength := PrimaryHeaderSize + actualLength
-	if packetLength < 7 || packetLength > 65542 {
-		return errors.New("packet length must be between 7 and 65542 octets")
+	expectedLength := int(sp.PrimaryHeader.PacketLength) + 1
+	if dataFieldSize != expectedLength {
+		return ErrPacketLengthMismatch
+	}
+
+	totalPacketSize := PrimaryHeaderSize + dataFieldSize
+	if totalPacketSize < 7 || totalPacketSize > 65542 {
+		return ErrPacketTooLarge
 	}
 
 	return nil

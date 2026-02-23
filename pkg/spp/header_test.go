@@ -10,7 +10,7 @@ func TestPrimaryHeaderEncodeDecode(t *testing.T) {
 		Version:             0,
 		Type:                1,
 		SecondaryHeaderFlag: 0,
-		APID:                2047,
+		APID:                100,
 		SequenceFlags:       3,
 		SequenceCount:       16383,
 		PacketLength:        1023,
@@ -45,10 +45,10 @@ func TestPrimaryHeaderSecondaryHeaderFlag(t *testing.T) {
 
 	for _, test := range tests {
 		ph := &spp.PrimaryHeader{
-			Version:             1,
+			Version:             0,
 			Type:                1,
 			SecondaryHeaderFlag: test.flag,
-			APID:                2047,
+			APID:                100,
 			SequenceFlags:       3,
 			SequenceCount:       16383,
 			PacketLength:        1023,
@@ -76,7 +76,7 @@ func TestPrimaryHeaderAPID(t *testing.T) {
 
 	for _, test := range tests {
 		ph := &spp.PrimaryHeader{
-			Version:             1,
+			Version:             0,
 			Type:                1,
 			SecondaryHeaderFlag: 0,
 			APID:                test.apid,
@@ -107,10 +107,10 @@ func TestPrimaryHeaderSequenceCount(t *testing.T) {
 
 	for _, test := range tests {
 		ph := &spp.PrimaryHeader{
-			Version:             1,
+			Version:             0,
 			Type:                1,
 			SecondaryHeaderFlag: 0,
-			APID:                2047,
+			APID:                100,
 			SequenceFlags:       3,
 			SequenceCount:       test.sequenceCount,
 			PacketLength:        1023,

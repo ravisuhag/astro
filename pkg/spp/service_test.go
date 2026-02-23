@@ -19,8 +19,13 @@ func TestWritePacket(t *testing.T) {
 		t.Fatalf("Failed to send space packet: %v", err)
 	}
 
-	if buf.Len() == 0 {
-		t.Errorf("Expected buffer to have data")
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode packet: %v", err)
+	}
+
+	if !bytes.Equal(buf.Bytes(), encoded) {
+		t.Errorf("Written bytes don't match encoded packet. Got %v, want %v", buf.Bytes(), encoded)
 	}
 }
 
