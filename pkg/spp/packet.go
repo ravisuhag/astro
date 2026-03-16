@@ -17,7 +17,7 @@ Space Packet Protocol (SPP):
 +----------------+----------------+----------------+----------------+
 | Packet Length (16b)                                             |
 +----------------+----------------+----------------+----------------+
-| Secondary Header (Optional, mission-specific)                  |
+| Secondary Header (Optional, mission-specific, 1-63 bytes)      |
 |                                                                |
 +----------------+----------------+----------------+----------------+
 | User Data Field (Variable Length)                              |
@@ -36,10 +36,10 @@ Legend:
 
 // SpacePacket represents a complete space packet as per CCSDS standards.
 type SpacePacket struct {
-	PrimaryHeader   PrimaryHeader    // The primary header of the space packet
-	SecondaryHeader *SecondaryHeader // Optional secondary header
-	UserData        []byte           // User data contained in the packet
-	ErrorControl    *uint16          // Optional error control field (e.g., CRC)
+	PrimaryHeader   PrimaryHeader   // The primary header of the space packet
+	SecondaryHeader SecondaryHeader // Optional mission-specific secondary header
+	UserData        []byte          // User data contained in the packet
+	ErrorControl    *uint16         // Optional error control field (e.g., CRC)
 }
 
 // NewSpacePacket creates a new SpacePacket instance.
@@ -52,24 +52,21 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 		return nil, ErrDataTooShort
 	}
 
-	// Default primary header
 	primaryHeader := PrimaryHeader{
 		Version:             0,
 		Type:                packetType,
 		SecondaryHeaderFlag: 0,
 		APID:                apid,
-		SequenceFlags:       3, // Default sequence flag (standalone packet)
+		SequenceFlags:       SeqFlagUnsegmented,
 		SequenceCount:       0,
 		PacketLength:        0, // Calculated after options are applied
 	}
 
-	// Initialize SpacePacket
 	packet := &SpacePacket{
 		PrimaryHeader: primaryHeader,
 		UserData:      data,
 	}
 
-	// Apply optional configurations
 	for _, option := range options {
 		if err := option(packet); err != nil {
 			return nil, err
@@ -80,11 +77,7 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 	// Packet data field = secondary header + user data + error control
 	dataFieldSize := len(packet.UserData)
 	if packet.SecondaryHeader != nil {
-		shBytes, err := packet.SecondaryHeader.Encode()
-		if err != nil {
-			return nil, err
-		}
-		dataFieldSize += len(shBytes)
+		dataFieldSize += packet.SecondaryHeader.Size()
 	}
 	if packet.ErrorControl != nil {
 		dataFieldSize += 2
@@ -97,7 +90,6 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 
 	packet.PrimaryHeader.PacketLength = uint16(dataFieldSize) - 1
 
-	// Validate the packet
 	if err := packet.Validate(); err != nil {
 		return nil, err
 	}
@@ -105,12 +97,14 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 	return packet, nil
 }
 
+// NewTMPacket creates a new telemetry SpacePacket.
 func NewTMPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacket, error) {
-	return NewSpacePacket(apid, 0, data, options...)
+	return NewSpacePacket(apid, PacketTypeTM, data, options...)
 }
 
+// NewTCPacket creates a new telecommand SpacePacket.
 func NewTCPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacket, error) {
-	return NewSpacePacket(apid, 1, data, options...)
+	return NewSpacePacket(apid, PacketTypeTC, data, options...)
 }
 
 // PacketOption defines a function type for configuring SpacePacket options.
@@ -119,8 +113,11 @@ type PacketOption func(*SpacePacket) error
 // WithSecondaryHeader adds a secondary header to the SpacePacket.
 func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 	return func(packet *SpacePacket) error {
+		if err := validateSecondaryHeader(header); err != nil {
+			return err
+		}
 		packet.PrimaryHeader.SecondaryHeaderFlag = 1
-		packet.SecondaryHeader = &header
+		packet.SecondaryHeader = header
 		return nil
 	}
 }
@@ -135,29 +132,27 @@ func WithErrorControl(crc uint16) PacketOption {
 
 // Encode converts the SpacePacket into a byte slice for transmission.
 func (sp *SpacePacket) Encode() ([]byte, error) {
-	// Encode primary header
 	headerBytes, err := sp.PrimaryHeader.Encode()
 	if err != nil {
-		return nil, ErrInvalidHeader
+		return nil, err
 	}
 
 	packetData := append([]byte{}, headerBytes...)
 
 	// Encode secondary header if present
-	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader != nil {
+	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
+		if sp.SecondaryHeader == nil {
+			return nil, ErrSecondaryHeaderMissing
+		}
 		secondaryBytes, err := sp.SecondaryHeader.Encode()
 		if err != nil {
-			return nil, ErrInvalidHeader
+			return nil, err
 		}
 		packetData = append(packetData, secondaryBytes...)
-	} else if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader == nil {
-		return nil, ErrSecondaryHeaderMissing
 	}
 
-	// Append user data
 	packetData = append(packetData, sp.UserData...)
 
-	// Append error control field if present
 	if sp.ErrorControl != nil {
 		crcBytes := make([]byte, 2)
 		crcBytes[0] = byte(*sp.ErrorControl >> 8)
@@ -169,15 +164,17 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 }
 
 // Decode parses a byte slice into a SpacePacket.
-func Decode(data []byte) (*SpacePacket, error) {
+// If the packet has a secondary header (flag = 1) and a SecondaryHeader
+// implementation is provided, it will be used to decode the secondary header.
+// Otherwise, secondary header bytes are included in UserData.
+func Decode(data []byte, sh ...SecondaryHeader) (*SpacePacket, error) {
 	if len(data) < 7 {
 		return nil, ErrDataTooShort
 	}
 
-	// Decode primary header
 	primaryHeader := PrimaryHeader{}
 	if err := primaryHeader.Decode(data[:6]); err != nil {
-		return nil, ErrInvalidHeader
+		return nil, err
 	}
 
 	// Per CCSDS: total packet = primary header + packet data field
@@ -189,22 +186,22 @@ func Decode(data []byte) (*SpacePacket, error) {
 
 	offset := PrimaryHeaderSize
 	remainingDataField := dataFieldSize
-	var secondaryHeader *SecondaryHeader
+	var secondaryHeader SecondaryHeader
 
-	// Decode secondary header if flag is set
-	if primaryHeader.SecondaryHeaderFlag == 1 {
-		if remainingDataField < 8 {
+	// Decode secondary header if flag is set and a decoder is provided
+	if primaryHeader.SecondaryHeaderFlag == 1 && len(sh) > 0 && sh[0] != nil {
+		secondaryHeader = sh[0]
+		shSize := secondaryHeader.Size()
+		if remainingDataField < shSize {
 			return nil, ErrDataTooShort
 		}
-		secondaryHeader = &SecondaryHeader{}
-		if err := secondaryHeader.Decode(data[offset : offset+8]); err != nil {
-			return nil, ErrInvalidHeader
+		if err := secondaryHeader.Decode(data[offset : offset+shSize]); err != nil {
+			return nil, err
 		}
-		offset += 8
-		remainingDataField -= 8
+		offset += shSize
+		remainingDataField -= shSize
 	}
 
-	// Remaining data field is user data
 	userData := data[offset : offset+remainingDataField]
 
 	packet := &SpacePacket{
@@ -213,40 +210,31 @@ func Decode(data []byte) (*SpacePacket, error) {
 		UserData:        userData,
 	}
 
-	// Validate the packet
-	if err := packet.Validate(); err != nil {
-		return nil, err
-	}
-
 	return packet, nil
 }
 
 // Validate checks the integrity and correctness of the SpacePacket.
 func (sp *SpacePacket) Validate() error {
-	// Validate primary header
 	if err := sp.PrimaryHeader.Validate(); err != nil {
 		return err
 	}
 
-	// Validate secondary header if present
-	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
-		if sp.SecondaryHeader == nil {
-			return ErrSecondaryHeaderMissing
-		}
-		if err := sp.SecondaryHeader.Validate(); err != nil {
+	// Validate secondary header structural constraints
+	if sp.SecondaryHeader != nil {
+		if err := validateSecondaryHeader(sp.SecondaryHeader); err != nil {
 			return err
 		}
 	}
 
+	// Check flag consistency: flag set but no secondary header provided at creation time
+	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader == nil {
+		return ErrSecondaryHeaderMissing
+	}
+
 	// Calculate total packet data field size per CCSDS
-	// Packet data field = secondary header + user data + error control
 	dataFieldSize := len(sp.UserData)
 	if sp.SecondaryHeader != nil {
-		shBytes, err := sp.SecondaryHeader.Encode()
-		if err != nil {
-			return err
-		}
-		dataFieldSize += len(shBytes)
+		dataFieldSize += sp.SecondaryHeader.Size()
 	}
 	if sp.ErrorControl != nil {
 		dataFieldSize += 2
@@ -273,8 +261,9 @@ func (sp *SpacePacket) Humanize() string {
 	builder.WriteString(sp.PrimaryHeader.Humanize())
 
 	if sp.SecondaryHeader != nil {
-		builder.WriteString("\nSecondary Header:\n")
-		builder.WriteString(sp.SecondaryHeader.Humanize())
+		builder.WriteString("\nSecondary Header: present (")
+		builder.WriteString(strconv.Itoa(sp.SecondaryHeader.Size()))
+		builder.WriteString(" bytes)")
 	}
 
 	if sp.ErrorControl != nil {

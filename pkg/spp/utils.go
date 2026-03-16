@@ -3,14 +3,11 @@ package spp
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"strings"
 )
 
 // CalculatePacketSize computes the total size of a space packet from a raw header dump.
 // It uses the packet length field in the primary header to determine the full packet size.
 func CalculatePacketSize(header []byte) (int, error) {
-
 	if len(header) < PrimaryHeaderSize {
 		return 0, errors.New("header size is too small to calculate packet size")
 	}
@@ -18,14 +15,14 @@ func CalculatePacketSize(header []byte) (int, error) {
 	// Extract the packet length field (bytes 4 and 5 of the header)
 	packetLength := binary.BigEndian.Uint16(header[4:6])
 
-	// Calculate the total packet size (primary header + payload length + 1 byte for packet length offset)
+	// Total packet size = primary header (6) + packet data field (packetLength + 1)
 	totalPacketSize := PrimaryHeaderSize + int(packetLength) + 1
 
 	return totalPacketSize, nil
 }
 
 // IsIdlePacket determines if a given Space Packet is an idle packet.
-// For CCSDS Space Packets, idle packets are identified by the APID being 0x7FF (2047 in decimal).
+// For CCSDS Space Packets, idle packets are identified by the APID being 0x7FF (2047).
 func IsIdlePacket(packet *SpacePacket) bool {
 	if packet == nil {
 		return false
@@ -48,13 +45,4 @@ func ComputeCRC(data []byte) uint16 {
 		}
 	}
 	return crc
-}
-
-// mapToString converts a map to a string representation.
-func mapToString(m map[string]interface{}) string {
-	var sb strings.Builder
-	for k, v := range m {
-		sb.WriteString(k + ": " + fmt.Sprintf("%v", v) + "\n")
-	}
-	return sb.String()
 }

@@ -29,7 +29,7 @@ func TestWritePacket(t *testing.T) {
 	}
 }
 
-func TestSendPacket(t *testing.T) {
+func TestReadWritePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {

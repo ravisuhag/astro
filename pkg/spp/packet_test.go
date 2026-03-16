@@ -2,9 +2,33 @@ package spp_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	spp2 "github.com/ravisuhag/astro/pkg/spp"
 	"testing"
 )
+
+// testSecondaryHeader is a simple mission-specific secondary header for testing.
+type testSecondaryHeader struct {
+	Timestamp uint64
+}
+
+func (h *testSecondaryHeader) Encode() ([]byte, error) {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, h.Timestamp)
+	return buf, nil
+}
+
+func (h *testSecondaryHeader) Decode(data []byte) error {
+	if len(data) < 8 {
+		return spp2.ErrDataTooShort
+	}
+	h.Timestamp = binary.BigEndian.Uint64(data[:8])
+	return nil
+}
+
+func (h *testSecondaryHeader) Size() int {
+	return 8
+}
 
 func TestNewSpacePacket(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
@@ -50,8 +74,8 @@ func TestSpacePacketEncodeDecode(t *testing.T) {
 
 func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	secondaryHeader := spp2.SecondaryHeader{Timestamp: 1234567890}
-	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(secondaryHeader))
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh))
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with secondary header: %v", err)
 	}
@@ -60,8 +84,8 @@ func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 		t.Errorf("Expected SecondaryHeaderFlag 1, got %d", packet.PrimaryHeader.SecondaryHeaderFlag)
 	}
 
-	if packet.SecondaryHeader == nil || packet.SecondaryHeader.Timestamp != 1234567890 {
-		t.Errorf("Secondary header does not match. Got %+v, want %+v", packet.SecondaryHeader, secondaryHeader)
+	if packet.SecondaryHeader == nil {
+		t.Fatal("Expected secondary header, got nil")
 	}
 }
 
@@ -80,7 +104,7 @@ func TestSpacePacketWithErrorControl(t *testing.T) {
 
 func TestSpacePacketWithSecondaryHeaderEncodeDecode(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	sh := spp2.SecondaryHeader{Timestamp: 1234567890}
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
 	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh))
 	if err != nil {
 		t.Fatalf("Failed to create packet: %v", err)
@@ -91,7 +115,8 @@ func TestSpacePacketWithSecondaryHeaderEncodeDecode(t *testing.T) {
 		t.Fatalf("Failed to encode: %v", err)
 	}
 
-	decoded, err := spp2.Decode(encoded)
+	decodedSH := &testSecondaryHeader{}
+	decoded, err := spp2.Decode(encoded, decodedSH)
 	if err != nil {
 		t.Fatalf("Failed to decode: %v", err)
 	}
@@ -102,14 +127,45 @@ func TestSpacePacketWithSecondaryHeaderEncodeDecode(t *testing.T) {
 	if decoded.SecondaryHeader == nil {
 		t.Fatal("Expected secondary header, got nil")
 	}
-	if decoded.SecondaryHeader.Timestamp != sh.Timestamp {
-		t.Errorf("Timestamp mismatch. Got %d, want %d", decoded.SecondaryHeader.Timestamp, sh.Timestamp)
+	if decodedSH.Timestamp != sh.Timestamp {
+		t.Errorf("Timestamp mismatch. Got %d, want %d", decodedSH.Timestamp, sh.Timestamp)
+	}
+}
+
+func TestSpacePacketWithSecondaryHeaderDecodeWithoutDecoder(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode: %v", err)
+	}
+
+	// Decode without providing a secondary header decoder
+	decoded, err := spp2.Decode(encoded)
+	if err != nil {
+		t.Fatalf("Failed to decode: %v", err)
+	}
+
+	// Secondary header bytes should be included in UserData
+	if decoded.SecondaryHeader != nil {
+		t.Error("Expected nil secondary header when no decoder provided")
+	}
+
+	// UserData should contain secondary header bytes + original user data
+	expectedLen := 8 + len(data) // 8 bytes timestamp + 3 bytes data
+	if len(decoded.UserData) != expectedLen {
+		t.Errorf("Expected UserData length %d, got %d", expectedLen, len(decoded.UserData))
 	}
 }
 
 func TestPacketLengthIncludesAllFields(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	sh := spp2.SecondaryHeader{Timestamp: 1234567890}
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
 	crc := uint16(0xABCD)
 	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl(crc))
 	if err != nil {
@@ -130,7 +186,6 @@ func TestPacketLengthIncludesAllFields(t *testing.T) {
 }
 
 func TestSpacePacketValidate(t *testing.T) {
-	// Test case: Valid SpacePacket
 	data := []byte{0x01, 0x02, 0x03}
 	packet, err := spp2.NewSpacePacket(100, 0, data)
 	if err != nil {
@@ -146,35 +201,78 @@ func TestSpacePacketValidate(t *testing.T) {
 	if err := packet.Validate(); err == nil {
 		t.Errorf("Expected error for invalid APID, but got none")
 	}
-	packet.PrimaryHeader.APID = 100 // Reset to valid APID
+	packet.PrimaryHeader.APID = 100
 
 	// Test case: Invalid user data length
 	packet.UserData = []byte{0x01, 0x02}
 	if err := packet.Validate(); err == nil {
 		t.Errorf("Expected error for mismatched user data length, but got none")
 	}
-	packet.UserData = data // Reset to valid user data
+	packet.UserData = data
 
 	// Test case: Invalid packet length
 	packet.PrimaryHeader.PacketLength = 65535
 	if err := packet.Validate(); err == nil {
 		t.Errorf("Expected error for packet length exceeding maximum, but got none")
 	}
-	packet.PrimaryHeader.PacketLength = uint16(len(data)) - 1 // Reset to valid packet length
+	packet.PrimaryHeader.PacketLength = uint16(len(data)) - 1
 
 	// Test case: Secondary header flag set but no secondary header
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
 	if err := packet.Validate(); err == nil {
 		t.Errorf("Expected error for missing secondary header, but got none")
 	}
-	packet.PrimaryHeader.SecondaryHeaderFlag = 0 // Reset to valid state
+	packet.PrimaryHeader.SecondaryHeaderFlag = 0
 
 	// Test case: Valid secondary header
-	secondaryHeader := spp2.SecondaryHeader{Timestamp: 1234567890}
-	packet.SecondaryHeader = &secondaryHeader
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
+	packet.SecondaryHeader = sh
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
-	packet.PrimaryHeader.PacketLength = uint16(len(data)+8) - 1 // user data (3) + secondary header timestamp (8)
+	packet.PrimaryHeader.PacketLength = uint16(len(data)+8) - 1
 	if err := packet.Validate(); err != nil {
 		t.Errorf("Expected packet to be valid with secondary header, but got error: %v", err)
+	}
+}
+
+func TestNewTMPacket(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	packet, err := spp2.NewTMPacket(100, data)
+	if err != nil {
+		t.Fatalf("Failed to create TM packet: %v", err)
+	}
+	if packet.PrimaryHeader.Type != spp2.PacketTypeTM {
+		t.Errorf("Expected TM type %d, got %d", spp2.PacketTypeTM, packet.PrimaryHeader.Type)
+	}
+}
+
+func TestNewTCPacket(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	packet, err := spp2.NewTCPacket(100, data)
+	if err != nil {
+		t.Fatalf("Failed to create TC packet: %v", err)
+	}
+	if packet.PrimaryHeader.Type != spp2.PacketTypeTC {
+		t.Errorf("Expected TC type %d, got %d", spp2.PacketTypeTC, packet.PrimaryHeader.Type)
+	}
+}
+
+func TestPacketConstants(t *testing.T) {
+	if spp2.PacketTypeTM != 0 {
+		t.Errorf("PacketTypeTM should be 0, got %d", spp2.PacketTypeTM)
+	}
+	if spp2.PacketTypeTC != 1 {
+		t.Errorf("PacketTypeTC should be 1, got %d", spp2.PacketTypeTC)
+	}
+	if spp2.SeqFlagContinuation != 0 {
+		t.Errorf("SeqFlagContinuation should be 0, got %d", spp2.SeqFlagContinuation)
+	}
+	if spp2.SeqFlagFirstSegment != 1 {
+		t.Errorf("SeqFlagFirstSegment should be 1, got %d", spp2.SeqFlagFirstSegment)
+	}
+	if spp2.SeqFlagLastSegment != 2 {
+		t.Errorf("SeqFlagLastSegment should be 2, got %d", spp2.SeqFlagLastSegment)
+	}
+	if spp2.SeqFlagUnsegmented != 3 {
+		t.Errorf("SeqFlagUnsegmented should be 3, got %d", spp2.SeqFlagUnsegmented)
 	}
 }
