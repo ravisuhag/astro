@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ravisuhag/astro)](https://goreportcard.com/report/github.com/ravisuhag/astro)
 
-Astro is an open-source Go library implementing [CCSDS](https://public.ccsds.org) (Consultative Committee for Space Data Systems) standards — the international protocols used by NASA, ESA, JAXA, and other space agencies for spacecraft communication and data systems.
+Astro is an open-source Go library implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards — the international protocols used by NASA, ESA, JAXA, and other space agencies for spacecraft communication and data systems.
 
 ## Installation
 
@@ -12,7 +12,7 @@ Astro is an open-source Go library implementing [CCSDS](https://public.ccsds.org
 go get github.com/ravisuhag/astro
 ```
 
-Requires Go 1.23 or later.
+Requires Go 1.26 or later.
 
 ## Usage
 
@@ -77,6 +77,18 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 | Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/spp.md) \| [PICS](docs/pics/spp-pics.md) |
 | Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | | |
 | CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5.pdf) | | |
+| Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | | |
+| Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | | |
+
+#### Space Link Extension
+
+| Protocol | Standard | Package | Docs |
+|----------|----------|---------|------|
+| SLE Return All Frames | [CCSDS 911.1-B-4](https://public.ccsds.org/Pubs/911x1b4.pdf) | | |
+| SLE Return Channel Frames | [CCSDS 911.2-B-3](https://public.ccsds.org/Pubs/911x2b3.pdf) | | |
+| SLE Forward CLTU | [CCSDS 912.1-B-4](https://public.ccsds.org/Pubs/912x1b4.pdf) | | |
+| SLE Return Operational Control Fields | [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) | | |
+| SLE Internet Protocol for Transfer Services | [CCSDS 914.0-B-2](https://public.ccsds.org/Pubs/914x0b2.pdf) | | |
 
 #### Time
 
@@ -84,11 +96,25 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 |----------|----------|---------|------|
 | Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | | |
 
+#### Mission Database
+
+| Protocol | Standard | Package | Docs |
+|----------|----------|---------|------|
+| XML Telemetric and Command Exchange | [XTCE](https://www.omg.org/spec/XTCE/) / [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) | | |
+
+#### Packet Utilization
+
+| Protocol | Standard | Package | Docs |
+|----------|----------|---------|------|
+| Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | | |
+| Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
+| Space Data Links — Service Specification | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-rev-1-space-data-links-telemetry-transfer-frame-protocol/) | | |
+
 ## Contributing
 
 Contributions are welcome. Each protocol listed above without a package is open for implementation. To get started:
 
-1. Read the relevant CCSDS Blue Book (linked in the table above).
+1. Read the relevant CCSDS Blue Book or ECSS standard (linked in the table above).
 2. Look at [`pkg/spp`](pkg/spp) or [`pkg/tmdl`](pkg/tmdl) for the established patterns — struct design, encode/decode, validation, options, and tests.
 3. Open an issue to discuss your approach before submitting a PR.
 
