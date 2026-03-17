@@ -1,130 +1,109 @@
 package tmdl_test
 
 import (
-	"github.com/ravisuhag/astro/pkg/tmdl"
+	"errors"
 	"testing"
+
+	"github.com/ravisuhag/astro/pkg/tmdl"
 )
 
 func TestNewVirtualChannel(t *testing.T) {
-	vcid := uint8(0x01)
-	bufferSize := 10
+	vc := tmdl.NewVirtualChannel(0x01, 10)
 
-	vc := tmdl.NewVirtualChannel(vcid, bufferSize)
-
-	if vc.VCID != vcid {
-		t.Errorf("Expected VCID %v, got %v", vcid, vc.VCID)
+	if vc.VCID != 0x01 {
+		t.Errorf("Expected VCID 0x01, got %v", vc.VCID)
 	}
 
-	if len(vc.FrameBuffer) != 0 {
-		t.Errorf("Expected FrameBuffer length 0, got %v", len(vc.FrameBuffer))
+	if vc.Len() != 0 {
+		t.Errorf("Expected Len 0, got %v", vc.Len())
 	}
 
-	if cap(vc.FrameBuffer) != bufferSize {
-		t.Errorf("Expected FrameBuffer capacity %v, got %v", bufferSize, cap(vc.FrameBuffer))
-	}
-
-	if vc.MaxBufferSize != bufferSize {
-		t.Errorf("Expected MaxBufferSize %v, got %v", bufferSize, vc.MaxBufferSize)
+	if vc.HasFrames() {
+		t.Error("Expected HasFrames to be false")
 	}
 }
 
 func TestAddFrame(t *testing.T) {
-	vcid := uint8(0x01)
-	bufferSize := 2
-	vc := tmdl.NewVirtualChannel(vcid, bufferSize)
+	vc := tmdl.NewVirtualChannel(0x01, 2)
 
 	frame := &tmdl.TMTransferFrame{}
+	if err := vc.AddFrame(frame); err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if vc.Len() != 1 {
+		t.Errorf("Expected Len 1, got %v", vc.Len())
+	}
+
+	if err := vc.AddFrame(frame); err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
 	err := vc.AddFrame(frame)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+	if !errors.Is(err, tmdl.ErrBufferFull) {
+		t.Fatalf("Expected ErrBufferFull, got %v", err)
 	}
 
-	if len(vc.FrameBuffer) != 1 {
-		t.Errorf("Expected FrameBuffer length 1, got %v", len(vc.FrameBuffer))
-	}
-
-	err = vc.AddFrame(frame)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	err = vc.AddFrame(frame)
-	if err == nil {
-		t.Fatalf("Expected error, got nil")
-	}
-
-	if len(vc.FrameBuffer) != bufferSize {
-		t.Errorf("Expected FrameBuffer length %v, got %v", bufferSize, len(vc.FrameBuffer))
+	if vc.Len() != 2 {
+		t.Errorf("Expected Len 2, got %v", vc.Len())
 	}
 }
 
 func TestGetNextFrame(t *testing.T) {
-	vcid := uint8(0x01)
-	bufferSize := 2
-	vc := tmdl.NewVirtualChannel(vcid, bufferSize)
+	vc := tmdl.NewVirtualChannel(0x01, 2)
 
 	frame1 := &tmdl.TMTransferFrame{}
 	frame2 := &tmdl.TMTransferFrame{}
 
-	err := vc.AddFrame(frame1)
-	if err != nil {
-		t.Errorf("Failed to add frame1: %v", err)
+	if err := vc.AddFrame(frame1); err != nil {
+		t.Fatalf("Failed to add frame1: %v", err)
+	}
+	if err := vc.AddFrame(frame2); err != nil {
+		t.Fatalf("Failed to add frame2: %v", err)
 	}
 
-	err = vc.AddFrame(frame2)
-	if err != nil {
-		t.Errorf("Failed to add frame2: %v", err)
-	}
-
-	retrievedFrame, err := vc.GetNextFrame()
+	retrieved, err := vc.GetNextFrame()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-
-	if retrievedFrame != frame1 {
-		t.Errorf("Expected frame1, got %v", retrievedFrame)
+	if retrieved != frame1 {
+		t.Errorf("Expected frame1, got %v", retrieved)
 	}
 
-	retrievedFrame, err = vc.GetNextFrame()
+	retrieved, err = vc.GetNextFrame()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-
-	if retrievedFrame != frame2 {
-		t.Errorf("Expected frame2, got %v", retrievedFrame)
+	if retrieved != frame2 {
+		t.Errorf("Expected frame2, got %v", retrieved)
 	}
 
 	_, err = vc.GetNextFrame()
-	if err == nil {
-		t.Fatalf("Expected error, got nil")
+	if !errors.Is(err, tmdl.ErrNoFramesAvailable) {
+		t.Fatalf("Expected ErrNoFramesAvailable, got %v", err)
 	}
 }
 
 func TestHasFrames(t *testing.T) {
-	vcid := uint8(0x01)
-	bufferSize := 2
-	vc := tmdl.NewVirtualChannel(vcid, bufferSize)
+	vc := tmdl.NewVirtualChannel(0x01, 2)
 
 	if vc.HasFrames() {
-		t.Errorf("Expected HasFrames to be false, got true")
+		t.Error("Expected HasFrames to be false")
 	}
 
-	frame := &tmdl.TMTransferFrame{}
-	err := vc.AddFrame(frame)
-	if err != nil {
-		t.Errorf("Failed to add frame: %v", err)
+	if err := vc.AddFrame(&tmdl.TMTransferFrame{}); err != nil {
+		t.Fatalf("Failed to add frame: %v", err)
 	}
 
 	if !vc.HasFrames() {
-		t.Errorf("Expected HasFrames to be true, got false")
+		t.Error("Expected HasFrames to be true")
 	}
 
-	_, err = vc.GetNextFrame()
-	if err != nil {
-		t.Errorf("Failed to retrieve frame: %v", err)
+	if _, err := vc.GetNextFrame(); err != nil {
+		t.Fatalf("Failed to retrieve frame: %v", err)
 	}
 
 	if vc.HasFrames() {
-		t.Errorf("Expected HasFrames to be false, got true")
+		t.Error("Expected HasFrames to be false")
 	}
 }

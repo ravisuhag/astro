@@ -1,9 +1,6 @@
 package tmdl
 
-import (
-	"encoding/binary"
-	"errors"
-)
+import "encoding/binary"
 
 // TMTransferFrame represents a CCSDS TM Space Data Link Protocol Transfer Frame.
 type TMTransferFrame struct {
@@ -17,18 +14,19 @@ type TMTransferFrame struct {
 // NewTMTransferFrame initializes a new TM Transfer Frame.
 func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
 	if len(data) > 65535 {
-		return nil, errors.New("data field exceeds maximum frame length")
+		return nil, ErrDataTooLarge
 	}
 
 	secondaryHeader := SecondaryHeader{
-		DataField: secondaryHeaderData,
+		HeaderLength: uint8(len(secondaryHeaderData)),
+		DataField:    secondaryHeaderData,
 	}
 
 	frame := &TMTransferFrame{
 		Header: PrimaryHeader{
 			VersionNumber:    0b00,          // Default CCSDS TM version
 			SpacecraftID:     scid & 0x03FF, // Mask to 10 bits
-			VirtualChannelID: vcid & 0x3F,   // Mask to 6 bits
+			VirtualChannelID: vcid & 0x07,   // Mask to 3 bits
 			OCFFlag:          len(ocf) > 0,  // Set OCF flag if present
 			FSHFlag:          len(secondaryHeaderData) > 0,
 			MCFrameCount:     0, // To be set dynamically
@@ -43,39 +41,51 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 		OperationalControl: ocf,
 	}
 	if !frame.Header.SyncFlag {
-		frame.Header.FirstHeaderPtr = uint16(len(secondaryHeaderData))
+		// FirstHeaderPtr = total encoded secondary header size (1 prefix byte + data)
+		if len(secondaryHeaderData) > 0 {
+			frame.Header.FirstHeaderPtr = uint16(1 + len(secondaryHeaderData))
+		}
 	} else {
-		frame.Header.FirstHeaderPtr = 0xFFFF // Undefined when SyncFlag is set
+		frame.Header.FirstHeaderPtr = 0x07FF // Undefined when SyncFlag is set (all 1s in 11 bits)
 	}
 
 	// Compute Frame Error Control (CRC-16)
-	frame.FrameErrorControl = ComputeCRC(frame.EncodeWithoutFEC())
+	encoded, err := frame.EncodeWithoutFEC()
+	if err != nil {
+		return nil, err
+	}
+	frame.FrameErrorControl = ComputeCRC(encoded)
 
 	return frame, nil
 }
 
 // Encode converts the TM Transfer Frame to a byte slice.
-func (tf *TMTransferFrame) Encode() []byte {
-	frameData := tf.EncodeWithoutFEC()
+func (tf *TMTransferFrame) Encode() ([]byte, error) {
+	frameData, err := tf.EncodeWithoutFEC()
+	if err != nil {
+		return nil, err
+	}
 
 	// Append CRC-16
 	crcBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(crcBytes, tf.FrameErrorControl)
-	return append(frameData, crcBytes...)
+	return append(frameData, crcBytes...), nil
 }
 
 // EncodeWithoutFEC converts the frame to bytes excluding the CRC field.
-func (tf *TMTransferFrame) EncodeWithoutFEC() []byte {
-	header := tf.Header.Encode()
+func (tf *TMTransferFrame) EncodeWithoutFEC() ([]byte, error) {
+	header, err := tf.Header.Encode()
+	if err != nil {
+		return nil, err
+	}
+
 	var secondaryHeader []byte
-	var err error
 
 	// Only encode secondary header if FSHFlag is set
 	if tf.Header.FSHFlag {
 		secondaryHeader, err = tf.SecondaryHeader.Encode()
 		if err != nil {
-			// Handle error or truncate to FirstHeaderPtr length
-			secondaryHeader = secondaryHeader[:tf.Header.FirstHeaderPtr]
+			return nil, err
 		}
 	}
 
@@ -86,18 +96,18 @@ func (tf *TMTransferFrame) EncodeWithoutFEC() []byte {
 		frameData = append(frameData, tf.OperationalControl...)
 	}
 
-	return frameData
+	return frameData, nil
 }
 
 // DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	if len(data) < 7 {
-		return nil, errors.New("frame too short to be a valid TM Transfer Frame")
+		return nil, ErrDataTooShort
 	}
 
 	// Decode Primary Header
-	header, err := (&PrimaryHeader{}).Decode(data[:6])
-	if err != nil {
+	var header PrimaryHeader
+	if err := header.Decode(data[:6]); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +115,7 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	receivedCRC := binary.BigEndian.Uint16(data[len(data)-2:])
 	computedCRC := ComputeCRC(data[:len(data)-2])
 	if receivedCRC != computedCRC {
-		return nil, errors.New("CRC mismatch: received CRC does not match computed CRC")
+		return nil, ErrCRCMismatch
 	}
 
 	// Extract Data Field
@@ -118,7 +128,7 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	// Extract Secondary Header if present
 	if header.FSHFlag {
 		if int(header.FirstHeaderPtr) > len(data)-primaryHeaderLength {
-			return nil, errors.New("invalid FirstHeaderPtr value")
+			return nil, ErrInvalidFirstHeaderPtr
 		}
 		frameSecondaryData = data[dataStart : dataStart+int(header.FirstHeaderPtr)]
 		dataStart += int(header.FirstHeaderPtr)
@@ -143,7 +153,7 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 
 	// Construct and return the TMTransferFrame object
 	return &TMTransferFrame{
-		Header:             *header,
+		Header:             header,
 		SecondaryHeader:    secondaryHeader,
 		DataField:          dataField,
 		OperationalControl: operationalControl,

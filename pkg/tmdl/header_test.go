@@ -3,6 +3,7 @@ package tmdl_test
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/tmdl"
@@ -23,19 +24,21 @@ func TestPrimaryHeader_EncodeDecode(t *testing.T) {
 		FirstHeaderPtr:   0x07FF,
 	}
 
-	encoded := original.Encode()
+	encoded, err := original.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
 
-	// Verify header is exactly 8 bytes (6 bytes + 2 bytes FirstHeaderPtr)
 	if len(encoded) != 6 {
 		t.Fatalf("Expected header length of 6 bytes, got %d", len(encoded))
 	}
 
-	decoded, err := original.Decode(encoded)
-	if err != nil {
+	var decoded tmdl.PrimaryHeader
+	if err := decoded.Decode(encoded); err != nil {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	if *original != *decoded {
+	if *original != decoded {
 		t.Errorf("Expected %v, got %v", original, decoded)
 	}
 }
@@ -53,49 +56,49 @@ func TestPrimaryHeader_Validate(t *testing.T) {
 	}
 
 	invalidHeader := &tmdl.PrimaryHeader{
-		VersionNumber:    4, // Invalid VersionNumber
+		VersionNumber:    4,
 		SpacecraftID:     0x3FF,
 		VirtualChannelID: 0x07,
 		SegmentLengthID:  0x03,
 	}
 
-	if err := invalidHeader.Validate(); err == nil {
-		t.Errorf("Expected error, got nil")
+	if err := invalidHeader.Validate(); !errors.Is(err, tmdl.ErrInvalidVersion) {
+		t.Errorf("Expected ErrInvalidVersion, got %v", err)
 	}
 }
 
 func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
-	// Create a fully populated Header
 	original := &tmdl.PrimaryHeader{
-		VersionNumber:    0,     // 00
-		SpacecraftID:     0x3A5, // 933 (11 1010 0101)
-		VirtualChannelID: 5,     // 101
-		OCFFlag:          true,  // 1
-		MCFrameCount:     20,    // 0001 0100
-		VCFrameCount:     40,    // 0010 1000
-		FSHFlag:          true,  // 1
-		SyncFlag:         false, // 0
-		PacketOrderFlag:  false, // 0
-		SegmentLengthID:  3,     // 10
-		FirstHeaderPtr:   500,   // 001 1111 0100
+		VersionNumber:    0,
+		SpacecraftID:     0x3A5,
+		VirtualChannelID: 5,
+		OCFFlag:          true,
+		MCFrameCount:     20,
+		VCFrameCount:     40,
+		FSHFlag:          true,
+		SyncFlag:         false,
+		PacketOrderFlag:  false,
+		SegmentLengthID:  3,
+		FirstHeaderPtr:   500,
 	}
-	// Encode the header
-	encoded := original.Encode()
 
-	// Convert to hex for readability
+	encoded, err := original.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
 	hexEncoded := hex.EncodeToString(encoded)
 	expectedHex := "3a5b142899f4"
 	if hexEncoded != expectedHex {
 		t.Errorf("Expected encoded header to be %s, got %s", expectedHex, hexEncoded)
 	}
 
-	// Decode the header
-	decoded, err := original.Decode(encoded)
-	if err != nil {
+	var decoded tmdl.PrimaryHeader
+	if err := decoded.Decode(encoded); err != nil {
 		t.Fatalf("Decode failed: %v", err)
 	}
-	// Compare the decoded header with the original
-	if *original != *decoded {
+
+	if *original != decoded {
 		t.Errorf("Expected %v, got %v", original, decoded)
 	}
 }
@@ -103,7 +106,7 @@ func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 func TestSecondaryHeader_EncodeDecode(t *testing.T) {
 	original := &tmdl.SecondaryHeader{
 		VersionNumber: 0,
-		HeaderLength:  0x3F,
+		HeaderLength:  3, // Must match len(DataField)
 		DataField:     []byte{0x01, 0x02, 0x03},
 	}
 
@@ -133,11 +136,11 @@ func TestSecondaryHeader_Validate(t *testing.T) {
 	}
 
 	invalidHeader := &tmdl.SecondaryHeader{
-		VersionNumber: 1, // Invalid VersionNumber
+		VersionNumber: 1,
 		HeaderLength:  0x3F,
 	}
 
-	if err := invalidHeader.Validate(); err == nil {
-		t.Errorf("Expected error, got nil")
+	if err := invalidHeader.Validate(); !errors.Is(err, tmdl.ErrInvalidSecondaryHeaderVersion) {
+		t.Errorf("Expected ErrInvalidSecondaryHeaderVersion, got %v", err)
 	}
 }

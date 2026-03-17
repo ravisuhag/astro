@@ -1,45 +1,47 @@
 package tmdl
 
-import (
-	"errors"
-)
-
 // VirtualChannel represents a logical data stream within a spacecraft.
 type VirtualChannel struct {
-	VCID          uint8
-	FrameBuffer   []*TMTransferFrame // Stores received frames
-	MaxBufferSize int                // Max frames that can be stored
+	VCID        uint8
+	frameBuffer []*TMTransferFrame
+	maxSize     int
 }
 
 // NewVirtualChannel initializes a new Virtual Channel.
 func NewVirtualChannel(vcid uint8, bufferSize int) *VirtualChannel {
 	return &VirtualChannel{
-		VCID:          vcid,
-		FrameBuffer:   make([]*TMTransferFrame, 0, bufferSize),
-		MaxBufferSize: bufferSize,
+		VCID:        vcid,
+		frameBuffer: make([]*TMTransferFrame, 0, bufferSize),
+		maxSize:     bufferSize,
 	}
 }
 
 // AddFrame stores a new frame in the Virtual Channel buffer.
 func (vc *VirtualChannel) AddFrame(f *TMTransferFrame) error {
-	if len(vc.FrameBuffer) >= vc.MaxBufferSize {
-		return errors.New("virtual channel buffer full, dropping frame")
+	if len(vc.frameBuffer) >= vc.maxSize {
+		return ErrBufferFull
 	}
-	vc.FrameBuffer = append(vc.FrameBuffer, f)
+	vc.frameBuffer = append(vc.frameBuffer, f)
 	return nil
 }
 
 // GetNextFrame retrieves and removes the oldest frame from the buffer.
 func (vc *VirtualChannel) GetNextFrame() (*TMTransferFrame, error) {
-	if len(vc.FrameBuffer) == 0 {
-		return nil, errors.New("no frames in buffer")
+	if len(vc.frameBuffer) == 0 {
+		return nil, ErrNoFramesAvailable
 	}
-	f := vc.FrameBuffer[0]
-	vc.FrameBuffer = vc.FrameBuffer[1:]
+	f := vc.frameBuffer[0]
+	vc.frameBuffer[0] = nil // Allow GC of consumed frame
+	vc.frameBuffer = vc.frameBuffer[1:]
 	return f, nil
 }
 
 // HasFrames checks if there are frames available in the Virtual Channel.
 func (vc *VirtualChannel) HasFrames() bool {
-	return len(vc.FrameBuffer) > 0
+	return len(vc.frameBuffer) > 0
+}
+
+// Len returns the number of frames currently buffered.
+func (vc *VirtualChannel) Len() int {
+	return len(vc.frameBuffer)
 }

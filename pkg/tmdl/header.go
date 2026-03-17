@@ -1,15 +1,13 @@
 package tmdl
 
 import (
-	"bytes"
-	"errors"
 	"strconv"
 	"strings"
 )
 
-// Header represents the CCSDS TM Transfer Frame Primary Header.
+// PrimaryHeader represents the CCSDS TM Transfer Frame Primary Header.
 type PrimaryHeader struct {
-	VersionNumber    uint8  // 2 bits (0-1)   - Transfer Frame Version Number (01 for TM)
+	VersionNumber    uint8  // 2 bits (0-1)   - Transfer Frame Version Number (00 for TM)
 	SpacecraftID     uint16 // 10 bits (2-11) - Spacecraft Identifier
 	VirtualChannelID uint8  // 3 bits (12-14) - Virtual Channel Identifier
 	OCFFlag          bool   // 1 bit (15)     - Operational Control Field Flag
@@ -22,20 +20,24 @@ type PrimaryHeader struct {
 	FirstHeaderPtr   uint16 // 11 bits (37-47) - First Header Pointer
 }
 
-// GetMCID returns the Master Channel Identifier (MCID) for the TM Transfer Frame.
-func (h *PrimaryHeader) GetMCID() uint16 {
-	// MCID = TFVN + SCID
-	return uint16(h.VersionNumber)<<8 | h.SpacecraftID
+// MCID returns the Master Channel Identifier (MCID) for the TM Transfer Frame.
+func (h *PrimaryHeader) MCID() uint16 {
+	// MCID = TFVN (2 bits) + SCID (10 bits)
+	return uint16(h.VersionNumber)<<10 | h.SpacecraftID
 }
 
-// GetGVCID returns Global Virtual Channel Identifier.
-func (h *PrimaryHeader) GetGVCID() uint16 {
-	// GVCID = MCID + VCID = TFVN + SCID + VCID
-	return h.GetMCID() + uint16(h.VirtualChannelID)
+// GVCID returns the Global Virtual Channel Identifier.
+func (h *PrimaryHeader) GVCID() uint16 {
+	// GVCID = MCID (12 bits) + VCID (3 bits)
+	return h.MCID()<<3 | uint16(h.VirtualChannelID)
 }
 
-// Encode packs the Header fields into a byte slice.
-func (h *PrimaryHeader) Encode() []byte {
+// Encode packs the PrimaryHeader fields into a byte slice.
+func (h *PrimaryHeader) Encode() ([]byte, error) {
+	if err := h.Validate(); err != nil {
+		return nil, err
+	}
+
 	header := make([]byte, 6)
 
 	// Pack Version Number, Spacecraft ID, and Virtual Channel ID
@@ -64,66 +66,56 @@ func (h *PrimaryHeader) Encode() []byte {
 	}
 	header[4] |= (h.SegmentLengthID & 0x03) << 3
 
-	// Pack First Header Pointer (11 bits) into the last parts of byte 5 and into a new byte
-	header[4] |= uint8((h.FirstHeaderPtr >> 8) & 0x07) // Top 3 bits of FirstHeaderPtr
-	header[5] = uint8(h.FirstHeaderPtr & 0xFF)         // Bottom 8 bits of FirstHeaderPtr
-
-	return header
-}
-
-// Decode parses a byte slice into a Header struct.
-func (h *PrimaryHeader) Decode(data []byte) (*PrimaryHeader, error) {
-	if len(data) < 6 {
-		return nil, errors.New("data too short to decode primary header")
-	}
-
-	// Extract fields
-	header := &PrimaryHeader{
-		VersionNumber:    (data[0] >> 6) & 0x03,
-		SpacecraftID:     (uint16(data[0]&0x3F) << 4) | uint16(data[1]>>4),
-		VirtualChannelID: (data[1] >> 1) & 0x07,
-		OCFFlag:          (data[1] & 1) != 0,
-		MCFrameCount:     data[2],
-		VCFrameCount:     data[3],
-		FSHFlag:          (data[4] & (1 << 7)) != 0,
-		SyncFlag:         (data[4] & (1 << 6)) != 0,
-		PacketOrderFlag:  (data[4] & (1 << 5)) != 0,
-		SegmentLengthID:  (data[4] >> 3) & 0x03,
-		FirstHeaderPtr:   (uint16(data[4]&0x07) << 8) | uint16(data[5]),
-	}
-
-	if err := header.Validate(); err != nil {
-		return nil, err
-	}
+	// Pack First Header Pointer (11 bits)
+	header[4] |= uint8((h.FirstHeaderPtr >> 8) & 0x07) // Top 3 bits
+	header[5] = uint8(h.FirstHeaderPtr & 0xFF)          // Bottom 8 bits
 
 	return header, nil
 }
 
+// Decode parses a byte slice into the PrimaryHeader.
+func (h *PrimaryHeader) Decode(data []byte) error {
+	if len(data) < 6 {
+		return ErrDataTooShort
+	}
+
+	h.VersionNumber = (data[0] >> 6) & 0x03
+	h.SpacecraftID = (uint16(data[0]&0x3F) << 4) | uint16(data[1]>>4)
+	h.VirtualChannelID = (data[1] >> 1) & 0x07
+	h.OCFFlag = (data[1] & 1) != 0
+	h.MCFrameCount = data[2]
+	h.VCFrameCount = data[3]
+	h.FSHFlag = (data[4] & (1 << 7)) != 0
+	h.SyncFlag = (data[4] & (1 << 6)) != 0
+	h.PacketOrderFlag = (data[4] & (1 << 5)) != 0
+	h.SegmentLengthID = (data[4] >> 3) & 0x03
+	h.FirstHeaderPtr = (uint16(data[4]&0x07) << 8) | uint16(data[5])
+
+	return h.Validate()
+}
+
 // Validate checks if the header values are within valid ranges.
 func (h *PrimaryHeader) Validate() error {
-	if h.VersionNumber > 0b11 {
-		return errors.New("invalid VersionNumber: must be in range 0-3 (2 bits)")
-	}
 	if h.VersionNumber != 0 {
-		return errors.New("invalid VersionNumber: must be 0 for TM Transfer Frame")
+		return ErrInvalidVersion
 	}
 	if h.SpacecraftID > 0x03FF {
-		return errors.New("invalid SpacecraftID: must be in range 0-1023 (10 bits)")
+		return ErrInvalidSpacecraftID
 	}
 	if h.VirtualChannelID > 0x07 {
-		return errors.New("invalid VirtualChannelID: must be in range 0-7 (3 bits)")
+		return ErrInvalidVCID
 	}
 	if !h.SyncFlag && h.PacketOrderFlag {
-		return errors.New("invalid PacketOrderFlag: must be 0 when SyncFlag is 0")
+		return ErrInvalidPacketOrderFlag
 	}
 	if !h.SyncFlag && h.SegmentLengthID != 0b11 {
-		return errors.New("invalid SegmentLengthID: must be 3 (0b11) when SyncFlag is 0")
+		return ErrInvalidSegmentLengthID
 	}
-	if h.SegmentLengthID > 0x03 {
-		return errors.New("invalid SegmentLengthID: must be in range 0-3 (2 bits)")
+	if h.FirstHeaderPtr > 0x07FF {
+		return ErrInvalidFirstHeaderPtr
 	}
-	if h.SyncFlag && h.FirstHeaderPtr != 0xFFFF {
-		return errors.New("invalid FirstHeaderPtr: must be 0xFFFF when SyncFlag is 1")
+	if h.SyncFlag && h.FirstHeaderPtr != 0x07FF {
+		return ErrInvalidFirstHeaderPtr
 	}
 	return nil
 }
@@ -148,7 +140,7 @@ func (h *PrimaryHeader) Humanize() string {
 // SecondaryHeader represents the Transfer Frame Secondary Header as per CCSDS 132.0-B-3.
 type SecondaryHeader struct {
 	VersionNumber uint8  // 2 bits (0-1) - Always `00` for Version 1
-	HeaderLength  uint8  // 6 bits (2-7) - Length of Secondary Header (excluding this field)
+	HeaderLength  uint8  // 6 bits (2-7) - Length of Secondary Header Data Field
 	DataField     []byte // Transfer Frame Secondary Header Data
 }
 
@@ -158,35 +150,28 @@ func (sh *SecondaryHeader) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	buf := new(bytes.Buffer)
+	data := make([]byte, 1+len(sh.DataField))
+	data[0] = (sh.VersionNumber << 6) | (sh.HeaderLength & 0x3F)
+	copy(data[1:], sh.DataField)
 
-	// Encode VersionNumber and HeaderLength
-	firstByte := (sh.VersionNumber << 6) | (sh.HeaderLength & 0x3F)
-	if err := buf.WriteByte(firstByte); err != nil {
-		return nil, err
-	}
-
-	// Encode DataField
-	if _, err := buf.Write(sh.DataField); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return data, nil
 }
 
-// Decode deserializes a byte slice into a SecondaryHeader.
+// Decode deserializes a byte slice into the SecondaryHeader.
 func (sh *SecondaryHeader) Decode(data []byte) error {
 	if len(data) < 1 {
-		return errors.New("data too short to decode secondary header")
+		return ErrDataTooShort
 	}
 
-	// Decode VersionNumber and HeaderLength
-	firstByte := data[0]
-	sh.VersionNumber = firstByte >> 6
-	sh.HeaderLength = firstByte & 0x3F
+	sh.VersionNumber = data[0] >> 6
+	sh.HeaderLength = data[0] & 0x3F
 
-	// Decode DataField
-	sh.DataField = data[1:]
+	// Validate and extract DataField based on HeaderLength
+	expectedLen := 1 + int(sh.HeaderLength)
+	if len(data) < expectedLen {
+		return ErrDataTooShort
+	}
+	sh.DataField = data[1:expectedLen]
 
 	return sh.Validate()
 }
@@ -194,10 +179,10 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 // Validate checks if the header values are within valid ranges.
 func (sh *SecondaryHeader) Validate() error {
 	if sh.VersionNumber != 0 {
-		return errors.New("invalid VersionNumber: must be 0 for Version 1")
+		return ErrInvalidSecondaryHeaderVersion
 	}
 	if sh.HeaderLength > 0x3F {
-		return errors.New("invalid HeaderLength: must be in range 0-63 (6 bits)")
+		return ErrInvalidHeaderLength
 	}
 	return nil
 }

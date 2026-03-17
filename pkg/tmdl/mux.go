@@ -1,61 +1,93 @@
 package tmdl
 
-import "errors"
+import "sort"
 
 // VirtualChannelMultiplexer handles frame scheduling from multiple Virtual Channels.
 type VirtualChannelMultiplexer struct {
-	VChannels map[uint8]*VirtualChannel // Map of VCID to VirtualChannel
-	Priority  map[uint8]int             // Scheduling weight per VC
-	lastUsed  uint8                     // Tracks last scheduled VC
+	channels        map[uint8]*VirtualChannel
+	priority        map[uint8]int
+	sortedVCIDs     []uint8
+	currentIndex    int
+	remainingWeight int
 }
 
 // NewMultiplexer initializes a Virtual Channel multiplexer.
 func NewMultiplexer() *VirtualChannelMultiplexer {
 	return &VirtualChannelMultiplexer{
-		VChannels: make(map[uint8]*VirtualChannel),
-		Priority:  make(map[uint8]int),
-		lastUsed:  0,
+		channels: make(map[uint8]*VirtualChannel),
+		priority: make(map[uint8]int),
 	}
 }
 
 // AddVirtualChannel registers a Virtual Channel with a priority weight.
 func (mux *VirtualChannelMultiplexer) AddVirtualChannel(vc *VirtualChannel, priority int) {
-	mux.VChannels[vc.VCID] = vc
-	mux.Priority[vc.VCID] = priority
+	mux.channels[vc.VCID] = vc
+	mux.priority[vc.VCID] = priority
+
+	// Rebuild sorted VCID list for deterministic iteration
+	mux.sortedVCIDs = make([]uint8, 0, len(mux.channels))
+	for vcid := range mux.channels {
+		mux.sortedVCIDs = append(mux.sortedVCIDs, vcid)
+	}
+	sort.Slice(mux.sortedVCIDs, func(i, j int) bool {
+		return mux.sortedVCIDs[i] < mux.sortedVCIDs[j]
+	})
+
+	// Reset scheduling state
+	mux.currentIndex = 0
+	if len(mux.sortedVCIDs) > 0 {
+		mux.remainingWeight = mux.priority[mux.sortedVCIDs[0]]
+	}
 }
 
-// GetNextFrame selects the next frame for transmission based on priority.
+// GetNextFrame selects the next frame for transmission based on weighted round-robin.
 func (mux *VirtualChannelMultiplexer) GetNextFrame() (*TMTransferFrame, error) {
-	if len(mux.VChannels) == 0 {
-		return nil, errors.New("no virtual channels available")
+	if len(mux.sortedVCIDs) == 0 {
+		return nil, ErrNoVirtualChannels
 	}
 
-	// Collect all VCIDs in a slice for round-robin selection
-	vcids := make([]uint8, 0, len(mux.VChannels))
-	for vcid := range mux.VChannels {
-		vcids = append(vcids, vcid)
-	}
+	// Try each VC starting from current position
+	for i := 0; i < len(mux.sortedVCIDs); i++ {
+		vcid := mux.sortedVCIDs[mux.currentIndex]
+		vc := mux.channels[vcid]
 
-	// Find the next eligible VC with available frames
-	for i := 0; i < len(vcids); i++ {
-		mux.lastUsed = (mux.lastUsed + 1) % uint8(len(vcids)) // Round-robin selection
-		vcid := vcids[mux.lastUsed]
-		vc := mux.VChannels[vcid]
-
-		// Check if VC has frames
 		if vc.HasFrames() {
-			return vc.GetNextFrame()
+			frame, err := vc.GetNextFrame()
+			if err != nil {
+				return nil, err
+			}
+			mux.remainingWeight--
+			if mux.remainingWeight <= 0 {
+				mux.advanceToNext()
+			}
+			return frame, nil
 		}
+
+		// This VC has no frames, skip to next
+		mux.advanceToNext()
 	}
-	return nil, errors.New("no frames available in any virtual channel")
+
+	return nil, ErrNoFramesAvailable
 }
 
 // HasPendingFrames checks if any Virtual Channel has pending frames.
 func (mux *VirtualChannelMultiplexer) HasPendingFrames() bool {
-	for _, vc := range mux.VChannels {
+	for _, vc := range mux.channels {
 		if vc.HasFrames() {
 			return true
 		}
 	}
 	return false
+}
+
+// Len returns the number of registered Virtual Channels.
+func (mux *VirtualChannelMultiplexer) Len() int {
+	return len(mux.channels)
+}
+
+// advanceToNext moves to the next VC and resets its weight allowance.
+func (mux *VirtualChannelMultiplexer) advanceToNext() {
+	mux.currentIndex = (mux.currentIndex + 1) % len(mux.sortedVCIDs)
+	vcid := mux.sortedVCIDs[mux.currentIndex]
+	mux.remainingWeight = mux.priority[vcid]
 }
