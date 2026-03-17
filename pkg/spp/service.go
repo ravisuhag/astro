@@ -1,7 +1,6 @@
 package spp
 
 import (
-	"errors"
 	"io"
 	"sync"
 )
@@ -49,7 +48,7 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 // per CCSDS 133.0-B-2 Section 4.1.3.5.
 func (s *Service) SendPacket(packet *SpacePacket) error {
 	if packet == nil {
-		return errors.New("invalid packet: cannot send nil packet")
+		return ErrNilPacket
 	}
 
 	s.mu.Lock()
@@ -81,8 +80,8 @@ func (s *Service) ReceivePacket() (*SpacePacket, error) {
 		return nil, err
 	}
 
-	if totalPacketSize < PrimaryHeaderSize {
-		return nil, errors.New("calculated packet size is smaller than header size")
+	if totalPacketSize > s.maxPacketLen {
+		return nil, ErrPacketTooLarge
 	}
 
 	buffer := make([]byte, totalPacketSize)

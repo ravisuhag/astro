@@ -21,6 +21,12 @@ var (
 	// ErrInvalidSequenceCount indicates the sequence count is out of range.
 	ErrInvalidSequenceCount = errors.New("invalid sequence count: must be in the range 0-16383")
 
+	// ErrEmptyPacket indicates a packet has neither a secondary header nor user data (CCSDS C1/C2).
+	ErrEmptyPacket = errors.New("packet must contain a secondary header or user data")
+
+	// ErrNilPacket indicates a nil packet was provided.
+	ErrNilPacket = errors.New("packet must not be nil")
+
 	// ErrPacketTooLarge indicates that the packet size exceeds the allowable limit.
 	ErrPacketTooLarge = errors.New("packet length must be between 7 and 65542 octets")
 

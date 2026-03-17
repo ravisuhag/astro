@@ -181,6 +181,9 @@ size, err := spp.CalculatePacketSize(headerBytes)
 // Compute CRC-16-CCITT (polynomial 0x1021, initial 0xFFFF)
 crc := spp.ComputeCRC(data)
 
+// Check if a packet is an idle packet (APID 0x7FF)
+if packet.IsIdle() { ... }
+
 // Human-readable packet dump for debugging
 fmt.Println(packet.Humanize())
 ```
@@ -211,6 +214,8 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrInvalidSequenceFlags` | Sequence flags outside 0–3 |
 | `ErrInvalidSequenceCount` | Sequence count outside 0–16383 |
 | `ErrInvalidHeader` | Header does not conform to CCSDS |
+| `ErrEmptyPacket` | Packet has no secondary header and no user data (C1/C2) |
+| `ErrNilPacket` | Nil packet provided |
 | `ErrPacketTooLarge` | Total packet size outside 7–65542 bytes |
 | `ErrDataTooShort` | Input data too short to decode |
 | `ErrPacketLengthMismatch` | Data field size doesn't match header length |

@@ -46,7 +46,7 @@ func TestServiceSequenceCounting(t *testing.T) {
 	})
 
 	// Send 3 packets on APID 100, expect sequence counts 0, 1, 2
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		packet, err := spp2.NewTMPacket(100, []byte{0x01})
 		if err != nil {
 			t.Fatalf("Failed to create packet: %v", err)
@@ -57,14 +57,14 @@ func TestServiceSequenceCounting(t *testing.T) {
 	}
 
 	// Send 2 packets on APID 200, expect sequence counts 0, 1
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := svc.SendBytes(200, []byte{0x02}); err != nil {
 			t.Fatalf("SendBytes failed: %v", err)
 		}
 	}
 
 	// Verify APID 100 sequence counts
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		received, err := svc.ReceivePacket()
 		if err != nil {
 			t.Fatalf("ReceivePacket failed: %v", err)
@@ -76,7 +76,7 @@ func TestServiceSequenceCounting(t *testing.T) {
 	}
 
 	// Verify APID 200 sequence counts (independent from APID 100)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		received, err := svc.ReceivePacket()
 		if err != nil {
 			t.Fatalf("ReceivePacket failed: %v", err)
@@ -95,18 +95,18 @@ func TestServiceSequenceCountWrap(t *testing.T) {
 	})
 
 	// Send 16384 packets (0..16383), then one more that should wrap to 0
-	for i := 0; i < 16385; i++ {
+	for range 16385 {
 		packet, err := spp2.NewTMPacket(1, []byte{0x01})
 		if err != nil {
 			t.Fatalf("Failed to create packet: %v", err)
 		}
 		if err := svc.SendPacket(packet); err != nil {
-			t.Fatalf("SendPacket failed at %d: %v", i, err)
+			t.Fatalf("SendPacket failed: %v", err)
 		}
 	}
 
 	// Discard first 16384 packets
-	for i := 0; i < 16384; i++ {
+	for i := range 16384 {
 		if _, err := svc.ReceivePacket(); err != nil {
 			t.Fatalf("ReceivePacket failed at %d: %v", i, err)
 		}

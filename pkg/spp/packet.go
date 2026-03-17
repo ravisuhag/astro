@@ -73,7 +73,7 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 
 	// CCSDS C1/C2: packet must contain at least a secondary header or user data
 	if len(packet.UserData) == 0 && packet.SecondaryHeader == nil {
-		return nil, ErrDataTooShort
+		return nil, ErrEmptyPacket
 	}
 
 	// Calculate PacketLength per CCSDS: (packet data field size) - 1
@@ -304,7 +304,7 @@ func (sp *SpacePacket) Validate() error {
 	// during Decode(), the secondary header bytes are included in UserData,
 	// so this check still holds.
 	if len(sp.UserData) == 0 && sp.SecondaryHeader == nil {
-		return ErrDataTooShort
+		return ErrEmptyPacket
 	}
 
 	// Calculate total packet data field size per CCSDS
