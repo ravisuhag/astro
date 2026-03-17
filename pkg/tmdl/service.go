@@ -341,6 +341,7 @@ type MasterChannel struct {
 	config   ChannelConfig
 	mux      *VirtualChannelMultiplexer
 	channels map[uint8]*VirtualChannel
+	detector *FrameGapDetector
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
@@ -351,6 +352,7 @@ func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 		config:   config,
 		mux:      NewMultiplexer(),
 		channels: make(map[uint8]*VirtualChannel),
+		detector: NewFrameGapDetector(),
 	}
 }
 
@@ -362,15 +364,29 @@ func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
 }
 
 // AddFrame routes an inbound frame to the appropriate Virtual Channel based on VCID.
+// Frame counts are tracked; use MCFrameGap/VCFrameGap to check for lost frames.
 func (mc *MasterChannel) AddFrame(frame *TMTransferFrame) error {
 	if frame.Header.SpacecraftID != mc.scid {
 		return ErrSCIDMismatch
 	}
+	mc.detector.Track(frame)
 	vc, ok := mc.channels[frame.Header.VirtualChannelID]
 	if !ok {
 		return ErrVirtualChannelNotFound
 	}
 	return vc.AddFrame(frame)
+}
+
+// MCFrameGap returns the Master Channel frame count gap detected by
+// the last AddFrame call. 0 means no gap.
+func (mc *MasterChannel) MCFrameGap() int {
+	return mc.detector.MCFrameGap()
+}
+
+// VCFrameGap returns the Virtual Channel frame count gap detected by
+// the last AddFrame call. 0 means no gap.
+func (mc *MasterChannel) VCFrameGap() int {
+	return mc.detector.VCFrameGap()
 }
 
 // GetNextFrame retrieves the next frame from the multiplexer (send path).
