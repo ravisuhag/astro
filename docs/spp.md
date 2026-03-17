@@ -2,29 +2,74 @@
 
 The `spp` package implements the CCSDS 133.0-B-2 Space Packet Protocol — the fundamental data unit used for transferring application data in space missions.
 
-## Packet Structure
+## Quick Start
 
-```
-+----------------+----------------+----------------+----------------+
-| Version (3b)   | Type (1b)      | SecHdrFlag (1b)| APID (11b)     |
-+----------------+----------------+----------------+----------------+
-| SeqFlags (2b)  | Sequence Count (14b)                            |
-+----------------+----------------+----------------+----------------+
-| Packet Length (16b)                                               |
-+----------------+----------------+----------------+----------------+
-| Secondary Header (optional, 1–63 bytes, mission-defined)         |
-+----------------+----------------+----------------+----------------+
-| User Data Field (variable length)                                |
-+----------------+----------------+----------------+----------------+
-| Error Control (optional, 16b CRC)                                |
-+----------------+----------------+----------------+----------------+
+```go
+// Create a service over any io.ReadWriter (TCP conn, serial port, etc.)
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType: spp.PacketTypeTM,
+})
+
+// Send raw bytes — packet construction is handled automatically
+err := svc.SendBytes(100, []byte("temperature=22.5"))
+
+// Receive — returns APID and user data
+apid, data, err := svc.ReceiveBytes()
 ```
 
-A packet must contain at least a secondary header or user data (CCSDS C1/C2). Total packet size: 7–65,542 bytes.
+## Service Layer
+
+The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
+
+- **Packet Service** (CCSDS 3.3) — send and receive pre-built `SpacePacket` values
+- **Octet String Service** (CCSDS 3.4) — send and receive raw byte data, with automatic packet wrapping
+
+```go
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType:      spp.PacketTypeTM,
+    MaxPacketLength: 1024,               // optional, defaults to 65542
+    SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
+    ErrorControl:    true,               // optional, validate CRC on received packets
+})
+```
+
+### Octet String Service
+
+The simplest way to send and receive data. The service wraps your bytes in a valid space packet automatically:
+
+```go
+// Send raw bytes
+err := svc.SendBytes(100, []byte("payload data"))
+
+// Send with a secondary header and CRC
+err := svc.SendBytes(100, data,
+    spp.WithSendSecondaryHeader(myHeader),
+    spp.WithSendErrorControl(),
+)
+
+// Receive — returns APID and user data
+apid, data, err := svc.ReceiveBytes()
+```
+
+### Packet Service
+
+For full control over the packet structure, build a `SpacePacket` and send it directly:
+
+```go
+// Send a pre-built packet (sequence count is stamped automatically)
+err := svc.SendPacket(packet)
+
+// Receive and decode a packet
+packet, err := svc.ReceivePacket()
+```
+
+### Sequence Counting
+
+The service automatically maintains a per-APID 14-bit sequence counter (per CCSDS 133.0-B-2 Section 4.1.3.5). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
 
 ## Creating Packets
 
-Use `NewTMPacket` for telemetry and `NewTCPacket` for telecommand:
+For use cases outside the Service layer (testing, offline encoding, custom transports), construct packets directly:
 
 ```go
 // Telemetry packet with APID 100
@@ -39,7 +84,7 @@ packet, err := spp.NewSpacePacket(100, spp.PacketTypeTM, data)
 
 ### Packet Options
 
-Options configure optional fields via functional options:
+Options configure optional fields:
 
 ```go
 // With error control (CRC-16-CCITT, auto-computed during Encode)
@@ -59,6 +104,16 @@ packet, err := spp.NewTMPacket(100, data,
     spp.WithSecondaryHeader(myHeader),
     spp.WithErrorControl(),
 )
+```
+
+### Inspecting Packets
+
+```go
+// Check if a packet is an idle packet (APID 0x7FF)
+if packet.IsIdle() { ... }
+
+// Human-readable dump for debugging
+fmt.Println(packet.Humanize())
 ```
 
 ## Encoding and Decoding
@@ -126,81 +181,25 @@ func (h *TimestampHeader) Decode(data []byte) error {
 func (h *TimestampHeader) Size() int { return 6 }
 ```
 
-## Service Layer
+## Packet Structure
 
-The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
-
-- **Packet Service** (CCSDS 3.3) — send and receive pre-built `SpacePacket` values
-- **Octet String Service** (CCSDS 3.4) — send and receive raw byte data, with automatic packet wrapping
-
-```go
-svc := spp.NewService(conn, spp.ServiceConfig{
-    PacketType:      spp.PacketTypeTM,
-    MaxPacketLength: 1024,               // optional, defaults to 65542
-    SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
-    ErrorControl:    true,               // optional, validate CRC on received packets
-})
+```
++----------------+----------------+----------------+----------------+
+| Version (3b)   | Type (1b)      | SecHdrFlag (1b)| APID (11b)     |
++----------------+----------------+----------------+----------------+
+| SeqFlags (2b)  | Sequence Count (14b)                            |
++----------------+----------------+----------------+----------------+
+| Packet Length (16b)                                               |
++----------------+----------------+----------------+----------------+
+| Secondary Header (optional, 1–63 bytes, mission-defined)         |
++----------------+----------------+----------------+----------------+
+| User Data Field (variable length)                                |
++----------------+----------------+----------------+----------------+
+| Error Control (optional, 16b CRC)                                |
++----------------+----------------+----------------+----------------+
 ```
 
-### Sequence Counting
-
-The service automatically maintains a per-APID 14-bit sequence counter (per CCSDS 133.0-B-2 Section 4.1.3.5). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
-
-### Packet Service
-
-```go
-// Send a pre-built packet (sequence count is stamped automatically)
-err := svc.SendPacket(packet)
-
-// Receive and decode a packet
-packet, err := svc.ReceivePacket()
-```
-
-### Octet String Service
-
-```go
-// Send raw bytes — packet construction is handled automatically
-err := svc.SendBytes(100, []byte("payload data"))
-
-// Send with options
-err := svc.SendBytes(100, data,
-    spp.WithSendSecondaryHeader(myHeader),
-    spp.WithSendErrorControl(),
-)
-
-// Receive — returns APID and user data
-apid, data, err := svc.ReceiveBytes()
-```
-
-## Utilities
-
-```go
-// Calculate total packet size from a raw 6-byte header
-size, err := spp.CalculatePacketSize(headerBytes)
-
-// Compute CRC-16-CCITT (polynomial 0x1021, initial 0xFFFF)
-crc := spp.ComputeCRC(data)
-
-// Check if a packet is an idle packet (APID 0x7FF)
-if packet.IsIdle() { ... }
-
-// Human-readable packet dump for debugging
-fmt.Println(packet.Humanize())
-```
-
-## Constants
-
-```go
-spp.PrimaryHeaderSize    // 6 bytes
-
-spp.PacketTypeTM         // 0 — Telemetry
-spp.PacketTypeTC         // 1 — Telecommand
-
-spp.SeqFlagContinuation  // 0
-spp.SeqFlagFirstSegment  // 1
-spp.SeqFlagLastSegment   // 2
-spp.SeqFlagUnsegmented   // 3
-```
+A packet must contain at least a secondary header or user data (CCSDS C1/C2). Total packet size: 7–65,542 bytes.
 
 ## Errors
 

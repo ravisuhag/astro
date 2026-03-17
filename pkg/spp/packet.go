@@ -349,3 +349,25 @@ func (sp *SpacePacket) Humanize() string {
 
 	return builder.String()
 }
+
+// IsIdle reports whether the packet is an idle packet (APID 0x7FF).
+func (sp *SpacePacket) IsIdle() bool {
+	return sp.PrimaryHeader.APID == 0x7FF
+}
+
+// ComputeCRC computes the CRC-16-CCITT checksum per CCSDS specification.
+// Uses polynomial 0x1021 with initial value 0xFFFF.
+func ComputeCRC(data []byte) uint16 {
+	crc := uint16(0xFFFF)
+	for _, b := range data {
+		crc ^= uint16(b) << 8
+		for range 8 {
+			if crc&0x8000 != 0 {
+				crc = (crc << 1) ^ 0x1021
+			} else {
+				crc <<= 1
+			}
+		}
+	}
+	return crc
+}

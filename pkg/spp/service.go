@@ -1,6 +1,7 @@
 package spp
 
 import (
+	"encoding/binary"
 	"io"
 	"sync"
 )
@@ -75,7 +76,7 @@ func (s *Service) ReceivePacket() (*SpacePacket, error) {
 		return nil, err
 	}
 
-	totalPacketSize, err := CalculatePacketSize(header)
+	totalPacketSize, err := calculatePacketSize(header)
 	if err != nil {
 		return nil, err
 	}
@@ -153,5 +154,14 @@ func (s *Service) ReceiveBytes() (apid uint16, data []byte, err error) {
 		return 0, nil, err
 	}
 	return packet.PrimaryHeader.APID, packet.UserData, nil
+}
+
+// calculatePacketSize computes the total size of a space packet from a raw header dump.
+func calculatePacketSize(header []byte) (int, error) {
+	if len(header) < PrimaryHeaderSize {
+		return 0, ErrDataTooShort
+	}
+	packetLength := binary.BigEndian.Uint16(header[4:6])
+	return PrimaryHeaderSize + int(packetLength) + 1, nil
 }
 
