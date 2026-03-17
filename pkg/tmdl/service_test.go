@@ -142,6 +142,36 @@ func TestVCAService_SendReceive(t *testing.T) {
 	}
 }
 
+func TestVCAService_SyncFlag(t *testing.T) {
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 1, 4, vc, nil)
+
+	if err := svc.Send([]byte("abcd")); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	frame, err := vc.GetNextFrame()
+	if err != nil {
+		t.Fatalf("GetNextFrame failed: %v", err)
+	}
+
+	if !frame.Header.SyncFlag {
+		t.Error("Expected SyncFlag=true for VCA frame")
+	}
+	if frame.Header.FirstHeaderPtr != 0x07FF {
+		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x07FF for VCA frame", frame.Header.FirstHeaderPtr)
+	}
+
+	// Verify CRC is valid after header modifications
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+		t.Errorf("Frame CRC invalid after VCA header changes: %v", err)
+	}
+}
+
 func TestVCAService_SendSizeMismatch(t *testing.T) {
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelAccessService(933, 1, 8, vc, nil)

@@ -270,6 +270,49 @@ func TestSecondaryHeaderValidateConsistency(t *testing.T) {
 	}
 }
 
+func TestFirstHeaderPtr_WithSecondaryHeader(t *testing.T) {
+	shData := []byte{0xAA, 0xBB, 0xCC}
+	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("payload"), shData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Per CCSDS 132.0-B-3 §4.1.2.7.3, FirstHeaderPtr is relative to the
+	// Transfer Frame Data Field (after secondary header), not the frame payload.
+	// When the first packet starts at byte 0 of the Data Field, FirstHeaderPtr = 0.
+	if frame.Header.FirstHeaderPtr != 0 {
+		t.Errorf("FirstHeaderPtr = %d, want 0 (first packet at start of Data Field)", frame.Header.FirstHeaderPtr)
+	}
+}
+
+func TestDecodedFrameDoesNotAliasInput(t *testing.T) {
+	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("original"), nil, []byte{0x01, 0x02, 0x03, 0x04})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Zero out the encoded buffer — decoded fields should be unaffected
+	for i := range encoded {
+		encoded[i] = 0
+	}
+
+	if !bytes.Equal(decoded.DataField, []byte("original")) {
+		t.Errorf("DataField corrupted after input modification: got %q", decoded.DataField)
+	}
+	if !bytes.Equal(decoded.OperationalControl, []byte{0x01, 0x02, 0x03, 0x04}) {
+		t.Errorf("OperationalControl corrupted after input modification: got %x", decoded.OperationalControl)
+	}
+}
+
 func TestUninitializedFrame(t *testing.T) {
 	// Zero-value frame should fail validation since SegmentLengthID must be 0b11 when SyncFlag is 0
 	frame := &tmdl.TMTransferFrame{}

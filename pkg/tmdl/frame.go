@@ -43,14 +43,10 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 		DataField:          data,
 		OperationalControl: ocf,
 	}
-	if !frame.Header.SyncFlag {
-		// FirstHeaderPtr = total encoded secondary header size (1 prefix byte + data)
-		if len(secondaryHeaderData) > 0 {
-			frame.Header.FirstHeaderPtr = uint16(1 + len(secondaryHeaderData))
-		}
-	} else {
-		frame.Header.FirstHeaderPtr = 0x07FF // Undefined when SyncFlag is set (all 1s in 11 bits)
-	}
+	// FirstHeaderPtr defaults to 0: first packet starts at byte 0 of Data Field.
+	// Per CCSDS 132.0-B-3 §4.1.2.7.3, FirstHeaderPtr is relative to the
+	// Transfer Frame Data Field (after the Secondary Header), not the frame payload.
+	// VCA service sets SyncFlag=true and FirstHeaderPtr=0x07FF separately.
 
 	// Compute Frame Error Control (CRC-16)
 	encoded, err := frame.EncodeWithoutFEC()
@@ -144,12 +140,14 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 		if dataEnd-dataStart < 4 {
 			return nil, ErrDataTooShort
 		}
-		operationalControl = data[dataEnd-4 : dataEnd]
+		operationalControl = make([]byte, 4)
+		copy(operationalControl, data[dataEnd-4:dataEnd])
 		dataEnd -= 4
 	}
 
-	// Extract main Data Field
-	dataField := data[dataStart:dataEnd]
+	// Extract main Data Field (copy to avoid aliasing caller's buffer)
+	dataField := make([]byte, dataEnd-dataStart)
+	copy(dataField, data[dataStart:dataEnd])
 
 	// Construct and return the TMTransferFrame object
 	return &TMTransferFrame{

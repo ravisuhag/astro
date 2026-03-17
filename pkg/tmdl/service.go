@@ -43,14 +43,16 @@ func (fc *FrameCounter) Next(vcid uint8) (mc, vc uint8) {
 	return mc, vc
 }
 
-// stampFrame applies frame counters and CRC to a frame.
+// stampFrame applies optional frame counters and recomputes CRC.
+// It always recomputes CRC to ensure it reflects the final header state,
+// which is important when headers are modified after NewTMTransferFrame
+// (e.g., VCA setting SyncFlag).
 func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error {
-	if counter == nil {
-		return nil
+	if counter != nil {
+		mc, vc := counter.Next(vcid)
+		frame.Header.MCFrameCount = mc
+		frame.Header.VCFrameCount = vc
 	}
-	mc, vc := counter.Next(vcid)
-	frame.Header.MCFrameCount = mc
-	frame.Header.VCFrameCount = vc
 	encoded, err := frame.EncodeWithoutFEC()
 	if err != nil {
 		return err
@@ -172,6 +174,8 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 }
 
 // Send wraps a fixed-length SDU into a TM Transfer Frame and pushes it into the Virtual Channel.
+// Per CCSDS 132.0-B-3 §4.1.2.7, VCA frames use synchronous mode (SyncFlag=1)
+// with FirstHeaderPtr set to 0x07FF (undefined in sync mode).
 func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if len(data) != s.vcaSize {
 		return ErrSizeMismatch
@@ -181,6 +185,9 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
+
+	frame.Header.SyncFlag = true
+	frame.Header.FirstHeaderPtr = 0x07FF
 
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err

@@ -126,6 +126,37 @@ func TestMultiplexerHasPendingFrames(t *testing.T) {
 	}
 }
 
+func TestMultiplexerPriorityClamp(t *testing.T) {
+	mux := tmdl.NewMultiplexer()
+
+	vc1 := tmdl.NewVirtualChannel(0x01, 10)
+	vc2 := tmdl.NewVirtualChannel(0x02, 10)
+	mux.AddVirtualChannel(vc1, 0)  // should be clamped to 1
+	mux.AddVirtualChannel(vc2, -5) // should be clamped to 1
+
+	if err := vc1.AddFrame(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{MCFrameCount: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := vc1.AddFrame(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{MCFrameCount: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := vc2.AddFrame(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{MCFrameCount: 10}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// With clamped priority=1, should alternate: vc1, vc2, vc1
+	expected := []uint8{1, 10, 2}
+	for i, exp := range expected {
+		frame, err := mux.GetNextFrame()
+		if err != nil {
+			t.Fatalf("Frame %d: %v", i, err)
+		}
+		if frame.Header.MCFrameCount != exp {
+			t.Errorf("Frame %d: MCFrameCount = %d, want %d", i, frame.Header.MCFrameCount, exp)
+		}
+	}
+}
+
 func TestMultiplexerNoChannels(t *testing.T) {
 	mux := tmdl.NewMultiplexer()
 	_, err := mux.GetNextFrame()

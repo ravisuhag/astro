@@ -10,9 +10,15 @@ type ChannelConfig struct {
 }
 
 // DataFieldCapacity returns the maximum data field size available
-// in frames on this physical channel.
-func (c ChannelConfig) DataFieldCapacity() int {
+// in frames on this physical channel. secondaryHeaderLen is the
+// length of the secondary header data field (0 if not present);
+// when present, the encoded secondary header adds 1 prefix byte
+// plus secondaryHeaderLen data bytes.
+func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
 	capacity := c.FrameLength - 6 // primary header is always 6 bytes
+	if secondaryHeaderLen > 0 {
+		capacity -= 1 + secondaryHeaderLen // 1 prefix byte + data
+	}
 	if c.HasOCF {
 		capacity -= 4
 	}

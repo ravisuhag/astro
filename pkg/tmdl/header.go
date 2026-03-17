@@ -172,7 +172,8 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 	if len(data) < expectedLen {
 		return ErrDataTooShort
 	}
-	sh.DataField = data[1:expectedLen]
+	sh.DataField = make([]byte, dataFieldLen)
+	copy(sh.DataField, data[1:expectedLen])
 
 	return sh.Validate()
 }

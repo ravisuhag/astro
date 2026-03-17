@@ -33,6 +33,10 @@ func (vc *VirtualChannel) GetNextFrame() (*TMTransferFrame, error) {
 	f := vc.frameBuffer[0]
 	vc.frameBuffer[0] = nil // Allow GC of consumed frame
 	vc.frameBuffer = vc.frameBuffer[1:]
+	// Reclaim underlying array when fully drained
+	if len(vc.frameBuffer) == 0 {
+		vc.frameBuffer = make([]*TMTransferFrame, 0, vc.maxSize)
+	}
 	return f, nil
 }
 

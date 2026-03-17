@@ -20,7 +20,11 @@ func NewMultiplexer() *VirtualChannelMultiplexer {
 }
 
 // AddVirtualChannel registers a Virtual Channel with a priority weight.
+// Priority must be at least 1; values below 1 are clamped to 1.
 func (mux *VirtualChannelMultiplexer) AddVirtualChannel(vc *VirtualChannel, priority int) {
+	if priority < 1 {
+		priority = 1
+	}
 	mux.channels[vc.VCID] = vc
 	mux.priority[vc.VCID] = priority
 
