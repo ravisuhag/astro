@@ -71,4 +71,7 @@ var (
 
 	// ErrIncompletePacket indicates reassembly failed due to unexpected frame sequence.
 	ErrIncompletePacket = errors.New("incomplete packet: unexpected frame during reassembly")
+
+	// ErrInvalidPVN indicates the packet version number is not in the valid set.
+	ErrInvalidPVN = errors.New("invalid packet version number")
 )

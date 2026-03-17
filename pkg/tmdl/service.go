@@ -71,11 +71,12 @@ func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error
 // packets are segmented across fixed-length frames with a 2-byte
 // length prefix for reassembly.
 type VirtualChannelPacketService struct {
-	scid    uint16
-	vcid    uint8
-	config  ChannelConfig
-	counter *FrameCounter
-	vc      *VirtualChannel
+	scid      uint16
+	vcid      uint8
+	config    ChannelConfig
+	counter   *FrameCounter
+	vc        *VirtualChannel
+	validPVNs []uint8 // valid Packet Version Numbers; empty = no validation
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
@@ -92,6 +93,14 @@ func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel,
 	}
 }
 
+// SetValidPVNs configures the set of valid Packet Version Numbers.
+// When set, Send validates that the first 3 bits of the packet data
+// match one of the configured PVNs per CCSDS 132.0-B-3 §4.2.2.
+// Pass no arguments to disable validation.
+func (s *VirtualChannelPacketService) SetValidPVNs(pvns ...uint8) {
+	s.validPVNs = pvns
+}
+
 // Send wraps data into TM Transfer Frame(s) and pushes them into the Virtual Channel.
 // When ChannelConfig is set, the packet is prepended with a 2-byte big-endian length
 // and segmented across fixed-length frames. FirstHeaderPtr is 0 for the first frame
@@ -99,6 +108,20 @@ func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel,
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
+	}
+
+	if len(s.validPVNs) > 0 {
+		pvn := data[0] >> 5
+		valid := false
+		for _, v := range s.validPVNs {
+			if pvn == v {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return ErrInvalidPVN
+		}
 	}
 
 	if s.config.FrameLength == 0 {
@@ -253,16 +276,25 @@ func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
 	return frame.Encode()
 }
 
+// VCAStatus contains the Transfer Frame Data Field Status fields
+// delivered alongside a VCA SDU per CCSDS 132.0-B-3 §3.4.2.3.
+type VCAStatus struct {
+	SyncFlag        bool
+	PacketOrderFlag bool
+	SegmentLengthID uint8
+}
+
 // VirtualChannelAccessService implements the VCA service.
 // It accepts fixed-length service data units and pushes frames into
 // the associated VirtualChannel.
 type VirtualChannelAccessService struct {
-	scid    uint16
-	vcid    uint8
-	vcaSize int
-	config  ChannelConfig
-	counter *FrameCounter
-	vc      *VirtualChannel
+	scid       uint16
+	vcid       uint8
+	vcaSize    int
+	config     ChannelConfig
+	counter    *FrameCounter
+	vc         *VirtualChannel
+	lastStatus VCAStatus
 }
 
 // NewVirtualChannelAccessService creates a new VCA service instance.
@@ -322,15 +354,27 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 
 // Receive retrieves the next frame from the Virtual Channel and returns its data field.
 // When ChannelConfig is set, the data field is trimmed to vcaSize.
+// Status fields from the frame header are available via LastStatus().
 func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 	frame, err := s.vc.GetNextFrame()
 	if err != nil {
 		return nil, err
 	}
+	s.lastStatus = VCAStatus{
+		SyncFlag:        frame.Header.SyncFlag,
+		PacketOrderFlag: frame.Header.PacketOrderFlag,
+		SegmentLengthID: frame.Header.SegmentLengthID,
+	}
 	if s.config.FrameLength > 0 {
 		return frame.DataField[:s.vcaSize], nil
 	}
 	return frame.DataField, nil
+}
+
+// LastStatus returns the Transfer Frame Data Field Status fields from
+// the most recent Receive call.
+func (s *VirtualChannelAccessService) LastStatus() VCAStatus {
+	return s.lastStatus
 }
 
 // MasterChannel manages TM Transfer Frames for a Master Channel identified by SCID.

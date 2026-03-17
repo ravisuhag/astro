@@ -267,6 +267,64 @@ func TestVCPService_Segmentation_PacketTooLarge(t *testing.T) {
 	}
 }
 
+func TestVCPService_PVNValidation(t *testing.T) {
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, tmdl.ChannelConfig{}, nil)
+	svc.SetValidPVNs(0) // only CCSDS v1 (PVN=000)
+
+	// PVN=0 (bits 7-5 = 000): valid
+	validPacket := []byte{0x00, 0x01, 0x02}
+	if err := svc.Send(validPacket); err != nil {
+		t.Fatalf("Send valid PVN failed: %v", err)
+	}
+
+	// PVN=1 (bits 7-5 = 001 → 0x20): invalid
+	invalidPacket := []byte{0x20, 0x01, 0x02}
+	err := svc.Send(invalidPacket)
+	if !errors.Is(err, tmdl.ErrInvalidPVN) {
+		t.Errorf("Expected ErrInvalidPVN, got %v", err)
+	}
+
+	// PVN=7 (bits 7-5 = 111 → 0xE0): invalid
+	err = svc.Send([]byte{0xE0, 0x01})
+	if !errors.Is(err, tmdl.ErrInvalidPVN) {
+		t.Errorf("Expected ErrInvalidPVN for PVN=7, got %v", err)
+	}
+}
+
+func TestVCPService_PVNValidation_MultiplePVNs(t *testing.T) {
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, tmdl.ChannelConfig{}, nil)
+	svc.SetValidPVNs(0, 1) // accept PVN 0 and 1
+
+	// PVN=0: valid
+	if err := svc.Send([]byte{0x00, 0x01}); err != nil {
+		t.Errorf("PVN=0 should be valid: %v", err)
+	}
+
+	// PVN=1 (0x20): valid
+	if err := svc.Send([]byte{0x20, 0x01}); err != nil {
+		t.Errorf("PVN=1 should be valid: %v", err)
+	}
+
+	// PVN=2 (0x40): invalid
+	err := svc.Send([]byte{0x40, 0x01})
+	if !errors.Is(err, tmdl.ErrInvalidPVN) {
+		t.Errorf("PVN=2 should be invalid: %v", err)
+	}
+}
+
+func TestVCPService_PVNValidation_Disabled(t *testing.T) {
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, tmdl.ChannelConfig{}, nil)
+	// No SetValidPVNs call — validation disabled
+
+	// Any PVN should be accepted
+	if err := svc.Send([]byte{0xE0, 0x01}); err != nil {
+		t.Errorf("With no PVN validation, any packet should be accepted: %v", err)
+	}
+}
+
 func TestVCPService_Segmentation_DataFieldTooSmall(t *testing.T) {
 	// Frame: 6 header + 2 data + 2 CRC = 10 bytes → capacity 2 (< 3)
 	config := tmdl.ChannelConfig{FrameLength: 10, HasFEC: true}
@@ -429,6 +487,28 @@ func TestVCAService_Padding_TooLarge(t *testing.T) {
 	err := svc.Send([]byte("12345678"))
 	if !errors.Is(err, tmdl.ErrDataTooLarge) {
 		t.Errorf("Expected ErrDataTooLarge, got %v", err)
+	}
+}
+
+func TestVCAService_StatusFields(t *testing.T) {
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 1, 4, vc, tmdl.ChannelConfig{}, nil)
+
+	if err := svc.Send([]byte("abcd")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	status := svc.LastStatus()
+	if !status.SyncFlag {
+		t.Error("Expected SyncFlag=true for VCA frame")
+	}
+	if status.SegmentLengthID != 0b11 {
+		t.Errorf("SegmentLengthID = %d, want 3", status.SegmentLengthID)
 	}
 }
 
