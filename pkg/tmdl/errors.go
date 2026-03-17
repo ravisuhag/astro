@@ -74,4 +74,7 @@ var (
 
 	// ErrInvalidPVN indicates the packet version number is not in the valid set.
 	ErrInvalidPVN = errors.New("invalid packet version number")
+
+	// ErrNoMasterChannels indicates no master channels are registered on the physical channel.
+	ErrNoMasterChannels = errors.New("no master channels registered")
 )

@@ -400,6 +400,9 @@ func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 	}
 }
 
+// SCID returns the Spacecraft Identifier for this Master Channel.
+func (mc *MasterChannel) SCID() uint16 { return mc.scid }
+
 // AddVirtualChannel registers a Virtual Channel with this Master Channel
 // and adds it to the multiplexer with the given priority weight.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
