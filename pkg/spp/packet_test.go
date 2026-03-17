@@ -91,14 +91,68 @@ func TestSpacePacketWithSecondaryHeader(t *testing.T) {
 
 func TestSpacePacketWithErrorControl(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	crc := uint16(0xABCD)
-	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithErrorControl(crc))
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithErrorControl())
 	if err != nil {
 		t.Fatalf("Failed to create new space packet with error control: %v", err)
 	}
 
-	if packet.ErrorControl == nil || *packet.ErrorControl != crc {
-		t.Errorf("Error control does not match. Got %v, want %v", packet.ErrorControl, crc)
+	if packet.ErrorControl == nil {
+		t.Fatal("Expected ErrorControl to be set")
+	}
+}
+
+func TestSpacePacketWithErrorControlEncodeDecode(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+
+	// CRC is auto-computed during Encode
+	packet, err := spp2.NewTMPacket(100, data, spp2.WithErrorControl())
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode: %v", err)
+	}
+
+	// Verify CRC was written back to the packet
+	if *packet.ErrorControl == 0 {
+		t.Error("Expected CRC to be computed, got 0")
+	}
+
+	// Decode with error control validation
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeErrorControl())
+	if err != nil {
+		t.Fatalf("Failed to decode with CRC: %v", err)
+	}
+	if decoded.ErrorControl == nil {
+		t.Fatal("Expected ErrorControl to be set")
+	}
+	if *decoded.ErrorControl != *packet.ErrorControl {
+		t.Errorf("CRC mismatch. Got 0x%04X, want 0x%04X", *decoded.ErrorControl, *packet.ErrorControl)
+	}
+	if !bytes.Equal(decoded.UserData, data) {
+		t.Errorf("User data mismatch. Got %v, want %v", decoded.UserData, data)
+	}
+}
+
+func TestSpacePacketWithErrorControlCorrupted(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03}
+	packet, err := spp2.NewTMPacket(100, data, spp2.WithErrorControl())
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Failed to encode: %v", err)
+	}
+
+	// Corrupt a data byte
+	encoded[7] ^= 0xFF
+
+	// Decoding with error control should fail
+	_, err = spp2.Decode(encoded, spp2.WithDecodeErrorControl())
+	if err == nil {
+		t.Fatal("Expected CRC validation error")
 	}
 }
 
@@ -116,7 +170,7 @@ func TestSpacePacketWithSecondaryHeaderEncodeDecode(t *testing.T) {
 	}
 
 	decodedSH := &testSecondaryHeader{}
-	decoded, err := spp2.Decode(encoded, decodedSH)
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodedSH))
 	if err != nil {
 		t.Fatalf("Failed to decode: %v", err)
 	}
@@ -166,8 +220,7 @@ func TestSpacePacketWithSecondaryHeaderDecodeWithoutDecoder(t *testing.T) {
 func TestPacketLengthIncludesAllFields(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
 	sh := &testSecondaryHeader{Timestamp: 1234567890}
-	crc := uint16(0xABCD)
-	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl(crc))
+	packet, err := spp2.NewSpacePacket(100, 0, data, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl())
 	if err != nil {
 		t.Fatalf("Failed to create packet: %v", err)
 	}
@@ -299,7 +352,7 @@ func TestNewSpacePacketC1SecondaryHeaderOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
 	}
-	decoded, err := spp2.Decode(encoded, &testSecondaryHeader{})
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(&testSecondaryHeader{}))
 	if err != nil {
 		t.Fatalf("Decode failed: %v", err)
 	}

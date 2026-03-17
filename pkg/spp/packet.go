@@ -148,9 +148,11 @@ func WithSequenceFlags(flags uint8) PacketOption {
 	}
 }
 
-// WithErrorControl adds an error control field to the SpacePacket.
-func WithErrorControl(crc uint16) PacketOption {
+// WithErrorControl enables the error control field on the SpacePacket.
+// The CRC-16-CCITT checksum is computed automatically during Encode().
+func WithErrorControl() PacketOption {
 	return func(packet *SpacePacket) error {
+		crc := uint16(0)
 		packet.ErrorControl = &crc
 		return nil
 	}
@@ -180,20 +182,43 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 	packetData = append(packetData, sp.UserData...)
 
 	if sp.ErrorControl != nil {
-		crcBytes := make([]byte, 2)
-		crcBytes[0] = byte(*sp.ErrorControl >> 8)
-		crcBytes[1] = byte(*sp.ErrorControl & 0xFF)
-		packetData = append(packetData, crcBytes...)
+		crc := ComputeCRC(packetData)
+		*sp.ErrorControl = crc
+		packetData = append(packetData, byte(crc>>8), byte(crc&0xFF))
 	}
 
 	return packetData, nil
 }
 
-// Decode parses a byte slice into a SpacePacket.
-// If the packet has a secondary header (flag = 1) and a SecondaryHeader
-// implementation is provided, it will be used to decode the secondary header.
+// DecodeOption configures optional decoding behavior.
+type DecodeOption func(*decodeConfig)
+
+type decodeConfig struct {
+	sh           SecondaryHeader
+	errorControl bool
+}
+
+// WithDecodeSecondaryHeader provides a SecondaryHeader implementation for decoding.
+// If the packet's secondary header flag is set, this decoder will be used.
 // Otherwise, secondary header bytes are included in UserData.
-func Decode(data []byte, sh ...SecondaryHeader) (*SpacePacket, error) {
+func WithDecodeSecondaryHeader(sh SecondaryHeader) DecodeOption {
+	return func(cfg *decodeConfig) { cfg.sh = sh }
+}
+
+// WithDecodeErrorControl indicates the packet contains a trailing 2-byte error
+// control field. The CRC is extracted, verified against the packet contents
+// using CRC-16-CCITT, and stored in the decoded SpacePacket.
+func WithDecodeErrorControl() DecodeOption {
+	return func(cfg *decodeConfig) { cfg.errorControl = true }
+}
+
+// Decode parses a byte slice into a SpacePacket.
+func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
+	var cfg decodeConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	if len(data) < 7 {
 		return nil, ErrDataTooShort
 	}
@@ -215,8 +240,8 @@ func Decode(data []byte, sh ...SecondaryHeader) (*SpacePacket, error) {
 	var secondaryHeader SecondaryHeader
 
 	// Decode secondary header if flag is set and a decoder is provided
-	if primaryHeader.SecondaryHeaderFlag == 1 && len(sh) > 0 && sh[0] != nil {
-		secondaryHeader = sh[0]
+	if primaryHeader.SecondaryHeaderFlag == 1 && cfg.sh != nil {
+		secondaryHeader = cfg.sh
 		shSize := secondaryHeader.Size()
 		if remainingDataField < shSize {
 			return nil, ErrDataTooShort
@@ -228,12 +253,30 @@ func Decode(data []byte, sh ...SecondaryHeader) (*SpacePacket, error) {
 		remainingDataField -= shSize
 	}
 
+	// Extract error control field if expected
+	var errorControl *uint16
+	if cfg.errorControl {
+		if remainingDataField < 2 {
+			return nil, ErrDataTooShort
+		}
+		// Verify CRC over everything before the error control field
+		crcOffset := PrimaryHeaderSize + dataFieldSize - 2
+		expected := ComputeCRC(data[:crcOffset])
+		actual := uint16(data[crcOffset])<<8 | uint16(data[crcOffset+1])
+		if actual != expected {
+			return nil, ErrCRCValidationFailed
+		}
+		errorControl = &actual
+		remainingDataField -= 2
+	}
+
 	userData := data[offset : offset+remainingDataField]
 
 	packet := &SpacePacket{
 		PrimaryHeader:   primaryHeader,
 		SecondaryHeader: secondaryHeader,
 		UserData:        userData,
+		ErrorControl:    errorControl,
 	}
 
 	if err := packet.Validate(); err != nil {

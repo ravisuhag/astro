@@ -42,8 +42,8 @@ packet, err := spp.NewSpacePacket(100, spp.PacketTypeTM, data)
 Options configure optional fields via functional options:
 
 ```go
-// With error control (CRC)
-packet, err := spp.NewTMPacket(100, data, spp.WithErrorControl(crc))
+// With error control (CRC-16-CCITT, auto-computed during Encode)
+packet, err := spp.NewTMPacket(100, data, spp.WithErrorControl())
 
 // With a mission-specific secondary header
 packet, err := spp.NewTMPacket(100, data, spp.WithSecondaryHeader(myHeader))
@@ -57,7 +57,7 @@ packet, err := spp.NewTMPacket(100, data,
 // Combining options
 packet, err := spp.NewTMPacket(100, data,
     spp.WithSecondaryHeader(myHeader),
-    spp.WithErrorControl(crc),
+    spp.WithErrorControl(),
 )
 ```
 
@@ -71,10 +71,21 @@ encoded, err := packet.Encode()
 decoded, err := spp.Decode(encoded)
 
 // Decode with a secondary header decoder
-decoded, err := spp.Decode(encoded, &MySecondaryHeader{})
+decoded, err := spp.Decode(encoded, spp.WithDecodeSecondaryHeader(&MySecondaryHeader{}))
+
+// Decode with error control (CRC) validation
+decoded, err := spp.Decode(encoded, spp.WithDecodeErrorControl())
+
+// Combine decode options
+decoded, err := spp.Decode(encoded,
+    spp.WithDecodeSecondaryHeader(&MySecondaryHeader{}),
+    spp.WithDecodeErrorControl(),
+)
 ```
 
-When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation. If none is provided, the secondary header bytes are included in `UserData`.
+When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation via `WithDecodeSecondaryHeader`. If none is provided, the secondary header bytes are included in `UserData`.
+
+When `WithDecodeErrorControl()` is used, the trailing 2 bytes are extracted as a CRC-16-CCITT checksum and verified against the packet contents. If the CRC does not match, `ErrCRCValidationFailed` is returned.
 
 ## Secondary Headers
 
@@ -127,6 +138,7 @@ svc := spp.NewService(conn, spp.ServiceConfig{
     PacketType:      spp.PacketTypeTM,
     MaxPacketLength: 1024,               // optional, defaults to 65542
     SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
+    ErrorControl:    true,               // optional, validate CRC on received packets
 })
 ```
 
@@ -153,7 +165,7 @@ err := svc.SendBytes(100, []byte("payload data"))
 // Send with options
 err := svc.SendBytes(100, data,
     spp.WithSendSecondaryHeader(myHeader),
-    spp.WithSendErrorControl(crc),
+    spp.WithSendErrorControl(),
 )
 
 // Receive — returns APID and user data

@@ -13,6 +13,7 @@ type Service struct {
 	packetType   uint8
 	maxPacketLen int
 	sh           SecondaryHeader // optional decoder for inbound packets
+	errorControl bool            // expect error control field on received packets
 	mu           sync.Mutex
 	counters     map[uint16]uint16 // per-APID sequence counters
 }
@@ -22,6 +23,7 @@ type ServiceConfig struct {
 	PacketType      uint8           // PacketTypeTM or PacketTypeTC
 	MaxPacketLength int             // maximum total packet size in octets; default 65542
 	SecondaryHeader SecondaryHeader // optional decoder for received secondary headers
+	ErrorControl    bool            // if true, received packets are expected to contain a trailing CRC
 }
 
 // NewService creates a new SPP service over the given transport.
@@ -35,6 +37,7 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 		packetType:   cfg.PacketType,
 		maxPacketLen: maxLen,
 		sh:           cfg.SecondaryHeader,
+		errorControl: cfg.ErrorControl,
 		counters:     make(map[uint16]uint16),
 	}
 }
@@ -88,7 +91,14 @@ func (s *Service) ReceivePacket() (*SpacePacket, error) {
 		return nil, err
 	}
 
-	return Decode(buffer, s.sh)
+	var opts []DecodeOption
+	if s.sh != nil {
+		opts = append(opts, WithDecodeSecondaryHeader(s.sh))
+	}
+	if s.errorControl {
+		opts = append(opts, WithDecodeErrorControl())
+	}
+	return Decode(buffer, opts...)
 }
 
 // --- Octet String Service (CCSDS 3.4) ---
@@ -98,7 +108,7 @@ type SendOption func(*sendConfig)
 
 type sendConfig struct {
 	sh           SecondaryHeader
-	errorControl *uint16
+	errorControl bool
 }
 
 // WithSendSecondaryHeader attaches a secondary header to the outgoing packet.
@@ -106,9 +116,10 @@ func WithSendSecondaryHeader(sh SecondaryHeader) SendOption {
 	return func(cfg *sendConfig) { cfg.sh = sh }
 }
 
-// WithSendErrorControl attaches a CRC to the outgoing packet.
-func WithSendErrorControl(crc uint16) SendOption {
-	return func(cfg *sendConfig) { cfg.errorControl = &crc }
+// WithSendErrorControl enables CRC-16-CCITT error control on the outgoing packet.
+// The checksum is computed automatically during encoding.
+func WithSendErrorControl() SendOption {
+	return func(cfg *sendConfig) { cfg.errorControl = true }
 }
 
 // SendBytes wraps the given data in a space packet and writes it to the transport.
@@ -123,8 +134,8 @@ func (s *Service) SendBytes(apid uint16, data []byte, opts ...SendOption) error 
 	if cfg.sh != nil {
 		pktOpts = append(pktOpts, WithSecondaryHeader(cfg.sh))
 	}
-	if cfg.errorControl != nil {
-		pktOpts = append(pktOpts, WithErrorControl(*cfg.errorControl))
+	if cfg.errorControl {
+		pktOpts = append(pktOpts, WithErrorControl())
 	}
 
 	packet, err := NewSpacePacket(apid, s.packetType, data, pktOpts...)

@@ -155,6 +155,33 @@ func TestServiceSendReceiveBytes(t *testing.T) {
 	}
 }
 
+func TestServiceSendReceiveBytesWithErrorControl(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:   spp2.PacketTypeTM,
+		ErrorControl: true,
+	})
+
+	data := []byte{0xCA, 0xFE}
+
+	// CRC is auto-computed during encode
+	if err := svc.SendBytes(100, data, spp2.WithSendErrorControl()); err != nil {
+		t.Fatalf("SendBytes failed: %v", err)
+	}
+
+	// Receive — Service should validate CRC
+	apid, received, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatalf("ReceiveBytes failed: %v", err)
+	}
+	if apid != 100 {
+		t.Errorf("APID mismatch. Got %d, want 100", apid)
+	}
+	if !bytes.Equal(received, data) {
+		t.Errorf("Data mismatch. Got %v, want %v", received, data)
+	}
+}
+
 func TestServiceSendBytesWithSecondaryHeader(t *testing.T) {
 	var buf bytes.Buffer
 	sh := &testSecondaryHeader{Timestamp: 0x0102030405060708}

@@ -78,9 +78,9 @@ identified in section A2.2 with explanations.
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| SPP-14 | Space Packet | 4.1 | M | Yes | `SpacePacket` struct with `Encode()` / `Decode()` round-trip support. `Decode(data, sh...)` accepts an optional `SecondaryHeader` interface implementation; if provided and the secondary header flag is set, it is used to decode mission-specific header bytes. Otherwise, secondary header bytes are included in `UserData`. |
+| SPP-14 | Space Packet | 4.1 | M | Yes | `SpacePacket` struct with `Encode()` / `Decode()` round-trip support. `Decode(data, opts...)` accepts functional options: `WithDecodeSecondaryHeader()` to decode mission-specific header bytes, and `WithDecodeErrorControl()` to extract and verify the trailing CRC-16-CCITT. If no secondary header decoder is provided, secondary header bytes are included in `UserData`. |
 | SPP-15 | Packet Primary Header | 4.1.3 | M | Yes | `PrimaryHeader` — 6 octets. All fields implemented per CCSDS: Version Number (3 bits, enforced as 0 for CCSDS v1 via `ErrInvalidVersion`), Packet Type (1 bit, `PacketTypeTM`=0 / `PacketTypeTC`=1), Secondary Header Flag (1 bit), APID (11 bits), Sequence Flags (2 bits, named constants `SeqFlagContinuation`/`SeqFlagFirstSegment`/`SeqFlagLastSegment`/`SeqFlagUnsegmented`, configurable via `WithSequenceFlags()`), Sequence Count (14 bits, auto-incremented per APID in `Service`, manually configurable via `WithSequenceCount()`), Packet Data Length (16 bits). Big-endian encoding. |
-| SPP-16 | Packet Data Field | 4.1.4 | M | Yes | Composed of optional Secondary Header + User Data + optional Error Control. Length calculation follows CCSDS formula: `Packet Data Length = (data field octets) − 1`. |
+| SPP-16 | Packet Data Field | 4.1.4 | M | Yes | Composed of optional Secondary Header + User Data + optional Error Control. Length calculation follows CCSDS formula: `Packet Data Length = (data field octets) − 1`. Error Control is a 16-bit CRC-16-CCITT field: set on encode via `WithErrorControl()`, verified on decode via `WithDecodeErrorControl()`. Configurable at the service level via `ServiceConfig.ErrorControl`. |
 | SPP-17 | Packet Secondary Header | 4.1.4.2 | C1 | Yes | `SecondaryHeader` is an interface (`Encode()`, `Decode()`, `Size()`) allowing mission-specific implementations. Configurable via `WithSecondaryHeader()` option. CCSDS size constraint (1–63 octets) is enforced by `validateSecondaryHeader()` with `ErrSecondaryHeaderTooSmall` and `ErrSecondaryHeaderTooLarge`. C1 enforced: `NewSpacePacket()` allows nil/empty user data when a secondary header is provided. |
 | SPP-18 | User Data Field | 4.1.4.3 | C2 | Yes | `UserData []byte` field. C2 enforced: `NewSpacePacket()` requires user data only when no secondary header is present. When a secondary header is provided, user data may be nil or empty. |
 
@@ -94,10 +94,10 @@ Secondary Header is not present; otherwise, it is optional.
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| SPP-19 | Packet Assembly Function | 4.2.2 | M | Yes | `NewSpacePacket()` constructs the packet with functional options (`WithSecondaryHeader()`, `WithErrorControl()`, `WithSequenceCount()`, `WithSequenceFlags()`). `Encode()` serializes Primary Header + Secondary Header + User Data + Error Control into an octet stream. Packet Data Length is computed automatically. |
+| SPP-19 | Packet Assembly Function | 4.2.2 | M | Yes | `NewSpacePacket()` constructs the packet with functional options (`WithSecondaryHeader()`, `WithErrorControl()`, `WithSequenceCount()`, `WithSequenceFlags()`). `Encode()` serializes Primary Header + Secondary Header + User Data + Error Control into an octet stream. Packet Data Length is computed automatically. When error control is enabled, `Encode()` auto-computes the CRC-16-CCITT over the serialized header and data, then appends it. |
 | SPP-20 | Packet Transfer Function | 4.2.3 | M | Yes | `Service.SendPacket()` stamps the per-APID sequence count (14-bit, wraps at 16383) and writes the encoded packet to the transport via `io.ReadWriter`. Multiplexing of packets from multiple APIDs is delegated to the caller, which controls the order and scheduling of `SendPacket()` calls. The multiplexing scheme itself is an optional management parameter (SPP-25). |
-| SPP-21 | Packet Extraction Function | 4.3.2 | M | Yes | `Service.ReceivePacket()` reads the 6-octet Primary Header, computes total packet size via `CalculatePacketSize()`, reads the remaining octets, and invokes `Decode()`. |
-| SPP-22 | Packet Reception Function | 4.3.3 | M | Yes | `Decode()` parses raw octets into a `SpacePacket` and automatically validates the result via `Validate()`. Sequence count continuity checking for packet loss reporting is an optional capability (SPP-4). |
+| SPP-21 | Packet Extraction Function | 4.3.2 | M | Yes | `Service.ReceivePacket()` reads the 6-octet Primary Header, computes total packet size via `CalculatePacketSize()`, reads the remaining octets, and invokes `Decode()` with configured decode options (secondary header decoder and error control validation). |
+| SPP-22 | Packet Reception Function | 4.3.3 | M | Yes | `Decode()` parses raw octets into a `SpacePacket` and automatically validates the result via `Validate()`. When `WithDecodeErrorControl()` is used, the trailing 2-byte CRC is verified against the packet contents using CRC-16-CCITT; mismatches return `ErrCRCValidationFailed`. Sequence count continuity checking for packet loss reporting is an optional capability (SPP-4). |
 
 ### Table A-6: Management Parameters
 
@@ -148,15 +148,15 @@ None. All mandatory and conditional items are fully supported.
 | SPP-11 | Packet.indication | `Service.ReceivePacket()` with optional `SecondaryHeader` decoding. |
 | SPP-12 | Octet_String.request | `Service.SendBytes()` constructs packet from raw bytes and service parameters. |
 | SPP-13 | Octet_String.indication | `Service.ReceiveBytes()` delivers APID and user data. |
-| SPP-14 | Space Packet | `SpacePacket` struct with encode/decode round-trip. `Decode()` accepts optional `SecondaryHeader` interface for mission-specific decoding. |
+| SPP-14 | Space Packet | `SpacePacket` struct with encode/decode round-trip. `Decode()` accepts `WithDecodeSecondaryHeader()` and `WithDecodeErrorControl()` options. |
 | SPP-17 | Packet Secondary Header (C1) | `SecondaryHeader` interface with `WithSecondaryHeader()` option. Packets with secondary header only (no user data) are valid. |
 | SPP-18 | User Data Field (C2) | User data required only when no secondary header is present; optional otherwise. |
 | SPP-15 | Packet Primary Header | Complete 6-octet header with all CCSDS fields. Version enforced as 0 (CCSDS v1). Named constants for packet types and sequence flags. Per-APID sequence counting in `Service`; `WithSequenceCount()` / `WithSequenceFlags()` for manual control. |
-| SPP-16 | Packet Data Field | Correct composition and length calculation. |
+| SPP-16 | Packet Data Field | Correct composition and length calculation. CRC-16-CCITT error control on encode (`WithErrorControl()`) and decode (`WithDecodeErrorControl()`). |
 | SPP-19 | Packet Assembly Function | Full assembly via `NewSpacePacket()` + `Encode()`. |
 | SPP-20 | Packet Transfer Function | `Service.SendPacket()` stamps per-APID sequence count and writes to transport. Multiplexing delegated to caller. |
 | SPP-21 | Packet Extraction Function | Full extraction via `Service.ReceivePacket()` + `Decode()`. |
-| SPP-22 | Packet Reception Function | `Decode()` parses and auto-validates. Sequence gap detection is optional (SPP-4). |
+| SPP-22 | Packet Reception Function | `Decode()` parses, validates, and optionally verifies CRC. Sequence gap detection is optional (SPP-4). |
 | SPP-23 | Maximum Packet Length | Configurable via `ServiceConfig.MaxPacketLength`, default 65542. |
 | SPP-24 | Packet Type | Configurable via `ServiceConfig.PacketType`. TM (0) / TC (1) via named constants with convenience constructors. |
 | SPP-26 | Service Type | Both Packet Service and Octet String Service available via `Service`. |
