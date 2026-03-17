@@ -10,7 +10,8 @@ import (
 
 func TestTMServiceManager_VCPService(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
-	svc := tmdl.NewVirtualChannelPacketService(933, 1)
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, nil)
 	mgr.RegisterVirtualService(1, tmdl.VCP, svc)
 
 	data := []byte("packet data")
@@ -30,7 +31,8 @@ func TestTMServiceManager_VCPService(t *testing.T) {
 
 func TestTMServiceManager_VCAService(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
-	svc := tmdl.NewVirtualChannelAccessService(933, 2, 8)
+	vc := tmdl.NewVirtualChannel(2, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 2, 8, vc, nil)
 	mgr.RegisterVirtualService(2, tmdl.VCA, svc)
 
 	data := []byte("12345678")
@@ -50,7 +52,8 @@ func TestTMServiceManager_VCAService(t *testing.T) {
 
 func TestTMServiceManager_VCFService(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
-	svc := tmdl.NewVirtualChannelFrameService(3)
+	vc := tmdl.NewVirtualChannel(3, 100)
+	svc := tmdl.NewVirtualChannelFrameService(3, vc)
 	mgr.RegisterVirtualService(3, tmdl.VCF, svc)
 
 	frame, err := tmdl.NewTMTransferFrame(933, 3, []byte("frame data"), nil, nil)
@@ -92,7 +95,10 @@ func TestTMServiceManager_UnregisteredService(t *testing.T) {
 
 func TestTMServiceManager_MasterChannel(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
-	mgr.RegisterMasterChannelService(933)
+	mc := tmdl.NewMasterChannel(933)
+	vc := tmdl.NewVirtualChannel(1, 100)
+	mc.AddVirtualChannel(vc, 1)
+	mgr.RegisterMasterChannel(933, mc)
 
 	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("mc data"), nil, nil)
 	if err != nil {
@@ -141,5 +147,53 @@ func TestTMServiceManager_UnregisteredMasterChannel(t *testing.T) {
 
 	if mgr.HasPendingFramesInMasterChannel(999) {
 		t.Error("Expected false for unregistered master channel")
+	}
+}
+
+func TestTMServiceManager_FullPipeline(t *testing.T) {
+	mgr := tmdl.NewTMServiceManager()
+	counter := tmdl.NewFrameCounter()
+
+	// Set up master channel with two virtual channels
+	mc := tmdl.NewMasterChannel(933)
+	vc1 := tmdl.NewVirtualChannel(1, 100)
+	vc2 := tmdl.NewVirtualChannel(2, 100)
+	mc.AddVirtualChannel(vc1, 2) // higher priority
+	mc.AddVirtualChannel(vc2, 1)
+	mgr.RegisterMasterChannel(933, mc)
+
+	// Register services wired to the same VCs
+	svc1 := tmdl.NewVirtualChannelPacketService(933, 1, vc1, counter)
+	svc2 := tmdl.NewVirtualChannelPacketService(933, 2, vc2, counter)
+	mgr.RegisterVirtualService(1, tmdl.VCP, svc1)
+	mgr.RegisterVirtualService(2, tmdl.VCP, svc2)
+
+	// Send data through services — frames land in VCs
+	if err := mgr.SendData(1, tmdl.VCP, []byte("priority")); err != nil {
+		t.Fatalf("SendData vc1: %v", err)
+	}
+	if err := mgr.SendData(2, tmdl.VCP, []byte("normal")); err != nil {
+		t.Fatalf("SendData vc2: %v", err)
+	}
+
+	// Pull from master channel — goes through Mux
+	f1, err := mgr.GetNextFrameFromMasterChannel(933)
+	if err != nil {
+		t.Fatalf("GetNextFrame 1: %v", err)
+	}
+	if string(f1.DataField) != "priority" {
+		t.Errorf("Expected 'priority' first (higher weight), got %q", f1.DataField)
+	}
+
+	f2, err := mgr.GetNextFrameFromMasterChannel(933)
+	if err != nil {
+		t.Fatalf("GetNextFrame 2: %v", err)
+	}
+	if string(f2.DataField) != "normal" {
+		t.Errorf("Expected 'normal' second, got %q", f2.DataField)
+	}
+
+	if mgr.HasPendingFramesInMasterChannel(933) {
+		t.Error("Expected no pending frames")
 	}
 }

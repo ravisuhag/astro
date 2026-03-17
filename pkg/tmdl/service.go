@@ -1,71 +1,130 @@
 package tmdl
 
+import "sync"
+
 // Service defines the interface for all TM Data Link services.
 type Service interface {
 	Send(data []byte) error
 	Receive() ([]byte, error)
 }
 
+// ServiceType defines the types of TM services available.
+type ServiceType int
+
+const (
+	VCP ServiceType = iota // Virtual Channel Packet Service
+	VCA                    // Virtual Channel Access Service
+	VCF                    // Virtual Channel Frame Service
+)
+
+// FrameCounter manages 8-bit MC and VC frame counts per CCSDS 132.0-B-3.
+// Share a single FrameCounter across all services for the same spacecraft
+// so the Master Channel count increments correctly.
+type FrameCounter struct {
+	mu       sync.Mutex
+	mcCount  uint8
+	vcCounts map[uint8]uint8
+}
+
+// NewFrameCounter creates a new FrameCounter.
+func NewFrameCounter() *FrameCounter {
+	return &FrameCounter{vcCounts: make(map[uint8]uint8)}
+}
+
+// Next returns the current MC and VC frame counts for the given VCID,
+// then increments both counters.
+func (fc *FrameCounter) Next(vcid uint8) (mc, vc uint8) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	mc = fc.mcCount
+	vc = fc.vcCounts[vcid]
+	fc.mcCount++
+	fc.vcCounts[vcid] = vc + 1
+	return mc, vc
+}
+
+// stampFrame applies frame counters and CRC to a frame.
+func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error {
+	if counter == nil {
+		return nil
+	}
+	mc, vc := counter.Next(vcid)
+	frame.Header.MCFrameCount = mc
+	frame.Header.VCFrameCount = vc
+	encoded, err := frame.EncodeWithoutFEC()
+	if err != nil {
+		return err
+	}
+	frame.FrameErrorControl = ComputeCRC(encoded)
+	return nil
+}
+
 // VirtualChannelPacketService implements the VCP service.
+// It wraps variable-length telemetry packets into frames and pushes
+// them into the associated VirtualChannel.
 type VirtualChannelPacketService struct {
-	scid      uint16
-	channelID uint8
-	frames    []*TMTransferFrame
+	scid    uint16
+	vcid    uint8
+	counter *FrameCounter
+	vc      *VirtualChannel
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
-func NewVirtualChannelPacketService(scid uint16, channelID uint8) *VirtualChannelPacketService {
+// Frames are buffered in vc. If counter is non-nil, frame counts and
+// CRC are auto-stamped on each Send.
+func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel, counter *FrameCounter) *VirtualChannelPacketService {
 	return &VirtualChannelPacketService{
-		scid:      scid,
-		channelID: channelID,
-		frames:    make([]*TMTransferFrame, 0),
+		scid:    scid,
+		vcid:    vcid,
+		counter: counter,
+		vc:      vc,
 	}
 }
 
-// Send adds a telemetry packet to the Virtual Channel Packet Service.
+// Send wraps data into a TM Transfer Frame and pushes it into the Virtual Channel.
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
 
-	newFrame, err := NewTMTransferFrame(s.scid, s.channelID, data, nil, nil)
+	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, nil, nil)
 	if err != nil {
 		return err
 	}
 
-	s.frames = append(s.frames, newFrame)
-	return nil
-}
-
-// Receive retrieves the next packet from the Virtual Channel Packet Service.
-func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
-	if len(s.frames) == 0 {
-		return nil, ErrNoFramesAvailable
+	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
+		return err
 	}
 
-	nextFrame := s.frames[0]
-	s.frames[0] = nil // Allow GC of consumed frame
-	s.frames = s.frames[1:]
+	return s.vc.AddFrame(frame)
+}
 
-	return nextFrame.DataField, nil
+// Receive retrieves the next frame from the Virtual Channel and returns its data field.
+func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
+	frame, err := s.vc.GetNextFrame()
+	if err != nil {
+		return nil, err
+	}
+	return frame.DataField, nil
 }
 
 // VirtualChannelFrameService implements the VCF service.
 // Send accepts encoded frame bytes; Receive returns encoded frame bytes.
 type VirtualChannelFrameService struct {
-	channelID uint8
-	frames    []*TMTransferFrame
+	vcid uint8
+	vc   *VirtualChannel
 }
 
 // NewVirtualChannelFrameService creates a new VCF service instance.
-func NewVirtualChannelFrameService(channelID uint8) *VirtualChannelFrameService {
+// Frames are buffered in vc.
+func NewVirtualChannelFrameService(vcid uint8, vc *VirtualChannel) *VirtualChannelFrameService {
 	return &VirtualChannelFrameService{
-		channelID: channelID,
-		frames:    make([]*TMTransferFrame, 0),
+		vcid: vcid,
+		vc:   vc,
 	}
 }
 
-// Send decodes the provided bytes as a TM Transfer Frame and stores it.
+// Send decodes the provided bytes as a TM Transfer Frame and pushes it into the Virtual Channel.
 func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
@@ -76,107 +135,112 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 		return err
 	}
 
-	s.frames = append(s.frames, frame)
-	return nil
+	return s.vc.AddFrame(frame)
 }
 
-// Receive retrieves the next full TM Transfer Frame as encoded bytes.
+// Receive retrieves the next frame from the Virtual Channel and returns it as encoded bytes.
 func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
-	if len(s.frames) == 0 {
-		return nil, ErrNoFramesAvailable
+	frame, err := s.vc.GetNextFrame()
+	if err != nil {
+		return nil, err
 	}
-
-	nextFrame := s.frames[0]
-	s.frames[0] = nil // Allow GC of consumed frame
-	s.frames = s.frames[1:]
-
-	return nextFrame.Encode()
+	return frame.Encode()
 }
 
 // VirtualChannelAccessService implements the VCA service.
+// It accepts fixed-length service data units and pushes frames into
+// the associated VirtualChannel.
 type VirtualChannelAccessService struct {
-	scid      uint16
-	channelID uint8
-	vcaSize   int
-	frames    []*TMTransferFrame
+	scid    uint16
+	vcid    uint8
+	vcaSize int
+	counter *FrameCounter
+	vc      *VirtualChannel
 }
 
 // NewVirtualChannelAccessService creates a new VCA service instance.
-func NewVirtualChannelAccessService(scid uint16, channelID uint8, vcaSize int) *VirtualChannelAccessService {
+// Frames are buffered in vc. If counter is non-nil, frame counts and
+// CRC are auto-stamped on each Send.
+func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *VirtualChannel, counter *FrameCounter) *VirtualChannelAccessService {
 	return &VirtualChannelAccessService{
-		scid:      scid,
-		channelID: channelID,
-		vcaSize:   vcaSize,
-		frames:    make([]*TMTransferFrame, 0),
+		scid:    scid,
+		vcid:    vcid,
+		vcaSize: vcaSize,
+		counter: counter,
+		vc:      vc,
 	}
 }
 
-// Send adds a fixed-length service data unit to the Virtual Channel Access Service.
+// Send wraps a fixed-length SDU into a TM Transfer Frame and pushes it into the Virtual Channel.
 func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if len(data) != s.vcaSize {
 		return ErrSizeMismatch
 	}
 
-	newFrame, err := NewTMTransferFrame(s.scid, s.channelID, data, nil, nil)
+	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, nil, nil)
 	if err != nil {
 		return err
 	}
 
-	s.frames = append(s.frames, newFrame)
-	return nil
+	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
+		return err
+	}
+
+	return s.vc.AddFrame(frame)
 }
 
-// Receive retrieves the next fixed-length service data unit from the VCA service.
+// Receive retrieves the next frame from the Virtual Channel and returns its data field.
 func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
-	if len(s.frames) == 0 {
-		return nil, ErrNoFramesAvailable
+	frame, err := s.vc.GetNextFrame()
+	if err != nil {
+		return nil, err
 	}
-
-	nextFrame := s.frames[0]
-	s.frames[0] = nil // Allow GC of consumed frame
-	s.frames = s.frames[1:]
-
-	return nextFrame.DataField, nil
+	return frame.DataField, nil
 }
 
-// MasterChannelService manages full TM Transfer Frames for a Master Channel.
-type MasterChannelService struct {
-	scid   uint16
-	frames []*TMTransferFrame
+// MasterChannel manages TM Transfer Frames for a Master Channel identified by SCID.
+// It holds a multiplexer for the send path and routes inbound frames to
+// Virtual Channels for the receive path.
+type MasterChannel struct {
+	scid     uint16
+	mux      *VirtualChannelMultiplexer
+	channels map[uint8]*VirtualChannel
 }
 
-// NewMasterChannelService creates a new Master Channel service instance.
-func NewMasterChannelService(scid uint16) *MasterChannelService {
-	return &MasterChannelService{
-		scid:   scid,
-		frames: make([]*TMTransferFrame, 0),
+// NewMasterChannel creates a new Master Channel for the given spacecraft ID.
+func NewMasterChannel(scid uint16) *MasterChannel {
+	return &MasterChannel{
+		scid:     scid,
+		mux:      NewMultiplexer(),
+		channels: make(map[uint8]*VirtualChannel),
 	}
 }
 
-// AddFrame adds a full TM Transfer Frame to the Master Channel.
-func (s *MasterChannelService) AddFrame(frame *TMTransferFrame) error {
-	if frame.Header.SpacecraftID != s.scid {
+// AddVirtualChannel registers a Virtual Channel with this Master Channel
+// and adds it to the multiplexer with the given priority weight.
+func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
+	mc.channels[vc.VCID] = vc
+	mc.mux.AddVirtualChannel(vc, priority)
+}
+
+// AddFrame routes an inbound frame to the appropriate Virtual Channel based on VCID.
+func (mc *MasterChannel) AddFrame(frame *TMTransferFrame) error {
+	if frame.Header.SpacecraftID != mc.scid {
 		return ErrSCIDMismatch
 	}
-
-	s.frames = append(s.frames, frame)
-	return nil
-}
-
-// GetNextFrame retrieves the next TM Transfer Frame from the Master Channel.
-func (s *MasterChannelService) GetNextFrame() (*TMTransferFrame, error) {
-	if len(s.frames) == 0 {
-		return nil, ErrNoFramesAvailable
+	vc, ok := mc.channels[frame.Header.VirtualChannelID]
+	if !ok {
+		return ErrVirtualChannelNotFound
 	}
-
-	nextFrame := s.frames[0]
-	s.frames[0] = nil // Allow GC of consumed frame
-	s.frames = s.frames[1:]
-
-	return nextFrame, nil
+	return vc.AddFrame(frame)
 }
 
-// HasFrames checks if there are any pending frames in the Master Channel.
-func (s *MasterChannelService) HasFrames() bool {
-	return len(s.frames) > 0
+// GetNextFrame retrieves the next frame from the multiplexer (send path).
+func (mc *MasterChannel) GetNextFrame() (*TMTransferFrame, error) {
+	return mc.mux.GetNextFrame()
+}
+
+// HasPendingFrames checks if any Virtual Channel has pending frames.
+func (mc *MasterChannel) HasPendingFrames() bool {
+	return mc.mux.HasPendingFrames()
 }

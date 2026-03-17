@@ -78,7 +78,7 @@ func TestMultiplexerPriorityWeighting(t *testing.T) {
 	mux.AddVirtualChannel(vc2, 1) // Priority 1: gets 1 turn
 
 	// Add 3 frames to vc1 and 3 to vc2
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := vc1.AddFrame(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{MCFrameCount: uint8(i)}}); err != nil {
 			t.Fatalf("Failed to add frame to vc1: %v", err)
 		}

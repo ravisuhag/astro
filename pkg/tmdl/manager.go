@@ -1,29 +1,21 @@
 package tmdl
 
-// ServiceType defines the types of TM services available.
-type ServiceType int
-
-const (
-	VCP ServiceType = iota // Virtual Channel Packet Service
-	VCA                    // Virtual Channel Access Service
-	VCF                    // Virtual Channel Frame Service
-)
-
-// TMServiceManager manages multiple TM services, including both Virtual and Master Channel services.
+// TMServiceManager manages multiple TM services and Master Channels,
+// wiring the pipeline: Service → VirtualChannel → Mux → MasterChannel.
 type TMServiceManager struct {
 	virtualServices map[uint8]map[ServiceType]Service
-	masterServices  map[uint16]*MasterChannelService
+	masterChannels  map[uint16]*MasterChannel
 }
 
 // NewTMServiceManager creates a new TM Service Manager.
 func NewTMServiceManager() *TMServiceManager {
 	return &TMServiceManager{
 		virtualServices: make(map[uint8]map[ServiceType]Service),
-		masterServices:  make(map[uint16]*MasterChannelService),
+		masterChannels:  make(map[uint16]*MasterChannel),
 	}
 }
 
-// RegisterVirtualService registers a new Virtual Channel service for a specific VCID and service type.
+// RegisterVirtualService registers a Virtual Channel service for a specific VCID and service type.
 func (m *TMServiceManager) RegisterVirtualService(vcid uint8, serviceType ServiceType, service Service) {
 	if _, exists := m.virtualServices[vcid]; !exists {
 		m.virtualServices[vcid] = make(map[ServiceType]Service)
@@ -31,11 +23,9 @@ func (m *TMServiceManager) RegisterVirtualService(vcid uint8, serviceType Servic
 	m.virtualServices[vcid][serviceType] = service
 }
 
-// RegisterMasterChannelService registers a new Master Channel service for a specific SCID.
-func (m *TMServiceManager) RegisterMasterChannelService(scid uint16) {
-	if _, exists := m.masterServices[scid]; !exists {
-		m.masterServices[scid] = NewMasterChannelService(scid)
-	}
+// RegisterMasterChannel registers a Master Channel.
+func (m *TMServiceManager) RegisterMasterChannel(scid uint16, mc *MasterChannel) {
+	m.masterChannels[scid] = mc
 }
 
 // SendData sends data using the specified Virtual Channel service type for a given VCID.
@@ -56,28 +46,30 @@ func (m *TMServiceManager) ReceiveData(vcid uint8, serviceType ServiceType) ([]b
 	return service.Receive()
 }
 
-// AddFrameToMasterChannel adds a full TM Transfer Frame to the specified Master Channel.
+// AddFrameToMasterChannel routes a frame to the appropriate Virtual Channel
+// within the specified Master Channel.
 func (m *TMServiceManager) AddFrameToMasterChannel(scid uint16, frame *TMTransferFrame) error {
-	masterService, exists := m.masterServices[scid]
+	mc, exists := m.masterChannels[scid]
 	if !exists {
 		return ErrMasterChannelNotFound
 	}
-	return masterService.AddFrame(frame)
+	return mc.AddFrame(frame)
 }
 
-// GetNextFrameFromMasterChannel retrieves the next frame from the specified Master Channel.
+// GetNextFrameFromMasterChannel retrieves the next frame from the
+// Master Channel's multiplexer.
 func (m *TMServiceManager) GetNextFrameFromMasterChannel(scid uint16) (*TMTransferFrame, error) {
-	masterService, exists := m.masterServices[scid]
+	mc, exists := m.masterChannels[scid]
 	if !exists {
 		return nil, ErrMasterChannelNotFound
 	}
-	return masterService.GetNextFrame()
+	return mc.GetNextFrame()
 }
 
 // HasPendingFramesInMasterChannel checks if a Master Channel has pending frames.
 func (m *TMServiceManager) HasPendingFramesInMasterChannel(scid uint16) bool {
-	masterService, exists := m.masterServices[scid]
-	return exists && masterService.HasFrames()
+	mc, exists := m.masterChannels[scid]
+	return exists && mc.HasPendingFrames()
 }
 
 // getVirtualService retrieves the virtual service for a given VCID and service type.

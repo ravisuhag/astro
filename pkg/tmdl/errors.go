@@ -59,4 +59,7 @@ var (
 
 	// ErrNoVirtualChannels indicates no virtual channels are registered.
 	ErrNoVirtualChannels = errors.New("no virtual channels available")
+
+	// ErrVirtualChannelNotFound indicates no virtual channel exists for the given VCID.
+	ErrVirtualChannelNotFound = errors.New("virtual channel not found for specified VCID")
 )

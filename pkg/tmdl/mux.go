@@ -1,6 +1,6 @@
 package tmdl
 
-import "sort"
+import "slices"
 
 // VirtualChannelMultiplexer handles frame scheduling from multiple Virtual Channels.
 type VirtualChannelMultiplexer struct {
@@ -29,9 +29,7 @@ func (mux *VirtualChannelMultiplexer) AddVirtualChannel(vc *VirtualChannel, prio
 	for vcid := range mux.channels {
 		mux.sortedVCIDs = append(mux.sortedVCIDs, vcid)
 	}
-	sort.Slice(mux.sortedVCIDs, func(i, j int) bool {
-		return mux.sortedVCIDs[i] < mux.sortedVCIDs[j]
-	})
+	slices.Sort(mux.sortedVCIDs)
 
 	// Reset scheduling state
 	mux.currentIndex = 0
@@ -47,7 +45,7 @@ func (mux *VirtualChannelMultiplexer) GetNextFrame() (*TMTransferFrame, error) {
 	}
 
 	// Try each VC starting from current position
-	for i := 0; i < len(mux.sortedVCIDs); i++ {
+	for range len(mux.sortedVCIDs) {
 		vcid := mux.sortedVCIDs[mux.currentIndex]
 		vc := mux.channels[vcid]
 
