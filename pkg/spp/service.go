@@ -3,6 +3,7 @@ package spp
 import (
 	"errors"
 	"io"
+	"sync"
 )
 
 // Service provides both the Packet Service (CCSDS 3.3) and the Octet String
@@ -12,6 +13,8 @@ type Service struct {
 	packetType   uint8
 	maxPacketLen int
 	sh           SecondaryHeader // optional decoder for inbound packets
+	mu           sync.Mutex
+	counters     map[uint16]uint16 // per-APID sequence counters
 }
 
 // ServiceConfig holds configuration for a Service.
@@ -32,16 +35,25 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 		packetType:   cfg.PacketType,
 		maxPacketLen: maxLen,
 		sh:           cfg.SecondaryHeader,
+		counters:     make(map[uint16]uint16),
 	}
 }
 
 // --- Packet Service (CCSDS 3.3) ---
 
 // SendPacket writes a pre-built space packet to the transport.
+// It stamps the packet with the next sequence count for its APID
+// per CCSDS 133.0-B-2 Section 4.1.3.5.
 func (s *Service) SendPacket(packet *SpacePacket) error {
 	if packet == nil {
 		return errors.New("invalid packet: cannot send nil packet")
 	}
+
+	s.mu.Lock()
+	apid := packet.PrimaryHeader.APID
+	packet.PrimaryHeader.SequenceCount = s.counters[apid]
+	s.counters[apid] = (s.counters[apid] + 1) & 0x3FFF
+	s.mu.Unlock()
 
 	data, err := packet.Encode()
 	if err != nil {

@@ -125,6 +125,29 @@ func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 	}
 }
 
+// WithSequenceCount sets the sequence count on the SpacePacket.
+// Use this when constructing packets outside of a Service.
+func WithSequenceCount(n uint16) PacketOption {
+	return func(packet *SpacePacket) error {
+		if n > 16383 {
+			return ErrInvalidSequenceCount
+		}
+		packet.PrimaryHeader.SequenceCount = n
+		return nil
+	}
+}
+
+// WithSequenceFlags sets the sequence flags on the SpacePacket.
+func WithSequenceFlags(flags uint8) PacketOption {
+	return func(packet *SpacePacket) error {
+		if flags > 3 {
+			return ErrInvalidSequenceFlags
+		}
+		packet.PrimaryHeader.SequenceFlags = flags
+		return nil
+	}
+}
+
 // WithErrorControl adds an error control field to the SpacePacket.
 func WithErrorControl(crc uint16) PacketOption {
 	return func(packet *SpacePacket) error {

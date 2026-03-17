@@ -308,6 +308,38 @@ func TestNewSpacePacketC1SecondaryHeaderOnly(t *testing.T) {
 	}
 }
 
+func TestWithSequenceCount(t *testing.T) {
+	packet, err := spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSequenceCount(42))
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+	if packet.PrimaryHeader.SequenceCount != 42 {
+		t.Errorf("Sequence count = %d, want 42", packet.PrimaryHeader.SequenceCount)
+	}
+
+	// Invalid sequence count
+	_, err = spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSequenceCount(16384))
+	if err == nil {
+		t.Error("Expected error for sequence count > 16383")
+	}
+}
+
+func TestWithSequenceFlags(t *testing.T) {
+	packet, err := spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSequenceFlags(spp2.SeqFlagFirstSegment))
+	if err != nil {
+		t.Fatalf("Failed to create packet: %v", err)
+	}
+	if packet.PrimaryHeader.SequenceFlags != spp2.SeqFlagFirstSegment {
+		t.Errorf("Sequence flags = %d, want %d", packet.PrimaryHeader.SequenceFlags, spp2.SeqFlagFirstSegment)
+	}
+
+	// Invalid sequence flags
+	_, err = spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSequenceFlags(4))
+	if err == nil {
+		t.Error("Expected error for sequence flags > 3")
+	}
+}
+
 func TestNewSpacePacketC2NoSecondaryHeaderNoData(t *testing.T) {
 	// C2: A packet with no secondary header AND no user data must be rejected
 	_, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, nil)

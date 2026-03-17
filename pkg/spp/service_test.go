@@ -28,11 +28,97 @@ func TestServiceSendReceivePacket(t *testing.T) {
 		t.Fatalf("ReceivePacket failed: %v", err)
 	}
 
-	if packet.PrimaryHeader != received.PrimaryHeader {
-		t.Errorf("Primary header mismatch. Got %+v, want %+v", received.PrimaryHeader, packet.PrimaryHeader)
+	if received.PrimaryHeader.APID != packet.PrimaryHeader.APID {
+		t.Errorf("APID mismatch. Got %d, want %d", received.PrimaryHeader.APID, packet.PrimaryHeader.APID)
+	}
+	if received.PrimaryHeader.SequenceCount != 0 {
+		t.Errorf("Expected sequence count 0, got %d", received.PrimaryHeader.SequenceCount)
 	}
 	if !bytes.Equal(packet.UserData, received.UserData) {
 		t.Errorf("User data mismatch. Got %v, want %v", received.UserData, packet.UserData)
+	}
+}
+
+func TestServiceSequenceCounting(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType: spp2.PacketTypeTM,
+	})
+
+	// Send 3 packets on APID 100, expect sequence counts 0, 1, 2
+	for i := 0; i < 3; i++ {
+		packet, err := spp2.NewTMPacket(100, []byte{0x01})
+		if err != nil {
+			t.Fatalf("Failed to create packet: %v", err)
+		}
+		if err := svc.SendPacket(packet); err != nil {
+			t.Fatalf("SendPacket failed: %v", err)
+		}
+	}
+
+	// Send 2 packets on APID 200, expect sequence counts 0, 1
+	for i := 0; i < 2; i++ {
+		if err := svc.SendBytes(200, []byte{0x02}); err != nil {
+			t.Fatalf("SendBytes failed: %v", err)
+		}
+	}
+
+	// Verify APID 100 sequence counts
+	for i := 0; i < 3; i++ {
+		received, err := svc.ReceivePacket()
+		if err != nil {
+			t.Fatalf("ReceivePacket failed: %v", err)
+		}
+		if received.PrimaryHeader.SequenceCount != uint16(i) {
+			t.Errorf("APID 100 packet %d: sequence count = %d, want %d",
+				i, received.PrimaryHeader.SequenceCount, i)
+		}
+	}
+
+	// Verify APID 200 sequence counts (independent from APID 100)
+	for i := 0; i < 2; i++ {
+		received, err := svc.ReceivePacket()
+		if err != nil {
+			t.Fatalf("ReceivePacket failed: %v", err)
+		}
+		if received.PrimaryHeader.SequenceCount != uint16(i) {
+			t.Errorf("APID 200 packet %d: sequence count = %d, want %d",
+				i, received.PrimaryHeader.SequenceCount, i)
+		}
+	}
+}
+
+func TestServiceSequenceCountWrap(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType: spp2.PacketTypeTM,
+	})
+
+	// Send 16384 packets (0..16383), then one more that should wrap to 0
+	for i := 0; i < 16385; i++ {
+		packet, err := spp2.NewTMPacket(1, []byte{0x01})
+		if err != nil {
+			t.Fatalf("Failed to create packet: %v", err)
+		}
+		if err := svc.SendPacket(packet); err != nil {
+			t.Fatalf("SendPacket failed at %d: %v", i, err)
+		}
+	}
+
+	// Discard first 16384 packets
+	for i := 0; i < 16384; i++ {
+		if _, err := svc.ReceivePacket(); err != nil {
+			t.Fatalf("ReceivePacket failed at %d: %v", i, err)
+		}
+	}
+
+	// The 16385th packet should have wrapped to 0
+	received, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket failed: %v", err)
+	}
+	if received.PrimaryHeader.SequenceCount != 0 {
+		t.Errorf("Expected wrapped sequence count 0, got %d", received.PrimaryHeader.SequenceCount)
 	}
 }
 

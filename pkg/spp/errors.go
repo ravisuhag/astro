@@ -21,9 +21,6 @@ var (
 	// ErrInvalidSequenceCount indicates the sequence count is out of range.
 	ErrInvalidSequenceCount = errors.New("invalid sequence count: must be in the range 0-16383")
 
-	// ErrAPIDAlreadyReserved indicates that the APID is already reserved.
-	ErrAPIDAlreadyReserved = errors.New("APID is already reserved")
-
 	// ErrPacketTooLarge indicates that the packet size exceeds the allowable limit.
 	ErrPacketTooLarge = errors.New("packet length must be between 7 and 65542 octets")
 

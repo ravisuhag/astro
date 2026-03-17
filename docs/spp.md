@@ -1,283 +1,212 @@
-# Space Packet Protocol (SPP) Guide
+# Space Packet Protocol (SPP)
 
-## Introduction
+The `spp` package implements the CCSDS 133.0-B-2 Space Packet Protocol — the fundamental data unit used for transferring application data in space missions.
 
-This guide covers how to use our Space Packet Protocol (SPP) package for spacecraft communications. The SPP package implements the CCSDS 133.0-B-2 standard, providing tools for creating and managing space packets in your satellite communication systems.
+## Packet Structure
 
-## Quick Start
-
-### Creating a Basic Telemetry Packet
-
-```go
-import "github.com/ravisuhag/astro/pkg/spp"
-
-// Create a telemetry packet with APID 123
-data := []byte("temperature=22.5,pressure=1013.2")
-packet, err := spp.NewTMPacket(123, data)
-if err != nil {
-    log.Fatal(err)
-}
-
-// Encode the packet for transmission
-encoded, err := packet.Encode()
-if err != nil {
-    log.Fatal(err)
-}
-// encoded is now ready for transmission
+```
++----------------+----------------+----------------+----------------+
+| Version (3b)   | Type (1b)      | SecHdrFlag (1b)| APID (11b)     |
++----------------+----------------+----------------+----------------+
+| SeqFlags (2b)  | Sequence Count (14b)                            |
++----------------+----------------+----------------+----------------+
+| Packet Length (16b)                                               |
++----------------+----------------+----------------+----------------+
+| Secondary Header (optional, 1–63 bytes, mission-defined)         |
++----------------+----------------+----------------+----------------+
+| User Data Field (variable length)                                |
++----------------+----------------+----------------+----------------+
+| Error Control (optional, 16b CRC)                                |
++----------------+----------------+----------------+----------------+
 ```
 
-### Creating a Telecommand Packet
+A packet must contain at least a secondary header or user data (CCSDS C1/C2). Total packet size: 7–65,542 bytes.
+
+## Creating Packets
+
+Use `NewTMPacket` for telemetry and `NewTCPacket` for telecommand:
 
 ```go
-// Create a telecommand packet with APID 456
-command := []byte("SET_MODE=SAFE")
-packet, err := spp.NewTCPacket(456, command)
-if err != nil {
-    log.Fatal(err)
-}
+// Telemetry packet with APID 100
+packet, err := spp.NewTMPacket(100, []byte("temperature=22.5"))
+
+// Telecommand packet with APID 200
+packet, err := spp.NewTCPacket(200, []byte("SET_MODE=SAFE"))
+
+// Generic constructor with explicit type
+packet, err := spp.NewSpacePacket(100, spp.PacketTypeTM, data)
 ```
 
-## Common Use Cases
+### Packet Options
 
-### 1. Sensor Data Transmission
-
-When sending sensor data from your satellite:
+Options configure optional fields via functional options:
 
 ```go
-type SensorData struct {
-    Temperature float64
-    Pressure    float64
-    Timestamp   int64
-}
+// With error control (CRC)
+packet, err := spp.NewTMPacket(100, data, spp.WithErrorControl(crc))
 
-func SendSensorData(data SensorData) error {
-    // Convert sensor data to bytes
-    payload := fmt.Sprintf("temp=%.2f,press=%.2f,time=%d",
-        data.Temperature,
-        data.Pressure,
-        data.Timestamp,
-    )
+// With a mission-specific secondary header
+packet, err := spp.NewTMPacket(100, data, spp.WithSecondaryHeader(myHeader))
 
-    // Create telemetry packet with APID 100 (sensor data)
-    packet, err := spp.NewTMPacket(100, []byte(payload))
-    if err != nil {
-        return fmt.Errorf("failed to create packet: %w", err)
-    }
+// With manual sequence count and flags (for packets built outside a Service)
+packet, err := spp.NewTMPacket(100, data,
+    spp.WithSequenceCount(42),
+    spp.WithSequenceFlags(spp.SeqFlagFirstSegment),
+)
 
-    // Add timestamp in secondary header
-    secondaryHeader := spp.SecondaryHeader{
-        Timestamp: uint64(time.Now().UnixNano()),
-    }
-    packet, err = spp.NewTMPacket(100, []byte(payload),
-        spp.WithSecondaryHeader(secondaryHeader))
-
-    // Encode and send...
-    return nil
-}
-```
-
-### 2. Command Reception
-
-When receiving commands:
-
-```go
-func ProcessPacket(rawData []byte) error {
-    // Decode the received packet
-    packet, err := spp.Decode(rawData)
-    if err != nil {
-        return fmt.Errorf("failed to decode packet: %w", err)
-    }
-
-    // Check if it's a command packet
-    if packet.PrimaryHeader.Type != 1 { // Type 1 = TC
-        return fmt.Errorf("expected command packet, got type %d",
-            packet.PrimaryHeader.Type)
-    }
-
-    // Process based on APID
-    switch packet.PrimaryHeader.APID {
-    case 456: // Command APID
-        return processCommand(packet.UserData)
-    default:
-        return fmt.Errorf("unknown APID: %d", packet.PrimaryHeader.APID)
-    }
-}
-```
-
-### 3. Large Data Transmission
-
-When sending large amounts of data that need to be split across multiple packets:
-
-```go
-func SendLargeData(data []byte, apid uint16) error {
-    // Maximum data size per packet (minus headers)
-    const maxDataSize = 65535 - 6 // 6 bytes for primary header
-
-    // Split data into chunks
-    for i := 0; i < len(data); i += maxDataSize {
-        end := i + maxDataSize
-        if end > len(data) {
-            end = len(data)
-        }
-
-        chunk := data[i:end]
-        var seqFlags uint8
-
-        switch {
-        case i == 0 && end == len(data):
-            seqFlags = 3 // Standalone packet
-        case i == 0:
-            seqFlags = 1 // First packet
-        case end == len(data):
-            seqFlags = 2 // Last packet
-        default:
-            seqFlags = 0 // Continuation packet
-        }
-
-        // Create packet with sequence flags
-        packet, err := spp.NewTMPacket(apid, chunk)
-        if err != nil {
-            return err
-        }
-        packet.PrimaryHeader.SequenceFlags = seqFlags
-
-        // Encode and send...
-    }
-    return nil
-}
-```
-
-## Best Practices
-
-### APID Management
-
-1. **Reserved APIDs**: Keep a registry of APIDs and their purposes
-   - 0-63: Reserved for system use
-   - 64-127: Telemetry data
-   - 128-191: Science data
-   - 192-255: Command and control
-
-2. **APID Documentation Example**:
-```go
-const (
-    APID_HOUSEKEEPING   = 64  // Basic spacecraft telemetry
-    APID_THERMAL        = 65  // Thermal subsystem data
-    APID_POWER         = 66  // Power subsystem data
-    APID_ATTITUDE      = 67  // Attitude determination data
-    APID_PAYLOAD       = 128 // Science payload data
-    APID_COMMAND       = 192 // Command packets
+// Combining options
+packet, err := spp.NewTMPacket(100, data,
+    spp.WithSecondaryHeader(myHeader),
+    spp.WithErrorControl(crc),
 )
 ```
 
-### Error Handling
-
-Always handle common error cases:
+## Encoding and Decoding
 
 ```go
-packet, err := spp.NewTMPacket(apid, data)
-switch {
-case errors.Is(err, spp.ErrInvalidAPID):
-    // Handle invalid APID
-case errors.Is(err, spp.ErrDataTooLong):
-    // Handle data too long
-case err != nil:
-    // Handle other errors
+// Encode a packet to bytes for transmission
+encoded, err := packet.Encode()
+
+// Decode bytes back into a packet
+decoded, err := spp.Decode(encoded)
+
+// Decode with a secondary header decoder
+decoded, err := spp.Decode(encoded, &MySecondaryHeader{})
+```
+
+When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation. If none is provided, the secondary header bytes are included in `UserData`.
+
+## Secondary Headers
+
+The secondary header format is mission-defined. Implement the `SecondaryHeader` interface:
+
+```go
+type SecondaryHeader interface {
+    Encode() ([]byte, error)
+    Decode([]byte) error
+    Size() int  // fixed size in bytes (1–63)
 }
 ```
 
-### Packet Validation
-
-Always validate received packets:
+Example implementation:
 
 ```go
-func validatePacket(packet *spp.SpacePacket) error {
-    // Check packet length
-    if len(packet.UserData) == 0 {
-        return fmt.Errorf("empty packet data")
-    }
+type TimestampHeader struct {
+    Seconds     uint32
+    Subseconds  uint16
+}
 
-    // Verify APID is in valid range
-    if packet.PrimaryHeader.APID > 2047 {
-        return fmt.Errorf("invalid APID")
-    }
+func (h *TimestampHeader) Encode() ([]byte, error) {
+    buf := make([]byte, 6)
+    binary.BigEndian.PutUint32(buf[0:4], h.Seconds)
+    binary.BigEndian.PutUint16(buf[4:6], h.Subseconds)
+    return buf, nil
+}
 
-    // Additional validation...
+func (h *TimestampHeader) Decode(data []byte) error {
+    if len(data) < 6 {
+        return errors.New("insufficient data for timestamp header")
+    }
+    h.Seconds = binary.BigEndian.Uint32(data[0:4])
+    h.Subseconds = binary.BigEndian.Uint16(data[4:6])
     return nil
 }
+
+func (h *TimestampHeader) Size() int { return 6 }
 ```
 
-## Performance Tips
+## Service Layer
 
-1. **Buffer Reuse**: For high-frequency packet processing, reuse buffers:
+The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
+
+- **Packet Service** (CCSDS 3.3) — send and receive pre-built `SpacePacket` values
+- **Octet String Service** (CCSDS 3.4) — send and receive raw byte data, with automatic packet wrapping
 
 ```go
-// Create a buffer pool
-var bufferPool = sync.Pool{
-    New: func() interface{} {
-        return make([]byte, 65542) // Max packet size
-    },
-}
-
-func processPacketsEfficiently(data []byte) {
-    buffer := bufferPool.Get().([]byte)
-    defer bufferPool.Put(buffer)
-
-    // Use buffer for packet processing...
-}
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType:      spp.PacketTypeTM,
+    MaxPacketLength: 1024,               // optional, defaults to 65542
+    SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
+})
 ```
 
-2. **Batch Processing**: When sending multiple packets, batch them:
+### Sequence Counting
+
+The service automatically maintains a per-APID 14-bit sequence counter (per CCSDS 133.0-B-2 Section 4.1.3.5). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
+
+### Packet Service
 
 ```go
-func sendPacketBatch(packets []*spp.SpacePacket) error {
-    encodedData := make([][]byte, 0, len(packets))
+// Send a pre-built packet (sequence count is stamped automatically)
+err := svc.SendPacket(packet)
 
-    // Encode all packets first
-    for _, packet := range packets {
-        encoded, err := packet.Encode()
-        if err != nil {
-            return err
-        }
-        encodedData = append(encodedData, encoded)
-    }
-
-    // Then send in batch
-    return sendBatch(encodedData)
-}
+// Receive and decode a packet
+packet, err := svc.ReceivePacket()
 ```
 
-## Debugging Tips
-
-1. Use the `Humanize()` method for debugging:
+### Octet String Service
 
 ```go
-packet, _ := spp.NewTMPacket(123, data)
-log.Printf("Packet details:\n%s", packet.Humanize())
+// Send raw bytes — packet construction is handled automatically
+err := svc.SendBytes(100, []byte("payload data"))
+
+// Send with options
+err := svc.SendBytes(100, data,
+    spp.WithSendSecondaryHeader(myHeader),
+    spp.WithSendErrorControl(crc),
+)
+
+// Receive — returns APID and user data
+apid, data, err := svc.ReceiveBytes()
 ```
 
-2. Enable packet logging in development:
+## Utilities
 
 ```go
-func logPacket(packet *spp.SpacePacket) {
-    if os.Getenv("DEBUG") == "1" {
-        log.Printf("APID: %d, Type: %d, Seq: %d, Length: %d",
-            packet.PrimaryHeader.APID,
-            packet.PrimaryHeader.Type,
-            packet.PrimaryHeader.SequenceCount,
-            packet.PrimaryHeader.PacketLength)
-    }
-}
+// Calculate total packet size from a raw 6-byte header
+size, err := spp.CalculatePacketSize(headerBytes)
+
+// Compute CRC-16-CCITT (polynomial 0x1021, initial 0xFFFF)
+crc := spp.ComputeCRC(data)
+
+// Human-readable packet dump for debugging
+fmt.Println(packet.Humanize())
 ```
 
-## Common Pitfalls
+## Constants
 
-1. **Packet Size Limits**: Don't exceed maximum packet size (65542 bytes)
-2. **APID Range**: Ensure APIDs are within valid range (0-2047)
-3. **Sequence Counting**: Handle sequence number wraparound correctly
-4. **Secondary Headers**: Don't forget to set the secondary header flag when using secondary headers
+```go
+spp.PrimaryHeaderSize    // 6 bytes
 
-## Further Reading
+spp.PacketTypeTM         // 0 — Telemetry
+spp.PacketTypeTC         // 1 — Telecommand
 
-- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2c1.pdf) - Space Packet Protocol
-- [ECSS-E-70-41A](https://ecss.nl) - Ground systems and operations
-- [Package Documentation](https://godoc.org/github.com/your-org/astro/pkg/spp)
+spp.SeqFlagContinuation  // 0
+spp.SeqFlagFirstSegment  // 1
+spp.SeqFlagLastSegment   // 2
+spp.SeqFlagUnsegmented   // 3
+```
+
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|-------|---------|
+| `ErrInvalidVersion` | Version is not 0 |
+| `ErrInvalidType` | Type is not 0 or 1 |
+| `ErrInvalidAPID` | APID outside 0–2047 |
+| `ErrInvalidSequenceFlags` | Sequence flags outside 0–3 |
+| `ErrInvalidSequenceCount` | Sequence count outside 0–16383 |
+| `ErrInvalidHeader` | Header does not conform to CCSDS |
+| `ErrPacketTooLarge` | Total packet size outside 7–65542 bytes |
+| `ErrDataTooShort` | Input data too short to decode |
+| `ErrPacketLengthMismatch` | Data field size doesn't match header length |
+| `ErrSecondaryHeaderMissing` | Flag is set but no secondary header provided |
+| `ErrSecondaryHeaderTooSmall` | Secondary header less than 1 byte |
+| `ErrSecondaryHeaderTooLarge` | Secondary header exceeds 63 bytes |
+| `ErrCRCValidationFailed` | CRC integrity check failed |
+
+## Reference
+
+- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol Blue Book
