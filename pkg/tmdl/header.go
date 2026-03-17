@@ -166,8 +166,9 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 	sh.VersionNumber = data[0] >> 6
 	sh.HeaderLength = data[0] & 0x3F
 
-	// Validate and extract DataField based on HeaderLength
-	expectedLen := 1 + int(sh.HeaderLength)
+	// Per CCSDS 132.0-B-3 §4.1.3.2.2: HeaderLength = (Data Field octets) - 1
+	dataFieldLen := int(sh.HeaderLength) + 1
+	expectedLen := 1 + dataFieldLen
 	if len(data) < expectedLen {
 		return ErrDataTooShort
 	}
@@ -182,6 +183,10 @@ func (sh *SecondaryHeader) Validate() error {
 		return ErrInvalidSecondaryHeaderVersion
 	}
 	if sh.HeaderLength > 0x3F {
+		return ErrInvalidHeaderLength
+	}
+	// Per CCSDS: HeaderLength = len(DataField) - 1
+	if len(sh.DataField) > 0 && sh.HeaderLength != uint8(len(sh.DataField)-1) {
 		return ErrInvalidHeaderLength
 	}
 	return nil

@@ -106,7 +106,7 @@ func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 func TestSecondaryHeader_EncodeDecode(t *testing.T) {
 	original := &tmdl.SecondaryHeader{
 		VersionNumber: 0,
-		HeaderLength:  3, // Must match len(DataField)
+		HeaderLength:  2, // CCSDS: len(DataField) - 1
 		DataField:     []byte{0x01, 0x02, 0x03},
 	}
 

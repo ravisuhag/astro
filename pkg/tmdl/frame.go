@@ -18,8 +18,11 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 	}
 
 	secondaryHeader := SecondaryHeader{
-		HeaderLength: uint8(len(secondaryHeaderData)),
-		DataField:    secondaryHeaderData,
+		DataField: secondaryHeaderData,
+	}
+	if len(secondaryHeaderData) > 0 {
+		// Per CCSDS 132.0-B-3 §4.1.3.2.2: HeaderLength = (Data Field octets) - 1
+		secondaryHeader.HeaderLength = uint8(len(secondaryHeaderData) - 1)
 	}
 
 	frame := &TMTransferFrame{
@@ -101,7 +104,7 @@ func (tf *TMTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 
 // DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
-	if len(data) < 7 {
+	if len(data) < 8 {
 		return nil, ErrDataTooShort
 	}
 
@@ -122,28 +125,25 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	primaryHeaderLength := 6
 	dataStart := primaryHeaderLength
 	dataEnd := len(data) - 2
-	frameSecondaryData := []byte{}
 	operationalControl := []byte{}
 
-	// Extract Secondary Header if present
-	if header.FSHFlag {
-		if int(header.FirstHeaderPtr) > len(data)-primaryHeaderLength {
-			return nil, ErrInvalidFirstHeaderPtr
-		}
-		frameSecondaryData = data[dataStart : dataStart+int(header.FirstHeaderPtr)]
-		dataStart += int(header.FirstHeaderPtr)
-	}
-
-	// Decode Secondary Header
+	// Decode Secondary Header if present, using self-describing length
 	var secondaryHeader SecondaryHeader
 	if header.FSHFlag {
-		if err := secondaryHeader.Decode(frameSecondaryData); err != nil {
+		if dataStart >= dataEnd {
+			return nil, ErrDataTooShort
+		}
+		if err := secondaryHeader.Decode(data[dataStart:dataEnd]); err != nil {
 			return nil, err
 		}
+		dataStart += 1 + len(secondaryHeader.DataField)
 	}
 
 	// Extract OCF if present
-	if header.OCFFlag && dataEnd-dataStart >= 4 {
+	if header.OCFFlag {
+		if dataEnd-dataStart < 4 {
+			return nil, ErrDataTooShort
+		}
 		operationalControl = data[dataEnd-4 : dataEnd]
 		dataEnd -= 4
 	}

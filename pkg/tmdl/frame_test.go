@@ -173,6 +173,103 @@ func TestMalformedFrame(t *testing.T) {
 	}
 }
 
+func TestSecondaryHeaderLength_CCSDS(t *testing.T) {
+	shData := []byte{0xAA, 0xBB, 0xCC}
+	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("data"), shData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if frame.SecondaryHeader.HeaderLength != 2 {
+		t.Errorf("HeaderLength = %d, want 2 (len(DataField)-1 per CCSDS)", frame.SecondaryHeader.HeaderLength)
+	}
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wireLen := encoded[6] & 0x3F; wireLen != 2 {
+		t.Errorf("Wire HeaderLength = %d, want 2", wireLen)
+	}
+}
+
+func TestMinimumFrameSize(t *testing.T) {
+	// 7 bytes: too short (need 6 header + 2 CRC minimum)
+	_, err := tmdl.DecodeTMTransferFrame([]byte{0x00, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00})
+	if !errors.Is(err, tmdl.ErrDataTooShort) {
+		t.Errorf("7-byte input: got %v, want ErrDataTooShort", err)
+	}
+
+	// 8 bytes with valid CRC: smallest valid frame
+	header := []byte{0x00, 0x00, 0x00, 0x00, 0x18, 0x00}
+	crc := tmdl.ComputeCRC(header)
+	frame := make([]byte, 8)
+	copy(frame, header)
+	binary.BigEndian.PutUint16(frame[6:], crc)
+	if _, err := tmdl.DecodeTMTransferFrame(frame); err != nil {
+		t.Errorf("8-byte frame: got %v, want nil", err)
+	}
+}
+
+func TestSecondaryHeaderDecodeSelfDescribing(t *testing.T) {
+	data := []byte("payload")
+	shData := []byte{0x01, 0x02}
+
+	frame, err := tmdl.NewTMTransferFrame(933, 1, data, shData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(decoded.SecondaryHeader.DataField, shData) {
+		t.Errorf("SecondaryHeader.DataField = %x, want %x", decoded.SecondaryHeader.DataField, shData)
+	}
+	if !bytes.Equal(decoded.DataField, data) {
+		t.Errorf("DataField = %x, want %x", decoded.DataField, data)
+	}
+}
+
+func TestOCFInsufficientData(t *testing.T) {
+	header := tmdl.PrimaryHeader{
+		SpacecraftID:     100,
+		VirtualChannelID: 1,
+		OCFFlag:          true,
+		SegmentLengthID:  0b11,
+	}
+	hBytes, err := header.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2 bytes of data field — not enough for the 4-byte OCF the flag promises
+	withoutCRC := append(hBytes, 0x01, 0x02)
+	crc := tmdl.ComputeCRC(withoutCRC)
+	frame := binary.BigEndian.AppendUint16(withoutCRC, crc)
+
+	_, err = tmdl.DecodeTMTransferFrame(frame)
+	if !errors.Is(err, tmdl.ErrDataTooShort) {
+		t.Errorf("got %v, want ErrDataTooShort", err)
+	}
+}
+
+func TestSecondaryHeaderValidateConsistency(t *testing.T) {
+	sh := &tmdl.SecondaryHeader{
+		VersionNumber: 0,
+		HeaderLength:  10,
+		DataField:     []byte{0x01, 0x02, 0x03},
+	}
+	if err := sh.Validate(); err == nil {
+		t.Error("Validate() = nil, want error for HeaderLength/DataField mismatch")
+	}
+}
+
 func TestUninitializedFrame(t *testing.T) {
 	// Zero-value frame should fail validation since SegmentLengthID must be 0b11 when SyncFlag is 0
 	frame := &tmdl.TMTransferFrame{}

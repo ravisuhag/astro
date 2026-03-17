@@ -68,7 +68,7 @@ A Transfer Frame has a **fixed length**, which is predetermined for a given miss
 | ---------------------------------------------- | -------- | ---------------------------------------------- |
 | **Transfer Frame Version Number (TFVN)**       | 2 bits   | Identifies the protocol version                |
 | **Spacecraft ID (SCID)**                       | 10 bits  | Identifies the spacecraft                      |
-| **Virtual Channel ID (VCID)**                  | 6 bits   | Identifies the Virtual Channel                 |
+| **Virtual Channel ID (VCID)**                  | 3 bits   | Identifies the Virtual Channel                 |
 | **Frame Length**                               | 16 bits  | Specifies the total frame length               |
 | **Frame Secondary Header (Optional)**          | Variable | Can carry additional mission-specific metadata |
 | **Data Field**                                 | Variable | The main telemetry data being transmitted      |
