@@ -43,13 +43,11 @@ type SpacePacket struct {
 }
 
 // NewSpacePacket creates a new SpacePacket instance.
+// Per CCSDS C1/C2: a packet must contain at least a secondary header or user data.
+// User data may be nil/empty if a secondary header is provided, and vice versa.
 func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...PacketOption) (*SpacePacket, error) {
 	if apid > 2047 {
 		return nil, ErrInvalidAPID
-	}
-
-	if len(data) < 1 {
-		return nil, ErrDataTooShort
 	}
 
 	primaryHeader := PrimaryHeader{
@@ -71,6 +69,11 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 		if err := option(packet); err != nil {
 			return nil, err
 		}
+	}
+
+	// CCSDS C1/C2: packet must contain at least a secondary header or user data
+	if len(packet.UserData) == 0 && packet.SecondaryHeader == nil {
+		return nil, ErrDataTooShort
 	}
 
 	// Calculate PacketLength per CCSDS: (packet data field size) - 1
@@ -210,6 +213,10 @@ func Decode(data []byte, sh ...SecondaryHeader) (*SpacePacket, error) {
 		UserData:        userData,
 	}
 
+	if err := packet.Validate(); err != nil {
+		return nil, err
+	}
+
 	return packet, nil
 }
 
@@ -226,9 +233,12 @@ func (sp *SpacePacket) Validate() error {
 		}
 	}
 
-	// Check flag consistency: flag set but no secondary header provided at creation time
-	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader == nil {
-		return ErrSecondaryHeaderMissing
+	// CCSDS C1/C2: packet must contain at least a secondary header or user data.
+	// Note: when the secondary header flag is set but no decoder was provided
+	// during Decode(), the secondary header bytes are included in UserData,
+	// so this check still holds.
+	if len(sp.UserData) == 0 && sp.SecondaryHeader == nil {
+		return ErrDataTooShort
 	}
 
 	// Calculate total packet data field size per CCSDS

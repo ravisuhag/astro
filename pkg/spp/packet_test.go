@@ -217,10 +217,12 @@ func TestSpacePacketValidate(t *testing.T) {
 	}
 	packet.PrimaryHeader.PacketLength = uint16(len(data)) - 1
 
-	// Test case: Secondary header flag set but no secondary header
+	// Test case: Secondary header flag set but no secondary header struct.
+	// This is valid — it represents a decoded packet where no decoder was provided,
+	// so the secondary header bytes are included in UserData.
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
-	if err := packet.Validate(); err == nil {
-		t.Errorf("Expected error for missing secondary header, but got none")
+	if err := packet.Validate(); err != nil {
+		t.Errorf("Expected valid packet (secondary header bytes in UserData), but got error: %v", err)
 	}
 	packet.PrimaryHeader.SecondaryHeaderFlag = 0
 
@@ -274,5 +276,47 @@ func TestPacketConstants(t *testing.T) {
 	}
 	if spp2.SeqFlagUnsegmented != 3 {
 		t.Errorf("SeqFlagUnsegmented should be 3, got %d", spp2.SeqFlagUnsegmented)
+	}
+}
+
+func TestNewSpacePacketC1SecondaryHeaderOnly(t *testing.T) {
+	// C1: A packet with a secondary header and no user data should be valid
+	sh := &testSecondaryHeader{Timestamp: 1234567890}
+	packet, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, nil, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("Expected valid packet with secondary header only, got error: %v", err)
+	}
+
+	if packet.PrimaryHeader.SecondaryHeaderFlag != 1 {
+		t.Error("Expected secondary header flag to be set")
+	}
+	if len(packet.UserData) != 0 {
+		t.Errorf("Expected empty user data, got %d bytes", len(packet.UserData))
+	}
+
+	// Round-trip encode/decode
+	encoded, err := packet.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+	decoded, err := spp2.Decode(encoded, &testSecondaryHeader{})
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+	if decoded.PrimaryHeader.APID != 100 {
+		t.Errorf("APID mismatch after round-trip. Got %d, want 100", decoded.PrimaryHeader.APID)
+	}
+}
+
+func TestNewSpacePacketC2NoSecondaryHeaderNoData(t *testing.T) {
+	// C2: A packet with no secondary header AND no user data must be rejected
+	_, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, nil)
+	if err == nil {
+		t.Fatal("Expected error for packet with no secondary header and no user data")
+	}
+
+	_, err = spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{})
+	if err == nil {
+		t.Fatal("Expected error for packet with no secondary header and empty user data")
 	}
 }
