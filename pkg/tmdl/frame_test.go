@@ -313,6 +313,86 @@ func TestDecodedFrameDoesNotAliasInput(t *testing.T) {
 	}
 }
 
+func TestNewIdleFrame(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+	capacity := config.DataFieldCapacity(0)
+
+	frame, err := tmdl.NewIdleFrame(933, 1, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if frame.Header.FirstHeaderPtr != 0x07FF {
+		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x07FF", frame.Header.FirstHeaderPtr)
+	}
+	if len(frame.DataField) != capacity {
+		t.Errorf("DataField len = %d, want %d", len(frame.DataField), capacity)
+	}
+	for i, b := range frame.DataField {
+		if b != 0xFF {
+			t.Errorf("DataField[%d] = 0x%02X, want 0xFF", i, b)
+			break
+		}
+	}
+
+	// Verify CRC is valid via round-trip
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+		t.Errorf("Idle frame CRC invalid: %v", err)
+	}
+}
+
+func TestNewIdleFrame_WithOCF(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasOCF: true, HasFEC: true}
+	frame, err := tmdl.NewIdleFrame(933, 1, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !frame.Header.OCFFlag {
+		t.Error("Expected OCFFlag=true")
+	}
+	if len(frame.OperationalControl) != 4 {
+		t.Errorf("OCF len = %d, want 4", len(frame.OperationalControl))
+	}
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Total: 6 header + capacity data + 4 OCF + 2 CRC = 28
+	if len(encoded) != 28 {
+		t.Errorf("Encoded len = %d, want 28", len(encoded))
+	}
+}
+
+func TestIsIdleFrame(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+	idle, err := tmdl.NewIdleFrame(933, 1, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tmdl.IsIdleFrame(idle) {
+		t.Error("Expected IsIdleFrame=true for idle frame")
+	}
+
+	// VCP frame should not be idle
+	vcpFrame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	if tmdl.IsIdleFrame(vcpFrame) {
+		t.Error("Expected IsIdleFrame=false for VCP frame")
+	}
+
+	// VCA frame (SyncFlag=true, FHP=0x07FF) should not be idle
+	vcaFrame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	vcaFrame.Header.SyncFlag = true
+	vcaFrame.Header.FirstHeaderPtr = 0x07FF
+	if tmdl.IsIdleFrame(vcaFrame) {
+		t.Error("Expected IsIdleFrame=false for VCA frame (SyncFlag=true)")
+	}
+}
+
 func TestUninitializedFrame(t *testing.T) {
 	// Zero-value frame should fail validation since SegmentLengthID must be 0b11 when SyncFlag is 0
 	frame := &tmdl.TMTransferFrame{}

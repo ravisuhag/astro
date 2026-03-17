@@ -11,7 +11,7 @@ import (
 func TestTMServiceManager_VCPService(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
 	vc := tmdl.NewVirtualChannel(1, 100)
-	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, nil)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, tmdl.ChannelConfig{}, nil)
 	mgr.RegisterVirtualService(1, tmdl.VCP, svc)
 
 	data := []byte("packet data")
@@ -32,7 +32,7 @@ func TestTMServiceManager_VCPService(t *testing.T) {
 func TestTMServiceManager_VCAService(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
 	vc := tmdl.NewVirtualChannel(2, 100)
-	svc := tmdl.NewVirtualChannelAccessService(933, 2, 8, vc, nil)
+	svc := tmdl.NewVirtualChannelAccessService(933, 2, 8, vc, tmdl.ChannelConfig{}, nil)
 	mgr.RegisterVirtualService(2, tmdl.VCA, svc)
 
 	data := []byte("12345678")
@@ -95,7 +95,7 @@ func TestTMServiceManager_UnregisteredService(t *testing.T) {
 
 func TestTMServiceManager_MasterChannel(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
-	mc := tmdl.NewMasterChannel(933)
+	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
 	vc := tmdl.NewVirtualChannel(1, 100)
 	mc.AddVirtualChannel(vc, 1)
 	mgr.RegisterMasterChannel(933, mc)
@@ -154,21 +154,18 @@ func TestTMServiceManager_FullPipeline(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
 	counter := tmdl.NewFrameCounter()
 
-	// Set up master channel with two virtual channels
-	mc := tmdl.NewMasterChannel(933)
+	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
 	vc1 := tmdl.NewVirtualChannel(1, 100)
 	vc2 := tmdl.NewVirtualChannel(2, 100)
-	mc.AddVirtualChannel(vc1, 2) // higher priority
+	mc.AddVirtualChannel(vc1, 2)
 	mc.AddVirtualChannel(vc2, 1)
 	mgr.RegisterMasterChannel(933, mc)
 
-	// Register services wired to the same VCs
-	svc1 := tmdl.NewVirtualChannelPacketService(933, 1, vc1, counter)
-	svc2 := tmdl.NewVirtualChannelPacketService(933, 2, vc2, counter)
+	svc1 := tmdl.NewVirtualChannelPacketService(933, 1, vc1, tmdl.ChannelConfig{}, counter)
+	svc2 := tmdl.NewVirtualChannelPacketService(933, 2, vc2, tmdl.ChannelConfig{}, counter)
 	mgr.RegisterVirtualService(1, tmdl.VCP, svc1)
 	mgr.RegisterVirtualService(2, tmdl.VCP, svc2)
 
-	// Send data through services — frames land in VCs
 	if err := mgr.SendData(1, tmdl.VCP, []byte("priority")); err != nil {
 		t.Fatalf("SendData vc1: %v", err)
 	}
@@ -176,7 +173,6 @@ func TestTMServiceManager_FullPipeline(t *testing.T) {
 		t.Fatalf("SendData vc2: %v", err)
 	}
 
-	// Pull from master channel — goes through Mux
 	f1, err := mgr.GetNextFrameFromMasterChannel(933)
 	if err != nil {
 		t.Fatalf("GetNextFrame 1: %v", err)

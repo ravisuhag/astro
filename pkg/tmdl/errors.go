@@ -62,4 +62,13 @@ var (
 
 	// ErrVirtualChannelNotFound indicates no virtual channel exists for the given VCID.
 	ErrVirtualChannelNotFound = errors.New("virtual channel not found for specified VCID")
+
+	// ErrPacketTooLarge indicates the packet exceeds the maximum size for length-prefixed framing.
+	ErrPacketTooLarge = errors.New("packet exceeds maximum reassembly size (65535 bytes)")
+
+	// ErrDataFieldTooSmall indicates the data field capacity is too small for the length prefix.
+	ErrDataFieldTooSmall = errors.New("data field capacity too small for length prefix")
+
+	// ErrIncompletePacket indicates reassembly failed due to unexpected frame sequence.
+	ErrIncompletePacket = errors.New("incomplete packet: unexpected frame during reassembly")
 )

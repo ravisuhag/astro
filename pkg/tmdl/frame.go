@@ -98,6 +98,53 @@ func (tf *TMTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 	return frameData, nil
 }
 
+// padDataField pads data to capacity with idle fill (0xFF).
+func padDataField(data []byte, capacity int) []byte {
+	if len(data) >= capacity {
+		return data[:capacity]
+	}
+	padded := make([]byte, capacity)
+	copy(padded, data)
+	for i := len(data); i < capacity; i++ {
+		padded[i] = 0xFF
+	}
+	return padded
+}
+
+// NewIdleFrame creates an idle TM Transfer Frame with all-idle data field
+// and FirstHeaderPtr set to 0x07FF per CCSDS 132.0-B-3.
+func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFrame, error) {
+	capacity := config.DataFieldCapacity(0)
+	if capacity <= 0 {
+		return nil, ErrDataFieldTooSmall
+	}
+	idleData := make([]byte, capacity)
+	for i := range idleData {
+		idleData[i] = 0xFF
+	}
+	var ocf []byte
+	if config.HasOCF {
+		ocf = make([]byte, 4)
+	}
+	frame, err := NewTMTransferFrame(scid, vcid, idleData, nil, ocf)
+	if err != nil {
+		return nil, err
+	}
+	frame.Header.FirstHeaderPtr = 0x07FF
+	encoded, err := frame.EncodeWithoutFEC()
+	if err != nil {
+		return nil, err
+	}
+	frame.FrameErrorControl = ComputeCRC(encoded)
+	return frame, nil
+}
+
+// IsIdleFrame reports whether the frame is an idle frame
+// (SyncFlag=false with FirstHeaderPtr=0x07FF).
+func IsIdleFrame(frame *TMTransferFrame) bool {
+	return !frame.Header.SyncFlag && frame.Header.FirstHeaderPtr == 0x07FF
+}
+
 // DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	if len(data) < 8 {
