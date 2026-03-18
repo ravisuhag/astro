@@ -284,3 +284,97 @@ func TestServiceSendBytesRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// --- Service with Segmented Packets ---
+
+func TestServiceWithSegmentedPackets(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType: spp2.PacketTypeTM,
+	})
+
+	flags := []uint8{
+		spp2.SeqFlagFirstSegment,
+		spp2.SeqFlagContinuation,
+		spp2.SeqFlagContinuation,
+		spp2.SeqFlagLastSegment,
+	}
+
+	for _, flag := range flags {
+		pkt, err := spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSequenceFlags(flag))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.SendPacket(pkt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i, expectedFlag := range flags {
+		received, err := svc.ReceivePacket()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if received.PrimaryHeader.SequenceFlags != expectedFlag {
+			t.Errorf("Packet %d: flags = %d, want %d", i, received.PrimaryHeader.SequenceFlags, expectedFlag)
+		}
+		if received.PrimaryHeader.SequenceCount != uint16(i) {
+			t.Errorf("Packet %d: seq = %d, want %d", i, received.PrimaryHeader.SequenceCount, i)
+		}
+	}
+}
+
+// --- Service with Boundary APIDs ---
+
+func TestServiceWithBoundaryAPIDs(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType: spp2.PacketTypeTM,
+	})
+
+	// APID 0
+	if err := svc.SendBytes(0, []byte{0x01}); err != nil {
+		t.Fatalf("APID 0 should be valid: %v", err)
+	}
+	apid, _, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apid != 0 {
+		t.Errorf("Expected APID 0, got %d", apid)
+	}
+
+	// APID 2047 (max, also idle APID)
+	if err := svc.SendBytes(2047, []byte{0x02}); err != nil {
+		t.Fatalf("APID 2047 should be valid: %v", err)
+	}
+	apid, _, err = svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apid != 2047 {
+		t.Errorf("Expected APID 2047, got %d", apid)
+	}
+
+	// Verify independent sequence counting for both
+	for range 3 {
+		svc.SendBytes(0, []byte{0x01})
+	}
+	for range 2 {
+		svc.SendBytes(2047, []byte{0x02})
+	}
+
+	for i := 1; i <= 3; i++ {
+		pkt, _ := svc.ReceivePacket()
+		if pkt.PrimaryHeader.APID != 0 || pkt.PrimaryHeader.SequenceCount != uint16(i) {
+			t.Errorf("APID 0 packet %d: seq = %d, want %d", i, pkt.PrimaryHeader.SequenceCount, i)
+		}
+	}
+
+	for i := 1; i <= 2; i++ {
+		pkt, _ := svc.ReceivePacket()
+		if pkt.PrimaryHeader.APID != 2047 || pkt.PrimaryHeader.SequenceCount != uint16(i) {
+			t.Errorf("APID 2047 packet %d: seq = %d, want %d", i, pkt.PrimaryHeader.SequenceCount, i)
+		}
+	}
+}

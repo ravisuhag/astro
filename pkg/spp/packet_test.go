@@ -3,8 +3,10 @@ package spp_test
 import (
 	"bytes"
 	"encoding/binary"
-	spp2 "github.com/ravisuhag/astro/pkg/spp"
+	"errors"
 	"testing"
+
+	spp2 "github.com/ravisuhag/astro/pkg/spp"
 )
 
 // testSecondaryHeader is a simple mission-specific secondary header for testing.
@@ -403,5 +405,422 @@ func TestNewSpacePacketC2NoSecondaryHeaderNoData(t *testing.T) {
 	_, err = spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{})
 	if err == nil {
 		t.Fatal("Expected error for packet with no secondary header and empty user data")
+	}
+}
+
+// --- CRC-16-CCITT Known Test Vectors ---
+
+// TestCRC16_CCITT_KnownVectors verifies the CRC-16-CCITT implementation
+// against known test vectors. The standard "123456789" string should produce
+// CRC 0x29B1 with polynomial 0x1021 and initial value 0xFFFF.
+func TestCRC16_CCITT_KnownVectors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want uint16
+	}{
+		{
+			name: "standard ASCII 123456789",
+			data: []byte("123456789"),
+			want: 0x29B1,
+		},
+		{
+			name: "empty input",
+			data: []byte{},
+			want: 0xFFFF,
+		},
+		{
+			name: "single zero byte",
+			data: []byte{0x00},
+			want: 0xE1F0,
+		},
+		{
+			name: "single 0xFF byte",
+			data: []byte{0xFF},
+			want: 0xFF00,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := spp2.ComputeCRC(tt.data)
+			if got != tt.want {
+				t.Errorf("ComputeCRC(%x) = 0x%04X, want 0x%04X", tt.data, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Idle Packet Detection ---
+
+func TestIsIdle(t *testing.T) {
+	idlePkt, err := spp2.NewSpacePacket(0x7FF, spp2.PacketTypeTM, []byte{0xFF})
+	if err != nil {
+		t.Fatalf("Failed to create idle packet: %v", err)
+	}
+	if !idlePkt.IsIdle() {
+		t.Error("Expected IsIdle()=true for APID 0x7FF")
+	}
+
+	normalPkt, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalPkt.IsIdle() {
+		t.Error("Expected IsIdle()=false for APID 100")
+	}
+
+	// APID 0 is valid but not idle
+	zeroPkt, err := spp2.NewSpacePacket(0, spp2.PacketTypeTM, []byte{0x01})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if zeroPkt.IsIdle() {
+		t.Error("Expected IsIdle()=false for APID 0")
+	}
+}
+
+// --- Secondary Header Size Boundaries ---
+
+// minSecondaryHeader is a 1-byte secondary header (CCSDS minimum).
+type minSecondaryHeader struct{ Value uint8 }
+
+func (h *minSecondaryHeader) Encode() ([]byte, error) { return []byte{h.Value}, nil }
+func (h *minSecondaryHeader) Decode(data []byte) error {
+	if len(data) < 1 {
+		return spp2.ErrDataTooShort
+	}
+	h.Value = data[0]
+	return nil
+}
+func (h *minSecondaryHeader) Size() int { return 1 }
+
+// maxSecondaryHeader is a 63-byte secondary header (CCSDS maximum).
+type maxSecondaryHeader struct{ Data [63]byte }
+
+func (h *maxSecondaryHeader) Encode() ([]byte, error) { return h.Data[:], nil }
+func (h *maxSecondaryHeader) Decode(data []byte) error {
+	if len(data) < 63 {
+		return spp2.ErrDataTooShort
+	}
+	copy(h.Data[:], data[:63])
+	return nil
+}
+func (h *maxSecondaryHeader) Size() int { return 63 }
+
+// zeroSecondaryHeader has size 0 (below CCSDS minimum).
+type zeroSecondaryHeader struct{}
+
+func (h *zeroSecondaryHeader) Encode() ([]byte, error) { return nil, nil }
+func (h *zeroSecondaryHeader) Decode([]byte) error      { return nil }
+func (h *zeroSecondaryHeader) Size() int                 { return 0 }
+
+// oversizedSecondaryHeader has size 64 (above CCSDS maximum).
+type oversizedSecondaryHeader struct{ Data [64]byte }
+
+func (h *oversizedSecondaryHeader) Encode() ([]byte, error) { return h.Data[:], nil }
+func (h *oversizedSecondaryHeader) Decode(data []byte) error {
+	copy(h.Data[:], data)
+	return nil
+}
+func (h *oversizedSecondaryHeader) Size() int { return 64 }
+
+func TestSecondaryHeaderMinSize(t *testing.T) {
+	sh := &minSecondaryHeader{Value: 0x42}
+	pkt, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("1-byte secondary header should be valid: %v", err)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(&minSecondaryHeader{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodedSH := decoded.SecondaryHeader.(*minSecondaryHeader)
+	if decodedSH.Value != 0x42 {
+		t.Errorf("SecondaryHeader value = 0x%02X, want 0x42", decodedSH.Value)
+	}
+}
+
+func TestSecondaryHeaderMaxSize(t *testing.T) {
+	sh := &maxSecondaryHeader{}
+	for i := range 63 {
+		sh.Data[i] = byte(i)
+	}
+
+	pkt, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("63-byte secondary header should be valid: %v", err)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decodeSH := &maxSecondaryHeader{}
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodeSH))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.SecondaryHeader == nil {
+		t.Fatal("Expected non-nil secondary header")
+	}
+	if decodeSH.Data[0] != 0 || decodeSH.Data[62] != 62 {
+		t.Error("63-byte secondary header data corrupted during round-trip")
+	}
+}
+
+func TestSecondaryHeaderTooSmall(t *testing.T) {
+	sh := &zeroSecondaryHeader{}
+	_, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderTooSmall) {
+		t.Errorf("Expected ErrSecondaryHeaderTooSmall, got %v", err)
+	}
+}
+
+func TestSecondaryHeaderTooLarge(t *testing.T) {
+	sh := &oversizedSecondaryHeader{}
+	_, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderTooLarge) {
+		t.Errorf("Expected ErrSecondaryHeaderTooLarge, got %v", err)
+	}
+}
+
+func TestSecondaryHeaderOnlyMinMax(t *testing.T) {
+	// 1-byte secondary header, no user data
+	sh1 := &minSecondaryHeader{Value: 0xAA}
+	pkt, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, nil, spp2.WithSecondaryHeader(sh1))
+	if err != nil {
+		t.Fatalf("1-byte SH only: %v", err)
+	}
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(&minSecondaryHeader{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.UserData) != 0 {
+		t.Errorf("Expected no user data, got %d bytes", len(decoded.UserData))
+	}
+
+	// 63-byte secondary header, no user data
+	sh63 := &maxSecondaryHeader{}
+	for i := range 63 {
+		sh63.Data[i] = byte(i)
+	}
+	pkt, err = spp2.NewSpacePacket(100, spp2.PacketTypeTM, nil, spp2.WithSecondaryHeader(sh63))
+	if err != nil {
+		t.Fatalf("63-byte SH only: %v", err)
+	}
+	encoded, err = pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodeSH := &maxSecondaryHeader{}
+	decoded, err = spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodeSH))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.UserData) != 0 {
+		t.Errorf("Expected no user data, got %d bytes", len(decoded.UserData))
+	}
+	if decodeSH.Data[62] != 62 {
+		t.Error("63-byte secondary header corrupted")
+	}
+}
+
+// --- Maximum Packet Size ---
+
+func TestMaximumPacketSize(t *testing.T) {
+	maxData := make([]byte, 65536)
+	maxData[0] = 0xDE
+	maxData[65535] = 0xAD
+
+	pkt, err := spp2.NewTMPacket(100, maxData)
+	if err != nil {
+		t.Fatalf("Max-size packet should be valid: %v", err)
+	}
+	if pkt.PrimaryHeader.PacketLength != 65535 {
+		t.Errorf("PacketLength = %d, want 65535", pkt.PrimaryHeader.PacketLength)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) != 65542 {
+		t.Errorf("Encoded length = %d, want 65542", len(encoded))
+	}
+
+	decoded, err := spp2.Decode(encoded)
+	if err != nil {
+		t.Fatalf("Decode max-size packet: %v", err)
+	}
+	if decoded.UserData[0] != 0xDE || decoded.UserData[65535] != 0xAD {
+		t.Error("Max-size packet data corrupted during round-trip")
+	}
+}
+
+func TestMaximumPacketSizeWithErrorControl(t *testing.T) {
+	maxData := make([]byte, 65534)
+	maxData[0] = 0xCA
+	maxData[65533] = 0xFE
+
+	pkt, err := spp2.NewTMPacket(100, maxData, spp2.WithErrorControl())
+	if err != nil {
+		t.Fatalf("Max-size packet with CRC should be valid: %v", err)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) != 65542 {
+		t.Errorf("Encoded length = %d, want 65542", len(encoded))
+	}
+
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeErrorControl())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.UserData[0] != 0xCA || decoded.UserData[65533] != 0xFE {
+		t.Error("Data corrupted during round-trip")
+	}
+}
+
+func TestPacketExceedsMaximumSize(t *testing.T) {
+	oversized := make([]byte, 65537)
+	_, err := spp2.NewTMPacket(100, oversized)
+	if !errors.Is(err, spp2.ErrPacketTooLarge) {
+		t.Errorf("Expected ErrPacketTooLarge for 65537-byte data, got %v", err)
+	}
+}
+
+// --- SecondaryHeaderFlag=1 with nil Header ---
+
+func TestEncodeSecondaryHeaderFlagWithNilHeader(t *testing.T) {
+	pkt := &spp2.SpacePacket{
+		PrimaryHeader: spp2.PrimaryHeader{
+			Version:             0,
+			Type:                0,
+			SecondaryHeaderFlag: 1,
+			APID:                100,
+			SequenceFlags:       3,
+			SequenceCount:       0,
+			PacketLength:        2,
+		},
+		UserData: []byte{0x01, 0x02, 0x03},
+	}
+
+	_, err := pkt.Encode()
+	if !errors.Is(err, spp2.ErrSecondaryHeaderMissing) {
+		t.Errorf("Expected ErrSecondaryHeaderMissing, got %v", err)
+	}
+}
+
+// --- CRC Round-Trip Validation ---
+
+func TestCRCRoundTripAllPacketCombinations(t *testing.T) {
+	// TM with CRC
+	tmPkt, _ := spp2.NewTMPacket(100, []byte{0x01, 0x02, 0x03, 0x04}, spp2.WithErrorControl())
+	encoded, _ := tmPkt.Encode()
+	decoded, err := spp2.Decode(encoded, spp2.WithDecodeErrorControl())
+	if err != nil {
+		t.Fatalf("TM+CRC round-trip failed: %v", err)
+	}
+	if !bytes.Equal(decoded.UserData, tmPkt.UserData) {
+		t.Error("TM+CRC data mismatch")
+	}
+
+	// TC with CRC
+	tcPkt, _ := spp2.NewTCPacket(200, []byte{0x05, 0x06}, spp2.WithErrorControl())
+	encoded, _ = tcPkt.Encode()
+	decoded, err = spp2.Decode(encoded, spp2.WithDecodeErrorControl())
+	if err != nil {
+		t.Fatalf("TC+CRC round-trip failed: %v", err)
+	}
+	if decoded.PrimaryHeader.Type != spp2.PacketTypeTC {
+		t.Error("TC type not preserved")
+	}
+
+	// TM with secondary header + CRC
+	sh := &testSecondaryHeader{Timestamp: 0xDEADBEEFCAFEBABE}
+	pkt, _ := spp2.NewTMPacket(300, []byte{0x07}, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl())
+	encoded, _ = pkt.Encode()
+	decodeSH := &testSecondaryHeader{}
+	decoded, err = spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodeSH), spp2.WithDecodeErrorControl())
+	if err != nil {
+		t.Fatalf("TM+SH+CRC round-trip failed: %v", err)
+	}
+	if decodeSH.Timestamp != 0xDEADBEEFCAFEBABE {
+		t.Errorf("Secondary header timestamp = 0x%X, want 0xDEADBEEFCAFEBABE", decodeSH.Timestamp)
+	}
+}
+
+func TestCRCDetectsCorruptionAtVariousOffsets(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	pkt, _ := spp2.NewTMPacket(100, data, spp2.WithErrorControl())
+	encoded, _ := pkt.Encode()
+
+	for i := 0; i < len(encoded)-2; i++ {
+		corrupted := make([]byte, len(encoded))
+		copy(corrupted, encoded)
+		corrupted[i] ^= 0x01
+
+		_, err := spp2.Decode(corrupted, spp2.WithDecodeErrorControl())
+		if err == nil {
+			t.Errorf("CRC should detect corruption at byte %d", i)
+		}
+	}
+}
+
+// --- All Sequence Flag Values Encode/Decode ---
+
+func TestAllSequenceFlagsEncodeDecode(t *testing.T) {
+	flags := []struct {
+		flag uint8
+		name string
+	}{
+		{spp2.SeqFlagContinuation, "continuation"},
+		{spp2.SeqFlagFirstSegment, "first"},
+		{spp2.SeqFlagLastSegment, "last"},
+		{spp2.SeqFlagUnsegmented, "unsegmented"},
+	}
+
+	for _, f := range flags {
+		t.Run(f.name, func(t *testing.T) {
+			pkt, err := spp2.NewTMPacket(100, []byte{0x01},
+				spp2.WithSequenceFlags(f.flag),
+				spp2.WithSequenceCount(1000),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			encoded, err := pkt.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			decoded, err := spp2.Decode(encoded)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if decoded.PrimaryHeader.SequenceFlags != f.flag {
+				t.Errorf("flags = %d, want %d", decoded.PrimaryHeader.SequenceFlags, f.flag)
+			}
+			if decoded.PrimaryHeader.SequenceCount != 1000 {
+				t.Errorf("seq count = %d, want 1000", decoded.PrimaryHeader.SequenceCount)
+			}
+		})
 	}
 }

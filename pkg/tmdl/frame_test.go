@@ -393,6 +393,126 @@ func TestIsIdleFrame(t *testing.T) {
 	}
 }
 
+func TestCRC16_CCITT_KnownVectors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want uint16
+	}{
+		{
+			name: "standard ASCII 123456789",
+			data: []byte("123456789"),
+			want: 0x29B1,
+		},
+		{
+			name: "empty input",
+			data: []byte{},
+			want: 0xFFFF,
+		},
+		{
+			name: "single zero byte",
+			data: []byte{0x00},
+			want: 0xE1F0,
+		},
+		{
+			name: "single 0xFF byte",
+			data: []byte{0xFF},
+			want: 0xFF00,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tmdl.ComputeCRC(tt.data)
+			if got != tt.want {
+				t.Errorf("ComputeCRC(%x) = 0x%04X, want 0x%04X", tt.data, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCRCMismatchRejection(t *testing.T) {
+	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("test data"), nil, nil)
+	encoded, _ := frame.Encode()
+
+	encoded[8] ^= 0x01
+
+	_, err := tmdl.DecodeTMTransferFrame(encoded)
+	if err == nil {
+		t.Error("Expected CRC mismatch error")
+	}
+}
+
+func TestFrameFlagCombinations(t *testing.T) {
+	tests := []struct {
+		name    string
+		hasOCF  bool
+		hasFSH  bool
+		shData  []byte
+		ocfData []byte
+	}{
+		{
+			name: "no optional fields",
+		},
+		{
+			name:    "OCF only",
+			hasOCF:  true,
+			ocfData: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+		{
+			name:   "FSH only",
+			hasFSH: true,
+			shData: []byte{0xAA, 0xBB},
+		},
+		{
+			name:    "OCF + FSH",
+			hasOCF:  true,
+			hasFSH:  true,
+			shData:  []byte{0xAA, 0xBB, 0xCC},
+			ocfData: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := []byte("test payload")
+			frame, err := tmdl.NewTMTransferFrame(933, 1, data, tt.shData, tt.ocfData)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			encoded, err := frame.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+			if err != nil {
+				t.Fatalf("Decode failed: %v", err)
+			}
+
+			if !bytes.Equal(decoded.DataField, data) {
+				t.Errorf("DataField mismatch: got %q, want %q", decoded.DataField, data)
+			}
+
+			if tt.hasOCF {
+				if !bytes.Equal(decoded.OperationalControl, tt.ocfData) {
+					t.Errorf("OCF mismatch: got %x, want %x", decoded.OperationalControl, tt.ocfData)
+				}
+			}
+
+			if tt.hasFSH {
+				if !decoded.Header.FSHFlag {
+					t.Fatal("Expected FSHFlag=true")
+				}
+				if !bytes.Equal(decoded.SecondaryHeader.DataField, tt.shData) {
+					t.Errorf("SH data mismatch: got %x, want %x", decoded.SecondaryHeader.DataField, tt.shData)
+				}
+			}
+		})
+	}
+}
+
 func TestUninitializedFrame(t *testing.T) {
 	// Zero-value frame should fail validation since SegmentLengthID must be 0b11 when SyncFlag is 0
 	frame := &tmdl.TMTransferFrame{}

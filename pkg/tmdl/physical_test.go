@@ -217,8 +217,8 @@ func TestPhysicalChannel_Wrap_DefaultASM(t *testing.T) {
 	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
 	cadu, _ := pc.Wrap(frame)
 
-	if !bytes.Equal(cadu[:4], tmdl.DefaultASM) {
-		t.Errorf("ASM = %x, want %x", cadu[:4], tmdl.DefaultASM)
+	if !bytes.Equal(cadu[:4], tmdl.DefaultASM()) {
+		t.Errorf("ASM = %x, want %x", cadu[:4], tmdl.DefaultASM())
 	}
 }
 
@@ -261,6 +261,182 @@ func TestPhysicalChannel_Unwrap_BadASM(t *testing.T) {
 	_, err := pc.Unwrap([]byte{0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03})
 	if !errors.Is(err, tmdl.ErrSyncMarkerMismatch) {
 		t.Errorf("Expected ErrSyncMarkerMismatch, got %v", err)
+	}
+}
+
+func TestPNSequence_CCSDSReferenceVector(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 20, HasFEC: true}
+	pc := tmdl.NewPhysicalChannel("test", config)
+	pc.Randomize = true
+
+	zeroData := make([]byte, config.DataFieldCapacity(0))
+	frame, err := tmdl.NewTMTransferFrame(0, 0, zeroData, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frame.Header.MCFrameCount = 0
+	frame.Header.VCFrameCount = 0
+
+	cadu, err := pc.Wrap(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := pc.Unwrap(cadu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decoded.DataField, zeroData) {
+		t.Error("PN sequence round-trip failed: data corruption")
+	}
+
+	plainEncoded, _ := frame.Encode()
+	pnFirstByte := cadu[4] ^ plainEncoded[0]
+	if pnFirstByte != 0xFF {
+		t.Errorf("PN first byte = 0x%02X, want 0xFF", pnFirstByte)
+	}
+}
+
+func TestPhysicalChannel_CustomASM(t *testing.T) {
+	pc := tmdl.NewPhysicalChannel("test", tmdl.ChannelConfig{})
+	customASM := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	pc.ASM = customASM
+
+	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("custom asm"), nil, nil)
+	cadu, _ := pc.Wrap(frame)
+
+	if !bytes.Equal(cadu[:4], customASM) {
+		t.Errorf("Custom ASM not applied: got %x", cadu[:4])
+	}
+
+	decoded, err := pc.Unwrap(cadu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decoded.DataField, []byte("custom asm")) {
+		t.Error("Custom ASM round-trip failed")
+	}
+
+	defaultCADU := append(tmdl.DefaultASM(), cadu[4:]...)
+	_, err = pc.Unwrap(defaultCADU)
+	if !errors.Is(err, tmdl.ErrSyncMarkerMismatch) {
+		t.Errorf("Expected ErrSyncMarkerMismatch for wrong ASM, got %v", err)
+	}
+}
+
+func TestPhysicalChannel_RandomizationWithAllFields(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 48, HasOCF: true, HasFEC: true}
+	pc := tmdl.NewPhysicalChannel("test", config)
+	pc.Randomize = true
+
+	shData := []byte{0xAA, 0xBB}
+	ocf := []byte{0x01, 0x02, 0x03, 0x04}
+	data := []byte("randomized payload!!")
+
+	frame, err := tmdl.NewTMTransferFrame(933, 1, data, shData, ocf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cadu, err := pc.Wrap(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := pc.Unwrap(cadu)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(decoded.DataField, data) {
+		t.Errorf("DataField = %q, want %q", decoded.DataField, data)
+	}
+	if !bytes.Equal(decoded.OperationalControl, ocf) {
+		t.Errorf("OCF = %x, want %x", decoded.OperationalControl, ocf)
+	}
+	if !bytes.Equal(decoded.SecondaryHeader.DataField, shData) {
+		t.Errorf("SH = %x, want %x", decoded.SecondaryHeader.DataField, shData)
+	}
+}
+
+func TestEndToEnd_MultiVC_FrameCounting(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+
+	pc := tmdl.NewPhysicalChannel("downlink", config)
+	mc := tmdl.NewMasterChannel(42, config)
+	pc.AddMasterChannel(mc, 1)
+
+	vc0 := tmdl.NewVirtualChannel(0, 100)
+	vc1 := tmdl.NewVirtualChannel(1, 100)
+	mc.AddVirtualChannel(vc0, 2)
+	mc.AddVirtualChannel(vc1, 1)
+
+	counter := tmdl.NewFrameCounter()
+	svc0 := tmdl.NewVirtualChannelPacketService(42, 0, vc0, config, counter)
+	svc1 := tmdl.NewVirtualChannelPacketService(42, 1, vc1, config, counter)
+
+	for i := range 3 {
+		pkt := makeTestPacket([]byte{byte(i)})
+		svc0.Send(pkt)
+		svc0.Flush()
+	}
+	for i := range 2 {
+		pkt := makeTestPacket([]byte{byte(i + 10)})
+		svc1.Send(pkt)
+		svc1.Flush()
+	}
+
+	var cadus [][]byte
+	for pc.HasPendingFrames() {
+		frame, _ := pc.GetNextFrame()
+		cadu, _ := pc.Wrap(frame)
+		cadus = append(cadus, cadu)
+	}
+
+	pc2 := tmdl.NewPhysicalChannel("receiver", config)
+	mc2 := tmdl.NewMasterChannel(42, config)
+	pc2.AddMasterChannel(mc2, 1)
+
+	vc0r := tmdl.NewVirtualChannel(0, 100)
+	vc1r := tmdl.NewVirtualChannel(1, 100)
+	mc2.AddVirtualChannel(vc0r, 2)
+	mc2.AddVirtualChannel(vc1r, 1)
+
+	counter2 := tmdl.NewFrameCounter()
+	svc0r := tmdl.NewVirtualChannelPacketService(42, 0, vc0r, config, counter2)
+	svc1r := tmdl.NewVirtualChannelPacketService(42, 1, vc1r, config, counter2)
+
+	for _, cadu := range cadus {
+		frame, err := pc2.Unwrap(cadu)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pc2.AddFrame(frame)
+	}
+
+	vc0Count := 0
+	for {
+		_, err := svc0r.Receive()
+		if err != nil {
+			break
+		}
+		vc0Count++
+	}
+	if vc0Count != 3 {
+		t.Errorf("VC0: received %d packets, want 3", vc0Count)
+	}
+
+	vc1Count := 0
+	for {
+		_, err := svc1r.Receive()
+		if err != nil {
+			break
+		}
+		vc1Count++
+	}
+	if vc1Count != 2 {
+		t.Errorf("VC1: received %d packets, want 2", vc1Count)
 	}
 }
 
