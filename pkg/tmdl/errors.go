@@ -77,4 +77,7 @@ var (
 
 	// ErrNoMasterChannels indicates no master channels are registered on the physical channel.
 	ErrNoMasterChannels = errors.New("no master channels registered")
+
+	// ErrSyncMarkerMismatch indicates the CADU does not start with the expected ASM.
+	ErrSyncMarkerMismatch = errors.New("attached sync marker mismatch")
 )
