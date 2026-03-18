@@ -10,6 +10,7 @@ import (
 type Service interface {
 	Send(data []byte) error
 	Receive() ([]byte, error)
+	Flush() error
 }
 
 // ServiceType defines the types of TM services available.
@@ -20,6 +21,22 @@ const (
 	VCA                    // Virtual Channel Access Service
 	VCF                    // Virtual Channel Frame Service
 )
+
+// PacketSizer returns the total length in bytes of the packet starting
+// at data[0], or -1 if the data is too short to determine length.
+// Used by VCP Receive() to find packet boundaries within frame data.
+type PacketSizer func(data []byte) int
+
+// SpacePacketSizer implements PacketSizer for CCSDS Space Packets.
+// It reads the Packet Data Length field (bytes 4-5) and returns
+// total packet length: 6 (header) + PacketDataLength + 1.
+func SpacePacketSizer(data []byte) int {
+	if len(data) < 6 {
+		return -1
+	}
+	dataLen := int(binary.BigEndian.Uint16(data[4:6]))
+	return 7 + dataLen
+}
 
 // FrameCounter manages 8-bit MC and VC frame counts per CCSDS 132.0-B-3.
 // Share a single FrameCounter across all services for the same spacecraft
@@ -48,9 +65,6 @@ func (fc *FrameCounter) Next(vcid uint8) (mc, vc uint8) {
 }
 
 // stampFrame applies optional frame counters and recomputes CRC.
-// It always recomputes CRC to ensure it reflects the final header state,
-// which is important when headers are modified after NewTMTransferFrame
-// (e.g., VCA setting SyncFlag).
 func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error {
 	if counter != nil {
 		mc, vc := counter.Next(vcid)
@@ -65,24 +79,41 @@ func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error
 	return nil
 }
 
+// isIdleFill checks if all bytes are 0xFF (idle fill pattern).
+func isIdleFill(data []byte) bool {
+	for _, b := range data {
+		if b != 0xFF {
+			return false
+		}
+	}
+	return true
+}
+
 // VirtualChannelPacketService implements the VCP service.
-// It wraps variable-length telemetry packets into frames and pushes
-// them into the associated VirtualChannel. When ChannelConfig is set,
-// packets are segmented across fixed-length frames with a 2-byte
-// length prefix for reassembly.
+// When ChannelConfig is set, packets are packed into fixed-length frames
+// using native CCSDS FirstHeaderPtr for boundary detection, with FHP-based
+// resync on frame loss. Packet boundaries are determined using a PacketSizer
+// (default: SpacePacketSizer for CCSDS Space Packets).
 type VirtualChannelPacketService struct {
 	scid      uint16
 	vcid      uint8
 	config    ChannelConfig
 	counter   *FrameCounter
 	vc        *VirtualChannel
-	validPVNs []uint8 // valid Packet Version Numbers; empty = no validation
+	validPVNs []uint8
+
+	// Send-side buffer for multi-packet packing
+	sendBuf       []byte
+	packetOffsets []int
+
+	// Receive-side state for FHP-based extraction
+	recvBuf     []byte
+	synced      bool
+	sizer       PacketSizer
+	gapDetector *FrameGapDetector
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
-// Frames are buffered in vc. If counter is non-nil, frame counts and
-// CRC are auto-stamped on each Send. When config.FrameLength > 0,
-// packets are segmented into fixed-length frames.
 func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel, config ChannelConfig, counter *FrameCounter) *VirtualChannelPacketService {
 	return &VirtualChannelPacketService{
 		scid:    scid,
@@ -94,17 +125,28 @@ func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel,
 }
 
 // SetValidPVNs configures the set of valid Packet Version Numbers.
-// When set, Send validates that the first 3 bits of the packet data
-// match one of the configured PVNs per CCSDS 132.0-B-3 §4.2.2.
-// Pass no arguments to disable validation.
 func (s *VirtualChannelPacketService) SetValidPVNs(pvns ...uint8) {
 	s.validPVNs = pvns
 }
 
-// Send wraps data into TM Transfer Frame(s) and pushes them into the Virtual Channel.
-// When ChannelConfig is set, the packet is prepended with a 2-byte big-endian length
-// and segmented across fixed-length frames. FirstHeaderPtr is 0 for the first frame
-// and 0x07FE for continuation frames.
+// SetPacketSizer configures a custom PacketSizer for Receive().
+// If not set, SpacePacketSizer is used by default.
+func (s *VirtualChannelPacketService) SetPacketSizer(sizer PacketSizer) {
+	s.sizer = sizer
+}
+
+func (s *VirtualChannelPacketService) packetSizer() PacketSizer {
+	if s.sizer != nil {
+		return s.sizer
+	}
+	return SpacePacketSizer
+}
+
+// Send appends packet data to the send buffer and generates full frames.
+// When ChannelConfig is not set, creates one frame per packet (legacy).
+// When ChannelConfig is set, packs packets into fixed-length frames with
+// proper FirstHeaderPtr. Call Flush() after the last Send() to emit any
+// remaining partial frame.
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
@@ -135,46 +177,64 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 		return s.vc.AddFrame(frame)
 	}
 
+	// Record packet boundary and buffer data
+	s.packetOffsets = append(s.packetOffsets, len(s.sendBuf))
+	s.sendBuf = append(s.sendBuf, data...)
+
+	return s.emitFullFrames()
+}
+
+// Flush pads and emits any remaining buffered data as a final frame.
+// Only meaningful when ChannelConfig is set.
+func (s *VirtualChannelPacketService) Flush() error {
+	if s.config.FrameLength == 0 || len(s.sendBuf) == 0 {
+		return nil
+	}
+
 	capacity := s.config.DataFieldCapacity(0)
-	if capacity < 3 {
+	chunk := padDataField(s.sendBuf, capacity)
+
+	fhp := uint16(0x07FE)
+	for _, off := range s.packetOffsets {
+		if off < len(s.sendBuf) {
+			fhp = uint16(off)
+			break
+		}
+	}
+
+	s.sendBuf = nil
+	s.packetOffsets = nil
+
+	return s.emitFrame(chunk, fhp)
+}
+
+// emitFullFrames generates frames from sendBuf while it has >= capacity bytes.
+func (s *VirtualChannelPacketService) emitFullFrames() error {
+	capacity := s.config.DataFieldCapacity(0)
+	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
-	if len(data) > 65535 {
-		return ErrPacketTooLarge
-	}
 
-	// Prepend 2-byte big-endian packet length for reassembly
-	prefixed := make([]byte, 2+len(data))
-	binary.BigEndian.PutUint16(prefixed[:2], uint16(len(data)))
-	copy(prefixed[2:], data)
+	for len(s.sendBuf) >= capacity {
+		chunk := make([]byte, capacity)
+		copy(chunk, s.sendBuf[:capacity])
 
-	var ocf []byte
-	if s.config.HasOCF {
-		ocf = make([]byte, 4)
-	}
-
-	for offset := 0; offset < len(prefixed); offset += capacity {
-		end := offset + capacity
-		if end > len(prefixed) {
-			end = len(prefixed)
+		// Find first packet start in this chunk
+		fhp := uint16(0x07FE)
+		remaining := s.packetOffsets[:0]
+		for _, off := range s.packetOffsets {
+			if off < capacity {
+				if fhp == 0x07FE {
+					fhp = uint16(off)
+				}
+			} else {
+				remaining = append(remaining, off-capacity)
+			}
 		}
-		chunk := padDataField(prefixed[offset:end], capacity)
+		s.packetOffsets = remaining
+		s.sendBuf = s.sendBuf[capacity:]
 
-		frame, err := NewTMTransferFrame(s.scid, s.vcid, chunk, nil, ocf)
-		if err != nil {
-			return err
-		}
-
-		if offset == 0 {
-			frame.Header.FirstHeaderPtr = 0
-		} else {
-			frame.Header.FirstHeaderPtr = 0x07FE
-		}
-
-		if err := stampFrame(frame, s.counter, s.vcid); err != nil {
-			return err
-		}
-		if err := s.vc.AddFrame(frame); err != nil {
+		if err := s.emitFrame(chunk, fhp); err != nil {
 			return err
 		}
 	}
@@ -182,9 +242,28 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 	return nil
 }
 
-// Receive retrieves the next packet from the Virtual Channel.
-// When ChannelConfig is set, it reassembles segmented packets using
-// the 2-byte length prefix, skipping idle frames.
+func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) error {
+	var ocf []byte
+	if s.config.HasOCF {
+		ocf = make([]byte, 4)
+	}
+
+	frame, err := NewTMTransferFrame(s.scid, s.vcid, dataField, nil, ocf)
+	if err != nil {
+		return err
+	}
+	frame.Header.FirstHeaderPtr = fhp
+
+	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
+		return err
+	}
+	return s.vc.AddFrame(frame)
+}
+
+// Receive extracts the next complete packet from frame data.
+// When ChannelConfig is not set, returns the data field of one frame (legacy).
+// When ChannelConfig is set, uses FHP to find packet boundaries and
+// PacketSizer to determine packet length. Resyncs after frame loss.
 func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 	if s.config.FrameLength == 0 {
 		frame, err := s.vc.GetNextFrame()
@@ -194,63 +273,96 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		return frame.DataField, nil
 	}
 
-	// Skip idle frames, find first frame of packet
-	frame, err := s.nextNonIdleFrame()
-	if err != nil {
-		return nil, err
-	}
-	if frame.Header.FirstHeaderPtr != 0 {
-		return nil, ErrIncompletePacket
-	}
-	if len(frame.DataField) < 2 {
-		return nil, ErrDataTooShort
+	sizer := s.packetSizer()
+	if s.gapDetector == nil {
+		s.gapDetector = NewFrameGapDetector()
 	}
 
-	packetLen := int(binary.BigEndian.Uint16(frame.DataField[:2]))
-	buf := make([]byte, 0, packetLen)
-	buf = append(buf, frame.DataField[2:]...)
-
-	for len(buf) < packetLen {
-		frame, err = s.nextNonIdleFrame()
-		if err != nil {
-			return nil, err
-		}
-		if frame.Header.FirstHeaderPtr != 0x07FE {
-			return nil, ErrIncompletePacket
-		}
-		buf = append(buf, frame.DataField...)
-	}
-
-	return buf[:packetLen], nil
-}
-
-// nextNonIdleFrame reads frames from the VirtualChannel, skipping idle frames.
-func (s *VirtualChannelPacketService) nextNonIdleFrame() (*TMTransferFrame, error) {
 	for {
+		// Try to extract a complete packet from buffer
+		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf) {
+			pktLen := sizer(s.recvBuf)
+			if pktLen > 0 && pktLen <= len(s.recvBuf) {
+				pkt := make([]byte, pktLen)
+				copy(pkt, s.recvBuf[:pktLen])
+				s.recvBuf = s.recvBuf[pktLen:]
+				if isIdleFill(s.recvBuf) {
+					s.recvBuf = nil
+				}
+				return pkt, nil
+			}
+		}
+
+		// Pull next frame
 		frame, err := s.vc.GetNextFrame()
 		if err != nil {
 			return nil, err
 		}
-		if !IsIdleFrame(frame) {
-			return frame, nil
+
+		if IsIdleFrame(frame) {
+			continue
+		}
+
+		// VC gap detection (only meaningful when frames are counter-stamped)
+		_, vcGap := s.gapDetector.Track(frame)
+		if s.counter != nil && vcGap > 0 {
+			s.recvBuf = nil
+			s.synced = false
+		}
+
+		fhp := frame.Header.FirstHeaderPtr
+		data := frame.DataField
+
+		switch {
+		case fhp == 0x07FF:
+			continue // idle
+
+		case fhp == 0x07FE:
+			// Continuation only
+			if s.synced {
+				s.recvBuf = append(s.recvBuf, data...)
+			}
+
+		default:
+			// New packet starts at offset fhp
+			if s.synced && int(fhp) > 0 && len(s.recvBuf) > 0 {
+				// Append tail of previous packet
+				s.recvBuf = append(s.recvBuf, data[:fhp]...)
+
+				// Try to extract completed previous packet
+				pktLen := sizer(s.recvBuf)
+				if pktLen > 0 && pktLen <= len(s.recvBuf) {
+					pkt := make([]byte, pktLen)
+					copy(pkt, s.recvBuf[:pktLen])
+					// Start new accumulation from FHP
+					s.recvBuf = make([]byte, len(data)-int(fhp))
+					copy(s.recvBuf, data[fhp:])
+					if isIdleFill(s.recvBuf) {
+						s.recvBuf = nil
+					}
+					return pkt, nil
+				}
+			}
+			// Sync/resync from FHP
+			s.recvBuf = make([]byte, len(data)-int(fhp))
+			copy(s.recvBuf, data[fhp:])
+			s.synced = true
+			if isIdleFill(s.recvBuf) {
+				s.recvBuf = nil
+			}
 		}
 	}
 }
 
 // VirtualChannelFrameService implements the VCF service.
-// Send accepts encoded frame bytes; Receive returns encoded frame bytes.
 type VirtualChannelFrameService struct {
 	vcid uint8
 	vc   *VirtualChannel
 }
 
 // NewVirtualChannelFrameService creates a new VCF service instance.
-// Frames are buffered in vc.
 func NewVirtualChannelFrameService(vcid uint8, vc *VirtualChannel) *VirtualChannelFrameService {
-	return &VirtualChannelFrameService{
-		vcid: vcid,
-		vc:   vc,
-	}
+	return &VirtualChannelFrameService{vcid: vcid, vc: vc}
 }
 
 // Send decodes the provided bytes as a TM Transfer Frame and pushes it into the Virtual Channel.
@@ -258,12 +370,10 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-
 	frame, err := DecodeTMTransferFrame(data)
 	if err != nil {
 		return err
 	}
-
 	return s.vc.AddFrame(frame)
 }
 
@@ -276,6 +386,9 @@ func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
 	return frame.Encode()
 }
 
+// Flush is a no-op for VCF service.
+func (s *VirtualChannelFrameService) Flush() error { return nil }
+
 // VCAStatus contains the Transfer Frame Data Field Status fields
 // delivered alongside a VCA SDU per CCSDS 132.0-B-3 §3.4.2.3.
 type VCAStatus struct {
@@ -285,8 +398,6 @@ type VCAStatus struct {
 }
 
 // VirtualChannelAccessService implements the VCA service.
-// It accepts fixed-length service data units and pushes frames into
-// the associated VirtualChannel.
 type VirtualChannelAccessService struct {
 	scid       uint16
 	vcid       uint8
@@ -298,9 +409,6 @@ type VirtualChannelAccessService struct {
 }
 
 // NewVirtualChannelAccessService creates a new VCA service instance.
-// Frames are buffered in vc. If counter is non-nil, frame counts and
-// CRC are auto-stamped on each Send. When config.FrameLength > 0,
-// the data field is padded to the frame's data field capacity.
 func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *VirtualChannel, config ChannelConfig, counter *FrameCounter) *VirtualChannelAccessService {
 	return &VirtualChannelAccessService{
 		scid:    scid,
@@ -312,10 +420,7 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 	}
 }
 
-// Send wraps a fixed-length SDU into a TM Transfer Frame and pushes it into the Virtual Channel.
-// Per CCSDS 132.0-B-3 §4.1.2.7, VCA frames use synchronous mode (SyncFlag=1)
-// with FirstHeaderPtr set to 0x07FF (undefined in sync mode).
-// When ChannelConfig is set, the data field is padded to the frame capacity.
+// Send wraps a fixed-length SDU into a TM Transfer Frame.
 func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if s.config.FrameLength == 0 {
 		if len(data) != s.vcaSize {
@@ -348,13 +453,10 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
-
 	return s.vc.AddFrame(frame)
 }
 
-// Receive retrieves the next frame from the Virtual Channel and returns its data field.
-// When ChannelConfig is set, the data field is trimmed to vcaSize.
-// Status fields from the frame header are available via LastStatus().
+// Receive retrieves the next frame and returns its data field.
 func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 	frame, err := s.vc.GetNextFrame()
 	if err != nil {
@@ -371,15 +473,15 @@ func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 	return frame.DataField, nil
 }
 
-// LastStatus returns the Transfer Frame Data Field Status fields from
-// the most recent Receive call.
+// LastStatus returns the status fields from the most recent Receive.
 func (s *VirtualChannelAccessService) LastStatus() VCAStatus {
 	return s.lastStatus
 }
 
+// Flush is a no-op for VCA service.
+func (s *VirtualChannelAccessService) Flush() error { return nil }
+
 // MasterChannel manages TM Transfer Frames for a Master Channel identified by SCID.
-// It holds a multiplexer for the send path and routes inbound frames to
-// Virtual Channels for the receive path.
 type MasterChannel struct {
 	scid     uint16
 	config   ChannelConfig
@@ -389,7 +491,6 @@ type MasterChannel struct {
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
-// When config.FrameLength > 0, GetNextFrameOrIdle can generate idle frames.
 func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 	return &MasterChannel{
 		scid:     scid,
@@ -403,15 +504,13 @@ func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 // SCID returns the Spacecraft Identifier for this Master Channel.
 func (mc *MasterChannel) SCID() uint16 { return mc.scid }
 
-// AddVirtualChannel registers a Virtual Channel with this Master Channel
-// and adds it to the multiplexer with the given priority weight.
+// AddVirtualChannel registers a Virtual Channel with this Master Channel.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
 	mc.channels[vc.VCID] = vc
 	mc.mux.AddVirtualChannel(vc, priority)
 }
 
-// AddFrame routes an inbound frame to the appropriate Virtual Channel based on VCID.
-// Frame counts are tracked; use MCFrameGap/VCFrameGap to check for lost frames.
+// AddFrame routes an inbound frame to the appropriate Virtual Channel.
 func (mc *MasterChannel) AddFrame(frame *TMTransferFrame) error {
 	if frame.Header.SpacecraftID != mc.scid {
 		return ErrSCIDMismatch
@@ -424,26 +523,18 @@ func (mc *MasterChannel) AddFrame(frame *TMTransferFrame) error {
 	return vc.AddFrame(frame)
 }
 
-// MCFrameGap returns the Master Channel frame count gap detected by
-// the last AddFrame call. 0 means no gap.
-func (mc *MasterChannel) MCFrameGap() int {
-	return mc.detector.MCFrameGap()
-}
+// MCFrameGap returns the MC gap from the last AddFrame call.
+func (mc *MasterChannel) MCFrameGap() int { return mc.detector.MCFrameGap() }
 
-// VCFrameGap returns the Virtual Channel frame count gap detected by
-// the last AddFrame call. 0 means no gap.
-func (mc *MasterChannel) VCFrameGap() int {
-	return mc.detector.VCFrameGap()
-}
+// VCFrameGap returns the VC gap from the last AddFrame call.
+func (mc *MasterChannel) VCFrameGap() int { return mc.detector.VCFrameGap() }
 
-// GetNextFrame retrieves the next frame from the multiplexer (send path).
+// GetNextFrame retrieves the next frame from the multiplexer.
 func (mc *MasterChannel) GetNextFrame() (*TMTransferFrame, error) {
 	return mc.mux.GetNextFrame()
 }
 
-// GetNextFrameOrIdle retrieves the next frame from the multiplexer,
-// or generates an idle frame if no Virtual Channel has pending data.
-// Requires ChannelConfig to be set (FrameLength > 0).
+// GetNextFrameOrIdle returns the next frame or an idle frame if none available.
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	frame, err := mc.mux.GetNextFrame()
 	if err == nil {

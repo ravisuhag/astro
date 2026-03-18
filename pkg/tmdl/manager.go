@@ -46,6 +46,15 @@ func (m *TMServiceManager) ReceiveData(vcid uint8, serviceType ServiceType) ([]b
 	return service.Receive()
 }
 
+// FlushService flushes the specified Virtual Channel service.
+func (m *TMServiceManager) FlushService(vcid uint8, serviceType ServiceType) error {
+	service, err := m.getVirtualService(vcid, serviceType)
+	if err != nil {
+		return err
+	}
+	return service.Flush()
+}
+
 // AddFrameToMasterChannel routes a frame to the appropriate Virtual Channel
 // within the specified Master Channel.
 func (m *TMServiceManager) AddFrameToMasterChannel(scid uint16, frame *TMTransferFrame) error {
