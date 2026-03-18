@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/tmdl |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing CCSDS TM Space Data Link Protocol. Full pipeline: PhysicalChannel (ASM, randomization, MC mux/demux) → MasterChannel (VC mux, frame gap detection) → VirtualChannel (single frame buffer) → Services (VCP with segmentation/reassembly, VCA with status fields, VCF). Fixed frame length enforcement, idle frame insertion, PVN validation, and CCSDS pseudo-randomization supported. |
+| Other Information | Go library implementing CCSDS TM Space Data Link Protocol. Full pipeline: PhysicalChannel (ASM, randomization, MC mux/demux) → MasterChannel (VC mux, frame gap detection) → VirtualChannel (single frame buffer) → Services (VCP with native multi-packet packing via FHP and PacketSizer-based reassembly with loss resync, VCA with status fields, VCF). Fixed frame length enforcement, idle frame insertion, PVN validation, and CCSDS pseudo-randomization supported. |
 
 ### A2.1.3 Identification of Supplier
 
@@ -104,8 +104,8 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | | **VCP Service Primitives** | | | | |
-| TM-34 | VCP.request | 3.3.3.2 | M | Yes | `VirtualChannelPacketService.Send(data)` implements VCP.request. When `ChannelConfig` is set, segments packets across fixed-length frames with 2-byte length prefix; FirstHeaderPtr=0 for first frame, 0x07FE for continuations. Validates PVN when configured via `SetValidPVNs()`. |
-| TM-35 | VCP.indication | 3.3.3.3 | M | Yes | `VirtualChannelPacketService.Receive()` implements VCP.indication. When `ChannelConfig` is set, reassembles segmented packets using length prefix, skipping idle frames. |
+| TM-34 | VCP.request | 3.3.3.2 | M | Yes | `VirtualChannelPacketService.Send(data)` implements VCP.request. When `ChannelConfig` is set, packs packets into fixed-length frames using native FHP (multi-packet packing: tail-of-previous + start-of-next in same frame). `Flush()` emits remaining partial frame. Validates PVN when configured via `SetValidPVNs()`. |
+| TM-35 | VCP.indication | 3.3.3.3 | M | Yes | `VirtualChannelPacketService.Receive()` implements VCP.indication. When `ChannelConfig` is set, uses FHP to locate packet boundaries and `PacketSizer` (default: `SpacePacketSizer`) to extract complete packets. Resyncs via FHP after VC frame count gaps. Skips idle frames. |
 | | **VCA Service Primitives** | | | | |
 | TM-36 | VCA.request | 3.4.3.2 | M | Yes | `VirtualChannelAccessService.Send(data)` implements VCA.request. Enforces fixed `vcaSize`, constructs a frame, stamps counters/CRC via `stampFrame()`, and pushes it into the `VirtualChannel`. |
 | TM-37 | VCA.indication | 3.4.3.3 | M | Yes | `VirtualChannelAccessService.Receive()` implements VCA.indication. Pulls the next frame from the `VirtualChannel` and returns its fixed-length Data Field. |
@@ -149,7 +149,7 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | TM-59 | MC Generation Function | 4.2.5 | M | Yes | `MasterChannel.AddFrame()` routes inbound frames to Virtual Channels by VCID with SCID validation. |
 | TM-60 | MC Multiplexing Function | 4.2.6 | M | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing across registered `MasterChannel`s via `GetNextFrame()`. |
 | TM-61 | All Frames Generation Function | 4.2.7 | M | Yes | `PhysicalChannel.Wrap()` produces CADUs: encodes frame, applies optional CCSDS pseudo-randomization (LFSR x^8+x^7+x^5+x^3+1), and prepends ASM (default 0x1ACFFC1D). `GetNextFrameOrIdle()` inserts idle frames when no MC has data. |
-| TM-62 | Packet Extraction Function | 4.3.2 | M | Yes | `VirtualChannelPacketService.Receive()` reassembles segmented packets using 2-byte length prefix when `ChannelConfig` is set, skipping idle frames. |
+| TM-62 | Packet Extraction Function | 4.3.2 | M | Yes | `VirtualChannelPacketService.Receive()` uses FHP to locate packet starts and `PacketSizer` to extract complete packets per §4.3.2. Resyncs after frame loss by aborting partial packets and finding next FHP. Skips idle frames. |
 | TM-63 | VC Reception Function | 4.3.3 | M | Yes | `DecodeTMTransferFrame()` parses raw octets into a `TMTransferFrame`, verifying CRC and extracting all fields. `MasterChannel.AddFrame()` routes received frames to the appropriate `VirtualChannel` by VCID. |
 | TM-64 | VC Demultiplexing Function | 4.3.4 | M | Yes | `MasterChannel.AddFrame()` demultiplexes inbound frames to Virtual Channels by VCID. `TMServiceManager` dispatches to the correct VC service. |
 | TM-65 | MC Reception Function | 4.3.5 | M | Yes | `MasterChannel.GetNextFrame()` pulls the next frame from the integrated multiplexer. |
@@ -183,7 +183,7 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | TM-85 | Presence of VC_OCF | Table 5-3 | M | Present ('1') / Absent ('0') | Yes | `PrimaryHeader.OCFFlag`. |
 | | **Managed Parameters for Packet Transfer** | | | | | |
 | TM-86 | Valid PVNs | Table 5-4 | M | Set of Integers | Yes | `VirtualChannelPacketService.SetValidPVNs()` configures the accepted PVN set. `Send()` validates the first 3 bits of packet data. Empty set disables validation. |
-| TM-87 | Maximum Packet Length (octets) | Table 5-4 | M | Integer | Yes | Maximum packet length is 65535 bytes, enforced by the 2-byte length prefix in VCP segmentation. Per-frame capacity derived from `ChannelConfig.DataFieldCapacity()`. |
+| TM-87 | Maximum Packet Length (octets) | Table 5-4 | M | Integer | Yes | Maximum packet length bounded by `PacketSizer` (Space Packets: 65542 bytes max). Per-frame capacity derived from `ChannelConfig.DataFieldCapacity()`. Packets larger than one frame are automatically packed across multiple frames. |
 | TM-88 | Whether incomplete Packets are required to be delivered to the user at the receiving end | Table 5-4 | M | Required, not required | Yes | Policy: not required. `VirtualChannelPacketService.Receive()` always delivers complete reassembled packets. Incomplete packets (insufficient continuation frames) return `ErrIncompletePacket`. |
 
 ### Table A-7: Protocol Specification with SDLS Option
@@ -265,12 +265,12 @@ All 78 mandatory items (TM-1 through TM-88, excluding optional/conditional) are 
 | Area | Items | Implementation |
 |------|-------|----------------|
 | Service Data Units | TM-1–5 | `TMTransferFrame` encode/decode, `SecondaryHeader`, `OperationalControl`. |
-| VCP Service | TM-6–8, TM-34–35 | `VirtualChannelPacketService` with segmentation/reassembly, PVN validation via `SetValidPVNs()`. |
+| VCP Service | TM-6–8, TM-34–35 | `VirtualChannelPacketService` with native multi-packet packing via FHP, `PacketSizer`-based reassembly with FHP resync on loss, PVN validation via `SetValidPVNs()`. |
 | VCA Service | TM-11–13, TM-36–37 | `VirtualChannelAccessService` with padding, `LastStatus()` for status fields. |
 | VCF Service | TM-22–23, TM-42–43 | `VirtualChannelFrameService` with encode/decode via `VirtualChannel`. |
 | FSH/OCF Services | TM-16–20, TM-25–32, TM-38–49 | Secondary header and OCF via `NewTMTransferFrame()` / `DecodeTMTransferFrame()`. `MasterChannel` with SCID validation. |
 | Protocol Data Unit | TM-50–55 | `PrimaryHeader` (48-bit), `SecondaryHeader`, CRC-16-CCITT. |
-| Packet Processing | TM-56, TM-62 | VCP segmentation with 2-byte length prefix, reassembly with idle frame skipping. |
+| Packet Processing | TM-56, TM-62 | VCP native multi-packet packing with FHP, `PacketSizer`-based extraction with FHP resync after loss. `Flush()` emits partial frames. |
 | VC Functions | TM-57–58, TM-63–64 | `NewTMTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
 | MC Functions | TM-59–60, TM-65–66 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
 | Physical Channel | TM-61, TM-67–69, TM-72 | `PhysicalChannel` with `Wrap()`/`Unwrap()` (ASM + randomization), `Name`, `ChannelConfig.FrameLength`, MC multiplexing scheme. |
