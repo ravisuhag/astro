@@ -66,14 +66,14 @@ var (
 	// ErrDataFieldTooSmall indicates the data field capacity is too small for framing.
 	ErrDataFieldTooSmall = errors.New("data field capacity too small")
 
-	// ErrIncompletePacket indicates reassembly failed due to unexpected frame sequence.
-	ErrIncompletePacket = errors.New("incomplete packet: unexpected frame during reassembly")
-
 	// ErrInvalidPVN indicates the packet version number is not in the valid set.
 	ErrInvalidPVN = errors.New("invalid packet version number")
 
 	// ErrNoMasterChannels indicates no master channels are registered on the physical channel.
 	ErrNoMasterChannels = errors.New("no master channels registered")
+
+	// ErrInvalidOCFLength indicates the Operational Control Field is not exactly 4 bytes.
+	ErrInvalidOCFLength = errors.New("operational control field must be exactly 4 bytes when OCF flag is set")
 
 	// ErrSyncMarkerMismatch indicates the CADU does not start with the expected ASM.
 	ErrSyncMarkerMismatch = errors.New("attached sync marker mismatch")

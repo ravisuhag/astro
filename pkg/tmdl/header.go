@@ -1,6 +1,7 @@
 package tmdl
 
 import (
+	"encoding/hex"
 	"strconv"
 	"strings"
 )
@@ -198,6 +199,6 @@ func (sh *SecondaryHeader) Humanize() string {
 	return strings.Join([]string{
 		"  Version Number: " + strconv.Itoa(int(sh.VersionNumber)),
 		"  Header Length: " + strconv.Itoa(int(sh.HeaderLength)),
-		"  Data Field: " + string(sh.DataField),
+		"  Data Field: " + hex.EncodeToString(sh.DataField),
 	}, "\n")
 }

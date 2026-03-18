@@ -92,17 +92,19 @@ func (tf *TMTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 	frameData := append(header, secondaryHeader...)
 	frameData = append(frameData, tf.DataField...)
 	if tf.Header.OCFFlag {
+		if len(tf.OperationalControl) != 4 {
+			return nil, ErrInvalidOCFLength
+		}
 		frameData = append(frameData, tf.OperationalControl...)
 	}
 
 	return frameData, nil
 }
 
-// padDataField pads data to capacity with idle fill (0xFF).
+// padDataField copies data into a new slice of the given capacity,
+// filling any remaining bytes with 0xFF (idle fill). If data is longer
+// than capacity it is truncated. The returned slice never aliases the input.
 func padDataField(data []byte, capacity int) []byte {
-	if len(data) >= capacity {
-		return data[:capacity]
-	}
 	padded := make([]byte, capacity)
 	copy(padded, data)
 	for i := len(data); i < capacity; i++ {
@@ -131,12 +133,17 @@ func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFra
 		return nil, err
 	}
 	frame.Header.FirstHeaderPtr = 0x07FF
+	return frame, recomputeCRC(frame)
+}
+
+// recomputeCRC re-encodes the frame (without FEC) and updates FrameErrorControl.
+func recomputeCRC(frame *TMTransferFrame) error {
 	encoded, err := frame.EncodeWithoutFEC()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	frame.FrameErrorControl = ComputeCRC(encoded)
-	return frame, nil
+	return nil
 }
 
 // IsIdleFrame reports whether the frame is an idle frame

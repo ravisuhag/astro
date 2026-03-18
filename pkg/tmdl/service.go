@@ -71,12 +71,7 @@ func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error
 		frame.Header.MCFrameCount = mc
 		frame.Header.VCFrameCount = vc
 	}
-	encoded, err := frame.EncodeWithoutFEC()
-	if err != nil {
-		return err
-	}
-	frame.FrameErrorControl = ComputeCRC(encoded)
-	return nil
+	return recomputeCRC(frame)
 }
 
 // isIdleFill checks if all bytes are 0xFF (idle fill pattern).
@@ -192,6 +187,9 @@ func (s *VirtualChannelPacketService) Flush() error {
 	}
 
 	capacity := s.config.DataFieldCapacity(0)
+	if capacity <= 0 {
+		return ErrDataFieldTooSmall
+	}
 	chunk := padDataField(s.sendBuf, capacity)
 
 	fhp := uint16(0x07FE)
@@ -221,7 +219,7 @@ func (s *VirtualChannelPacketService) emitFullFrames() error {
 
 		// Find first packet start in this chunk
 		fhp := uint16(0x07FE)
-		remaining := s.packetOffsets[:0]
+		var remaining []int
 		for _, off := range s.packetOffsets {
 			if off < capacity {
 				if fhp == 0x07FE {
@@ -324,6 +322,12 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 			}
 
 		default:
+			if int(fhp) >= len(data) {
+				// Corrupted FHP — discard and resync
+				s.recvBuf = nil
+				s.synced = false
+				continue
+			}
 			// New packet starts at offset fhp
 			if s.synced && int(fhp) > 0 && len(s.recvBuf) > 0 {
 				// Append tail of previous packet
@@ -468,6 +472,9 @@ func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 		SegmentLengthID: frame.Header.SegmentLengthID,
 	}
 	if s.config.FrameLength > 0 {
+		if len(frame.DataField) < s.vcaSize {
+			return nil, ErrDataTooShort
+		}
 		return frame.DataField[:s.vcaSize], nil
 	}
 	return frame.DataField, nil

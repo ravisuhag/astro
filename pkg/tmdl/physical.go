@@ -6,9 +6,12 @@ import (
 	"slices"
 )
 
-// DefaultASM is the standard CCSDS Attached Sync Marker (0x1ACFFC1D)
+// DefaultASM returns the standard CCSDS Attached Sync Marker (0x1ACFFC1D)
 // used to identify the start of each Transfer Frame in the bitstream.
-var DefaultASM = []byte{0x1A, 0xCF, 0xFC, 0x1D}
+// A fresh copy is returned each call to prevent accidental mutation.
+func DefaultASM() []byte {
+	return []byte{0x1A, 0xCF, 0xFC, 0x1D}
+}
 
 // ChannelConfig defines the fixed parameters of a physical channel
 // per CCSDS 132.0-B-3. All frames on a physical channel share the
@@ -207,7 +210,7 @@ func (pc *PhysicalChannel) asm() []byte {
 	if pc.ASM != nil {
 		return pc.ASM
 	}
-	return DefaultASM
+	return DefaultASM()
 }
 
 func (pc *PhysicalChannel) advanceToNext() {

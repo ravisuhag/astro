@@ -1,8 +1,11 @@
 package tmdl
 
+import "sync"
+
 // VirtualChannel represents a logical data stream within a spacecraft.
 type VirtualChannel struct {
 	VCID        uint8
+	mu          sync.Mutex
 	frameBuffer []*TMTransferFrame
 	maxSize     int
 }
@@ -18,6 +21,8 @@ func NewVirtualChannel(vcid uint8, bufferSize int) *VirtualChannel {
 
 // AddFrame stores a new frame in the Virtual Channel buffer.
 func (vc *VirtualChannel) AddFrame(f *TMTransferFrame) error {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	if len(vc.frameBuffer) >= vc.maxSize {
 		return ErrBufferFull
 	}
@@ -27,6 +32,8 @@ func (vc *VirtualChannel) AddFrame(f *TMTransferFrame) error {
 
 // GetNextFrame retrieves and removes the oldest frame from the buffer.
 func (vc *VirtualChannel) GetNextFrame() (*TMTransferFrame, error) {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	if len(vc.frameBuffer) == 0 {
 		return nil, ErrNoFramesAvailable
 	}
@@ -42,10 +49,14 @@ func (vc *VirtualChannel) GetNextFrame() (*TMTransferFrame, error) {
 
 // HasFrames checks if there are frames available in the Virtual Channel.
 func (vc *VirtualChannel) HasFrames() bool {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	return len(vc.frameBuffer) > 0
 }
 
 // Len returns the number of frames currently buffered.
 func (vc *VirtualChannel) Len() int {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	return len(vc.frameBuffer)
 }
