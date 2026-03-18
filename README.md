@@ -94,7 +94,7 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 
 | Protocol | Standard | Package | Docs |
 |----------|----------|---------|------|
-| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | | |
+| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | |
 
 #### Mission Database
 
