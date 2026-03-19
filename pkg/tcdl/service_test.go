@@ -2,44 +2,11 @@ package tcdl_test
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tcdl"
 )
-
-func TestMasterChannel_Routing(t *testing.T) {
-	mc := tcdl.NewMasterChannel(42)
-	vc1 := tcdl.NewVirtualChannel(1, 10)
-	vc2 := tcdl.NewVirtualChannel(2, 10)
-	mc.AddVirtualChannel(vc1, 1)
-	mc.AddVirtualChannel(vc2, 1)
-
-	f1, _ := tcdl.NewTCTransferFrame(42, 1, []byte("to-vc1"))
-	f2, _ := tcdl.NewTCTransferFrame(42, 2, []byte("to-vc2"))
-	_ = mc.AddFrame(f1)
-	_ = mc.AddFrame(f2)
-
-	got1, _ := vc1.Next()
-	if !bytes.Equal(got1.DataField, []byte("to-vc1")) {
-		t.Errorf("VC1 got %q", got1.DataField)
-	}
-	got2, _ := vc2.Next()
-	if !bytes.Equal(got2.DataField, []byte("to-vc2")) {
-		t.Errorf("VC2 got %q", got2.DataField)
-	}
-}
-
-func TestMasterChannel_SCIDMismatch(t *testing.T) {
-	mc := tcdl.NewMasterChannel(42)
-	vc := tcdl.NewVirtualChannel(1, 10)
-	mc.AddVirtualChannel(vc, 1)
-	frame, _ := tcdl.NewTCTransferFrame(999, 1, []byte("wrong"))
-	if !errors.Is(mc.AddFrame(frame), tcdl.ErrSCIDMismatch) {
-		t.Error("expected ErrSCIDMismatch")
-	}
-}
 
 func TestMAPPacketService_SmallPacket(t *testing.T) {
 	vc := tcdl.NewVirtualChannel(1, 100)

@@ -3,12 +3,279 @@ package tmdl_test
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"testing"
 
 	ccsdscrc "github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/tmdl"
 )
+
+// --- Primary Header Tests ---
+
+func TestPrimaryHeader_EncodeDecode(t *testing.T) {
+	header := tmdl.PrimaryHeader{
+		VersionNumber:    0b00,
+		SpacecraftID:     933,
+		VirtualChannelID: 2,
+		OCFFlag:          true,
+		MCFrameCount:     15,
+		VCFrameCount:     8,
+		FSHFlag:          false,
+		SyncFlag:         false,
+		PacketOrderFlag:  false,
+		SegmentLengthID:  0b11,
+		FirstHeaderPtr:   1024,
+	}
+
+	encoded, err := header.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	// Verify the header length
+	if len(encoded) != 6 {
+		t.Fatalf("Expected header length 6, got %d", len(encoded))
+	}
+
+	// Decode the encoded header
+	var decoded tmdl.PrimaryHeader
+	if err := decoded.Decode(encoded); err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	// Verify fields match
+	if header != decoded {
+		t.Errorf("Header mismatch:\n  expected: %+v\n  got:      %+v", header, decoded)
+	}
+}
+
+func TestPrimaryHeader_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  tmdl.PrimaryHeader
+		wantErr bool
+	}{
+		{
+			name: "valid header",
+			header: tmdl.PrimaryHeader{
+				VersionNumber:    0,
+				SpacecraftID:     100,
+				VirtualChannelID: 3,
+				SegmentLengthID:  0b11,
+			},
+		},
+		{
+			name: "invalid version",
+			header: tmdl.PrimaryHeader{
+				VersionNumber:   1,
+				SegmentLengthID: 0b11,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid SCID",
+			header: tmdl.PrimaryHeader{
+				SpacecraftID:    0x0400,
+				SegmentLengthID: 0b11,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid VCID",
+			header: tmdl.PrimaryHeader{
+				VirtualChannelID: 8,
+				SegmentLengthID:  0b11,
+			},
+			wantErr: true,
+		},
+		{
+			name: "packet order without sync",
+			header: tmdl.PrimaryHeader{
+				PacketOrderFlag: true,
+				SyncFlag:        false,
+				SegmentLengthID: 0b11,
+			},
+			wantErr: true,
+		},
+		{
+			name: "segment length without sync",
+			header: tmdl.PrimaryHeader{
+				SyncFlag:        false,
+				SegmentLengthID: 0b01,
+			},
+			wantErr: true,
+		},
+		{
+			name: "FHP with sync flag",
+			header: tmdl.PrimaryHeader{
+				SyncFlag:        true,
+				SegmentLengthID: 0b11,
+				FirstHeaderPtr:  0x0000,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.header.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
+	// Build a valid header and encode it
+	h := tmdl.PrimaryHeader{
+		VersionNumber:    0,
+		SpacecraftID:     0x3A5,
+		VirtualChannelID: 5,
+		OCFFlag:          true,
+		MCFrameCount:     0xAB,
+		VCFrameCount:     0xCD,
+		FSHFlag:          true,
+		SyncFlag:         false,
+		PacketOrderFlag:  false,
+		SegmentLengthID:  0b11,
+		FirstHeaderPtr:   0x456,
+	}
+	data, err := h.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	var h2 tmdl.PrimaryHeader
+	if err := h2.Decode(data); err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if h != h2 {
+		t.Errorf("Round-trip mismatch:\n  before: %+v\n  after:  %+v", h, h2)
+	}
+
+	// Verify known bit layout by checking hex encoding matches expectations
+	got := hex.EncodeToString(data)
+	t.Logf("Encoded header: %s", got)
+}
+
+// --- Secondary Header Tests ---
+
+func TestSecondaryHeader_EncodeDecode(t *testing.T) {
+	sh := tmdl.SecondaryHeader{
+		VersionNumber: 0,
+		HeaderLength:  2,
+		DataField:     []byte{0xAA, 0xBB, 0xCC},
+	}
+
+	encoded, err := sh.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	var decoded tmdl.SecondaryHeader
+	if err := decoded.Decode(encoded); err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if decoded.VersionNumber != sh.VersionNumber ||
+		decoded.HeaderLength != sh.HeaderLength ||
+		!bytes.Equal(decoded.DataField, sh.DataField) {
+		t.Errorf("SecondaryHeader mismatch:\n  expected: %+v\n  got:      %+v", sh, decoded)
+	}
+}
+
+func TestSecondaryHeader_MaxLength63(t *testing.T) {
+	data := make([]byte, 64)
+	sh := tmdl.SecondaryHeader{
+		VersionNumber: 0,
+		HeaderLength:  63,
+		DataField:     data,
+	}
+	_, err := sh.Encode()
+	if err != nil {
+		t.Errorf("Expected no error for max length 63, got %v", err)
+	}
+}
+
+func TestSecondaryHeader_MinLength1(t *testing.T) {
+	sh := tmdl.SecondaryHeader{
+		VersionNumber: 0,
+		HeaderLength:  0,
+		DataField:     []byte{0xFF},
+	}
+	_, err := sh.Encode()
+	if err != nil {
+		t.Errorf("Expected no error for min length 1, got %v", err)
+	}
+}
+
+func TestSCIDBoundaries(t *testing.T) {
+	for _, scid := range []uint16{0, 1, 0x03FF} {
+		h := tmdl.PrimaryHeader{SpacecraftID: scid, SegmentLengthID: 0b11}
+		if err := h.Validate(); err != nil {
+			t.Errorf("SCID %d should be valid: %v", scid, err)
+		}
+	}
+}
+
+func TestVCIDBoundaries(t *testing.T) {
+	for _, vcid := range []uint8{0, 1, 7} {
+		h := tmdl.PrimaryHeader{VirtualChannelID: vcid, SegmentLengthID: 0b11}
+		if err := h.Validate(); err != nil {
+			t.Errorf("VCID %d should be valid: %v", vcid, err)
+		}
+	}
+}
+
+func TestInvalidSCID(t *testing.T) {
+	h := tmdl.PrimaryHeader{SpacecraftID: 0x0400, SegmentLengthID: 0b11}
+	if err := h.Validate(); !errors.Is(err, tmdl.ErrInvalidSpacecraftID) {
+		t.Errorf("Expected ErrInvalidSpacecraftID, got %v", err)
+	}
+}
+
+func TestInvalidVCID(t *testing.T) {
+	h := tmdl.PrimaryHeader{VirtualChannelID: 8, SegmentLengthID: 0b11}
+	if err := h.Validate(); !errors.Is(err, tmdl.ErrInvalidVCID) {
+		t.Errorf("Expected ErrInvalidVCID, got %v", err)
+	}
+}
+
+func TestSecondaryHeader_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		sh      tmdl.SecondaryHeader
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			sh:   tmdl.SecondaryHeader{VersionNumber: 0, HeaderLength: 1, DataField: []byte{0xAA, 0xBB}},
+		},
+		{
+			name:    "invalid version",
+			sh:      tmdl.SecondaryHeader{VersionNumber: 1, HeaderLength: 0, DataField: []byte{0xAA}},
+			wantErr: true,
+		},
+		{
+			name:    "length mismatch",
+			sh:      tmdl.SecondaryHeader{VersionNumber: 0, HeaderLength: 5, DataField: []byte{0xAA}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.sh.Validate(); (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// --- Transfer Frame Tests ---
 
 func TestHeaderEncoding(t *testing.T) {
 	header := tmdl.PrimaryHeader{

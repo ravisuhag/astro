@@ -361,12 +361,12 @@ func TestVCPService_Packing_LossResync(t *testing.T) {
 	svc2 := tmdl.NewVirtualChannelPacketService(933, 1, vc2, config2, counter2)
 	svc2.SetPacketSizer(spp.PacketSizer)
 
-	bigPkt1 := makeTestPacket(bytes.Repeat([]byte{0xAA}, 5))  // 11 bytes
-	bigPkt2 := makeTestPacket(bytes.Repeat([]byte{0xBB}, 5))  // 11 bytes
+	bigPkt1 := makeTestPacket(bytes.Repeat([]byte{0xAA}, 5)) // 11 bytes
+	bigPkt2 := makeTestPacket(bytes.Repeat([]byte{0xBB}, 5)) // 11 bytes
 
 	_ = svc2.Send(bigPkt1) // 11 bytes, generates 1 full frame (10 bytes), 1 byte remains
 	_ = svc2.Send(bigPkt2) // +11=12 bytes remaining, generates 1 full frame, 2 remain
-	_ = svc2.Flush()        // flush remaining 2 bytes
+	_ = svc2.Flush()       // flush remaining 2 bytes
 
 	// Should have 3 frames: F0(VCcount=0), F1(VCcount=1), F2(VCcount=2)
 	// Remove F0 (contains start of pkt1)
@@ -553,84 +553,6 @@ func TestVCAService_Flush(t *testing.T) {
 	svc := tmdl.NewVirtualChannelAccessService(933, 1, 8, vc, tmdl.ChannelConfig{}, nil)
 	if err := svc.Flush(); err != nil {
 		t.Errorf("VCA Flush should be no-op: %v", err)
-	}
-}
-
-// --- MasterChannel Tests ---
-
-func TestMasterChannel_AddAndGet(t *testing.T) {
-	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
-	vc := tmdl.NewVirtualChannel(1, 10)
-	mc.AddVirtualChannel(vc, 1)
-
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
-	_ = mc.AddFrame(frame)
-
-	got, _ := mc.GetNextFrame()
-	if got != frame {
-		t.Error("Expected same frame back")
-	}
-}
-
-func TestMasterChannel_SCIDMismatch(t *testing.T) {
-	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
-	vc := tmdl.NewVirtualChannel(1, 10)
-	mc.AddVirtualChannel(vc, 1)
-	frame, _ := tmdl.NewTMTransferFrame(500, 1, []byte("data"), nil, nil)
-	if !errors.Is(mc.AddFrame(frame), tmdl.ErrSCIDMismatch) {
-		t.Error("Expected ErrSCIDMismatch")
-	}
-}
-
-func TestMasterChannel_VCIDNotFound(t *testing.T) {
-	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
-	if !errors.Is(mc.AddFrame(frame), tmdl.ErrVirtualChannelNotFound) {
-		t.Error("Expected ErrVirtualChannelNotFound")
-	}
-}
-
-func TestMasterChannel_GetNextFrameOrIdle(t *testing.T) {
-	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
-	mc := tmdl.NewMasterChannel(933, config)
-	vc := tmdl.NewVirtualChannel(1, 10)
-	mc.AddVirtualChannel(vc, 1)
-
-	frame, _ := mc.GetNextFrameOrIdle()
-	if !tmdl.IsIdleFrame(frame) {
-		t.Error("Expected idle when empty")
-	}
-
-	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
-	svc.SetPacketSizer(spp.PacketSizer)
-	_ = svc.Send(makeTestPacket([]byte{0x01}))
-	_ = svc.Flush()
-
-	frame, _ = mc.GetNextFrameOrIdle()
-	if tmdl.IsIdleFrame(frame) {
-		t.Error("Expected data frame")
-	}
-}
-
-func TestMasterChannel_MultiplexesSendPath(t *testing.T) {
-	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
-	vc1 := tmdl.NewVirtualChannel(1, 10)
-	vc2 := tmdl.NewVirtualChannel(2, 10)
-	mc.AddVirtualChannel(vc1, 1)
-	mc.AddVirtualChannel(vc2, 1)
-
-	svc1 := tmdl.NewVirtualChannelPacketService(933, 1, vc1, tmdl.ChannelConfig{}, nil)
-	svc2 := tmdl.NewVirtualChannelPacketService(933, 2, vc2, tmdl.ChannelConfig{}, nil)
-	_ = svc1.Send([]byte("from vc1"))
-	_ = svc2.Send([]byte("from vc2"))
-
-	f1, _ := mc.GetNextFrame()
-	if string(f1.DataField) != "from vc1" {
-		t.Errorf("Expected 'from vc1', got %q", f1.DataField)
-	}
-	f2, _ := mc.GetNextFrame()
-	if string(f2.DataField) != "from vc2" {
-		t.Errorf("Expected 'from vc2', got %q", f2.DataField)
 	}
 }
 
@@ -899,4 +821,3 @@ func TestIdleFrameDoesNotAffectPacketState(t *testing.T) {
 		t.Errorf("Packet corrupted by interleaved idle frame")
 	}
 }
-

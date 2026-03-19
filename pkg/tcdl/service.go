@@ -283,65 +283,9 @@ func (s *VCFrameService) Receive() ([]byte, error) {
 // Flush is a no-op for VC Frame Service.
 func (s *VCFrameService) Flush() error { return nil }
 
-// MasterChannel manages TC Transfer Frames for a Master Channel identified by SCID.
-type MasterChannel struct {
-	scid     uint16
-	mux      *VirtualChannelMultiplexer
-	channels map[uint8]*VirtualChannel
-	detector *FrameGapDetector
-}
-
-// NewMasterChannel creates a new Master Channel for the given spacecraft ID.
-func NewMasterChannel(scid uint16) *MasterChannel {
-	return &MasterChannel{
-		scid:     scid,
-		mux:      NewMultiplexer(),
-		channels: make(map[uint8]*VirtualChannel),
-		detector: NewFrameGapDetector(),
-	}
-}
-
-// SCID returns the Spacecraft Identifier for this Master Channel.
-func (mc *MasterChannel) SCID() uint16 { return mc.scid }
-
-// AddVirtualChannel registers a Virtual Channel with this Master Channel.
-func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
-	mc.channels[vc.ID] = vc
-	mc.mux.AddChannel(vc, priority)
-}
-
-// AddFrame routes an inbound frame to the appropriate Virtual Channel.
-func (mc *MasterChannel) AddFrame(frame *TCTransferFrame) error {
-	if frame.Header.SpacecraftID != mc.scid {
-		return ErrSCIDMismatch
-	}
-	mc.detector.Track(frame)
-	vc, ok := mc.channels[frame.Header.VirtualChannelID]
-	if !ok {
-		return ErrVirtualChannelNotFound
-	}
-	return vc.Add(frame)
-}
-
-// GetNextFrame retrieves the next frame from the multiplexer.
-func (mc *MasterChannel) GetNextFrame() (*TCTransferFrame, error) {
-	return mc.mux.Next()
-}
-
-// HasPendingFrames checks if any Virtual Channel has pending frames.
-func (mc *MasterChannel) HasPendingFrames() bool {
-	return mc.mux.HasPending()
-}
-
-// VCFrameGap returns the VC gap from the last AddFrame call.
-func (mc *MasterChannel) VCFrameGap() int {
-	return mc.detector.VCFrameGap()
-}
-
 // Ensure services implement the Service interface.
 var (
 	_ Service = (*MAPPacketService)(nil)
 	_ Service = (*MAPAccessService)(nil)
 	_ Service = (*VCFrameService)(nil)
 )
-
