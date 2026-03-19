@@ -58,8 +58,8 @@ var (
 	// ErrServiceNotFound aliases sdl.ErrServiceNotFound.
 	ErrServiceNotFound = sdl.ErrServiceNotFound
 
-	// ErrMasterChannelNotFound indicates the requested master channel was not found.
-	ErrMasterChannelNotFound = errors.New("master channel service not found for specified SCID")
+	// ErrMasterChannelNotFound aliases sdl.ErrMasterChannelNotFound.
+	ErrMasterChannelNotFound = sdl.ErrMasterChannelNotFound
 
 	// ErrNoVirtualChannels aliases sdl.ErrNoChannels.
 	ErrNoVirtualChannels = sdl.ErrNoChannels
@@ -73,8 +73,8 @@ var (
 	// ErrNoPacketSizer indicates no PacketSizer has been set on the VCP service.
 	ErrNoPacketSizer = errors.New("no PacketSizer configured: call SetPacketSizer before Receive")
 
-	// ErrNoMasterChannels indicates no master channels are registered on the physical channel.
-	ErrNoMasterChannels = errors.New("no master channels registered")
+	// ErrNoMasterChannels aliases sdl.ErrNoMasterChannels.
+	ErrNoMasterChannels = sdl.ErrNoMasterChannels
 
 	// ErrInvalidOCFLength indicates the Operational Control Field is not exactly 4 bytes.
 	ErrInvalidOCFLength = errors.New("operational control field must be exactly 4 bytes when OCF flag is set")

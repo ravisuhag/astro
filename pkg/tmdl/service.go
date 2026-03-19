@@ -7,12 +7,12 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
-// Service defines the interface for all TM Data Link services.
-type Service interface {
-	Send(data []byte) error
-	Receive() ([]byte, error)
-	Flush() error
-}
+// Service is the interface for all TM Data Link services.
+type Service = sdl.Service
+
+// PacketSizer returns the total length in bytes of the packet starting
+// at data[0], or -1 if the data is too short to determine length.
+type PacketSizer = sdl.PacketSizer
 
 // ServiceType defines the types of TM services available.
 type ServiceType int
@@ -22,11 +22,6 @@ const (
 	VCA                    // Virtual Channel Access Service
 	VCF                    // Virtual Channel Frame Service
 )
-
-// PacketSizer returns the total length in bytes of the packet starting
-// at data[0], or -1 if the data is too short to determine length.
-// Used by VCP Receive() to find packet boundaries within frame data.
-type PacketSizer func(data []byte) int
 
 // FrameCounter manages 8-bit MC and VC frame counts per CCSDS 132.0-B-3.
 // Share a single FrameCounter across all services for the same spacecraft

@@ -14,4 +14,10 @@ var (
 
 	// ErrServiceNotFound indicates the requested service was not found.
 	ErrServiceNotFound = errors.New("service not found for specified key")
+
+	// ErrMasterChannelNotFound indicates the requested master channel was not found.
+	ErrMasterChannelNotFound = errors.New("master channel not found for specified SCID")
+
+	// ErrNoMasterChannels indicates no master channels are registered.
+	ErrNoMasterChannels = errors.New("no master channels registered")
 )

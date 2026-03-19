@@ -2,7 +2,6 @@ package tmdl
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
@@ -41,13 +40,10 @@ func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
 // per CCSDS 132.0-B-3. For sync-layer operations (ASM, randomization,
 // CADU wrapping), use the tmsc package (CCSDS 131.0-B-4).
 type PhysicalChannel struct {
-	Name            string // Channel identifier (e.g., "X-band")
-	config          ChannelConfig
-	masterChannels  map[uint16]*MasterChannel
-	priority        map[uint16]int
-	sortedSCIDs     []uint16
-	currentIndex    int
-	remainingWeight int
+	Name           string // Channel identifier (e.g., "X-band")
+	config         ChannelConfig
+	mux            *sdl.MCMultiplexer[*TMTransferFrame]
+	masterChannels map[uint16]*MasterChannel
 }
 
 // NewPhysicalChannel creates a physical channel with the given configuration.
@@ -55,60 +51,22 @@ func NewPhysicalChannel(name string, config ChannelConfig) *PhysicalChannel {
 	return &PhysicalChannel{
 		Name:           name,
 		config:         config,
+		mux:            sdl.NewMCMultiplexer[*TMTransferFrame](),
 		masterChannels: make(map[uint16]*MasterChannel),
-		priority:       make(map[uint16]int),
 	}
 }
 
 // AddMasterChannel registers a Master Channel with a priority weight
 // for the MC multiplexing scheme. Priority must be at least 1.
 func (pc *PhysicalChannel) AddMasterChannel(mc *MasterChannel, priority int) {
-	if priority < 1 {
-		priority = 1
-	}
-	scid := mc.SCID()
-	pc.masterChannels[scid] = mc
-	pc.priority[scid] = priority
-
-	pc.sortedSCIDs = make([]uint16, 0, len(pc.masterChannels))
-	for s := range pc.masterChannels {
-		pc.sortedSCIDs = append(pc.sortedSCIDs, s)
-	}
-	slices.Sort(pc.sortedSCIDs)
-
-	pc.currentIndex = 0
-	if len(pc.sortedSCIDs) > 0 {
-		pc.remainingWeight = pc.priority[pc.sortedSCIDs[0]]
-	}
+	pc.masterChannels[mc.SCID()] = mc
+	pc.mux.Add(mc, priority)
 }
 
 // GetNextFrame selects the next frame for transmission using weighted
 // round-robin MC multiplexing across registered Master Channels.
 func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
-	if len(pc.sortedSCIDs) == 0 {
-		return nil, ErrNoMasterChannels
-	}
-
-	for range len(pc.sortedSCIDs) {
-		scid := pc.sortedSCIDs[pc.currentIndex]
-		mc := pc.masterChannels[scid]
-
-		if mc.HasPendingFrames() {
-			frame, err := mc.GetNextFrame()
-			if err != nil {
-				return nil, err
-			}
-			pc.remainingWeight--
-			if pc.remainingWeight <= 0 {
-				pc.advanceToNext()
-			}
-			return frame, nil
-		}
-
-		pc.advanceToNext()
-	}
-
-	return nil, sdl.ErrNoFramesAvailable
+	return pc.mux.Next()
 }
 
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
@@ -118,15 +76,16 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	if err == nil {
 		return frame, nil
 	}
-	if !errors.Is(err, sdl.ErrNoFramesAvailable) && !errors.Is(err, ErrNoMasterChannels) {
+	if !errors.Is(err, sdl.ErrNoFramesAvailable) && !errors.Is(err, sdl.ErrNoMasterChannels) {
 		return nil, err
 	}
 	if pc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
 	var scid uint16
-	if len(pc.sortedSCIDs) > 0 {
-		scid = pc.sortedSCIDs[0]
+	for s := range pc.masterChannels {
+		scid = s
+		break
 	}
 	return NewIdleFrame(scid, 7, pc.config)
 }
@@ -143,22 +102,10 @@ func (pc *PhysicalChannel) AddFrame(frame *TMTransferFrame) error {
 
 // HasPendingFrames checks if any Master Channel has pending frames.
 func (pc *PhysicalChannel) HasPendingFrames() bool {
-	for _, mc := range pc.masterChannels {
-		if mc.HasPendingFrames() {
-			return true
-		}
-	}
-	return false
+	return pc.mux.HasPending()
 }
 
 // Len returns the number of registered Master Channels.
 func (pc *PhysicalChannel) Len() int {
-	return len(pc.masterChannels)
+	return pc.mux.Len()
 }
-
-func (pc *PhysicalChannel) advanceToNext() {
-	pc.currentIndex = (pc.currentIndex + 1) % len(pc.sortedSCIDs)
-	scid := pc.sortedSCIDs[pc.currentIndex]
-	pc.remainingWeight = pc.priority[scid]
-}
-

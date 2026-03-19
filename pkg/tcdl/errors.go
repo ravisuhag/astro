@@ -52,8 +52,8 @@ var (
 	// ErrServiceNotFound aliases sdl.ErrServiceNotFound.
 	ErrServiceNotFound = sdl.ErrServiceNotFound
 
-	// ErrMasterChannelNotFound indicates the requested master channel was not found.
-	ErrMasterChannelNotFound = errors.New("master channel not found for specified SCID")
+	// ErrMasterChannelNotFound aliases sdl.ErrMasterChannelNotFound.
+	ErrMasterChannelNotFound = sdl.ErrMasterChannelNotFound
 
 	// ErrNoVirtualChannels aliases sdl.ErrNoChannels.
 	ErrNoVirtualChannels = sdl.ErrNoChannels
@@ -61,8 +61,8 @@ var (
 	// ErrVirtualChannelNotFound indicates no virtual channel exists for the given VCID.
 	ErrVirtualChannelNotFound = errors.New("virtual channel not found for specified VCID")
 
-	// ErrNoMasterChannels indicates no master channels are registered on the physical channel.
-	ErrNoMasterChannels = errors.New("no master channels registered")
+	// ErrNoMasterChannels aliases sdl.ErrNoMasterChannels.
+	ErrNoMasterChannels = sdl.ErrNoMasterChannels
 
 	// ErrNoPacketSizer indicates no PacketSizer has been set on the MAP Packet service.
 	ErrNoPacketSizer = errors.New("no PacketSizer configured: call SetPacketSizer before Receive")
