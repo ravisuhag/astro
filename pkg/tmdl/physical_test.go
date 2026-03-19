@@ -67,10 +67,10 @@ func TestPhysicalChannel_MCMultiplexing(t *testing.T) {
 	svc1 := tmdl.NewVirtualChannelPacketService(100, 1, vc1, config, nil)
 	svc2 := tmdl.NewVirtualChannelPacketService(200, 1, vc2, config, nil)
 
-	svc1.Send(makeTestPacket([]byte{0x01}))
-	svc1.Flush()
-	svc2.Send(makeTestPacket([]byte{0x02}))
-	svc2.Flush()
+	_ = svc1.Send(makeTestPacket([]byte{0x01}))
+	_ = svc1.Flush()
+	_ = svc2.Send(makeTestPacket([]byte{0x02}))
+	_ = svc2.Flush()
 
 	f1, err := pc.GetNextFrame()
 	if err != nil {
@@ -107,10 +107,10 @@ func TestPhysicalChannel_MCPriorityWeighting(t *testing.T) {
 	svc2 := tmdl.NewVirtualChannelPacketService(200, 1, vc2, config, nil)
 
 	for range 3 {
-		svc1.Send(makeTestPacket([]byte{0xAA}))
-		svc1.Flush()
-		svc2.Send(makeTestPacket([]byte{0xBB}))
-		svc2.Flush()
+		_ = svc1.Send(makeTestPacket([]byte{0xAA}))
+		_ = svc1.Flush()
+		_ = svc2.Send(makeTestPacket([]byte{0xBB}))
+		_ = svc2.Flush()
 	}
 
 	expected := []uint16{100, 100, 200, 100, 200, 200}
@@ -141,8 +141,8 @@ func TestPhysicalChannel_Demultiplex(t *testing.T) {
 
 	f1, _ := tmdl.NewTMTransferFrame(100, 1, []byte("for-sc100"), nil, nil)
 	f2, _ := tmdl.NewTMTransferFrame(200, 1, []byte("for-sc200"), nil, nil)
-	pc.AddFrame(f1)
-	pc.AddFrame(f2)
+	_ = pc.AddFrame(f1)
+	_ = pc.AddFrame(f2)
 
 	got1, _ := vc1.Next()
 	if string(got1.DataField) != "for-sc100" {
@@ -176,8 +176,8 @@ func TestPhysicalChannel_GetNextFrameOrIdle(t *testing.T) {
 	}
 
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
-	svc.Send(makeTestPacket([]byte{0x01}))
-	svc.Flush()
+	_ = svc.Send(makeTestPacket([]byte{0x01}))
+	_ = svc.Flush()
 
 	frame, _ = pc.GetNextFrameOrIdle()
 	if tmdl.IsIdleFrame(frame) {
@@ -203,7 +203,7 @@ func TestPhysicalChannel_HasPendingFrames(t *testing.T) {
 	if pc.HasPendingFrames() {
 		t.Error("Expected false")
 	}
-	vc.Add(&tmdl.TMTransferFrame{})
+	_ = vc.Add(&tmdl.TMTransferFrame{})
 	if !pc.HasPendingFrames() {
 		t.Error("Expected true")
 	}

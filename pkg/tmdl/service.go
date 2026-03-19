@@ -273,11 +273,11 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		fhp := frame.Header.FirstHeaderPtr
 		data := frame.DataField
 
-		switch {
-		case fhp == 0x07FF:
+		switch fhp {
+		case 0x07FF:
 			continue // idle
 
-		case fhp == 0x07FE:
+		case 0x07FE:
 			// Continuation only
 			if s.synced {
 				s.recvBuf = append(s.recvBuf, data...)

@@ -36,7 +36,7 @@ func TestFOP_WindowFull(t *testing.T) {
 	fop.Initialize(0)
 
 	for range 3 {
-		fop.TransmitFrame([]byte("frame"))
+		_ = fop.TransmitFrame([]byte("frame"))
 	}
 
 	err := fop.TransmitFrame([]byte("overflow"))
@@ -49,9 +49,9 @@ func TestFOP_ProcessCLCW_Acknowledgment(t *testing.T) {
 	fop := cop.NewFOP(42, 1, 10)
 	fop.Initialize(0)
 
-	fop.TransmitFrame([]byte("frame-0"))
-	fop.TransmitFrame([]byte("frame-1"))
-	fop.TransmitFrame([]byte("frame-2"))
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+	_ = fop.TransmitFrame([]byte("frame-2"))
 
 	if fop.PendingCount() != 3 {
 		t.Fatalf("PendingCount = %d, want 3", fop.PendingCount())
@@ -70,7 +70,7 @@ func TestFOP_ProcessCLCW_Acknowledgment(t *testing.T) {
 func TestFOP_ProcessCLCW_Lockout(t *testing.T) {
 	fop := cop.NewFOP(42, 1, 10)
 	fop.Initialize(0)
-	fop.TransmitFrame([]byte("frame"))
+	_ = fop.TransmitFrame([]byte("frame"))
 
 	clcw := &cop.CLCW{LockoutFlag: true}
 	err := fop.ProcessCLCW(clcw)
@@ -86,11 +86,11 @@ func TestFOP_ProcessCLCW_Retransmit(t *testing.T) {
 	fop := cop.NewFOP(42, 1, 10)
 	fop.Initialize(0)
 
-	fop.TransmitFrame([]byte("frame-0"))
-	fop.TransmitFrame([]byte("frame-1"))
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
 
 	clcw := &cop.CLCW{ReportValue: 0, RetransmitFlag: true}
-	fop.ProcessCLCW(clcw)
+	_ = fop.ProcessCLCW(clcw)
 
 	data, _, ok := fop.GetNextFrame()
 	if !ok {
@@ -107,7 +107,7 @@ func TestFOP_FARM_Integration(t *testing.T) {
 	fop.Initialize(0)
 
 	for i := range 3 {
-		fop.TransmitFrame([]byte{byte(i)})
+		_ = fop.TransmitFrame([]byte{byte(i)})
 	}
 
 	for i := range 3 {
@@ -122,7 +122,7 @@ func TestFOP_FARM_Integration(t *testing.T) {
 		t.Errorf("CLCW V(R) = %d, want 3", clcw.ReportValue)
 	}
 
-	fop.ProcessCLCW(clcw)
+	_ = fop.ProcessCLCW(clcw)
 	if fop.PendingCount() != 0 {
 		t.Errorf("PendingCount = %d, want 0", fop.PendingCount())
 	}

@@ -713,7 +713,7 @@ func TestCRCRoundTripAllPacketCombinations(t *testing.T) {
 	pkt, _ := spp2.NewTMPacket(300, []byte{0x07}, spp2.WithSecondaryHeader(sh), spp2.WithErrorControl())
 	encoded, _ = pkt.Encode()
 	decodeSH := &testSecondaryHeader{}
-	decoded, err = spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodeSH), spp2.WithDecodeErrorControl())
+	_, err = spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(decodeSH), spp2.WithDecodeErrorControl())
 	if err != nil {
 		t.Fatalf("TM+SH+CRC round-trip failed: %v", err)
 	}

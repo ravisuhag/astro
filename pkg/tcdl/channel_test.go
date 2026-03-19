@@ -29,7 +29,7 @@ func TestVirtualChannel_AddGetFrame(t *testing.T) {
 func TestVirtualChannel_BufferFull(t *testing.T) {
 	vc := tcdl.NewVirtualChannel(1, 1)
 	frame, _ := tcdl.NewTCTransferFrame(42, 1, []byte("a"))
-	vc.Add(frame)
+	_ = vc.Add(frame)
 	err := vc.Add(frame)
 	if !errors.Is(err, tcdl.ErrBufferFull) {
 		t.Errorf("expected ErrBufferFull, got %v", err)

@@ -14,8 +14,8 @@ func TestMultiplexer_RoundRobin(t *testing.T) {
 	mux.AddChannel(ch1, 1)
 	mux.AddChannel(ch2, 1)
 
-	ch1.Add("a")
-	ch2.Add("b")
+	_ = ch1.Add("a")
+	_ = ch2.Add("b")
 
 	got1, _ := mux.Next()
 	got2, _ := mux.Next()
@@ -35,8 +35,8 @@ func TestMultiplexer_WeightedPriority(t *testing.T) {
 	mux.AddChannel(ch2, 1)
 
 	for range 3 {
-		ch1.Add("hi")
-		ch2.Add("lo")
+		_ = ch1.Add("hi")
+		_ = ch2.Add("lo")
 	}
 
 	// Priority 2:1 → ch1, ch1, ch2, ch1, ch2, ...
@@ -75,7 +75,7 @@ func TestMultiplexer_HasPending(t *testing.T) {
 	if mux.HasPending() {
 		t.Error("expected false")
 	}
-	ch.Add("a")
+	_ = ch.Add("a")
 	if !mux.HasPending() {
 		t.Error("expected true")
 	}

@@ -226,7 +226,7 @@ func TestRS_Encode_DoesNotMutateInput(t *testing.T) {
 	saved := make([]byte, len(data))
 	copy(saved, data)
 
-	rs.Encode(data)
+	_, _ = rs.Encode(data)
 	if !bytes.Equal(data, saved) {
 		t.Error("Encode must not modify the input slice")
 	}

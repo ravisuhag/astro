@@ -22,8 +22,8 @@ func TestPhysicalChannel_MCMultiplexing(t *testing.T) {
 
 	f1, _ := tcdl.NewTCTransferFrame(100, 1, []byte("sc100"))
 	f2, _ := tcdl.NewTCTransferFrame(200, 1, []byte("sc200"))
-	vc1.Add(f1)
-	vc2.Add(f2)
+	_ = vc1.Add(f1)
+	_ = vc2.Add(f2)
 
 	got1, _ := pc.GetNextFrame()
 	if got1.Header.SpacecraftID != 100 {

@@ -137,7 +137,7 @@ func main() {
 			fmt.Printf("  ERROR sending packet %d: %v\n", i, err)
 		}
 	}
-	vcp.Flush()
+	_ = vcp.Flush()
 
 	// Wrap all frames as CADUs with RS encoding and push through the noisy link.
 	var receivedCADUs [][]byte

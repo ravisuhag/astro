@@ -29,7 +29,7 @@ func TestFARM_TypeA_InSequence(t *testing.T) {
 
 func TestFARM_TypeA_OutOfSequence_Retransmit(t *testing.T) {
 	farm := cop.NewFARM(1, 10)
-	farm.ProcessFrame(0, 0, 0)
+	_, _ = farm.ProcessFrame(0, 0, 0)
 
 	accepted, err := farm.ProcessFrame(0, 0, 2)
 	if accepted {
@@ -50,7 +50,7 @@ func TestFARM_TypeA_OutOfSequence_Retransmit(t *testing.T) {
 
 func TestFARM_TypeA_OutsideWindow_Lockout(t *testing.T) {
 	farm := cop.NewFARM(1, 10)
-	farm.ProcessFrame(0, 0, 0)
+	_, _ = farm.ProcessFrame(0, 0, 0)
 
 	accepted, err := farm.ProcessFrame(0, 0, 100)
 	if accepted {
@@ -86,8 +86,8 @@ func TestFARM_TypeB_AlwaysAccepted(t *testing.T) {
 func TestFARM_ControlCommand_Unlock(t *testing.T) {
 	farm := cop.NewFARM(1, 10)
 
-	farm.ProcessFrame(0, 0, 0)
-	farm.ProcessFrame(0, 0, 100) // lockout
+	_, _ = farm.ProcessFrame(0, 0, 0)
+	_, _ = farm.ProcessFrame(0, 0, 100) // lockout
 
 	accepted, _ := farm.ProcessFrame(0, 1, 5)
 	if !accepted {
@@ -103,7 +103,7 @@ func TestFARM_ControlCommand_Unlock(t *testing.T) {
 
 func TestFARM_GenerateCLCW(t *testing.T) {
 	farm := cop.NewFARM(7, 10)
-	farm.ProcessFrame(0, 0, 0)
+	_, _ = farm.ProcessFrame(0, 0, 0)
 
 	clcw := farm.GenerateCLCW()
 	if clcw.VirtualChannelID != 7 {
@@ -118,7 +118,7 @@ func TestFARM_GenerateCLCW(t *testing.T) {
 
 	encoded, _ := clcw.Encode()
 	var decoded cop.CLCW
-	decoded.Decode(encoded)
+	_ = decoded.Decode(encoded)
 	if decoded.ReportValue != 1 {
 		t.Errorf("decoded V(R) = %d, want 1", decoded.ReportValue)
 	}

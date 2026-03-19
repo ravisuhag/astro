@@ -53,9 +53,9 @@ type housekeepingTelemetry struct {
 
 func (hk housekeepingTelemetry) encode() []byte {
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, hk.Timestamp)
-	binary.Write(buf, binary.BigEndian, hk.BatteryV)
-	binary.Write(buf, binary.BigEndian, hk.TempC)
+	_ = binary.Write(buf, binary.BigEndian, hk.Timestamp)
+	_ = binary.Write(buf, binary.BigEndian, hk.BatteryV)
+	_ = binary.Write(buf, binary.BigEndian, hk.TempC)
 	buf.WriteByte(hk.CPUPercent)
 	buf.WriteByte(hk.MemPercent)
 	buf.WriteByte(hk.ModeFlag)
@@ -68,9 +68,9 @@ func decodeHousekeeping(data []byte) (housekeepingTelemetry, error) {
 	}
 	r := bytes.NewReader(data)
 	var hk housekeepingTelemetry
-	binary.Read(r, binary.BigEndian, &hk.Timestamp)
-	binary.Read(r, binary.BigEndian, &hk.BatteryV)
-	binary.Read(r, binary.BigEndian, &hk.TempC)
+	_ = binary.Read(r, binary.BigEndian, &hk.Timestamp)
+	_ = binary.Read(r, binary.BigEndian, &hk.BatteryV)
+	_ = binary.Read(r, binary.BigEndian, &hk.TempC)
 	hk.CPUPercent, _ = r.ReadByte()
 	hk.MemPercent, _ = r.ReadByte()
 	hk.ModeFlag, _ = r.ReadByte()
@@ -183,7 +183,7 @@ func main() {
 		sciData := new(bytes.Buffer)
 		for s := 0; s < 100; s++ {
 			val := float32(math.Sin(float64(s)*0.1 + float64(i)))
-			binary.Write(sciData, binary.BigEndian, val)
+			_ = binary.Write(sciData, binary.BigEndian, val)
 		}
 
 		pkt, err := spp.NewTMPacket(apidScience, sciData.Bytes(),

@@ -171,13 +171,3 @@ func IsControlFrame(frame *TCTransferFrame) bool {
 func IsBypass(frame *TCTransferFrame) bool {
 	return frame.Header.BypassFlag == 1
 }
-
-// recomputeCRC re-encodes the frame (without FEC) and updates FrameErrorControl.
-func recomputeCRC(frame *TCTransferFrame) error {
-	encoded, err := frame.EncodeWithoutFEC()
-	if err != nil {
-		return err
-	}
-	frame.FrameErrorControl = crc.ComputeCRC16(encoded)
-	return nil
-}

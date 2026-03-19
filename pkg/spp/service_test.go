@@ -358,10 +358,10 @@ func TestServiceWithBoundaryAPIDs(t *testing.T) {
 
 	// Verify independent sequence counting for both
 	for range 3 {
-		svc.SendBytes(0, []byte{0x01})
+		_ = svc.SendBytes(0, []byte{0x01})
 	}
 	for range 2 {
-		svc.SendBytes(2047, []byte{0x02})
+		_ = svc.SendBytes(2047, []byte{0x02})
 	}
 
 	for i := 1; i <= 3; i++ {

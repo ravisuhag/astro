@@ -62,7 +62,7 @@ func TestCLCW_AllFlags(t *testing.T) {
 	}
 	encoded, _ := clcw.Encode()
 	var decoded cop.CLCW
-	decoded.Decode(encoded)
+	_ = decoded.Decode(encoded)
 
 	if !decoded.NoRFAvailableFlag {
 		t.Error("NoRF should be true")
@@ -103,7 +103,7 @@ func TestCLCW_RoundTrip_Zero(t *testing.T) {
 	clcw := cop.CLCW{ReportValue: 0}
 	encoded, _ := clcw.Encode()
 	var decoded cop.CLCW
-	decoded.Decode(encoded)
+	_ = decoded.Decode(encoded)
 	if decoded.ReportValue != 0 {
 		t.Errorf("ReportValue = %d, want 0", decoded.ReportValue)
 	}

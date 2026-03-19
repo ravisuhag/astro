@@ -29,9 +29,9 @@ func TestChannel_AddNext(t *testing.T) {
 
 func TestChannel_FIFO(t *testing.T) {
 	ch := sdl.NewChannel[int](1, 10)
-	ch.Add(1)
-	ch.Add(2)
-	ch.Add(3)
+	_ = ch.Add(1)
+	_ = ch.Add(2)
+	_ = ch.Add(3)
 
 	for _, want := range []int{1, 2, 3} {
 		got, _ := ch.Next()
@@ -43,7 +43,7 @@ func TestChannel_FIFO(t *testing.T) {
 
 func TestChannel_BufferFull(t *testing.T) {
 	ch := sdl.NewChannel[string](1, 1)
-	ch.Add("a")
+	_ = ch.Add("a")
 	err := ch.Add("b")
 	if !errors.Is(err, sdl.ErrBufferFull) {
 		t.Errorf("expected ErrBufferFull, got %v", err)
@@ -63,7 +63,7 @@ func TestChannel_HasFrames(t *testing.T) {
 	if ch.HasFrames() {
 		t.Error("expected false")
 	}
-	ch.Add("a")
+	_ = ch.Add("a")
 	if !ch.HasFrames() {
 		t.Error("expected true")
 	}
