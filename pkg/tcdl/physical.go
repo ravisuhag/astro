@@ -5,7 +5,7 @@ import "github.com/ravisuhag/astro/pkg/sdl"
 // PhysicalChannel represents a single TC uplink physical communication link.
 // It handles MC-level multiplexing (send path) and demultiplexing (receive path)
 // per CCSDS 232.0-B-4. For sync-layer operations (CLTU, BCH), use a
-// separate tcsc package when available.
+// separate tcsc package.
 type PhysicalChannel struct {
 	Name           string
 	mux            *sdl.MCMultiplexer[*TCTransferFrame]

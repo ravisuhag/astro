@@ -1,0 +1,201 @@
+# TC Synchronization and Channel Coding (TCSC)
+
+The `tcsc` package implements the CCSDS 231.0-B-4 TC Synchronization and Channel Coding sublayer — the layer between the TC Data Link Protocol and the physical link that handles CLTU framing, BCH error correction, and pseudo-randomization for telecommand uplink.
+
+## Quick Start
+
+```go
+import "github.com/ravisuhag/astro/pkg/tcsc"
+
+// Wrap a TC Transfer Frame into a CLTU for transmission
+cltu, err := tcsc.WrapCLTU(encodedFrame, nil, nil, true) // nil=defaults, true=randomize
+
+// Unwrap a received CLTU back into a TC Transfer Frame
+frameData, corrected, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
+
+// BCH encode/decode individual codeblocks
+cb := tcsc.BCHEncode(infoBytes)
+info, corrections, err := tcsc.BCHDecode(cb)
+```
+
+## Architecture
+
+The TCSC sublayer sits between the TC Data Link Protocol (`tcdl`) and the physical layer:
+
+```
++-----------------------------------------+
+|  TC Space Data Link Protocol (tcdl)     |
+|  Packs commands into Transfer Frames    |
++-----------------------------------------+
+|  TC Sync & Channel Coding (tcsc)        |  <-- This package
+|  CLTU, BCH encoding, randomization      |
++-----------------------------------------+
+|  Physical Layer (RF uplink)             |
++-----------------------------------------+
+```
+
+## Command Link Transmission Unit (CLTU)
+
+A **CLTU** is the unit transmitted over the physical uplink. It consists of a start sequence, one or more BCH-encoded codeblocks, and a tail sequence.
+
+```
++-----------------+-------------+-----+-------------+-----------------+
+| Start Sequence  | Codeblock 1 | ... | Codeblock N | Tail Sequence   |
+| (2 bytes: EB90) | (8 bytes)   |     | (8 bytes)   | (8 bytes)       |
++-----------------+-------------+-----+-------------+-----------------+
+|<------------------------- CLTU ---------------------------------->|
+```
+
+### Start and Tail Sequences
+
+```go
+// Standard CCSDS start sequence (0xEB90)
+start := tcsc.DefaultStartSequence()
+
+// Standard CCSDS tail sequence (0xC5C5C5C5C5C5C579)
+tail := tcsc.DefaultTailSequence()
+```
+
+The start sequence marks the beginning of a CLTU in the bitstream. The tail sequence marks the end and allows the decoder to detect the final codeblock boundary. Fresh copies are returned each call to prevent accidental mutation.
+
+### Wrapping (Send Path)
+
+```go
+// Wrap with default sequences and pseudo-randomization
+cltu, err := tcsc.WrapCLTU(encodedFrame, nil, nil, true)
+
+// Wrap with default sequences, no randomization
+cltu, err := tcsc.WrapCLTU(encodedFrame, nil, nil, false)
+
+// Wrap with custom sequences
+customStart := []byte{0xDE, 0xAD}
+customTail := []byte{0xBE, 0xEF, 0xBE, 0xEF, 0xBE, 0xEF, 0xBE, 0xEF}
+cltu, err := tcsc.WrapCLTU(encodedFrame, customStart, customTail, true)
+```
+
+**Wrapping process:**
+1. Optionally pseudo-randomize the frame data
+2. Pad to a multiple of 7 bytes (fill pattern: `0x55`)
+3. BCH-encode each 7-byte block into an 8-byte codeblock
+4. Prepend start sequence, append tail sequence
+
+### Unwrapping (Receive Path)
+
+```go
+// Unwrap with default sequences and de-randomization
+frameData, corrections, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
+if errors.Is(err, tcsc.ErrStartSequenceMismatch) {
+    // Start sequence not found
+}
+if errors.Is(err, tcsc.ErrUncorrectable) {
+    // More than 1 bit error in a codeblock
+}
+fmt.Printf("Corrected %d bit errors\n", corrections)
+```
+
+**Note:** The caller must know the original data length to strip any padding, as the fill pattern is not self-describing.
+
+## BCH(63,56) Error Correction
+
+Each codeblock uses a BCH code that encodes 56 information bits (7 bytes) into 64 bits (8 bytes):
+
+```
++-------------------+----------------+--------+
+| Information Bits  | Parity Bits    | Filler |
+| (56 bits, 7 B)    | (7 bits)       | (1 bit)|
++-------------------+----------------+--------+
+|<------------- Codeblock (64 bits, 8 B) ---->|
+```
+
+- **Generator polynomial:** g(x) = x^7 + x^6 + x^2 + 1
+- **Error correction:** 1 bit error per codeblock
+- **Error detection:** Up to 3 bit errors per codeblock
+- **Filler bit:** Complement of the last parity bit (prevents all-zero codeblocks)
+
+### Direct BCH Usage
+
+```go
+// Encode 7 information bytes into an 8-byte codeblock
+info := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
+cb := tcsc.BCHEncode(info) // Returns [8]byte
+
+// Decode an 8-byte codeblock, correcting up to 1 bit error
+decoded, corrections, err := tcsc.BCHDecode(cb)
+if errors.Is(err, tcsc.ErrUncorrectable) {
+    // More than 1 bit error
+}
+```
+
+## Pseudo-Randomization
+
+CCSDS pseudo-randomization ensures good signal properties by preventing long runs of identical bits. The TC Transfer Frame bytes are XORed with a pseudo-random noise (PN) sequence before BCH encoding.
+
+```go
+// Randomize data (XOR with PN sequence)
+randomized := tcsc.Randomize(data)
+
+// De-randomize (same operation — XOR is self-inverse)
+original := tcsc.Randomize(randomized)
+```
+
+The PN sequence is generated by an 8-bit LFSR with polynomial `h(x) = x^8 + x^7 + x^5 + x^3 + 1`, initialized to all 1s (`0xFF`) — the same sequence used in TM synchronization.
+
+```go
+// Generate PN sequence of arbitrary length
+pnSeq := tcsc.GeneratePNSequence(256)
+```
+
+## Full Pipeline Example
+
+### Send Path (Ground to Spacecraft)
+
+```go
+import (
+    "github.com/ravisuhag/astro/pkg/tcdl"
+    "github.com/ravisuhag/astro/pkg/tcsc"
+)
+
+// 1. Get a TC Transfer Frame from the TC Data Link layer
+frame, _ := pc.GetNextFrame()
+encoded, _ := frame.Encode()
+
+// 2. Wrap as CLTU — randomize, BCH-encode, add framing
+cltu, _ := tcsc.WrapCLTU(encoded, nil, nil, true)
+
+// 3. Transmit CLTU over the physical uplink
+transmit(cltu)
+```
+
+### Receive Path (Spacecraft)
+
+```go
+// 1. Receive CLTU from physical link
+cltu := receive()
+
+// 2. Unwrap CLTU — validate framing, BCH-decode, de-randomize
+frameData, corrections, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
+if err != nil { /* handle errors */ }
+
+// 3. Decode the TC Transfer Frame
+frame, err := tcdl.DecodeTCTransferFrame(frameData)
+if err != nil { /* handle CRC errors */ }
+```
+
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|-------|---------|
+| `ErrDataTooShort` | CLTU too short to contain start sequence, codeblock, and tail |
+| `ErrStartSequenceMismatch` | CLTU does not start with the expected start sequence |
+| `ErrTailSequenceMismatch` | CLTU does not end with the expected tail sequence |
+| `ErrInvalidCLTULength` | CLTU body is not a multiple of the codeblock size (8 bytes) |
+| `ErrUncorrectable` | Codeblock has more than 1 bit error (exceeds BCH capability) |
+| `ErrEmptyData` | Empty data provided for encoding |
+
+## Reference
+
+- [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) — TC Synchronization and Channel Coding Blue Book
+- [CCSDS 230.2-G-1](https://public.ccsds.org/Pubs/230x2g1.pdf) — TC Synchronization and Channel Coding Summary (Green Book)
+- [`tcdl` package](tcdl.md) — TC Space Data Link Protocol

@@ -41,7 +41,7 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 +-----------------------------------------+
 ```
 
-> **Note:** The sync and channel coding layer (CLTU, BCH encoding) is handled by a separate `tcsc` package when available.
+> **Note:** The sync and channel coding layer (CLTU, BCH encoding) is handled by the [`tcsc` package](tcsc.md).
 
 ## Transfer Frames
 

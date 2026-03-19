@@ -62,7 +62,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/tmsc.md) \| [PICS](docs/pics/tmsc-pics.md) |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | | |
 | Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | | |
-| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | | |
+| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/tcsc.md) \| [PICS](docs/pics/tcsc-pics.md) |
 | **Space Link Extension** | | | |
 | SLE Return All Frames | [CCSDS 911.1-B-4](https://public.ccsds.org/Pubs/911x1b4.pdf) | | |
 | SLE Return Channel Frames | [CCSDS 911.2-B-3](https://public.ccsds.org/Pubs/911x2b3.pdf) | | |
