@@ -408,49 +408,6 @@ func TestNewSpacePacketC2NoSecondaryHeaderNoData(t *testing.T) {
 	}
 }
 
-// --- CRC-16-CCITT Known Test Vectors ---
-
-// TestCRC16_CCITT_KnownVectors verifies the CRC-16-CCITT implementation
-// against known test vectors. The standard "123456789" string should produce
-// CRC 0x29B1 with polynomial 0x1021 and initial value 0xFFFF.
-func TestCRC16_CCITT_KnownVectors(t *testing.T) {
-	tests := []struct {
-		name string
-		data []byte
-		want uint16
-	}{
-		{
-			name: "standard ASCII 123456789",
-			data: []byte("123456789"),
-			want: 0x29B1,
-		},
-		{
-			name: "empty input",
-			data: []byte{},
-			want: 0xFFFF,
-		},
-		{
-			name: "single zero byte",
-			data: []byte{0x00},
-			want: 0xE1F0,
-		},
-		{
-			name: "single 0xFF byte",
-			data: []byte{0xFF},
-			want: 0xFF00,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := spp2.ComputeCRC(tt.data)
-			if got != tt.want {
-				t.Errorf("ComputeCRC(%x) = 0x%04X, want 0x%04X", tt.data, got, tt.want)
-			}
-		})
-	}
-}
-
 // --- Idle Packet Detection ---
 
 func TestIsIdle(t *testing.T) {

@@ -19,6 +19,7 @@ import (
 
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tmdl"
+	"github.com/ravisuhag/astro/pkg/tmsc"
 )
 
 const (
@@ -95,7 +96,7 @@ func main() {
 
 	counter := tmdl.NewFrameCounter()
 	vcp := tmdl.NewVirtualChannelPacketService(spacecraftID, vcid, vc, config, counter)
-	vcp.SetPacketSizer(tmdl.SpacePacketSizer)
+	vcp.SetPacketSizer(spp.PacketSizer)
 
 	// Create 20 telemetry packets of varying sizes.
 	// Some will span multiple frames, making them vulnerable to frame loss.
@@ -132,7 +133,8 @@ func main() {
 	totalFrames := 0
 	for scPhysical.HasPendingFrames() {
 		frame, _ := scPhysical.GetNextFrame()
-		cadu, _ := scPhysical.Wrap(frame)
+		encoded, _ := frame.Encode()
+		cadu := tmsc.WrapCADU(encoded, nil, false)
 		totalFrames++
 
 		if arrived, ok := link.transmit(cadu); ok {
@@ -163,7 +165,7 @@ func main() {
 
 	gsCounter := tmdl.NewFrameCounter()
 	gsVCP := tmdl.NewVirtualChannelPacketService(spacecraftID, vcid, gsVC, config, gsCounter)
-	gsVCP.SetPacketSizer(tmdl.SpacePacketSizer)
+	gsVCP.SetPacketSizer(spp.PacketSizer)
 
 	gapDetector := tmdl.NewFrameGapDetector()
 
@@ -173,9 +175,14 @@ func main() {
 	vcGapsTotal := 0
 
 	for _, cadu := range receivedCADUs {
-		// Unwrap: strips ASM, de-randomizes, verifies CRC.
+		// Unwrap: strip ASM (CCSDS 131.0-B-4), then decode frame.
 		// Corrupted frames fail CRC and are rejected here.
-		frame, err := gsPhysical.Unwrap(cadu)
+		frameData, err := tmsc.UnwrapCADU(cadu, nil, false)
+		if err != nil {
+			crcRejects++
+			continue
+		}
+		frame, err := tmdl.DecodeTMTransferFrame(frameData)
 		if err != nil {
 			crcRejects++
 			continue

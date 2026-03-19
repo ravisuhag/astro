@@ -1,17 +1,9 @@
 package tmdl
 
 import (
-	"bytes"
 	"errors"
 	"slices"
 )
-
-// DefaultASM returns the standard CCSDS Attached Sync Marker (0x1ACFFC1D)
-// used to identify the start of each Transfer Frame in the bitstream.
-// A fresh copy is returned each call to prevent accidental mutation.
-func DefaultASM() []byte {
-	return []byte{0x1A, 0xCF, 0xFC, 0x1D}
-}
 
 // ChannelConfig defines the fixed parameters of a physical channel
 // per CCSDS 132.0-B-3. All frames on a physical channel share the
@@ -43,12 +35,11 @@ func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
 
 // PhysicalChannel represents a single physical communication link
 // that carries one or more Master Channels. It handles MC-level
-// multiplexing (send path), demultiplexing (receive path), and
-// physical-layer framing (ASM, randomization) per CCSDS 132.0-B-3.
+// multiplexing (send path) and demultiplexing (receive path)
+// per CCSDS 132.0-B-3. For sync-layer operations (ASM, randomization,
+// CADU wrapping), use the tmsc package (CCSDS 131.0-B-4).
 type PhysicalChannel struct {
-	Name            string        // Channel identifier (TM-68)
-	ASM             []byte        // Attached Sync Marker; nil uses DefaultASM
-	Randomize       bool          // Whether to apply CCSDS pseudo-randomization
+	Name            string // Channel identifier (e.g., "X-band")
 	config          ChannelConfig
 	masterChannels  map[uint16]*MasterChannel
 	priority        map[uint16]int
@@ -138,49 +129,6 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	return NewIdleFrame(scid, 7, pc.config)
 }
 
-// Wrap produces a Channel Access Data Unit (CADU) from a TM Transfer Frame.
-// It encodes the frame, optionally applies CCSDS pseudo-randomization,
-// and prepends the Attached Sync Marker per CCSDS 132.0-B-3 §4.2.7.
-func (pc *PhysicalChannel) Wrap(frame *TMTransferFrame) ([]byte, error) {
-	encoded, err := frame.Encode()
-	if err != nil {
-		return nil, err
-	}
-	if pc.Randomize {
-		pn := generatePNSequence(len(encoded))
-		for i := range encoded {
-			encoded[i] ^= pn[i]
-		}
-	}
-	asm := pc.asm()
-	cadu := make([]byte, len(asm)+len(encoded))
-	copy(cadu, asm)
-	copy(cadu[len(asm):], encoded)
-	return cadu, nil
-}
-
-// Unwrap extracts a TM Transfer Frame from a Channel Access Data Unit.
-// It validates and strips the ASM, optionally de-randomizes, and decodes
-// the frame per CCSDS 132.0-B-3 §4.3.7.
-func (pc *PhysicalChannel) Unwrap(cadu []byte) (*TMTransferFrame, error) {
-	asm := pc.asm()
-	if len(cadu) < len(asm) {
-		return nil, ErrDataTooShort
-	}
-	if !bytes.Equal(cadu[:len(asm)], asm) {
-		return nil, ErrSyncMarkerMismatch
-	}
-	data := make([]byte, len(cadu)-len(asm))
-	copy(data, cadu[len(asm):])
-	if pc.Randomize {
-		pn := generatePNSequence(len(data))
-		for i := range data {
-			data[i] ^= pn[i]
-		}
-	}
-	return DecodeTMTransferFrame(data)
-}
-
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel
 // based on the Spacecraft ID in the frame header.
 func (pc *PhysicalChannel) AddFrame(frame *TMTransferFrame) error {
@@ -206,35 +154,9 @@ func (pc *PhysicalChannel) Len() int {
 	return len(pc.masterChannels)
 }
 
-func (pc *PhysicalChannel) asm() []byte {
-	if pc.ASM != nil {
-		return pc.ASM
-	}
-	return DefaultASM()
-}
-
 func (pc *PhysicalChannel) advanceToNext() {
 	pc.currentIndex = (pc.currentIndex + 1) % len(pc.sortedSCIDs)
 	scid := pc.sortedSCIDs[pc.currentIndex]
 	pc.remainingWeight = pc.priority[scid]
 }
 
-// generatePNSequence produces the CCSDS pseudo-random sequence using an
-// 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1,
-// initialized to all 1s per CCSDS 131.0-B.
-func generatePNSequence(length int) []byte {
-	seq := make([]byte, length)
-	reg := uint8(0xFF)
-	for i := range length {
-		var b uint8
-		for bit := 7; bit >= 0; bit-- {
-			output := (reg >> 7) & 1
-			b |= output << uint(bit)
-			// Taps: x^8(bit7), x^7(bit6), x^5(bit4), x^3(bit2)
-			feedback := ((reg >> 7) ^ (reg >> 6) ^ (reg >> 4) ^ (reg >> 2)) & 1
-			reg = ((reg << 1) | feedback) & 0xFF
-		}
-		seq[i] = b
-	}
-	return seq
-}

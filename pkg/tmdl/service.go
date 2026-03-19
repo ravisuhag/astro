@@ -1,7 +1,6 @@
 package tmdl
 
 import (
-	"encoding/binary"
 	"errors"
 	"sync"
 )
@@ -26,17 +25,6 @@ const (
 // at data[0], or -1 if the data is too short to determine length.
 // Used by VCP Receive() to find packet boundaries within frame data.
 type PacketSizer func(data []byte) int
-
-// SpacePacketSizer implements PacketSizer for CCSDS Space Packets.
-// It reads the Packet Data Length field (bytes 4-5) and returns
-// total packet length: 6 (header) + PacketDataLength + 1.
-func SpacePacketSizer(data []byte) int {
-	if len(data) < 6 {
-		return -1
-	}
-	dataLen := int(binary.BigEndian.Uint16(data[4:6]))
-	return 7 + dataLen
-}
 
 // FrameCounter manages 8-bit MC and VC frame counts per CCSDS 132.0-B-3.
 // Share a single FrameCounter across all services for the same spacecraft
@@ -87,15 +75,14 @@ func isIdleFill(data []byte) bool {
 // VirtualChannelPacketService implements the VCP service.
 // When ChannelConfig is set, packets are packed into fixed-length frames
 // using native CCSDS FirstHeaderPtr for boundary detection, with FHP-based
-// resync on frame loss. Packet boundaries are determined using a PacketSizer
-// (default: SpacePacketSizer for CCSDS Space Packets).
+// resync on frame loss. A PacketSizer must be set via SetPacketSizer
+// before calling Receive (e.g., spp.PacketSizer for CCSDS Space Packets).
 type VirtualChannelPacketService struct {
-	scid      uint16
-	vcid      uint8
-	config    ChannelConfig
-	counter   *FrameCounter
-	vc        *VirtualChannel
-	validPVNs []uint8
+	scid    uint16
+	vcid    uint8
+	config  ChannelConfig
+	counter *FrameCounter
+	vc      *VirtualChannel
 
 	// Send-side buffer for multi-packet packing
 	sendBuf       []byte
@@ -119,22 +106,11 @@ func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel,
 	}
 }
 
-// SetValidPVNs configures the set of valid Packet Version Numbers.
-func (s *VirtualChannelPacketService) SetValidPVNs(pvns ...uint8) {
-	s.validPVNs = pvns
-}
-
-// SetPacketSizer configures a custom PacketSizer for Receive().
-// If not set, SpacePacketSizer is used by default.
+// SetPacketSizer configures the PacketSizer used by Receive() to detect
+// packet boundaries. Must be set before calling Receive() when
+// ChannelConfig is set (e.g., pass spp.PacketSizer for Space Packets).
 func (s *VirtualChannelPacketService) SetPacketSizer(sizer PacketSizer) {
 	s.sizer = sizer
-}
-
-func (s *VirtualChannelPacketService) packetSizer() PacketSizer {
-	if s.sizer != nil {
-		return s.sizer
-	}
-	return SpacePacketSizer
 }
 
 // Send appends packet data to the send buffer and generates full frames.
@@ -145,20 +121,6 @@ func (s *VirtualChannelPacketService) packetSizer() PacketSizer {
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
-	}
-
-	if len(s.validPVNs) > 0 {
-		pvn := data[0] >> 5
-		valid := false
-		for _, v := range s.validPVNs {
-			if pvn == v {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return ErrInvalidPVN
-		}
 	}
 
 	if s.config.FrameLength == 0 {
@@ -271,7 +233,10 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		return frame.DataField, nil
 	}
 
-	sizer := s.packetSizer()
+	if s.sizer == nil {
+		return nil, ErrNoPacketSizer
+	}
+	sizer := s.sizer
 	if s.gapDetector == nil {
 		s.gapDetector = NewFrameGapDetector()
 	}

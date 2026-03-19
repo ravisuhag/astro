@@ -1,8 +1,11 @@
 package spp
 
 import (
+	"encoding/binary"
 	"strconv"
 	"strings"
+
+	"github.com/ravisuhag/astro/pkg/crc"
 )
 
 /*
@@ -182,7 +185,7 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 	packetData = append(packetData, sp.UserData...)
 
 	if sp.ErrorControl != nil {
-		crc := ComputeCRC(packetData)
+		crc := crc.ComputeCRC16(packetData)
 		*sp.ErrorControl = crc
 		packetData = append(packetData, byte(crc>>8), byte(crc&0xFF))
 	}
@@ -261,7 +264,7 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 		}
 		// Verify CRC over everything before the error control field
 		crcOffset := PrimaryHeaderSize + dataFieldSize - 2
-		expected := ComputeCRC(data[:crcOffset])
+		expected := crc.ComputeCRC16(data[:crcOffset])
 		actual := uint16(data[crcOffset])<<8 | uint16(data[crcOffset+1])
 		if actual != expected {
 			return nil, ErrCRCValidationFailed
@@ -355,19 +358,14 @@ func (sp *SpacePacket) IsIdle() bool {
 	return sp.PrimaryHeader.APID == 0x7FF
 }
 
-// ComputeCRC computes the CRC-16-CCITT checksum per CCSDS specification.
-// Uses polynomial 0x1021 with initial value 0xFFFF.
-func ComputeCRC(data []byte) uint16 {
-	crc := uint16(0xFFFF)
-	for _, b := range data {
-		crc ^= uint16(b) << 8
-		for range 8 {
-			if crc&0x8000 != 0 {
-				crc = (crc << 1) ^ 0x1021
-			} else {
-				crc <<= 1
-			}
-		}
+// PacketSizer returns the total length in bytes of the Space Packet starting
+// at data[0], or -1 if the data is too short to determine length.
+// It reads the Packet Data Length field (bytes 4-5) and returns
+// total packet length: 6 (primary header) + PacketDataLength + 1.
+func PacketSizer(data []byte) int {
+	if len(data) < PrimaryHeaderSize {
+		return -1
 	}
-	return crc
+	dataLen := int(binary.BigEndian.Uint16(data[4:6]))
+	return PrimaryHeaderSize + 1 + dataLen
 }

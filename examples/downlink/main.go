@@ -29,6 +29,7 @@ import (
 
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tmdl"
+	"github.com/ravisuhag/astro/pkg/tmsc"
 )
 
 const (
@@ -134,10 +135,10 @@ func main() {
 	// Create VCP (Virtual Channel Packet) services for each VC.
 	// VCP multiplexes variable-length Space Packets into fixed-length frames.
 	vpcHK := tmdl.NewVirtualChannelPacketService(spacecraftID, vcidHK, vcHK, config, counter)
-	vpcHK.SetPacketSizer(tmdl.SpacePacketSizer)
+	vpcHK.SetPacketSizer(spp.PacketSizer)
 
 	vpcSci := tmdl.NewVirtualChannelPacketService(spacecraftID, vcidScience, vcSci, config, counter)
-	vpcSci.SetPacketSizer(tmdl.SpacePacketSizer)
+	vpcSci.SetPacketSizer(spp.PacketSizer)
 
 	// Generate and send housekeeping telemetry packets.
 	now := uint32(time.Now().Unix())
@@ -216,16 +217,17 @@ func main() {
 			log.Fatalf("Failed to get frame: %v", err)
 		}
 
-		// Wrap the frame: prepend ASM and apply pseudo-randomization.
-		cadu, err := scPhysical.Wrap(frame)
+		// Wrap the frame as CADU: prepend ASM (CCSDS 131.0-B-4).
+		encoded, err := frame.Encode()
 		if err != nil {
-			log.Fatalf("Failed to wrap frame as CADU: %v", err)
+			log.Fatalf("Failed to encode frame: %v", err)
 		}
+		cadu := tmsc.WrapCADU(encoded, nil, false)
 
 		link.transmit(cadu)
 		caduCount++
 	}
-	fmt.Printf("\nTransmitted %d CADUs over RF link (%d bytes each)\n", caduCount, len(tmdl.DefaultASM())+frameLength)
+	fmt.Printf("\nTransmitted %d CADUs over RF link (%d bytes each)\n", caduCount, len(tmsc.DefaultASM())+frameLength)
 
 	// =====================================================================
 	// GROUND STATION SIDE
@@ -249,10 +251,10 @@ func main() {
 	// Create VCP services for packet extraction on the ground side.
 	gsCounter := tmdl.NewFrameCounter()
 	gsVpcHK := tmdl.NewVirtualChannelPacketService(spacecraftID, vcidHK, gsVcHK, config, gsCounter)
-	gsVpcHK.SetPacketSizer(tmdl.SpacePacketSizer)
+	gsVpcHK.SetPacketSizer(spp.PacketSizer)
 
 	gsVpcSci := tmdl.NewVirtualChannelPacketService(spacecraftID, vcidScience, gsVcSci, config, gsCounter)
-	gsVpcSci.SetPacketSizer(tmdl.SpacePacketSizer)
+	gsVpcSci.SetPacketSizer(spp.PacketSizer)
 
 	// Receive CADUs, unwrap, and route to virtual channels.
 	receivedFrames := 0
@@ -262,10 +264,15 @@ func main() {
 			break
 		}
 
-		// Unwrap CADU: strip ASM, de-randomize, verify CRC.
-		frame, err := gsPhysical.Unwrap(cadu)
+		// Unwrap CADU: strip ASM (CCSDS 131.0-B-4), then decode frame.
+		frameData, err := tmsc.UnwrapCADU(cadu, nil, false)
 		if err != nil {
 			log.Printf("Warning: failed to unwrap CADU: %v", err)
+			continue
+		}
+		frame, err := tmdl.DecodeTMTransferFrame(frameData)
+		if err != nil {
+			log.Printf("Warning: failed to decode frame: %v", err)
 			continue
 		}
 

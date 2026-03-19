@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	ccsdscrc "github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/tmdl"
 )
 
@@ -101,7 +102,7 @@ func TestFrameDecoding(t *testing.T) {
 		'T', 'e', 'l', 'e', 'm', 'e', 't', 'r', 'y', ' ', 'D', 'a', 't', 'a', // Data
 	}
 
-	crc := tmdl.ComputeCRC(encodedFrame)
+	crc := ccsdscrc.ComputeCRC16(encodedFrame)
 	crcBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(crcBytes, crc)
 	encodedFrame = append(encodedFrame, crcBytes...)
@@ -119,10 +120,10 @@ func TestFrameDecoding(t *testing.T) {
 
 func TestCRCValidation(t *testing.T) {
 	data := []byte("Test Data")
-	expectedCRC := tmdl.ComputeCRC(data)
+	expectedCRC := ccsdscrc.ComputeCRC16(data)
 
 	modifiedData := append(data, 0x01)
-	modifiedCRC := tmdl.ComputeCRC(modifiedData)
+	modifiedCRC := ccsdscrc.ComputeCRC16(modifiedData)
 
 	if expectedCRC == modifiedCRC {
 		t.Errorf("CRC did not detect error; expected change but got identical CRC")
@@ -202,7 +203,7 @@ func TestMinimumFrameSize(t *testing.T) {
 
 	// 8 bytes with valid CRC: smallest valid frame
 	header := []byte{0x00, 0x00, 0x00, 0x00, 0x18, 0x00}
-	crc := tmdl.ComputeCRC(header)
+	crc := ccsdscrc.ComputeCRC16(header)
 	frame := make([]byte, 8)
 	copy(frame, header)
 	binary.BigEndian.PutUint16(frame[6:], crc)
@@ -250,7 +251,7 @@ func TestOCFInsufficientData(t *testing.T) {
 
 	// 2 bytes of data field — not enough for the 4-byte OCF the flag promises
 	withoutCRC := append(hBytes, 0x01, 0x02)
-	crc := tmdl.ComputeCRC(withoutCRC)
+	crc := ccsdscrc.ComputeCRC16(withoutCRC)
 	frame := binary.BigEndian.AppendUint16(withoutCRC, crc)
 
 	_, err = tmdl.DecodeTMTransferFrame(frame)
@@ -390,44 +391,6 @@ func TestIsIdleFrame(t *testing.T) {
 	vcaFrame.Header.FirstHeaderPtr = 0x07FF
 	if tmdl.IsIdleFrame(vcaFrame) {
 		t.Error("Expected IsIdleFrame=false for VCA frame (SyncFlag=true)")
-	}
-}
-
-func TestCRC16_CCITT_KnownVectors(t *testing.T) {
-	tests := []struct {
-		name string
-		data []byte
-		want uint16
-	}{
-		{
-			name: "standard ASCII 123456789",
-			data: []byte("123456789"),
-			want: 0x29B1,
-		},
-		{
-			name: "empty input",
-			data: []byte{},
-			want: 0xFFFF,
-		},
-		{
-			name: "single zero byte",
-			data: []byte{0x00},
-			want: 0xE1F0,
-		},
-		{
-			name: "single 0xFF byte",
-			data: []byte{0xFF},
-			want: 0xFF00,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tmdl.ComputeCRC(tt.data)
-			if got != tt.want {
-				t.Errorf("ComputeCRC(%x) = 0x%04X, want 0x%04X", tt.data, got, tt.want)
-			}
-		})
 	}
 }
 

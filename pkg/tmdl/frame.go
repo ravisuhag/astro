@@ -1,6 +1,10 @@
 package tmdl
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	"github.com/ravisuhag/astro/pkg/crc"
+)
 
 // TMTransferFrame represents a CCSDS TM Space Data Link Protocol Transfer Frame.
 type TMTransferFrame struct {
@@ -53,7 +57,7 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 	if err != nil {
 		return nil, err
 	}
-	frame.FrameErrorControl = ComputeCRC(encoded)
+	frame.FrameErrorControl = crc.ComputeCRC16(encoded)
 
 	return frame, nil
 }
@@ -142,7 +146,7 @@ func recomputeCRC(frame *TMTransferFrame) error {
 	if err != nil {
 		return err
 	}
-	frame.FrameErrorControl = ComputeCRC(encoded)
+	frame.FrameErrorControl = crc.ComputeCRC16(encoded)
 	return nil
 }
 
@@ -166,7 +170,7 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 
 	// Compute and verify CRC-16
 	receivedCRC := binary.BigEndian.Uint16(data[len(data)-2:])
-	computedCRC := ComputeCRC(data[:len(data)-2])
+	computedCRC := crc.ComputeCRC16(data[:len(data)-2])
 	if receivedCRC != computedCRC {
 		return nil, ErrCRCMismatch
 	}
