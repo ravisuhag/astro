@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/tmdl |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing CCSDS TM Space Data Link Protocol. Full pipeline: PhysicalChannel (ASM, randomization, MC mux/demux) → MasterChannel (VC mux, frame gap detection) → VirtualChannel (single frame buffer) → Services (VCP with native multi-packet packing via FHP and PacketSizer-based reassembly with loss resync, VCA with status fields, VCF). Fixed frame length enforcement, idle frame insertion, PVN validation, and CCSDS pseudo-randomization supported. |
+| Other Information | Go library implementing CCSDS TM Space Data Link Protocol. Full pipeline: PhysicalChannel (MC mux/demux) → MasterChannel (VC mux, frame gap detection) → VirtualChannel (single frame buffer) → Services (VCP with native multi-packet packing via FHP and PacketSizer-based reassembly with loss resync, VCA with status fields, VCF). Fixed frame length enforcement and idle frame insertion supported. The sync layer (ASM, CCSDS pseudo-randomization, CADU wrapping/unwrapping) is handled by the separate `pkg/tmsc` package. |
 
 ### A2.1.3 Identification of Supplier
 
@@ -63,7 +63,7 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | | **VCP Packet Service Parameters** | | | | | |
 | TM-6 | Packet | 3.3.2.2 | M | — | Yes | Packet data passed as `[]byte` to `VirtualChannelPacketService.Send()`. Frame pushed into `VirtualChannel`. Delivered via `Receive()`. |
 | TM-7 | GVCID | 3.3.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID configured at service construction. |
-| TM-8 | Packet Version Number | 3.3.2.4 | M | — | Yes | `VirtualChannelPacketService.SetValidPVNs()` configures accepted PVNs. `Send()` validates the first 3 bits of packet data against the set. |
+| TM-8 | Packet Version Number | 3.3.2.4 | M | — | Yes | PVN validation was removed from the VCP service; it is delegated to the application layer. The first 3 bits of packet data carry the PVN per CCSDS. |
 | TM-9 | Packet Quality Indicator | 3.3.2.5 | O | — | No | Not implemented. |
 | TM-10 | Verification Status Code | 3.3.2.6 | C2 | (see reference [10]) | N/A | SDLS Option not implemented. |
 | | **VCA SDU Service Parameters** | | | | | |
@@ -104,8 +104,8 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | | **VCP Service Primitives** | | | | |
-| TM-34 | VCP.request | 3.3.3.2 | M | Yes | `VirtualChannelPacketService.Send(data)` implements VCP.request. When `ChannelConfig` is set, packs packets into fixed-length frames using native FHP (multi-packet packing: tail-of-previous + start-of-next in same frame). `Flush()` emits remaining partial frame. Validates PVN when configured via `SetValidPVNs()`. |
-| TM-35 | VCP.indication | 3.3.3.3 | M | Yes | `VirtualChannelPacketService.Receive()` implements VCP.indication. When `ChannelConfig` is set, uses FHP to locate packet boundaries and `PacketSizer` (default: `SpacePacketSizer`) to extract complete packets. Resyncs via FHP after VC frame count gaps. Skips idle frames. |
+| TM-34 | VCP.request | 3.3.3.2 | M | Yes | `VirtualChannelPacketService.Send(data)` implements VCP.request. When `ChannelConfig` is set, packs packets into fixed-length frames using native FHP (multi-packet packing: tail-of-previous + start-of-next in same frame). `Flush()` emits remaining partial frame. |
+| TM-35 | VCP.indication | 3.3.3.3 | M | Yes | `VirtualChannelPacketService.Receive()` implements VCP.indication. When `ChannelConfig` is set, uses FHP to locate packet boundaries and `PacketSizer` (via `spp.PacketSizer`) to extract complete packets. `SetPacketSizer` must be called explicitly. Resyncs via FHP after VC frame count gaps. Skips idle frames. |
 | | **VCA Service Primitives** | | | | |
 | TM-36 | VCA.request | 3.4.3.2 | M | Yes | `VirtualChannelAccessService.Send(data)` implements VCA.request. Enforces fixed `vcaSize`, constructs a frame, stamps counters/CRC via `stampFrame()`, and pushes it into the `VirtualChannel`. |
 | TM-37 | VCA.indication | 3.4.3.3 | M | Yes | `VirtualChannelAccessService.Receive()` implements VCA.indication. Pulls the next frame from the `VirtualChannel` and returns its fixed-length Data Field. |
@@ -137,24 +137,24 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | TM-52 | Transfer Frame Secondary Header | 4.1.3 | M | Yes | `SecondaryHeader` struct: Version Number (2 bits, enforced as `00`), Header Length (6 bits, 0–63), Data Field (variable). `Encode()` / `Decode()` / `Validate()` methods. Presence controlled by FSHFlag. |
 | TM-53 | Transfer Frame Data Field | 4.1.4 | M | Yes | `TMTransferFrame.DataField` — variable-length telemetry payload. |
 | TM-54 | Operational Control Field | 4.1.5 | M | Yes | `TMTransferFrame.OperationalControl` — 4 bytes (32 bits). Included when `OCFFlag` is set. Extracted during decode. |
-| TM-55 | Frame Error Control Field | 4.1.6 | M | Yes | `TMTransferFrame.FrameErrorControl` — 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on encode via `ComputeCRC()`. Verified on decode; CRC mismatch returns error. |
+| TM-55 | Frame Error Control Field | 4.1.6 | M | Yes | `TMTransferFrame.FrameErrorControl` — 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on encode via `crc.ComputeCRC16()`. Verified on decode; CRC mismatch returns error. |
 
 ### Table A-5: Protocol Procedures
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TM-56 | Packet Processing Function | 4.2.2 | M | Yes | `VirtualChannelPacketService.Send()` accepts packet data, validates PVN if configured, segments across fixed-length frames when `ChannelConfig` is set (2-byte length prefix, idle-padded data fields, FirstHeaderPtr management), and pushes frames into the `VirtualChannel`. |
+| TM-56 | Packet Processing Function | 4.2.2 | M | Yes | `VirtualChannelPacketService.Send()` accepts packet data, segments across fixed-length frames when `ChannelConfig` is set (2-byte length prefix, idle-padded data fields, FirstHeaderPtr management), and pushes frames into the `VirtualChannel`. |
 | TM-57 | VC Generation Function | 4.2.3 | M | Yes | `NewTMTransferFrame()` generates frames with SCID, VCID, data, optional secondary header, and optional OCF. CRC auto-computed. Frame counts applied by `stampFrame()` when a `FrameCounter` is provided. |
 | TM-58 | VC Multiplexing Function | 4.2.4 | M | Yes | `VirtualChannelMultiplexer` schedules frames from multiple Virtual Channels using weighted round-robin via `GetNextFrame()`. Integrated into `MasterChannel`. |
 | TM-59 | MC Generation Function | 4.2.5 | M | Yes | `MasterChannel.AddFrame()` routes inbound frames to Virtual Channels by VCID with SCID validation. |
 | TM-60 | MC Multiplexing Function | 4.2.6 | M | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing across registered `MasterChannel`s via `GetNextFrame()`. |
-| TM-61 | All Frames Generation Function | 4.2.7 | M | Yes | `PhysicalChannel.Wrap()` produces CADUs: encodes frame, applies optional CCSDS pseudo-randomization (LFSR x^8+x^7+x^5+x^3+1), and prepends ASM (default 0x1ACFFC1D). `GetNextFrameOrIdle()` inserts idle frames when no MC has data. |
+| TM-61 | All Frames Generation Function | 4.2.7 | M | Yes | `PhysicalChannel` handles MC multiplexing only. `GetNextFrameOrIdle()` inserts idle frames when no MC has data. CADU wrapping (ASM prepending, CCSDS pseudo-randomization) is done by the `tmsc` package. |
 | TM-62 | Packet Extraction Function | 4.3.2 | M | Yes | `VirtualChannelPacketService.Receive()` uses FHP to locate packet starts and `PacketSizer` to extract complete packets per §4.3.2. Resyncs after frame loss by aborting partial packets and finding next FHP. Skips idle frames. |
 | TM-63 | VC Reception Function | 4.3.3 | M | Yes | `DecodeTMTransferFrame()` parses raw octets into a `TMTransferFrame`, verifying CRC and extracting all fields. `MasterChannel.AddFrame()` routes received frames to the appropriate `VirtualChannel` by VCID. |
 | TM-64 | VC Demultiplexing Function | 4.3.4 | M | Yes | `MasterChannel.AddFrame()` demultiplexes inbound frames to Virtual Channels by VCID. `TMServiceManager` dispatches to the correct VC service. |
 | TM-65 | MC Reception Function | 4.3.5 | M | Yes | `MasterChannel.GetNextFrame()` pulls the next frame from the integrated multiplexer. |
 | TM-66 | MC Demultiplexing Function | 4.3.6 | M | Yes | `PhysicalChannel.AddFrame()` demultiplexes inbound frames to the correct `MasterChannel` by SCID. |
-| TM-67 | All Frames Reception Function | 4.3.7 | M | Yes | `PhysicalChannel.Unwrap()` strips ASM, applies optional de-randomization, and decodes the frame. |
+| TM-67 | All Frames Reception Function | 4.3.7 | M | Yes | `tmsc.UnwrapCADU()` handles ASM stripping and de-randomization. `tmdl.DecodeTMTransferFrame()` handles frame decoding. |
 
 ### Table A-6: Management Parameters
 
@@ -182,7 +182,7 @@ Optional items not supported: TM-9 (Packet Quality Indicator), TM-89 (SDLS Proto
 | TM-84 | VC_FSH Length (if present) (octets) | Table 5-3 | M | Integer | Yes | `SecondaryHeader.HeaderLength`. |
 | TM-85 | Presence of VC_OCF | Table 5-3 | M | Present ('1') / Absent ('0') | Yes | `PrimaryHeader.OCFFlag`. |
 | | **Managed Parameters for Packet Transfer** | | | | | |
-| TM-86 | Valid PVNs | Table 5-4 | M | Set of Integers | Yes | `VirtualChannelPacketService.SetValidPVNs()` configures the accepted PVN set. `Send()` validates the first 3 bits of packet data. Empty set disables validation. |
+| TM-86 | Valid PVNs | Table 5-4 | M | Set of Integers | Yes | PVN validation was removed from tmdl; the application layer is responsible for validating PVNs before passing packet data to the VCP service. |
 | TM-87 | Maximum Packet Length (octets) | Table 5-4 | M | Integer | Yes | Maximum packet length bounded by `PacketSizer` (Space Packets: 65542 bytes max). Per-frame capacity derived from `ChannelConfig.DataFieldCapacity()`. Packets larger than one frame are automatically packed across multiple frames. |
 | TM-88 | Whether incomplete Packets are required to be delivered to the user at the receiving end | Table 5-4 | M | Required, not required | Yes | Policy: not required. `VirtualChannelPacketService.Receive()` always delivers complete reassembled packets. Incomplete packets (insufficient continuation frames) return `ErrIncompletePacket`. |
 
@@ -265,7 +265,7 @@ All 78 mandatory items (TM-1 through TM-88, excluding optional/conditional) are 
 | Area | Items | Implementation |
 |------|-------|----------------|
 | Service Data Units | TM-1–5 | `TMTransferFrame` encode/decode, `SecondaryHeader`, `OperationalControl`. |
-| VCP Service | TM-6–8, TM-34–35 | `VirtualChannelPacketService` with native multi-packet packing via FHP, `PacketSizer`-based reassembly with FHP resync on loss, PVN validation via `SetValidPVNs()`. |
+| VCP Service | TM-6–8, TM-34–35 | `VirtualChannelPacketService` with native multi-packet packing via FHP, `PacketSizer`-based reassembly with FHP resync on loss. |
 | VCA Service | TM-11–13, TM-36–37 | `VirtualChannelAccessService` with padding, `LastStatus()` for status fields. |
 | VCF Service | TM-22–23, TM-42–43 | `VirtualChannelFrameService` with encode/decode via `VirtualChannel`. |
 | FSH/OCF Services | TM-16–20, TM-25–32, TM-38–49 | Secondary header and OCF via `NewTMTransferFrame()` / `DecodeTMTransferFrame()`. `MasterChannel` with SCID validation. |
@@ -273,5 +273,5 @@ All 78 mandatory items (TM-1 through TM-88, excluding optional/conditional) are 
 | Packet Processing | TM-56, TM-62 | VCP native multi-packet packing with FHP, `PacketSizer`-based extraction with FHP resync after loss. `Flush()` emits partial frames. |
 | VC Functions | TM-57–58, TM-63–64 | `NewTMTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
 | MC Functions | TM-59–60, TM-65–66 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
-| Physical Channel | TM-61, TM-67–69, TM-72 | `PhysicalChannel` with `Wrap()`/`Unwrap()` (ASM + randomization), `Name`, `ChannelConfig.FrameLength`, MC multiplexing scheme. |
-| Management Params | TM-70–88 | TFVN enforced, SCID/VCID validated, SyncFlag, FSHFlag, OCFFlag, PVN validation, max packet 65535, complete packet delivery. |
+| Physical Channel | TM-61, TM-67–69, TM-72 | `PhysicalChannel` with MC mux/demux, `Name`, `ChannelConfig.FrameLength`, MC multiplexing scheme. CADU wrapping (ASM + randomization) handled by `tmsc` package. |
+| Management Params | TM-70–88 | TFVN enforced, SCID/VCID validated, SyncFlag, FSHFlag, OCFFlag, max packet 65535, complete packet delivery. |

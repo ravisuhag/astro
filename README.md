@@ -18,23 +18,26 @@ Requires Go 1.26 or later.
 
 ```go
 import (
+	"github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tmdl"
+	"github.com/ravisuhag/astro/pkg/tmsc"
 )
 
 // Create and encode a telemetry packet
 packet, _ := spp.NewTMPacket(123, []byte("temperature=22.5"))
 encoded, _ := packet.Encode()
 
-// Decode a received packet
-decoded, _ := spp.Decode(encoded)
-
-// Create and encode a TM Transfer Frame
+// Frame the packet with TM Data Link
 frame, _ := tmdl.NewTMTransferFrame(0x1A, 1, encoded, nil, nil)
 frameBytes, _ := frame.Encode()
 
-// Decode a received frame
-decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
+// Wrap the frame as a Channel Access Data Unit (CADU)
+cadu, _ := tmsc.NewCADU(frameBytes)
+caduBytes, _ := cadu.Encode()
+
+// Compute CRC for error detection
+checksum := crc.CRC16CCITT(caduBytes)
 ```
 
 ## Protocols
@@ -53,7 +56,7 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 
 | Protocol | Standard | Package | Docs |
 |----------|----------|---------|------|
-| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | | |
+| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | |
 | TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | | |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | | |
 | Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | | |
@@ -94,7 +97,7 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 
 | Protocol | Standard | Package | Docs |
 |----------|----------|---------|------|
-| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | |
+| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/tcf.md) |
 
 #### Mission Database
 
@@ -110,12 +113,18 @@ decoded, _ := tmdl.DecodeTMTransferFrame(frameBytes)
 | Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
 | Space Data Links — Service Specification | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-rev-1-space-data-links-telemetry-transfer-frame-protocol/) | | |
 
+#### Shared Utilities
+
+| Protocol | Standard | Package | Docs |
+|----------|----------|---------|------|
+| CRC-16-CCITT | [CCSDS 130.0-G-3](https://public.ccsds.org/Pubs/130x0g3.pdf) | [`pkg/crc`](pkg/crc) | |
+
 ## Contributing
 
 Contributions are welcome. Each protocol listed above without a package is open for implementation. To get started:
 
 1. Read the relevant CCSDS Blue Book or ECSS standard (linked in the table above).
-2. Look at [`pkg/spp`](pkg/spp) or [`pkg/tmdl`](pkg/tmdl) for the established patterns — struct design, encode/decode, validation, options, and tests.
+2. Look at [`pkg/spp`](pkg/spp), [`pkg/tmdl`](pkg/tmdl), [`pkg/tmsc`](pkg/tmsc), or [`pkg/crc`](pkg/crc) for the established patterns — struct design, encode/decode, validation, options, and tests.
 3. Open an issue to discuss your approach before submitting a PR.
 
 ## License

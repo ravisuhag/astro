@@ -116,6 +116,16 @@ if packet.IsIdle() { ... }
 fmt.Println(packet.Humanize())
 ```
 
+### Packet Sizing
+
+The `PacketSizer` function returns the total packet length from the first 6 header bytes of a Space Packet. It is used by the `tmdl` VCP service for detecting packet boundaries during reassembly from fixed-length transfer frames. Call `SetPacketSizer` on the VCP service to wire it up:
+
+```go
+// PacketSizer returns the total packet length from header bytes.
+// header must be at least 6 bytes (the primary header size).
+totalLen := spp.PacketSizer(headerBytes)
+```
+
 ## Encoding and Decoding
 
 ```go

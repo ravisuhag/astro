@@ -4,11 +4,17 @@
 // communication channel. A spacecraft transmits 20 telemetry packets
 // over a simulated RF link that randomly drops and corrupts CADUs.
 //
-// The ground station uses three CCSDS mechanisms to cope:
-//   - CRC-16 rejection: corrupted frames are detected and discarded
+// The ground station uses four CCSDS mechanisms to cope:
+//   - Reed-Solomon FEC: corrupted frames are corrected before CRC check
+//   - CRC-16 rejection: uncorrectable frames are detected and discarded
 //   - Frame gap detection: dropped frames are identified via MC/VC counters
 //   - FHP-based resync: after frame loss, the receiver re-synchronizes
 //     to the next packet boundary using the First Header Pointer
+//
+// The transmission chain per CCSDS 131.0-B-4:
+//
+//	Frame (128 bytes) → RS encode (128→160 bytes) → Randomize → ASM → CADU
+//	CADU → ASM strip → De-randomize → RS decode (160→128 bytes) → Frame
 //
 // Run with: go run ./examples/lossy-link/
 package main
@@ -83,6 +89,11 @@ func main() {
 
 	link := newNoisyLink(12345) // fixed seed for reproducibility
 
+	// Reed-Solomon codec: RS(255,223) can correct up to 16 symbol errors.
+	// We use it to protect each frame against bit errors from the noisy channel.
+	// Frames shorter than 223 bytes are zero-padded before encoding (virtual fill).
+	rs := tmsc.NewRS255_223()
+
 	// =================================================================
 	// SPACECRAFT: generate packets and transmit CADUs
 	// =================================================================
@@ -128,13 +139,20 @@ func main() {
 	}
 	vcp.Flush()
 
-	// Wrap all frames as CADUs and push through the noisy link.
+	// Wrap all frames as CADUs with RS encoding and push through the noisy link.
 	var receivedCADUs [][]byte
 	totalFrames := 0
 	for scPhysical.HasPendingFrames() {
 		frame, _ := scPhysical.GetNextFrame()
 		encoded, _ := frame.Encode()
-		cadu := tmsc.WrapCADU(encoded, nil, false)
+
+		// RS encode: pad frame to 223 bytes (virtual fill), encode to 255 bytes.
+		rsData := make([]byte, rs.DataLen())
+		copy(rsData, encoded)
+		rsEncoded, _ := rs.Encode(rsData)
+
+		// Wrap as CADU: randomize + ASM.
+		cadu := tmsc.WrapCADU(rsEncoded, nil, true)
 		totalFrames++
 
 		if arrived, ok := link.transmit(cadu); ok {
@@ -143,6 +161,8 @@ func main() {
 	}
 
 	fmt.Printf("  Sent: %d packets (%d bytes) in %d frames\n", numPackets, sentBytes, totalFrames)
+	fmt.Printf("  Each frame: %d bytes → RS(%d bytes) → CADU(%d bytes)\n",
+		frameLength, rs.DataLen()+rs.NRoots(), 4+rs.DataLen()+rs.NRoots())
 	fmt.Printf("\nRF Link statistics:\n")
 	fmt.Printf("  Delivered intact:  %d frames\n", link.delivered)
 	fmt.Printf("  Dropped (lost):    %d frames\n", link.dropped)
@@ -171,17 +191,33 @@ func main() {
 
 	goodFrames := 0
 	crcRejects := 0
+	rsCorrections := 0
+	rsFailed := 0
 	mcGapsTotal := 0
 	vcGapsTotal := 0
 
 	for _, cadu := range receivedCADUs {
-		// Unwrap: strip ASM (CCSDS 131.0-B-4), then decode frame.
-		// Corrupted frames fail CRC and are rejected here.
-		frameData, err := tmsc.UnwrapCADU(cadu, nil, false)
+		// Step 1: Unwrap CADU — strip ASM, de-randomize.
+		rsData, err := tmsc.UnwrapCADU(cadu, nil, true)
 		if err != nil {
 			crcRejects++
 			continue
 		}
+
+		// Step 2: RS decode — correct symbol errors from the noisy channel.
+		corrected, corr, err := rs.Decode(rsData)
+		if err != nil {
+			rsFailed++
+			fmt.Printf("  [RS FAIL] Uncorrectable errors in frame\n")
+			continue
+		}
+		if corr > 0 {
+			rsCorrections += corr
+			fmt.Printf("  [RS OK] Corrected %d symbol errors\n", corr)
+		}
+
+		// Step 3: Extract original frame (strip virtual fill) and decode.
+		frameData := corrected[:frameLength]
 		frame, err := tmdl.DecodeTMTransferFrame(frameData)
 		if err != nil {
 			crcRejects++
@@ -209,7 +245,9 @@ func main() {
 	fmt.Println()
 	fmt.Println("Frame reception summary:")
 	fmt.Printf("  Good frames accepted:  %d / %d transmitted\n", goodFrames, totalFrames)
-	fmt.Printf("  CRC rejects:           %d (corrupted in transit)\n", crcRejects)
+	fmt.Printf("  RS corrections:        %d symbols across all frames\n", rsCorrections)
+	fmt.Printf("  RS failures:           %d (uncorrectable, >16 errors)\n", rsFailed)
+	fmt.Printf("  CRC rejects:           %d\n", crcRejects)
 	fmt.Printf("  MC frame gaps:         %d (frames lost in transit)\n", mcGapsTotal)
 	fmt.Println()
 
@@ -245,8 +283,9 @@ func main() {
 	fmt.Printf("  Packets lost:       %d (spanned a dropped/corrupted frame)\n", numPackets-recovered-crcFailed)
 	fmt.Printf("  CRC failures:       %d (partial packet from lost frame)\n", crcFailed)
 	fmt.Println()
-	fmt.Println("This demonstrates why CCSDS uses three layers of protection:")
-	fmt.Println("  1. Frame CRC-16  — rejects corrupted frames before they enter the pipeline")
-	fmt.Println("  2. Frame counters — detects gaps so the receiver knows data was lost")
-	fmt.Println("  3. First Header Pointer — re-syncs to the next intact packet after a gap")
+	fmt.Println("This demonstrates why CCSDS uses four layers of protection:")
+	fmt.Println("  1. Reed-Solomon FEC — corrects corrupted frames before they reach the pipeline")
+	fmt.Println("  2. Frame CRC-16     — rejects frames with uncorrectable errors")
+	fmt.Println("  3. Frame counters   — detects gaps so the receiver knows data was lost")
+	fmt.Println("  4. First Header Ptr — re-syncs to the next intact packet after a gap")
 }

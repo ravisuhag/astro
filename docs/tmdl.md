@@ -37,9 +37,11 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 │  SecondaryHeader · FrameCounter · CRC-16    │
 ├─────────────────────────────────────────────┤
 │  Physical Layer                             │
-│  PhysicalChannel · ASM · Randomization      │
+│  PhysicalChannel (MC multiplexing)          │
 └─────────────────────────────────────────────┘
 ```
+
+> **Note:** The sync and channel coding layer (ASM, pseudo-randomization, CADU framing) is handled by the `tmsc` package, which implements CCSDS 131.0-B-4. See [tmsc](tmsc.md) for details.
 
 ## Transfer Frames
 
@@ -204,9 +206,15 @@ pkt, err := vcp.Receive()
 - When `ChannelConfig.FrameLength > 0`: packets are buffered and packed into fixed-length frames. Multiple small packets can share a frame; large packets span multiple frames. `FirstHeaderPtr` marks where each new packet begins.
 - When `ChannelConfig.FrameLength == 0`: legacy mode, one frame per packet.
 
-**Custom packet sizer:**
+**Packet sizer:**
 
-By default, `SpacePacketSizer` is used (reads CCSDS Space Packet length from bytes 4–5). For non-CCSDS packet formats:
+A packet sizer must be set before calling `Receive`. For CCSDS Space Packets, use the sizer from the `spp` package:
+
+```go
+vcp.SetPacketSizer(spp.PacketSizer)
+```
+
+For non-CCSDS packet formats, provide a custom sizer function:
 
 ```go
 vcp.SetPacketSizer(func(data []byte) int {
@@ -214,12 +222,6 @@ vcp.SetPacketSizer(func(data []byte) int {
     length := int(binary.BigEndian.Uint32(data[0:4]))
     return 4 + length
 })
-```
-
-**Packet version validation:**
-
-```go
-vcp.SetValidPVNs(0) // Only accept PVN=0 (CCSDS Space Packets)
 ```
 
 **Receive-side resync:** After a frame gap is detected (via `FrameGapDetector`), the receiver discards its buffer and resyncs at the next `FirstHeaderPtr` offset.
@@ -295,7 +297,7 @@ hasPending := mc.HasPendingFrames()
 
 ## Physical Channel
 
-Represents the physical communication link. Handles MC-level multiplexing, ASM framing, and optional pseudo-randomization:
+Represents the physical communication link. Handles MC-level multiplexing across Master Channels:
 
 ```go
 pc := tmdl.NewPhysicalChannel("TM-68", config)
@@ -308,27 +310,25 @@ pc.AddMasterChannel(mc2, 1)
 frame, err := pc.GetNextFrame()        // Weighted round-robin across MCs
 frame, err := pc.GetNextFrameOrIdle()  // Idle frame if no data
 
-// Wrap frame into a CADU (ASM + optional randomization + encoded frame)
-cadu, err := pc.Wrap(frame)
-
-// Unwrap CADU back to a frame (validates ASM, de-randomizes, decodes)
-frame, err := pc.Unwrap(cadu)
-
 // Receive path: demux inbound frame to correct MC by SCID
 err := pc.AddFrame(frame)
 ```
 
-### ASM and Randomization
+### Composing with tmsc for Sync and Channel Coding
+
+The `tmsc` package (CCSDS 131.0-B-4) handles the sync layer — ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
 
 ```go
-// Default CCSDS Attached Sync Marker (0x1ACFFC1D)
-asm := tmdl.DefaultASM()
+import "github.com/ravisuhag/astro/pkg/tmsc"
 
-// Custom ASM
-pc.ASM = []byte{0xDE, 0xAD, 0xBE, 0xEF}
+// Send: get next frame from MC multiplexer, then wrap as CADU
+frame, _ := pc.GetNextFrame()
+encoded, _ := frame.Encode()
+cadu := tmsc.WrapCADU(encoded, nil, true) // nil=default ASM, true=randomize
 
-// Enable CCSDS pseudo-randomization (LFSR per CCSDS 131.0-B)
-pc.Randomize = true
+// Receive: unwrap CADU, then decode frame
+unwrapped, _ := tmsc.UnwrapCADU(cadu, nil, true) // nil=default ASM, true=derandomize
+frame, _ := tmdl.DecodeTMTransferFrame(unwrapped)
 ```
 
 ## Service Manager
@@ -379,7 +379,6 @@ mc := tmdl.NewMasterChannel(0x1A, config)
 mc.AddVirtualChannel(vc1, 1)
 
 pc := tmdl.NewPhysicalChannel("TM-68", config)
-pc.Randomize = true
 pc.AddMasterChannel(mc, 1)
 
 // 3. Send packets
@@ -387,10 +386,11 @@ vcp.Send(packet1)
 vcp.Send(packet2)
 vcp.Flush()
 
-// 4. Transmit frames as CADUs
+// 4. Transmit frames as CADUs (using tmsc for sync layer)
 for pc.HasPendingFrames() {
     frame, _ := pc.GetNextFrame()
-    cadu, _ := pc.Wrap(frame)
+    encoded, _ := frame.Encode()
+    cadu := tmsc.WrapCADU(encoded, nil, true) // nil=default ASM, true=randomize
     transmit(cadu)
 }
 ```
@@ -402,17 +402,20 @@ for pc.HasPendingFrames() {
 counter := tmdl.NewFrameCounter()
 vc1 := tmdl.NewVirtualChannel(1, 100)
 vcp := tmdl.NewVirtualChannelPacketService(0x1A, 1, vc1, config, counter)
+vcp.SetPacketSizer(spp.PacketSizer)
 
 mc := tmdl.NewMasterChannel(0x1A, config)
 mc.AddVirtualChannel(vc1, 1)
 
 pc := tmdl.NewPhysicalChannel("TM-68", config)
-pc.Randomize = true
 pc.AddMasterChannel(mc, 1)
 
-// 2. Process incoming CADUs
-frame, err := pc.Unwrap(cadu)
-if err != nil { /* handle sync marker or CRC errors */ }
+// 2. Process incoming CADUs (using tmsc for sync layer)
+unwrapped, err := tmsc.UnwrapCADU(cadu, nil, true) // nil=default ASM, true=derandomize
+if err != nil { /* handle sync marker or data errors */ }
+
+frame, err := tmdl.DecodeTMTransferFrame(unwrapped)
+if err != nil { /* handle CRC or frame errors */ }
 
 // 3. Route to Master Channel → Virtual Channel
 err = pc.AddFrame(frame)
@@ -448,12 +451,13 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrNoVirtualChannels` | No virtual channels registered |
 | `ErrVirtualChannelNotFound` | No virtual channel for specified VCID |
 | `ErrDataFieldTooSmall` | Data field capacity too small for framing |
-| `ErrInvalidPVN` | Packet version number not in valid set |
 | `ErrNoMasterChannels` | No master channels on physical channel |
 | `ErrInvalidOCFLength` | OCF not exactly 4 bytes |
-| `ErrSyncMarkerMismatch` | CADU ASM doesn't match expected marker |
+
+> **Note:** Sync-layer errors such as `ErrSyncMarkerMismatch` and `ErrDataTooShort` are defined in the `tmsc` package.
 
 ## Reference
 
 - [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) — TM Space Data Link Protocol Blue Book
 - [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) — TM Synchronization and Channel Coding
+- [`tmsc` package](tmsc.md) — Sync and Channel Coding (ASM, randomization, CADU framing)
