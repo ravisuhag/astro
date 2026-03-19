@@ -1,13 +1,17 @@
 package tcdl
 
-import "sync"
+import (
+	"sync"
 
-// Service defines the interface for all TC Data Link services.
-type Service interface {
-	Send(data []byte) error
-	Receive() ([]byte, error)
-	Flush() error
-}
+	"github.com/ravisuhag/astro/pkg/sdl"
+)
+
+// Service is the interface for all TC Data Link services.
+type Service = sdl.Service
+
+// PacketSizer returns the total length in bytes of the packet starting
+// at data[0], or -1 if the data is too short to determine length.
+type PacketSizer = sdl.PacketSizer
 
 // ServiceType defines the types of TC services available.
 type ServiceType int
@@ -17,10 +21,6 @@ const (
 	MAPAccess                    // MAP Access Service
 	VCFrame                      // VC Frame Service
 )
-
-// PacketSizer returns the total length in bytes of the packet starting
-// at data[0], or -1 if the data is too short to determine length.
-type PacketSizer func(data []byte) int
 
 // FrameCounter manages per-VC 8-bit frame sequence numbers N(S) for COP-1.
 type FrameCounter struct {
@@ -140,7 +140,7 @@ func (s *MAPPacketService) emitFrame(data []byte, segFlags uint8) error {
 	if err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive extracts the next complete packet by reassembling segments.
@@ -150,7 +150,7 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 	}
 
 	for {
-		frame, err := s.vc.GetNextFrame()
+		frame, err := s.vc.Next()
 		if err != nil {
 			return nil, err
 		}
@@ -232,12 +232,12 @@ func (s *MAPAccessService) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive returns the data field of the next frame.
 func (s *MAPAccessService) Receive() ([]byte, error) {
-	frame, err := s.vc.GetNextFrame()
+	frame, err := s.vc.Next()
 	if err != nil {
 		return nil, err
 	}
@@ -268,12 +268,12 @@ func (s *VCFrameService) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive retrieves the next frame and returns it as encoded bytes.
 func (s *VCFrameService) Receive() ([]byte, error) {
-	frame, err := s.vc.GetNextFrame()
+	frame, err := s.vc.Next()
 	if err != nil {
 		return nil, err
 	}
@@ -306,8 +306,8 @@ func (mc *MasterChannel) SCID() uint16 { return mc.scid }
 
 // AddVirtualChannel registers a Virtual Channel with this Master Channel.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
-	mc.channels[vc.VCID] = vc
-	mc.mux.AddVirtualChannel(vc, priority)
+	mc.channels[vc.ID] = vc
+	mc.mux.AddChannel(vc, priority)
 }
 
 // AddFrame routes an inbound frame to the appropriate Virtual Channel.
@@ -320,17 +320,17 @@ func (mc *MasterChannel) AddFrame(frame *TCTransferFrame) error {
 	if !ok {
 		return ErrVirtualChannelNotFound
 	}
-	return vc.AddFrame(frame)
+	return vc.Add(frame)
 }
 
 // GetNextFrame retrieves the next frame from the multiplexer.
 func (mc *MasterChannel) GetNextFrame() (*TCTransferFrame, error) {
-	return mc.mux.GetNextFrame()
+	return mc.mux.Next()
 }
 
 // HasPendingFrames checks if any Virtual Channel has pending frames.
 func (mc *MasterChannel) HasPendingFrames() bool {
-	return mc.mux.HasPendingFrames()
+	return mc.mux.HasPending()
 }
 
 // VCFrameGap returns the VC gap from the last AddFrame call.

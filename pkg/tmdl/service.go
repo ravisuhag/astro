@@ -3,6 +3,8 @@ package tmdl
 import (
 	"errors"
 	"sync"
+
+	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
 // Service defines the interface for all TM Data Link services.
@@ -131,7 +133,7 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 		if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 			return err
 		}
-		return s.vc.AddFrame(frame)
+		return s.vc.Add(frame)
 	}
 
 	// Record packet boundary and buffer data
@@ -217,7 +219,7 @@ func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) er
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive extracts the next complete packet from frame data.
@@ -226,7 +228,7 @@ func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) er
 // PacketSizer to determine packet length. Resyncs after frame loss.
 func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 	if s.config.FrameLength == 0 {
-		frame, err := s.vc.GetNextFrame()
+		frame, err := s.vc.Next()
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +259,7 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		}
 
 		// Pull next frame
-		frame, err := s.vc.GetNextFrame()
+		frame, err := s.vc.Next()
 		if err != nil {
 			return nil, err
 		}
@@ -343,12 +345,12 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive retrieves the next frame from the Virtual Channel and returns it as encoded bytes.
 func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
-	frame, err := s.vc.GetNextFrame()
+	frame, err := s.vc.Next()
 	if err != nil {
 		return nil, err
 	}
@@ -422,12 +424,12 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
-	return s.vc.AddFrame(frame)
+	return s.vc.Add(frame)
 }
 
 // Receive retrieves the next frame and returns its data field.
 func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
-	frame, err := s.vc.GetNextFrame()
+	frame, err := s.vc.Next()
 	if err != nil {
 		return nil, err
 	}
@@ -478,8 +480,8 @@ func (mc *MasterChannel) SCID() uint16 { return mc.scid }
 
 // AddVirtualChannel registers a Virtual Channel with this Master Channel.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
-	mc.channels[vc.VCID] = vc
-	mc.mux.AddVirtualChannel(vc, priority)
+	mc.channels[vc.ID] = vc
+	mc.mux.AddChannel(vc, priority)
 }
 
 // AddFrame routes an inbound frame to the appropriate Virtual Channel.
@@ -492,7 +494,7 @@ func (mc *MasterChannel) AddFrame(frame *TMTransferFrame) error {
 	if !ok {
 		return ErrVirtualChannelNotFound
 	}
-	return vc.AddFrame(frame)
+	return vc.Add(frame)
 }
 
 // MCFrameGap returns the MC gap from the last AddFrame call.
@@ -503,25 +505,25 @@ func (mc *MasterChannel) VCFrameGap() int { return mc.detector.VCFrameGap() }
 
 // GetNextFrame retrieves the next frame from the multiplexer.
 func (mc *MasterChannel) GetNextFrame() (*TMTransferFrame, error) {
-	return mc.mux.GetNextFrame()
+	return mc.mux.Next()
 }
 
 // GetNextFrameOrIdle returns the next frame or an idle frame if none available.
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
-	frame, err := mc.mux.GetNextFrame()
+	frame, err := mc.mux.Next()
 	if err == nil {
 		return frame, nil
 	}
-	if !errors.Is(err, ErrNoFramesAvailable) {
+	if !errors.Is(err, sdl.ErrNoFramesAvailable) {
 		return nil, err
 	}
 	if mc.config.FrameLength == 0 {
-		return nil, ErrNoFramesAvailable
+		return nil, sdl.ErrNoFramesAvailable
 	}
 	return NewIdleFrame(mc.scid, 7, mc.config)
 }
 
 // HasPendingFrames checks if any Virtual Channel has pending frames.
 func (mc *MasterChannel) HasPendingFrames() bool {
-	return mc.mux.HasPendingFrames()
+	return mc.mux.HasPending()
 }

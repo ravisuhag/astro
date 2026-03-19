@@ -3,6 +3,8 @@ package tmdl
 import (
 	"errors"
 	"slices"
+
+	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
 // ChannelConfig defines the fixed parameters of a physical channel
@@ -106,7 +108,7 @@ func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
 		pc.advanceToNext()
 	}
 
-	return nil, ErrNoFramesAvailable
+	return nil, sdl.ErrNoFramesAvailable
 }
 
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
@@ -116,11 +118,11 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	if err == nil {
 		return frame, nil
 	}
-	if !errors.Is(err, ErrNoFramesAvailable) && !errors.Is(err, ErrNoMasterChannels) {
+	if !errors.Is(err, sdl.ErrNoFramesAvailable) && !errors.Is(err, ErrNoMasterChannels) {
 		return nil, err
 	}
 	if pc.config.FrameLength == 0 {
-		return nil, ErrNoFramesAvailable
+		return nil, sdl.ErrNoFramesAvailable
 	}
 	var scid uint16
 	if len(pc.sortedSCIDs) > 0 {

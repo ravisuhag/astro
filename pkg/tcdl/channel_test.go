@@ -11,13 +11,13 @@ import (
 func TestVirtualChannel_AddGetFrame(t *testing.T) {
 	vc := tcdl.NewVirtualChannel(5, 10)
 	frame, _ := tcdl.NewTCTransferFrame(42, 5, []byte("data"))
-	if err := vc.AddFrame(frame); err != nil {
+	if err := vc.Add(frame); err != nil {
 		t.Fatal(err)
 	}
 	if vc.Len() != 1 {
 		t.Errorf("Len = %d, want 1", vc.Len())
 	}
-	got, err := vc.GetNextFrame()
+	got, err := vc.Next()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +29,8 @@ func TestVirtualChannel_AddGetFrame(t *testing.T) {
 func TestVirtualChannel_BufferFull(t *testing.T) {
 	vc := tcdl.NewVirtualChannel(1, 1)
 	frame, _ := tcdl.NewTCTransferFrame(42, 1, []byte("a"))
-	vc.AddFrame(frame)
-	err := vc.AddFrame(frame)
+	vc.Add(frame)
+	err := vc.Add(frame)
 	if !errors.Is(err, tcdl.ErrBufferFull) {
 		t.Errorf("expected ErrBufferFull, got %v", err)
 	}

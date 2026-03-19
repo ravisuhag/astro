@@ -1,6 +1,10 @@
 package tcdl
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ravisuhag/astro/pkg/sdl"
+)
 
 var (
 	// ErrDataTooShort indicates the provided data is too short for decoding.
@@ -36,23 +40,23 @@ var (
 	// ErrEmptyData indicates that the provided data is empty.
 	ErrEmptyData = errors.New("data cannot be empty")
 
-	// ErrNoFramesAvailable indicates there are no frames to retrieve.
-	ErrNoFramesAvailable = errors.New("no frames available")
+	// ErrNoFramesAvailable aliases sdl.ErrNoFramesAvailable.
+	ErrNoFramesAvailable = sdl.ErrNoFramesAvailable
 
-	// ErrBufferFull indicates the virtual channel buffer is full.
-	ErrBufferFull = errors.New("virtual channel buffer full")
+	// ErrBufferFull aliases sdl.ErrBufferFull.
+	ErrBufferFull = sdl.ErrBufferFull
 
 	// ErrSCIDMismatch indicates the frame SCID does not match the master channel SCID.
 	ErrSCIDMismatch = errors.New("frame SCID does not match master channel SCID")
 
-	// ErrServiceNotFound indicates the requested service was not found.
-	ErrServiceNotFound = errors.New("service not found for specified VCID and service type")
+	// ErrServiceNotFound aliases sdl.ErrServiceNotFound.
+	ErrServiceNotFound = sdl.ErrServiceNotFound
 
 	// ErrMasterChannelNotFound indicates the requested master channel was not found.
 	ErrMasterChannelNotFound = errors.New("master channel not found for specified SCID")
 
-	// ErrNoVirtualChannels indicates no virtual channels are registered.
-	ErrNoVirtualChannels = errors.New("no virtual channels available")
+	// ErrNoVirtualChannels aliases sdl.ErrNoChannels.
+	ErrNoVirtualChannels = sdl.ErrNoChannels
 
 	// ErrVirtualChannelNotFound indicates no virtual channel exists for the given VCID.
 	ErrVirtualChannelNotFound = errors.New("virtual channel not found for specified VCID")

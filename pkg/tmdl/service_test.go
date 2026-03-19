@@ -178,7 +178,7 @@ func TestVCPService_Packing_TwoSmallPackets(t *testing.T) {
 	}
 
 	// Verify FHP = 0 (first packet starts at byte 0)
-	frame, _ := vc.GetNextFrame()
+	frame, _ := vc.Next()
 	if frame.Header.FirstHeaderPtr != 0 {
 		t.Errorf("FHP = %d, want 0", frame.Header.FirstHeaderPtr)
 	}
@@ -257,12 +257,12 @@ func TestVCPService_Packing_FHPValues(t *testing.T) {
 	svc.Send(pkt2)
 	svc.Flush()
 
-	f1, _ := vc.GetNextFrame()
+	f1, _ := vc.Next()
 	if f1.Header.FirstHeaderPtr != 0 {
 		t.Errorf("Frame 1: FHP = %d, want 0", f1.Header.FirstHeaderPtr)
 	}
 
-	f2, _ := vc.GetNextFrame()
+	f2, _ := vc.Next()
 	if f2.Header.FirstHeaderPtr != 0x07FE {
 		t.Errorf("Frame 2: FHP = 0x%04X, want 0x07FE", f2.Header.FirstHeaderPtr)
 	}
@@ -286,13 +286,13 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 	svc.Flush()     // flushes remaining 4 bytes
 
 	// Frame 1 should have FHP=0 (pkt1 at offset 0, pkt2 at offset 7)
-	f1, _ := vc.GetNextFrame()
+	f1, _ := vc.Next()
 	if f1.Header.FirstHeaderPtr != 0 {
 		t.Errorf("Frame 1 FHP = %d, want 0", f1.Header.FirstHeaderPtr)
 	}
 
 	// Frame 2 should have FHP=0x07FE (continuation of pkt2)
-	f2, _ := vc.GetNextFrame()
+	f2, _ := vc.Next()
 	if f2.Header.FirstHeaderPtr != 0x07FE {
 		t.Errorf("Frame 2 FHP = 0x%04X, want 0x07FE", f2.Header.FirstHeaderPtr)
 	}
@@ -312,12 +312,12 @@ func TestVCPService_Packing_IdleFrameSkip(t *testing.T) {
 	idle, _ := tmdl.NewIdleFrame(933, 1, config)
 	var frames []*tmdl.TMTransferFrame
 	for vc.HasFrames() {
-		f, _ := vc.GetNextFrame()
+		f, _ := vc.Next()
 		frames = append(frames, f)
 	}
-	vc.AddFrame(idle)
+	vc.Add(idle)
 	for _, f := range frames {
-		vc.AddFrame(f)
+		vc.Add(f)
 	}
 
 	received, err := svc.Receive()
@@ -344,7 +344,7 @@ func TestVCPService_Packing_LossResync(t *testing.T) {
 	svc.Flush()
 
 	// Remove the first frame (simulate loss)
-	vc.GetNextFrame() // discard pkt1's frame
+	vc.Next() // discard pkt1's frame
 
 	// pkt2's frame remains — it has FHP=0x07FE (continuation) or FHP with offset
 	// After gap detection, receiver should resync and eventually extract pkt2
@@ -370,7 +370,7 @@ func TestVCPService_Packing_LossResync(t *testing.T) {
 
 	// Should have 3 frames: F0(VCcount=0), F1(VCcount=1), F2(VCcount=2)
 	// Remove F0 (contains start of pkt1)
-	vc2.GetNextFrame() // discard
+	vc2.Next() // discard
 
 	// Receiver sees F1 first (VCcount=1, gap detected since expected 0)
 	// F1 has the tail of pkt1 + start of pkt2 (FHP should point to pkt2 start)
@@ -488,7 +488,7 @@ func TestVCAService_SyncFlag(t *testing.T) {
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelAccessService(933, 1, 4, vc, tmdl.ChannelConfig{}, nil)
 	svc.Send([]byte("abcd"))
-	frame, _ := vc.GetNextFrame()
+	frame, _ := vc.Next()
 	if !frame.Header.SyncFlag {
 		t.Error("Expected SyncFlag=true")
 	}
@@ -516,7 +516,7 @@ func TestVCAService_Padding(t *testing.T) {
 
 	data := []byte("12345678")
 	svc.Send(data)
-	frame, _ := vc.GetNextFrame()
+	frame, _ := vc.Next()
 	if len(frame.DataField) != capacity {
 		t.Errorf("DataField len = %d, want %d", len(frame.DataField), capacity)
 	}
@@ -781,13 +781,13 @@ func TestVCPService_ConsecutiveIdleFrames(t *testing.T) {
 	pkt := makeTestPacket([]byte{0x01, 0x02})
 	sendSvc.Send(pkt)
 	sendSvc.Flush()
-	dataFrame, _ := sendVC.GetNextFrame()
+	dataFrame, _ := sendVC.Next()
 
 	for range 5 {
 		idle, _ := tmdl.NewIdleFrame(933, 1, config)
-		vc.AddFrame(idle)
+		vc.Add(idle)
 	}
-	vc.AddFrame(dataFrame)
+	vc.Add(dataFrame)
 
 	received, err := svc.Receive()
 	if err != nil {
@@ -812,7 +812,7 @@ func TestVCPService_FrameLoss_ThreeFramePacket(t *testing.T) {
 	svc.Send(pkt2)
 	svc.Flush()
 
-	vc.GetNextFrame() // discard first frame
+	vc.Next() // discard first frame
 
 	received, err := svc.Receive()
 	if err != nil {
@@ -837,18 +837,18 @@ func TestVCPService_FrameLoss_MiddleFrame(t *testing.T) {
 	svc.Send(pkt2)
 	svc.Flush()
 
-	f0, _ := vc.GetNextFrame()
-	vc.GetNextFrame() // discard middle frame
+	f0, _ := vc.Next()
+	vc.Next() // discard middle frame
 
 	vc2 := tmdl.NewVirtualChannel(1, 100)
 	counter2 := tmdl.NewFrameCounter()
 	svc2 := tmdl.NewVirtualChannelPacketService(933, 1, vc2, config, counter2)
 	svc2.SetPacketSizer(spp.PacketSizer)
 
-	vc2.AddFrame(f0)
+	vc2.Add(f0)
 	for vc.HasFrames() {
-		f, _ := vc.GetNextFrame()
-		vc2.AddFrame(f)
+		f, _ := vc.Next()
+		vc2.Add(f)
 	}
 
 	var recovered []byte
@@ -878,8 +878,8 @@ func TestIdleFrameDoesNotAffectPacketState(t *testing.T) {
 	svc.Send(pkt)
 	svc.Flush()
 
-	f1, _ := vc.GetNextFrame()
-	f2, _ := vc.GetNextFrame()
+	f1, _ := vc.Next()
+	f2, _ := vc.Next()
 
 	idle, _ := tmdl.NewIdleFrame(933, 1, config)
 
@@ -887,9 +887,9 @@ func TestIdleFrameDoesNotAffectPacketState(t *testing.T) {
 	svc2 := tmdl.NewVirtualChannelPacketService(933, 1, vc2, config, nil)
 	svc2.SetPacketSizer(spp.PacketSizer)
 
-	vc2.AddFrame(f1)
-	vc2.AddFrame(idle)
-	vc2.AddFrame(f2)
+	vc2.Add(f1)
+	vc2.Add(idle)
+	vc2.Add(f2)
 
 	received, err := svc2.Receive()
 	if err != nil {

@@ -21,11 +21,11 @@ func TestMasterChannel_Routing(t *testing.T) {
 	mc.AddFrame(f1)
 	mc.AddFrame(f2)
 
-	got1, _ := vc1.GetNextFrame()
+	got1, _ := vc1.Next()
 	if !bytes.Equal(got1.DataField, []byte("to-vc1")) {
 		t.Errorf("VC1 got %q", got1.DataField)
 	}
-	got2, _ := vc2.GetNextFrame()
+	got2, _ := vc2.Next()
 	if !bytes.Equal(got2.DataField, []byte("to-vc2")) {
 		t.Errorf("VC2 got %q", got2.DataField)
 	}
@@ -98,7 +98,7 @@ func TestMAPPacketService_Bypass(t *testing.T) {
 	vc := tcdl.NewVirtualChannel(1, 100)
 	svc := tcdl.NewMAPPacketService(42, 1, 0, true, vc, nil)
 	svc.Send([]byte("bypass data"))
-	frame, _ := vc.GetNextFrame()
+	frame, _ := vc.Next()
 	if frame.Header.BypassFlag != 1 {
 		t.Error("expected BypassFlag=1 for bypass service")
 	}

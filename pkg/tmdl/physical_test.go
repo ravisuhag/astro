@@ -144,11 +144,11 @@ func TestPhysicalChannel_Demultiplex(t *testing.T) {
 	pc.AddFrame(f1)
 	pc.AddFrame(f2)
 
-	got1, _ := vc1.GetNextFrame()
+	got1, _ := vc1.Next()
 	if string(got1.DataField) != "for-sc100" {
 		t.Errorf("MC1 got %q", got1.DataField)
 	}
-	got2, _ := vc2.GetNextFrame()
+	got2, _ := vc2.Next()
 	if string(got2.DataField) != "for-sc200" {
 		t.Errorf("MC2 got %q", got2.DataField)
 	}
@@ -203,7 +203,7 @@ func TestPhysicalChannel_HasPendingFrames(t *testing.T) {
 	if pc.HasPendingFrames() {
 		t.Error("Expected false")
 	}
-	vc.AddFrame(&tmdl.TMTransferFrame{})
+	vc.Add(&tmdl.TMTransferFrame{})
 	if !pc.HasPendingFrames() {
 		t.Error("Expected true")
 	}
