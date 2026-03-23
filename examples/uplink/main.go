@@ -392,11 +392,12 @@ func main() {
 		fmt.Printf("  CLCW received: %s (%d bytes)\n", clcw.Humanize(), len(encoded))
 
 		// FOP-1 processes CLCW to acknowledge delivered frames.
-		if clcw.VirtualChannelID == vcidCritical {
+		switch clcw.VirtualChannelID {
+		case vcidCritical:
 			if err := fopCrit.ProcessCLCW(clcw); err != nil {
 				fmt.Printf("  [FOP-1 ERROR] VC%d: %v\n", vcidCritical, err)
 			}
-		} else if clcw.VirtualChannelID == vcidRoutine {
+		case vcidRoutine:
 			if err := fopRout.ProcessCLCW(clcw); err != nil {
 				fmt.Printf("  [FOP-1 ERROR] VC%d: %v\n", vcidRoutine, err)
 			}
