@@ -16,7 +16,7 @@
 //	Frame (128 bytes) → RS encode (128→160 bytes) → Randomize → ASM → CADU
 //	CADU → ASM strip → De-randomize → RS decode (160→128 bytes) → Frame
 //
-// Run with: go run ./examples/lossy-link/
+// Run with: go run ./examples/lossylink/
 package main
 
 import (
