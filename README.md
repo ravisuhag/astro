@@ -43,6 +43,8 @@ astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate
 | `astro time` | CCSDS Time Code Formats — encode, decode, inspect, now | [Reference](docs/cli/time.md) |
 | `astro tm` | TM Transfer Frames — encode, decode, inspect, gaps, demux | [Reference](docs/cli/tm.md) |
 | `astro tc` | TC Transfer Frames — encode, decode, inspect | [Reference](docs/cli/tc.md) |
+| `astro cadu` | Channel Access Data Units — wrap, unwrap, inspect, sync | [Reference](docs/cli/cadu.md) |
+| `astro cltu` | Command Link Transmission Units — wrap, unwrap, inspect | [Reference](docs/cli/cltu.md) |
 
 ## Library Usage
 
@@ -89,10 +91,10 @@ checksum := crc.CRC16CCITT(caduBytes)
 | AOS Space Data Link Protocol | [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) | | |
 | Unified Space Data Link Protocol | [CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf) | | |
 | **Synchronization and Channel Coding** | | | |
-| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/tmsc.md) \| [PICS](docs/pics/tmsc-pics.md) |
+| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | | |
 | Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | | |
-| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/tcsc.md) \| [PICS](docs/pics/tcsc-pics.md) |
+| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/tcsc.md) \| [CLI](docs/cli/cltu.md) \| [PICS](docs/pics/tcsc-pics.md) |
 | **Space Link Extension** | | | |
 | SLE Return All Frames | [CCSDS 911.1-B-4](https://public.ccsds.org/Pubs/911x1b4.pdf) | | |
 | SLE Return Channel Frames | [CCSDS 911.2-B-3](https://public.ccsds.org/Pubs/911x2b3.pdf) | | |

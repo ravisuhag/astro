@@ -23,6 +23,8 @@ func New() *cobra.Command {
 	cmd.AddCommand(timeCmd())
 	cmd.AddCommand(tmCmd())
 	cmd.AddCommand(tcCmd())
+	cmd.AddCommand(caduCmd())
+	cmd.AddCommand(cltuCmd())
 
 	mgr := commander.New(cmd)
 	mgr.Init()
