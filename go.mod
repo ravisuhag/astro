@@ -3,6 +3,11 @@ module github.com/ravisuhag/astro
 go 1.26.1
 
 require (
+	github.com/raystack/salt v0.6.3
+	github.com/spf13/cobra v1.10.2
+)
+
+require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/alecthomas/chroma v0.8.2 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -25,11 +30,9 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.11.1-0.20220212125758-44cd13922739 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/raystack/salt v0.6.3 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/schollz/progressbar/v3 v3.8.5 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yuin/goldmark v1.4.13 // indirect
 	github.com/yuin/goldmark-emoji v1.0.1 // indirect
