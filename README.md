@@ -41,6 +41,7 @@ astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate
 |---------|-------------|------|
 | `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream | [Reference](docs/cli/spp.md) |
 | `astro time` | CCSDS Time Code Formats — encode, decode, inspect, now | [Reference](docs/cli/time.md) |
+| `astro tm` | TM Transfer Frames — encode, decode, inspect, gaps, demux | [Reference](docs/cli/tm.md) |
 
 ## Library Usage
 
@@ -79,7 +80,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | | |
 | Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | | |
 | **Space Data Link** | | | |
-| TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/tmdl.md) \| [PICS](docs/pics/tmdl-pics.md) |
+| TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
 | Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | | |
 | TC Space Data Link Protocol | [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](pkg/tcdl) | [Guide](docs/tcdl.md) \| [PICS](docs/pics/tcdl-pics.md) |
 | Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/cop.md) \| [PICS](docs/pics/cop-pics.md) |
