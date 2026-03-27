@@ -8,13 +8,40 @@ Astro is an open-source Go library implementing [CCSDS](https://public.ccsds.org
 
 ## Installation
 
+### Library
+
 ```bash
 go get github.com/ravisuhag/astro
 ```
 
+### CLI
+
+```bash
+go install github.com/ravisuhag/astro@latest
+```
+
 Requires Go 1.26 or later.
 
-## Usage
+## CLI
+
+The `astro` CLI provides commands for encoding, decoding, inspecting, and validating CCSDS data directly from the terminal.
+
+```bash
+# Encode a telemetry Space Packet
+astro spp encode --apid 100 --type tm --data 68656c6c6f
+
+# Inspect a packet with annotated hex dump
+astro spp encode --apid 100 --type tm --data 68656c6c6f | astro spp inspect --input hex
+
+# Validate a packet with CRC verification
+astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate --input hex --crc
+```
+
+| Command | Description | Docs |
+|---------|-------------|------|
+| `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream | [Reference](docs/cli/spp.md) |
+
+## Library Usage
 
 ```go
 import (
@@ -45,7 +72,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Protocol | Standard | Package | Docs |
 |----------|----------|---------|------|
 | **Space Packet and Transport** | | | |
-| Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/spp.md) \| [PICS](docs/pics/spp-pics.md) |
+| Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/spp.md) \| [CLI](docs/cli/spp.md) \| [PICS](docs/pics/spp-pics.md) |
 | Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | | |
 | CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5.pdf) | | |
 | Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | | |

@@ -19,6 +19,8 @@ func New() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	cmd.AddCommand(sppCmd())
+
 	mgr := commander.New(cmd)
 	mgr.Init()
 
