@@ -24,6 +24,7 @@ func tcCmd() *cobra.Command {
 		tcDecodeCmd(),
 		tcEncodeCmd(),
 		tcInspectCmd(),
+		tcGenCmd(),
 	)
 
 	return cmd

@@ -27,6 +27,7 @@ func tmCmd() *cobra.Command {
 		tmInspectCmd(),
 		tmGapsCmd(),
 		tmDemuxCmd(),
+		tmGenCmd(),
 	)
 
 	return cmd

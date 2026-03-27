@@ -24,6 +24,7 @@ func cltuCmd() *cobra.Command {
 		cltuWrapCmd(),
 		cltuUnwrapCmd(),
 		cltuInspectCmd(),
+		cltuGenCmd(),
 	)
 
 	return cmd

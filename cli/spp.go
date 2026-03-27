@@ -28,6 +28,7 @@ func sppCmd() *cobra.Command {
 		sppInspectCmd(),
 		sppValidateCmd(),
 		sppStreamCmd(),
+		sppGenCmd(),
 	)
 
 	return cmd

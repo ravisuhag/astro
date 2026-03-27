@@ -27,6 +27,7 @@ func caduCmd() *cobra.Command {
 		caduUnwrapCmd(),
 		caduInspectCmd(),
 		caduSyncCmd(),
+		caduGenCmd(),
 	)
 
 	return cmd
