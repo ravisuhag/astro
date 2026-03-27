@@ -20,6 +20,7 @@ func New() *cobra.Command {
 	}
 
 	cmd.AddCommand(sppCmd())
+	cmd.AddCommand(timeCmd())
 
 	mgr := commander.New(cmd)
 	mgr.Init()

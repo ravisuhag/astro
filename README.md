@@ -40,6 +40,7 @@ astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate
 | Command | Description | Docs |
 |---------|-------------|------|
 | `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream | [Reference](docs/cli/spp.md) |
+| `astro time` | CCSDS Time Code Formats — encode, decode, inspect, now | [Reference](docs/cli/time.md) |
 
 ## Library Usage
 
