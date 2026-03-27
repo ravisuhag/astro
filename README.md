@@ -78,7 +78,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 |----------|----------|---------|------|
 | **Space Packet and Transport** | | | |
 | Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/spp.md) \| [CLI](docs/cli/spp.md) \| [PICS](docs/pics/spp-pics.md) |
-| Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | | |
+| Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](pkg/epp) | [Guide](docs/epp.md) \| [PICS](docs/pics/epp-pics.md) |
 | CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5.pdf) | | |
 | Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | | |
 | Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | | |
