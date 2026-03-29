@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/ravisuhag/astro/pkg/crc"
+	"github.com/ravisuhag/astro/pkg/epp"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tcdl"
 	"github.com/ravisuhag/astro/pkg/tcsc"
@@ -362,6 +363,63 @@ func cltuGenCmd() *cobra.Command {
 	cmd.Flags().IntVar(&count, "count", 10, "Number of CLTUs to generate")
 	cmd.Flags().IntVar(&dataSize, "data-size", 64, "TC frame data field size in bytes")
 	cmd.Flags().BoolVar(&randomize, "randomize", false, "Apply CCSDS pseudo-randomization")
+	cmd.Flags().StringVar(&outputFmt, "format", "bin", "Output format: bin or hex")
+
+	return cmd
+}
+
+func eppGenCmd() *cobra.Command {
+	var (
+		protocolID uint8
+		count      int
+		size       int
+		longLength bool
+		outputFmt  string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "gen",
+		Short: "Generate synthetic Encapsulation Packets",
+		Long:  "Generate a stream of synthetic Encapsulation Packets with random data zones.",
+		Example: `  # Generate 10 IPE packets of 64 bytes each
+  astro epp gen --pid 2 --count 10 --size 64
+
+  # Generate packets and pipe to stream
+  astro epp gen --pid 2 --count 50 --size 128 --format bin | astro epp stream --input bin
+
+  # Generate user-defined packets with long headers
+  astro epp gen --pid 6 --count 5 --size 32 --long-length`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			for i := range count {
+				data := randomBytes(size)
+				var opts []epp.PacketOption
+				if longLength {
+					opts = append(opts, epp.WithLongLength())
+				}
+
+				pkt, err := epp.NewPacket(protocolID, data, opts...)
+				if err != nil {
+					return fmt.Errorf("packet #%d: %w", i+1, err)
+				}
+				encoded, err := pkt.Encode()
+				if err != nil {
+					return fmt.Errorf("packet #%d: %w", i+1, err)
+				}
+
+				if err := writeGenOutput(encoded, outputFmt); err != nil {
+					return err
+				}
+			}
+
+			fmt.Fprintf(os.Stderr, "Generated %d packet(s), PID=%d, %d data bytes each\n", count, protocolID, size)
+			return nil
+		},
+	}
+
+	cmd.Flags().Uint8Var(&protocolID, "pid", 2, "Protocol ID (2=IPE, 6=user-defined, 7=extended)")
+	cmd.Flags().IntVar(&count, "count", 10, "Number of packets to generate")
+	cmd.Flags().IntVar(&size, "size", 64, "Data zone size in bytes per packet")
+	cmd.Flags().BoolVar(&longLength, "long-length", false, "Force longer header format (LoL=1)")
 	cmd.Flags().StringVar(&outputFmt, "format", "bin", "Output format: bin or hex")
 
 	return cmd
