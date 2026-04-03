@@ -1,247 +1,238 @@
-# Space Packet Protocol
+# Space Packet Protocol (SPP)
 
-> CCSDS 133.0-B-2 — Space Packet Protocol
+The `spp` package implements the CCSDS 133.0-B-2 Space Packet Protocol — the fundamental data unit used for transferring application data in space missions.
 
-## Overview
+## Quick Start
 
-The Space Packet Protocol (SPP) is the fundamental **Network Layer** protocol for transferring application data in space missions. It provides a standardized way to package telemetry, telecommands, and other application data into discrete units called **Space Packets** that can be routed across a spacecraft's onboard data network and between spacecraft and ground systems.
+```go
+// Create a service over any io.ReadWriter (TCP conn, serial port, etc.)
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType: spp.PacketTypeTM,
+})
 
-SPP is used by virtually every major space agency — NASA, ESA, JAXA, ISRO, and others — making it the lingua franca of spacecraft application data. Whether a temperature sensor reading leaves a CubeSat or a high-resolution image leaves a Mars rover, the data travels inside Space Packets.
+// Send raw bytes — packet construction is handled automatically
+err := svc.SendBytes(100, []byte("temperature=22.5"))
 
-### Where SPP Fits
-
-```
-┌─────────────────────────────────────────────┐
-│  Application Process (sensors, instruments) │
-├─────────────────────────────────────────────┤
-│  Space Packet Protocol (SPP)                │  ← Network Layer
-│  Packages application data into packets     │
-├─────────────────────────────────────────────┤
-│  Data Link Layer                            │
-│  TM/TC/AOS Space Data Link Protocol         │
-│  Carries packets inside Transfer Frames     │
-├─────────────────────────────────────────────┤
-│  Sync & Channel Coding Layer                │
-│  Error correction, synchronization          │
-├─────────────────────────────────────────────┤
-│  Physical Layer (RF/Optical link)           │
-└─────────────────────────────────────────────┘
+// Receive — returns APID and user data
+apid, data, err := svc.ReceiveBytes()
 ```
 
-SPP sits between the application processes that generate data and the Data Link Layer protocols (like TMDL) that carry packets over the space link. A single Space Packet is the smallest addressable unit of application data in the CCSDS architecture.
+## Service Layer
 
-### Key Characteristics
+The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
 
-- **Connectionless**: Each packet is self-contained with its own header — no session setup required.
-- **Fixed header, variable payload**: The 6-byte primary header is always the same structure; the data field varies from 1 to 65,536 bytes.
-- **Dual direction**: The same format serves both telemetry (spacecraft → ground) and telecommand (ground → spacecraft).
-- **Application addressing**: Each packet is tagged with an Application Process Identifier (APID) that identifies the source or destination application.
-- **Sequencing**: Built-in per-APID sequence counters detect lost or out-of-order packets.
+- **Packet Service** (CCSDS 3.3) — send and receive pre-built `SpacePacket` values
+- **Octet String Service** (CCSDS 3.4) — send and receive raw byte data, with automatic packet wrapping
 
-## Packet Structure
-
-Every Space Packet consists of two parts: a **Packet Primary Header** (6 bytes, mandatory) and a **Packet Data Field** (variable length, 1–65,536 bytes).
-
+```go
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType:      spp.PacketTypeTM,
+    MaxPacketLength: 1024,               // optional, defaults to 65542
+    SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
+    ErrorControl:    true,               // optional, validate CRC on received packets
+})
 ```
-                         Space Packet
-┌──────────────────────────┬──────────────────────────────┐
-│   Packet Primary Header  │     Packet Data Field        │
-│        (6 bytes)         │    (1 to 65,536 bytes)       │
-└──────────────────────────┴──────────────────────────────┘
-```
-
-Total packet size ranges from **7 bytes** (6-byte header + 1 byte of data) to **65,542 bytes**.
-
-### Packet Primary Header
-
-The 6-byte header is divided into three 16-bit words:
-
-```
-Word 1: Packet Identification
-┌─────────┬──────┬────────────┬─────────────────────┐
-│ Version │ Type │ Sec Header │        APID         │
-│  (3b)   │ (1b) │   Flag(1b) │       (11b)         │
-└─────────┴──────┴────────────┴─────────────────────┘
-
-Word 2: Packet Sequence Control
-┌──────────────────┬─────────────────────────────────┐
-│  Sequence Flags  │       Sequence Count            │
-│      (2b)        │          (14b)                  │
-└──────────────────┴─────────────────────────────────┘
-
-Word 3: Packet Data Length
-┌───────────────────────────────────────────────────┐
-│              Packet Data Length                    │
-│                   (16b)                           │
-└───────────────────────────────────────────────────┘
-```
-
-#### Packet Version Number (3 bits)
-
-Always `000` for the current version of SPP. This field identifies the packet as a CCSDS Space Packet and distinguishes it from other packet types that might share the same link.
-
-#### Packet Type (1 bit)
-
-| Value | Meaning |
-|-------|---------|
-| `0` | Telemetry (TM) — data from spacecraft |
-| `1` | Telecommand (TC) — commands to spacecraft |
-
-This bit determines the direction of data flow. A spacecraft's onboard router uses this field to decide whether a packet should be processed locally (TC) or forwarded to the downlink (TM).
-
-#### Secondary Header Flag (1 bit)
-
-| Value | Meaning |
-|-------|---------|
-| `0` | No secondary header present |
-| `1` | Secondary header is present |
-
-When set, the Packet Data Field begins with a mission-defined secondary header (typically containing a timestamp). The CCSDS standard does not prescribe the format of the secondary header — it is entirely mission-specific.
-
-#### Application Process Identifier — APID (11 bits)
-
-The APID is the **addressing mechanism** of SPP. It identifies which application process on the spacecraft generated (for TM) or should receive (for TC) the packet. Valid range: 0–2047.
-
-| APID | Usage |
-|------|-------|
-| `0x000–0x7FE` | Mission-defined application processes |
-| `0x7FF` (2047) | Idle packet (fill data, no application meaning) |
-
-A spacecraft might assign APIDs like this:
-
-| APID | Application |
-|------|-------------|
-| 1 | Attitude determination |
-| 2 | Thermal subsystem housekeeping |
-| 10 | Star tracker images |
-| 100 | Payload science data |
-| 200 | Command echo/verification |
-
-The APID space is managed per mission. Ground systems use the APID to route received packets to the correct processing pipeline.
-
-#### Sequence Flags (2 bits)
-
-These flags indicate where a packet falls within a sequence of related packets:
-
-| Value | Name | Meaning |
-|-------|------|---------|
-| `00` | Continuation | Middle segment of a multi-packet group |
-| `01` | First Segment | First packet in a group |
-| `10` | Last Segment | Last packet in a group |
-| `11` | Unsegmented | Complete, standalone packet |
-
-Most packets use `11` (unsegmented). The segmentation flags are used when a single application data unit is too large to fit in one packet and must be split across multiple packets. The receiving application reassembles the segments in order using the Sequence Count.
-
-#### Sequence Count (14 bits)
-
-A per-APID counter that increments with each packet sent. Range: 0–16,383, wrapping back to 0 after 16,383.
-
-**Purpose:**
-- **Loss detection**: If the ground receives packets with counts 41, 42, 44, it knows packet 43 was lost.
-- **Ordering**: If packets arrive out of order (possible with some link configurations), the sequence count restores the original order.
-- **Duplicate detection**: Two packets with the same APID and sequence count indicate a duplicate.
-
-Each APID maintains its own independent sequence counter. Packet 42 from APID 1 and packet 42 from APID 2 are unrelated.
-
-#### Packet Data Length (16 bits)
-
-The number of bytes in the Packet Data Field **minus one**. This "minus one" convention means:
-- A value of `0` indicates 1 byte of data.
-- A value of `65,535` indicates 65,536 bytes of data.
-- The minimum Packet Data Field is 1 byte; the maximum is 65,536 bytes.
-
-This field allows the receiver to know exactly how many bytes to read after the header without any framing ambiguity.
-
-### Packet Data Field
-
-The Packet Data Field contains the actual payload and optional framing fields:
-
-```
-┌─────────────────────┬───────────────────┬──────────────────┐
-│  Secondary Header   │   User Data       │  Error Control   │
-│  (optional, 1-63B)  │   (variable)      │  (optional, 2B)  │
-└─────────────────────┴───────────────────┴──────────────────┘
-```
-
-**Constraint (C1/C2):** A packet must contain at least a Secondary Header or User Data. An empty Packet Data Field (no secondary header and no user data) is not valid.
-
-#### Secondary Header
-
-When the Secondary Header Flag is set, the first bytes of the Packet Data Field are a mission-defined secondary header. Common uses:
-
-- **Timestamp**: When the data was acquired (most common use)
-- **Packet subcategory**: Further classifying data within an APID
-- **Data quality flags**: Indicating sensor status at acquisition time
-
-The CCSDS standard limits the secondary header to **1–63 bytes** and requires the format to be fixed for a given APID — all packets from the same APID must use the same secondary header structure.
-
-#### User Data
-
-The application payload. This is the actual telemetry measurement, command parameters, image data, or whatever the application process needs to transfer. The structure is entirely application-defined.
-
-#### Error Control (optional)
-
-An optional 2-byte CRC-16-CCITT checksum appended at the end of the Packet Data Field. When present, it covers the entire packet (header + data field, excluding the CRC itself) and allows the receiver to detect bit errors.
-
-The polynomial used is the standard CCITT CRC-16: `x^16 + x^12 + x^5 + 1` (0x1021), with an initial value of `0xFFFF`.
-
-## Idle Packets
-
-Idle packets (APID = `0x7FF`) serve as **fill data**. They are used when:
-- A fixed-rate link has no real data to send but must keep transmitting.
-- Transfer Frame slots need to be filled to maintain the fixed frame length.
-- Timing synchronization requires continuous transmission.
-
-Receivers should recognize and discard idle packets. Their data field content is meaningless (typically all `0xFF` or zeros).
-
-## Services
-
-The standard defines two service interfaces for applications to send and receive data:
-
-### Packet Service
-
-The application constructs a complete `SpacePacket` and hands it to the service layer. The service stamps it with a sequence count and transmits it. On the receive side, the service delivers complete decoded packets.
-
-This service gives the application full control over the packet structure, including secondary headers and segmentation.
 
 ### Octet String Service
 
-The application provides raw bytes and an APID. The service layer wraps them in a valid Space Packet automatically — constructing the header, assigning the sequence count, and optionally computing the CRC.
+The simplest way to send and receive data. The service wraps your bytes in a valid space packet automatically:
 
-This is the simpler interface, suitable for applications that just need to move data without worrying about packet structure.
+```go
+// Send raw bytes
+err := svc.SendBytes(100, []byte("payload data"))
 
-## Relationship with Data Link Protocols
+// Send with a secondary header and CRC
+err := svc.SendBytes(100, data,
+    spp.WithSendSecondaryHeader(myHeader),
+    spp.WithSendErrorControl(),
+)
 
-Space Packets do not travel alone — they are carried inside **Transfer Frames** at the Data Link Layer. The relationship works as follows:
-
-1. **Multiplexing**: Multiple packets from different APIDs can be packed into the same Transfer Frame. The Data Link Layer uses the **First Header Pointer** in the frame header to locate the first packet boundary.
-
-2. **Spanning**: A single large packet can span multiple Transfer Frames. The receiver accumulates data across frames and uses the packet length field to know when the packet is complete.
-
-3. **Virtual Channels**: Different Virtual Channels can carry different sets of APIDs, providing bandwidth allocation and priority between data streams.
-
-```
-Transfer Frame 1           Transfer Frame 2
-┌──────────────────────┐   ┌──────────────────────┐
-│ HDR │ [Pkt A][Pkt B  │   │  Pkt B cont][Pkt C]  │
-│     │       ↑        │   │  ↑                   │
-│     │  FHP=len(PktA) │   │  FHP=remaining_B     │
-└──────────────────────┘   └──────────────────────┘
+// Receive — returns APID and user data
+apid, data, err := svc.ReceiveBytes()
 ```
 
-## Design Rationale
+### Packet Service
 
-Several design choices in SPP reflect the unique constraints of space communication:
+For full control over the packet structure, build a `SpacePacket` and send it directly:
 
-**Why 11-bit APID?** 2,048 addresses is enough for even complex spacecraft (most missions use fewer than 100 APIDs) while keeping the header compact. Every byte matters when your downlink is 1 kbps.
+```go
+// Send a pre-built packet (sequence count is stamped automatically)
+err := svc.SendPacket(packet)
 
-**Why a separate Packet Type bit?** Spacecraft often have separate telemetry and telecommand processing chains. A single bit in a fixed position lets hardware routers make forwarding decisions without parsing the payload.
+// Receive and decode a packet
+packet, err := svc.ReceivePacket()
+```
 
-**Why "length minus one"?** This eliminates the ambiguity of whether length=0 means "empty" or "one byte" and guarantees every packet carries at least one byte of data, which is a CCSDS architectural requirement.
+### Sequence Counting
 
-**Why per-APID sequence counts?** Different applications generate data at different rates. A shared counter would wrap too quickly for high-rate instruments and waste counter space for low-rate housekeeping. Per-APID counting also means a lost packet from one application doesn't affect gap detection for another.
+The service automatically maintains a per-APID 14-bit sequence counter (per CCSDS 133.0-B-2 Section 4.1.3.5). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
+
+## Creating Packets
+
+For use cases outside the Service layer (testing, offline encoding, custom transports), construct packets directly:
+
+```go
+// Telemetry packet with APID 100
+packet, err := spp.NewTMPacket(100, []byte("temperature=22.5"))
+
+// Telecommand packet with APID 200
+packet, err := spp.NewTCPacket(200, []byte("SET_MODE=SAFE"))
+
+// Generic constructor with explicit type
+packet, err := spp.NewSpacePacket(100, spp.PacketTypeTM, data)
+```
+
+### Packet Options
+
+Options configure optional fields:
+
+```go
+// With error control (CRC-16-CCITT, auto-computed during Encode)
+packet, err := spp.NewTMPacket(100, data, spp.WithErrorControl())
+
+// With a mission-specific secondary header
+packet, err := spp.NewTMPacket(100, data, spp.WithSecondaryHeader(myHeader))
+
+// With manual sequence count and flags (for packets built outside a Service)
+packet, err := spp.NewTMPacket(100, data,
+    spp.WithSequenceCount(42),
+    spp.WithSequenceFlags(spp.SeqFlagFirstSegment),
+)
+
+// Combining options
+packet, err := spp.NewTMPacket(100, data,
+    spp.WithSecondaryHeader(myHeader),
+    spp.WithErrorControl(),
+)
+```
+
+### Inspecting Packets
+
+```go
+// Check if a packet is an idle packet (APID 0x7FF)
+if packet.IsIdle() { ... }
+
+// Human-readable dump for debugging
+fmt.Println(packet.Humanize())
+```
+
+### Packet Sizing
+
+The `PacketSizer` function returns the total packet length from the first 6 header bytes of a Space Packet. It is used by the `tmdl` VCP service for detecting packet boundaries during reassembly from fixed-length transfer frames. Call `SetPacketSizer` on the VCP service to wire it up:
+
+```go
+// PacketSizer returns the total packet length from header bytes.
+// header must be at least 6 bytes (the primary header size).
+totalLen := spp.PacketSizer(headerBytes)
+```
+
+## Encoding and Decoding
+
+```go
+// Encode a packet to bytes for transmission
+encoded, err := packet.Encode()
+
+// Decode bytes back into a packet
+decoded, err := spp.Decode(encoded)
+
+// Decode with a secondary header decoder
+decoded, err := spp.Decode(encoded, spp.WithDecodeSecondaryHeader(&MySecondaryHeader{}))
+
+// Decode with error control (CRC) validation
+decoded, err := spp.Decode(encoded, spp.WithDecodeErrorControl())
+
+// Combine decode options
+decoded, err := spp.Decode(encoded,
+    spp.WithDecodeSecondaryHeader(&MySecondaryHeader{}),
+    spp.WithDecodeErrorControl(),
+)
+```
+
+When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation via `WithDecodeSecondaryHeader`. If none is provided, the secondary header bytes are included in `UserData`.
+
+When `WithDecodeErrorControl()` is used, the trailing 2 bytes are extracted as a CRC-16-CCITT checksum and verified against the packet contents. If the CRC does not match, `ErrCRCValidationFailed` is returned.
+
+## Secondary Headers
+
+The secondary header format is mission-defined. Implement the `SecondaryHeader` interface:
+
+```go
+type SecondaryHeader interface {
+    Encode() ([]byte, error)
+    Decode([]byte) error
+    Size() int  // fixed size in bytes (1–63)
+}
+```
+
+Example implementation:
+
+```go
+type TimestampHeader struct {
+    Seconds     uint32
+    Subseconds  uint16
+}
+
+func (h *TimestampHeader) Encode() ([]byte, error) {
+    buf := make([]byte, 6)
+    binary.BigEndian.PutUint32(buf[0:4], h.Seconds)
+    binary.BigEndian.PutUint16(buf[4:6], h.Subseconds)
+    return buf, nil
+}
+
+func (h *TimestampHeader) Decode(data []byte) error {
+    if len(data) < 6 {
+        return errors.New("insufficient data for timestamp header")
+    }
+    h.Seconds = binary.BigEndian.Uint32(data[0:4])
+    h.Subseconds = binary.BigEndian.Uint16(data[4:6])
+    return nil
+}
+
+func (h *TimestampHeader) Size() int { return 6 }
+```
+
+## Packet Structure
+
+```
++----------------+----------------+----------------+----------------+
+| Version (3b)   | Type (1b)      | SecHdrFlag (1b)| APID (11b)     |
++----------------+----------------+----------------+----------------+
+| SeqFlags (2b)  | Sequence Count (14b)                            |
++----------------+----------------+----------------+----------------+
+| Packet Length (16b)                                               |
++----------------+----------------+----------------+----------------+
+| Secondary Header (optional, 1–63 bytes, mission-defined)         |
++----------------+----------------+----------------+----------------+
+| User Data Field (variable length)                                |
++----------------+----------------+----------------+----------------+
+| Error Control (optional, 16b CRC)                                |
++----------------+----------------+----------------+----------------+
+```
+
+A packet must contain at least a secondary header or user data (CCSDS C1/C2). Total packet size: 7–65,542 bytes.
+
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|-------|---------|
+| `ErrInvalidVersion` | Version is not 0 |
+| `ErrInvalidType` | Type is not 0 or 1 |
+| `ErrInvalidAPID` | APID outside 0–2047 |
+| `ErrInvalidSequenceFlags` | Sequence flags outside 0–3 |
+| `ErrInvalidSequenceCount` | Sequence count outside 0–16383 |
+| `ErrInvalidHeader` | Header does not conform to CCSDS |
+| `ErrEmptyPacket` | Packet has no secondary header and no user data (C1/C2) |
+| `ErrNilPacket` | Nil packet provided |
+| `ErrPacketTooLarge` | Total packet size outside 7–65542 bytes |
+| `ErrDataTooShort` | Input data too short to decode |
+| `ErrPacketLengthMismatch` | Data field size doesn't match header length |
+| `ErrSecondaryHeaderMissing` | Flag is set but no secondary header provided |
+| `ErrSecondaryHeaderTooSmall` | Secondary header less than 1 byte |
+| `ErrSecondaryHeaderTooLarge` | Secondary header exceeds 63 bytes |
+| `ErrCRCValidationFailed` | CRC integrity check failed |
 
 ## Reference
 
-- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol (Blue Book)
-- [CCSDS 133.0-G-1](https://public.ccsds.org/Pubs/133x0g1.pdf) — Space Packet Protocol Summary (Green Book)
+- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol Blue Book

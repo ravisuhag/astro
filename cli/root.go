@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"embed"
+
 	"github.com/raystack/salt/cli/commander"
 	"github.com/spf13/cobra"
 )
 
 // New creates the root command for the astro CLI.
-func New() *cobra.Command {
+func New(docsFS embed.FS) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "astro <command> <subcommand> [flags]",
 		Short: "CCSDS and ECSS space communication toolkit",
@@ -26,6 +28,7 @@ func New() *cobra.Command {
 	cmd.AddCommand(tcCmd())
 	cmd.AddCommand(caduCmd())
 	cmd.AddCommand(cltuCmd())
+	cmd.AddCommand(manualCmd(docsFS))
 
 	mgr := commander.New(cmd)
 	mgr.Init()
