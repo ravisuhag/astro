@@ -46,6 +46,7 @@ astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate
 | `astro tc` | TC Transfer Frames — encode, decode, inspect | [Reference](docs/cli/tc.md) |
 | `astro cadu` | Channel Access Data Units — wrap, unwrap, inspect, sync | [Reference](docs/cli/cadu.md) |
 | `astro cltu` | Command Link Transmission Units — wrap, unwrap, inspect | [Reference](docs/cli/cltu.md) |
+| `astro usdl` | USLP Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/usdl.md) |
 
 ## Library Usage
 
@@ -90,7 +91,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/cop.md) \| [PICS](docs/pics/cop-pics.md) |
 | Space Data Link Security | [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) | | |
 | AOS Space Data Link Protocol | [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) | | |
-| Unified Space Data Link Protocol | [CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf) | | |
+| Unified Space Data Link Protocol | [CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf) | [`pkg/usdl`](pkg/usdl) | [Guide](docs/guides/usdl.md) \| [CLI](docs/cli/usdl.md) \| [PICS](docs/pics/usdl-pics.md) |
 | **Synchronization and Channel Coding** | | | |
 | TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | | |

@@ -43,3 +43,36 @@ func TestComputeCRC16(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeCRC32(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want uint32
+	}{
+		{
+			name: "standard ASCII 123456789",
+			data: []byte("123456789"),
+			want: 0xE3069283,
+		},
+		{
+			name: "empty input",
+			data: []byte{},
+			want: 0x00000000,
+		},
+		{
+			name: "single zero byte",
+			data: []byte{0x00},
+			want: 0x527D5351,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := crc.ComputeCRC32(tt.data)
+			if got != tt.want {
+				t.Errorf("ComputeCRC32(%x) = 0x%08X, want 0x%08X", tt.data, got, tt.want)
+			}
+		})
+	}
+}
