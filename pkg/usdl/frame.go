@@ -387,14 +387,6 @@ func (f *TransferFrame) computeTotalLength() int {
 	return total
 }
 
-// fecSize returns the FECF size in bytes.
-func (f *TransferFrame) fecSize() int {
-	if f.UseCRC32 {
-		return FECSize32
-	}
-	return FECSize16
-}
-
 // computeFECF computes the Frame Error Control Field.
 func (f *TransferFrame) computeFECF() error {
 	encoded, err := f.encodeWithoutFECF()

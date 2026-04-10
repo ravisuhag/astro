@@ -197,7 +197,7 @@ func TestMAPPacketService_FixedLength_SequenceNumbers(t *testing.T) {
 	}
 
 	// Verify frames have sequential sequence numbers and correct header
-	var lastSeq int = -1
+	lastSeq := -1
 	for {
 		frame, err := vc.Next()
 		if err != nil {
