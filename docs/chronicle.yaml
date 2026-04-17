@@ -1,0 +1,27 @@
+title: Astro
+description: Space Communication Protocols
+content: .
+
+theme:
+  name: paper
+
+navigation:
+  links:
+    - label: GitHub
+      href: https://github.com/ravisuhag/astro
+
+search:
+  enabled: true
+  placeholder: Search docs...
+
+llms:
+  enabled: true
+
+telemetry:
+  enabled: false
+
+footer:
+  copyright: "© 2026 Ravi Suhag. All rights reserved."
+  links:
+    - label: GitHub
+      href: https://github.com/ravisuhag/astro
