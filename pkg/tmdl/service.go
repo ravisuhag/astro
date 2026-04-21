@@ -85,21 +85,34 @@ type VirtualChannelPacketService struct {
 	packetOffsets []int
 
 	// Receive-side state for FHP-based extraction
-	recvBuf     []byte
-	synced      bool
-	sizer       PacketSizer
-	gapDetector *FrameGapDetector
+	recvBuf      []byte
+	synced       bool
+	sizer        PacketSizer
+	gapDetector  *FrameGapDetector
+	gapResync    bool // when true, discard partial packets on frame gaps
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
+// Gap-based resync is enabled automatically when a FrameCounter is provided.
+// For pure receivers (counter=nil) that consume externally-stamped frames,
+// call SetGapResync(true) to enable resync on frame loss.
 func NewVirtualChannelPacketService(scid uint16, vcid uint8, vc *VirtualChannel, config ChannelConfig, counter *FrameCounter) *VirtualChannelPacketService {
 	return &VirtualChannelPacketService{
-		scid:    scid,
-		vcid:    vcid,
-		config:  config,
-		counter: counter,
-		vc:      vc,
+		scid:      scid,
+		vcid:      vcid,
+		config:    config,
+		counter:   counter,
+		vc:        vc,
+		gapResync: counter != nil,
 	}
+}
+
+// SetGapResync enables or disables gap-based resync on the receive side.
+// When enabled, the receiver discards partially-assembled packets whenever
+// a frame gap is detected. Enable this for pure receivers that consume
+// externally-stamped frames without a local FrameCounter.
+func (s *VirtualChannelPacketService) SetGapResync(enabled bool) {
+	s.gapResync = enabled
 }
 
 // SetPacketSizer configures the PacketSizer used by Receive() to detect
@@ -262,9 +275,10 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 			continue
 		}
 
-		// VC gap detection (only meaningful when frames are counter-stamped)
+		// VC gap detection: resync when frames are lost to avoid
+		// assembling corrupt packets from non-contiguous data.
 		_, vcGap := s.gapDetector.Track(frame)
-		if s.counter != nil && vcGap > 0 {
+		if s.gapResync && vcGap > 0 {
 			s.recvBuf = nil
 			s.synced = false
 		}

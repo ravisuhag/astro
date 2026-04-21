@@ -301,8 +301,8 @@ func main() {
 			fmt.Printf("  [BCH] Corrected %d bit error(s)\n", corrections)
 		}
 
-		// Step 2: Decode TC Transfer Frame and verify CRC.
-		frame, err := tcdl.DecodeTCTransferFrame(frameData)
+		// Step 2: Decode TC Transfer Frame (with MAP segment header) and verify CRC.
+		frame, err := tcdl.DecodeTCTransferFrameWithSegmentHeader(frameData)
 		if err != nil {
 			fmt.Printf("  [CRC FAIL] Frame decode error: %v\n", err)
 			rejectedFrames++
@@ -334,19 +334,7 @@ func main() {
 			frame.Header.VirtualChannelID, frame.Header.FrameSequenceNum, farm.VR())
 		acceptedFrames++
 
-		// Step 4: Parse segment header from data field.
-		// DecodeTCTransferFrame leaves the segment header in DataField since
-		// it cannot know whether a segment header is present. We parse it
-		// here because we know our MAP services always include one.
-		if len(frame.DataField) > 0 {
-			sh := &tcdl.SegmentHeader{}
-			if err := sh.Decode(frame.DataField[:1]); err == nil {
-				frame.SegmentHeader = sh
-				frame.DataField = frame.DataField[1:]
-			}
-		}
-
-		// Step 5: Route accepted frame to master channel for packet extraction.
+		// Step 4: Route accepted frame to master channel for packet extraction.
 		if err := scMaster.AddFrame(frame); err != nil {
 			fmt.Printf("  [ROUTE ERROR] %v\n", err)
 			continue

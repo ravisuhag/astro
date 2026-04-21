@@ -283,7 +283,7 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 
 	_ = svc.Send(pkt1) // buffer: 7 bytes, offsets: [0]
 	_ = svc.Send(pkt2) // buffer: 14 bytes, offsets: [0, 7] → generates 1 full frame (10 bytes)
-	_ = svc.Flush()     // flushes remaining 4 bytes
+	_ = svc.Flush()    // flushes remaining 4 bytes
 
 	// Frame 1 should have FHP=0 (pkt1 at offset 0, pkt2 at offset 7)
 	f1, _ := vc.Next()
@@ -786,6 +786,52 @@ func TestVCPService_FrameLoss_MiddleFrame(t *testing.T) {
 	}
 	if recovered == nil {
 		t.Log("pkt2 not recovered after middle-frame loss (expected in some FHP configurations)")
+	}
+}
+
+func TestVCPService_FrameLoss_GapResyncEnabled(t *testing.T) {
+	// Verify gap detection works for pure receivers using SetGapResync(true)
+	// even when no FrameCounter is provided.
+	config := tmdl.ChannelConfig{FrameLength: 18, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 100)
+	counter := tmdl.NewFrameCounter()
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, counter)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	pkt1 := makeTestPacket(bytes.Repeat([]byte{0xAA}, 20))
+	pkt2 := makeTestPacket(bytes.Repeat([]byte{0xBB}, 5))
+
+	_ = svc.Send(pkt1)
+	_ = svc.Send(pkt2)
+	_ = svc.Flush()
+
+	// Collect all frames (these have valid sequence numbers from counter).
+	var frames []*tmdl.TMTransferFrame
+	for vc.HasFrames() {
+		f, _ := vc.Next()
+		frames = append(frames, f)
+	}
+
+	vc2 := tmdl.NewVirtualChannel(1, 100)
+	// Pure receiver: no counter, but enable gap resync since frames
+	// have valid sequence numbers from the sender.
+	recv := tmdl.NewVirtualChannelPacketService(933, 1, vc2, config, nil)
+	recv.SetPacketSizer(spp.PacketSizer)
+	recv.SetGapResync(true)
+
+	// Feed first frame, skip second (simulate loss), feed remaining.
+	_ = vc2.Add(frames[0])
+	for _, f := range frames[2:] {
+		_ = vc2.Add(f)
+	}
+
+	// After frame loss, receiver should resync and eventually yield pkt2.
+	received, err := recv.Receive()
+	if err != nil {
+		t.Fatalf("Receive after gap with nil counter: %v", err)
+	}
+	if !bytes.Equal(pkt2, received) {
+		t.Errorf("Expected pkt2 after resync, got %d bytes (want %d)", len(received), len(pkt2))
 	}
 }
 

@@ -210,7 +210,7 @@ func (rs *RSCodec) chienSearch(sigma []byte, nerrs int) []int {
 	return positions
 }
 
-// evalPoly evaluates polynomial p at point x using Horner's method.
+// evalPoly evaluates polynomial p at point x using direct power accumulation.
 // p[0] is the constant term.
 func evalPoly(p []byte, x byte) byte {
 	val := byte(0)

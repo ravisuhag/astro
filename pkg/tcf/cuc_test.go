@@ -195,6 +195,55 @@ func TestCUCInvalidTimeCodeID(t *testing.T) {
 	}
 }
 
+func TestCUCExtendedFineBytes(t *testing.T) {
+	// Verify FineBytes=5 and FineBytes=6 don't overflow and roundtrip correctly.
+	for _, fb := range []uint8{5, 6} {
+		testTime := CCSDSEpoch.Add(100*time.Second + 123456789*time.Nanosecond)
+
+		cuc, err := NewCUC(testTime, WithCUCCoarseBytes(5), WithCUCFineBytes(fb))
+		if err != nil {
+			t.Fatalf("NewCUC FineBytes=%d failed: %v", fb, err)
+		}
+
+		if cuc.FineTime == 0 {
+			t.Errorf("FineBytes=%d: expected non-zero FineTime", fb)
+		}
+
+		encoded, err := cuc.Encode()
+		if err != nil {
+			t.Fatalf("FineBytes=%d: Encode failed: %v", fb, err)
+		}
+
+		decoded, err := DecodeCUC(encoded, time.Time{})
+		if err != nil {
+			t.Fatalf("FineBytes=%d: DecodeCUC failed: %v", fb, err)
+		}
+
+		if decoded.FineBytes != fb {
+			t.Errorf("FineBytes=%d: decoded FineBytes=%d", fb, decoded.FineBytes)
+		}
+
+		// Re-encode and compare bytes
+		reEncoded, err := decoded.Encode()
+		if err != nil {
+			t.Fatalf("FineBytes=%d: Re-encode failed: %v", fb, err)
+		}
+
+		if !bytes.Equal(encoded, reEncoded) {
+			t.Errorf("FineBytes=%d: roundtrip bytes differ", fb)
+		}
+
+		// Time roundtrip should be very close (sub-nanosecond for 5-6 octets)
+		diff := cuc.Time().Sub(decoded.Time())
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > time.Nanosecond {
+			t.Errorf("FineBytes=%d: roundtrip time diff %v too large", fb, diff)
+		}
+	}
+}
+
 func TestCUCPFieldExtensionBitLayout(t *testing.T) {
 	// Verify extension octet encodes additional coarse in bits 1-2
 	// and additional fine in bits 3-5 per §3.2.2

@@ -25,4 +25,8 @@ var (
 
 	// ErrEmptyData indicates that empty data was provided for encoding.
 	ErrEmptyData = errors.New("empty data provided")
+
+	// ErrInvalidInfoLength indicates that BCHEncode was called with a slice
+	// that is not exactly 7 bytes (InfoBytes).
+	ErrInvalidInfoLength = errors.New("BCH info must be exactly 7 bytes")
 )

@@ -104,7 +104,10 @@ func WrapCLTU(frameData, startSeq, tailSeq []byte, randomize bool) ([]byte, erro
 	// Encode each 7-byte info block into an 8-byte codeblock.
 	for i := range numBlocks {
 		info := padded[i*InfoBytes : (i+1)*InfoBytes]
-		cb := BCHEncode(info)
+		cb, err := BCHEncode(info)
+		if err != nil {
+			return nil, err
+		}
 		copy(cltu[offset:], cb[:])
 		offset += CodeblockBytes
 	}

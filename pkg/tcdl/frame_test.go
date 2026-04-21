@@ -160,6 +160,69 @@ func TestTCFrame_WithSegmentHeader(t *testing.T) {
 	}
 }
 
+func TestTCFrame_DecodeWithSegmentHeaderRoundTrip(t *testing.T) {
+	data := []byte("payload")
+	sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegFirst, MAPID: 7}
+	frame, err := tcdl.NewTCTransferFrame(100, 3, data,
+		tcdl.WithSegmentHeader(sh),
+		tcdl.WithSequenceNumber(42),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Decode with segment header awareness
+	decoded, err := tcdl.DecodeTCTransferFrameWithSegmentHeader(encoded)
+	if err != nil {
+		t.Fatalf("DecodeTCTransferFrameWithSegmentHeader failed: %v", err)
+	}
+
+	if decoded.SegmentHeader == nil {
+		t.Fatal("expected SegmentHeader to be non-nil")
+	}
+	if decoded.SegmentHeader.SequenceFlags != tcdl.SegFirst {
+		t.Errorf("SequenceFlags = %d, want %d", decoded.SegmentHeader.SequenceFlags, tcdl.SegFirst)
+	}
+	if decoded.SegmentHeader.MAPID != 7 {
+		t.Errorf("MAPID = %d, want 7", decoded.SegmentHeader.MAPID)
+	}
+	if !bytes.Equal(decoded.DataField, data) {
+		t.Errorf("DataField = %q, want %q", decoded.DataField, data)
+	}
+
+	// Re-encode and compare bytes
+	reEncoded, err := decoded.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(encoded, reEncoded) {
+		t.Error("roundtrip encode produced different bytes")
+	}
+}
+
+func TestTCFrame_DecodeWithoutSegmentHeader(t *testing.T) {
+	// Ensure the original DecodeTCTransferFrame still works as before.
+	data := []byte("test")
+	frame, _ := tcdl.NewTCTransferFrame(42, 5, data)
+	encoded, _ := frame.Encode()
+
+	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.SegmentHeader != nil {
+		t.Error("expected SegmentHeader to be nil for basic decode")
+	}
+	if !bytes.Equal(decoded.DataField, data) {
+		t.Errorf("DataField = %q, want %q", decoded.DataField, data)
+	}
+}
+
 func TestTCFrame_CRCMismatch(t *testing.T) {
 	frame, _ := tcdl.NewTCTransferFrame(42, 5, []byte("test"))
 	encoded, _ := frame.Encode()

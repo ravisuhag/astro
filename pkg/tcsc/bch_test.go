@@ -8,7 +8,10 @@ import (
 
 func TestBCHEncode_CodeblockSize(t *testing.T) {
 	info := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(cb) != tcsc.CodeblockBytes {
 		t.Fatalf("codeblock length = %d, want %d", len(cb), tcsc.CodeblockBytes)
 	}
@@ -23,7 +26,10 @@ func TestBCHEncode_CodeblockSize(t *testing.T) {
 func TestBCHEncode_ParityNotZero(t *testing.T) {
 	// Non-zero data should produce non-zero parity.
 	info := []byte{0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cb[tcsc.InfoBytes] == 0 {
 		t.Error("parity byte should not be zero for non-trivial data")
 	}
@@ -31,7 +37,10 @@ func TestBCHEncode_ParityNotZero(t *testing.T) {
 
 func TestBCHEncode_AllZeros(t *testing.T) {
 	info := make([]byte, tcsc.InfoBytes)
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// For all-zero information, the parity should also be zero.
 	// The filler bit (complement of LSB of parity) should be 1.
 	if cb[tcsc.InfoBytes] != 0x01 {
@@ -39,9 +48,32 @@ func TestBCHEncode_AllZeros(t *testing.T) {
 	}
 }
 
+func TestBCHEncode_InvalidLength(t *testing.T) {
+	// Too short
+	_, err := tcsc.BCHEncode([]byte{0x01})
+	if err == nil {
+		t.Error("expected error for 1-byte input, got nil")
+	}
+
+	// Too long
+	_, err = tcsc.BCHEncode(make([]byte, 8))
+	if err == nil {
+		t.Error("expected error for 8-byte input, got nil")
+	}
+
+	// Empty
+	_, err = tcsc.BCHEncode(nil)
+	if err == nil {
+		t.Error("expected error for nil input, got nil")
+	}
+}
+
 func TestBCHDecode_NoErrors(t *testing.T) {
 	info := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	decoded, corr, err := tcsc.BCHDecode(cb)
 	if err != nil {
@@ -59,7 +91,10 @@ func TestBCHDecode_NoErrors(t *testing.T) {
 
 func TestBCHDecode_SingleBitError_InfoByte(t *testing.T) {
 	info := []byte{0xAB, 0xCD, 0xEF, 0x12, 0x34, 0x56, 0x78}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Flip bit 4 of byte 2 (an information byte).
 	cb[2] ^= 0x10
@@ -80,7 +115,10 @@ func TestBCHDecode_SingleBitError_InfoByte(t *testing.T) {
 
 func TestBCHDecode_SingleBitError_ParityByte(t *testing.T) {
 	info := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Flip a bit in the parity byte (bit 3).
 	cb[tcsc.InfoBytes] ^= 0x08
@@ -101,13 +139,16 @@ func TestBCHDecode_SingleBitError_ParityByte(t *testing.T) {
 
 func TestBCHDecode_TwoBitErrors_Uncorrectable(t *testing.T) {
 	info := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Flip two bits.
 	cb[0] ^= 0x80
 	cb[1] ^= 0x01
 
-	_, _, err := tcsc.BCHDecode(cb)
+	_, _, err = tcsc.BCHDecode(cb)
 	if err == nil {
 		t.Fatal("expected error for 2-bit error, got nil")
 	}
@@ -125,7 +166,10 @@ func TestBCHEncodeDecode_AllInfoBytes(t *testing.T) {
 	}
 
 	for _, info := range patterns {
-		cb := tcsc.BCHEncode(info)
+		cb, err := tcsc.BCHEncode(info)
+		if err != nil {
+			t.Fatalf("info %x: unexpected error: %v", info, err)
+		}
 		decoded, corr, err := tcsc.BCHDecode(cb)
 		if err != nil {
 			t.Errorf("info %x: unexpected error: %v", info, err)
@@ -145,7 +189,10 @@ func TestBCHEncodeDecode_AllInfoBytes(t *testing.T) {
 func TestBCHDecode_SingleBitError_EachPosition(t *testing.T) {
 	// Test single-bit correction at every position in the 56 info bits.
 	info := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0x42}
-	cb := tcsc.BCHEncode(info)
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for byteIdx := range tcsc.InfoBytes {
 		for bitIdx := range 8 {

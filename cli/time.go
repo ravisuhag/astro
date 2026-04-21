@@ -40,7 +40,7 @@ type timeJSON struct {
 
 	// CUC fields
 	CoarseTime  *uint64 `json:"coarse_time,omitempty"`
-	FineTime    *uint32 `json:"fine_time,omitempty"`
+	FineTime    *uint64 `json:"fine_time,omitempty"`
 	CoarseBytes *uint8  `json:"coarse_bytes,omitempty"`
 	FineBytes   *uint8  `json:"fine_bytes,omitempty"`
 

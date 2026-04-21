@@ -32,9 +32,12 @@ const (
 // BCHEncode computes the 7-bit BCH parity for 7 information bytes (56 bits)
 // and returns an 8-byte codeblock. The parity is placed in the high 7 bits
 // of the 8th byte, and the filler bit (complement of the last parity bit)
-// occupies the LSB.
-func BCHEncode(info []byte) [CodeblockBytes]byte {
+// occupies the LSB. Returns ErrInvalidInfoLength if info is not exactly 7 bytes.
+func BCHEncode(info []byte) ([CodeblockBytes]byte, error) {
 	var cb [CodeblockBytes]byte
+	if len(info) != InfoBytes {
+		return cb, ErrInvalidInfoLength
+	}
 	copy(cb[:InfoBytes], info)
 
 	// Compute parity: systematic encoding via polynomial division.
@@ -60,7 +63,7 @@ func BCHEncode(info []byte) [CodeblockBytes]byte {
 	filler := ^parity & 1 // complement of lowest parity bit
 	cb[InfoBytes] = (parity << 1) | filler
 
-	return cb
+	return cb, nil
 }
 
 // BCHDecode extracts 7 information bytes from an 8-byte codeblock,

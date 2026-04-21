@@ -24,7 +24,7 @@ import (
 type CUC struct {
 	PField      PField    // Preamble field
 	CoarseTime  uint64    // Seconds since epoch
-	FineTime    uint32    // Fractional seconds (binary fraction)
+	FineTime    uint64    // Fractional seconds (binary fraction, up to 48 bits)
 	CoarseBytes uint8     // Number of coarse time octets (1-4, up to 7 with extension)
 	FineBytes   uint8     // Number of fine time octets (0-3, up to 6 with extension)
 	Epoch       time.Time // Reference epoch (CCSDSEpoch for Level 1)
@@ -87,9 +87,21 @@ func NewCUC(t time.Time, opts ...CUCOption) (*CUC, error) {
 	c.CoarseTime = uint64(elapsed.Seconds())
 	if c.FineBytes > 0 {
 		frac := elapsed - time.Duration(c.CoarseTime)*time.Second
-		// Convert fractional part to binary fraction with the configured precision
-		totalFineBits := uint(c.FineBytes) * 8
-		c.FineTime = uint32((frac.Nanoseconds() << totalFineBits) / int64(time.Second))
+		// Convert fractional part to binary fraction with the configured precision.
+		// Use successive doubling to avoid int64 overflow for large totalFineBits.
+		fracNs := frac.Nanoseconds()
+		secNs := int64(time.Second)
+		var fine uint64
+		for range int(c.FineBytes) * 8 {
+			fracNs *= 2
+			if fracNs >= secNs {
+				fine = (fine << 1) | 1
+				fracNs -= secNs
+			} else {
+				fine <<= 1
+			}
+		}
+		c.FineTime = fine
 	}
 
 	// Check coarse time fits in the configured width
@@ -126,7 +138,7 @@ func (c *CUC) Encode() ([]byte, error) {
 
 	// Encode fine time (big-endian, most significant octets)
 	for i := int(c.FineBytes) - 1; i >= 0; i-- {
-		tField = append(tField, byte(c.FineTime>>(uint(i)*8)))
+		tField = append(tField, byte(c.FineTime>>(uint64(i)*8)))
 	}
 
 	return append(pBytes, tField...), nil
@@ -194,7 +206,7 @@ func DecodeCUC(data []byte, epoch time.Time) (*CUC, error) {
 	// Decode fine time
 	c.FineTime = 0
 	for i := range int(c.FineBytes) {
-		c.FineTime = (c.FineTime << 8) | uint32(data[offset+i])
+		c.FineTime = (c.FineTime << 8) | uint64(data[offset+i])
 	}
 
 	return c, c.Validate()
@@ -204,9 +216,19 @@ func DecodeCUC(data []byte, epoch time.Time) (*CUC, error) {
 func (c *CUC) Time() time.Time {
 	t := c.Epoch.Add(time.Duration(c.CoarseTime) * time.Second)
 	if c.FineBytes > 0 {
-		totalFineBits := uint(c.FineBytes) * 8
-		fracNanos := (int64(c.FineTime) * int64(time.Second)) >> totalFineBits
-		t = t.Add(time.Duration(fracNanos))
+		// Reconstruct fractional nanoseconds using successive halving to
+		// avoid overflow for large FineBytes (up to 6 octets = 48 bits).
+		totalBits := int(c.FineBytes) * 8
+		secNs := int64(time.Second)
+		var fracNs int64
+		for i := range totalBits {
+			bit := (c.FineTime >> uint64(totalBits-1-i)) & 1
+			secNs /= 2
+			if bit == 1 {
+				fracNs += secNs
+			}
+		}
+		t = t.Add(time.Duration(fracNs))
 	}
 	return t
 }
@@ -223,6 +245,12 @@ func (c *CUC) Validate() error {
 	if c.CoarseTime > maxCoarse {
 		return ErrOverflow
 	}
+	if c.FineBytes > 0 {
+		maxFine := uint64(1)<<(uint(c.FineBytes)*8) - 1
+		if c.FineTime > maxFine {
+			return ErrOverflow
+		}
+	}
 	return nil
 }
 
@@ -236,7 +264,7 @@ func (c *CUC) Humanize() string {
 		"CUC Time Code:",
 		"  " + level,
 		"  Coarse Time: " + strconv.FormatUint(c.CoarseTime, 10) + " s",
-		"  Fine Time: " + strconv.FormatUint(uint64(c.FineTime), 10),
+		"  Fine Time: " + strconv.FormatUint(c.FineTime, 10),
 		"  Coarse Octets: " + strconv.Itoa(int(c.CoarseBytes)),
 		"  Fine Octets: " + strconv.Itoa(int(c.FineBytes)),
 		"  Time: " + c.Time().UTC().Format(time.RFC3339Nano),

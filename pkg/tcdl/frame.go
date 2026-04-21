@@ -294,8 +294,22 @@ func (tf *TCTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 }
 
 // DecodeTCTransferFrame parses a byte slice into a TC Transfer Frame.
-// Verifies CRC integrity.
+// Verifies CRC integrity. The segment header, if present, remains in
+// DataField because the primary header has no flag to indicate its
+// presence. Use DecodeTCTransferFrameWithSegmentHeader when the MAP
+// sublayer is known to be in use.
 func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
+	return decodeTCFrame(data, false)
+}
+
+// DecodeTCTransferFrameWithSegmentHeader parses a byte slice into a TC
+// Transfer Frame, treating the first byte of the data field as a MAP
+// Segment Header. Use this when the MAP sublayer is known to be in use.
+func DecodeTCTransferFrameWithSegmentHeader(data []byte) (*TCTransferFrame, error) {
+	return decodeTCFrame(data, true)
+}
+
+func decodeTCFrame(data []byte, hasSegmentHeader bool) (*TCTransferFrame, error) {
 	if len(data) < PrimaryHeaderSize+FECSize {
 		return nil, ErrDataTooShort
 	}
@@ -322,14 +336,30 @@ func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
 	// Extract data field (between header and CRC)
 	dataStart := PrimaryHeaderSize
 	dataEnd := expectedLen - FECSize
+
+	frame := &TCTransferFrame{
+		Header:            header,
+		FrameErrorControl: receivedCRC,
+	}
+
+	// Parse segment header if expected
+	if hasSegmentHeader {
+		if dataStart >= dataEnd {
+			return nil, ErrDataTooShort
+		}
+		var sh SegmentHeader
+		if err := sh.Decode(data[dataStart : dataStart+1]); err != nil {
+			return nil, err
+		}
+		frame.SegmentHeader = &sh
+		dataStart++
+	}
+
 	dataField := make([]byte, dataEnd-dataStart)
 	copy(dataField, data[dataStart:dataEnd])
+	frame.DataField = dataField
 
-	return &TCTransferFrame{
-		Header:            header,
-		DataField:         dataField,
-		FrameErrorControl: receivedCRC,
-	}, nil
+	return frame, nil
 }
 
 // IsControlFrame reports whether the frame is a control command frame.
