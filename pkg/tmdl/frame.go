@@ -72,7 +72,7 @@ func (h *PrimaryHeader) Encode() ([]byte, error) {
 
 	// Pack First Header Pointer (11 bits)
 	header[4] |= uint8((h.FirstHeaderPtr >> 8) & 0x07) // Top 3 bits
-	header[5] = uint8(h.FirstHeaderPtr & 0xFF)          // Bottom 8 bits
+	header[5] = uint8(h.FirstHeaderPtr & 0xFF)         // Bottom 8 bits
 
 	return header, nil
 }

@@ -208,4 +208,3 @@ func TestPhysicalChannel_HasPendingFrames(t *testing.T) {
 		t.Error("Expected true")
 	}
 }
-
