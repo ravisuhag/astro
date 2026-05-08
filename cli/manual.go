@@ -18,6 +18,8 @@ var protocols = map[string]string{
 	"time": "time.md",
 	"cadu": "cadu.md",
 	"cltu": "cltu.md",
+	"usdl": "usdl.md",
+	"aos":  "aos.md",
 }
 
 func manualCmd(docsFS embed.FS) *cobra.Command {
@@ -54,6 +56,8 @@ func printManualIndex() error {
 	sb.WriteString("| Time Code Formats | `astro manual time` |\n")
 	sb.WriteString("| Channel Access Data Units | `astro manual cadu` |\n")
 	sb.WriteString("| Command Link Transmission Units | `astro manual cltu` |\n")
+	sb.WriteString("| Unified Space Data Link Protocol | `astro manual usdl` |\n")
+	sb.WriteString("| AOS Space Data Link Protocol | `astro manual aos` |\n")
 
 	out, err := printer.Markdown(sb.String())
 	if err != nil {
