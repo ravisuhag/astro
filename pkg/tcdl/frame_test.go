@@ -3,6 +3,7 @@ package tcdl_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/tcdl"
@@ -249,5 +250,30 @@ func TestTCFrame_IsControlAndBypass(t *testing.T) {
 	}
 	if !tcdl.IsControlFrame(frame) {
 		t.Error("expected IsControlFrame=true")
+	}
+}
+
+func TestDecodeTCFrame_MalformedLengthDoesNotPanic(t *testing.T) {
+	cases := map[string][]byte{
+		// FrameLength=0 header: 7 zero bytes decode as a valid version-0 header,
+		// expectedLen=1 used to slice data[-1:1].
+		"zero length field": make([]byte, 7),
+	}
+	// FrameLength values 1..5 give expectedLen 2..6, below header+FECF.
+	for fl := 1; fl <= 5; fl++ {
+		b := make([]byte, 7)
+		b[2] = byte(fl >> 8 & 0x03)
+		b[3] = byte(fl & 0xFF)
+		cases[fmt.Sprintf("length field %d", fl)] = b
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := tcdl.DecodeTCTransferFrame(data); err == nil {
+				t.Fatal("expected error for malformed frame, got nil")
+			}
+			if _, err := tcdl.DecodeTCTransferFrameWithSegmentHeader(data); err == nil {
+				t.Fatal("expected error for malformed frame, got nil")
+			}
+		})
 	}
 }

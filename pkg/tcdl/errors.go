@@ -20,7 +20,7 @@ var (
 	ErrInvalidVCID = errors.New("invalid virtual channel ID: must be in range 0-63 (6 bits)")
 
 	// ErrInvalidFrameLength indicates the frame length field is out of range.
-	ErrInvalidFrameLength = errors.New("invalid frame length: exceeds maximum of 1024 bytes")
+	ErrInvalidFrameLength = errors.New("invalid frame length: must cover header and FECF and not exceed 1024 bytes")
 
 	// ErrInvalidReservedBits indicates the reserved bits are not zero.
 	ErrInvalidReservedBits = errors.New("invalid reserved bits: must be 00")

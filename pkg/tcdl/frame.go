@@ -322,6 +322,9 @@ func decodeTCFrame(data []byte, hasSegmentHeader bool) (*TCTransferFrame, error)
 
 	// Verify frame length matches data
 	expectedLen := int(header.FrameLength) + 1
+	if expectedLen < PrimaryHeaderSize+FECSize {
+		return nil, ErrInvalidFrameLength
+	}
 	if len(data) < expectedLen {
 		return nil, ErrDataTooShort
 	}
