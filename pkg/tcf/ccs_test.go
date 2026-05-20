@@ -2,6 +2,7 @@ package tcf
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 )
@@ -306,5 +307,17 @@ func TestCCSInvalidTimeCodeID(t *testing.T) {
 	_, err := DecodeCCS(data)
 	if err != ErrInvalidTimeCodeID {
 		t.Errorf("expected ErrInvalidTimeCodeID, got %v", err)
+	}
+}
+
+func TestCCSOversizedSubSecBytes(t *testing.T) {
+	// P-field detail bits 2-0 hold the resolution, so the wire can carry 7
+	// even though only 6 sub-second octets exist. This used to index past
+	// the end of SubSecond and panic.
+	data := []byte("W00000000000000")
+	if _, err := DecodeCCS(data); err == nil {
+		t.Fatal("expected error for 7 sub-second octets, got nil")
+	} else if !errors.Is(err, ErrInvalidCalendarTime) {
+		t.Fatalf("error = %v, want ErrInvalidCalendarTime", err)
 	}
 }

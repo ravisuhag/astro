@@ -176,6 +176,12 @@ func DecodeCCS(data []byte) (*CCS, error) {
 	c.MonthDay = (c.PField.Detail>>3)&0x01 == 0
 	c.SubSecBytes = c.PField.Detail & 0x07
 
+	// The resolution field is 3 bits (0-7), but only 6 sub-second octets are
+	// defined; reject 7 before it indexes past the end of SubSecond.
+	if c.SubSecBytes > 6 {
+		return nil, ErrInvalidCalendarTime
+	}
+
 	// Parse T-field
 	offset := c.PField.Size()
 
