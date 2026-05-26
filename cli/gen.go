@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -17,11 +18,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// maxGenBytes bounds a single generated payload to keep --size typos from
+// exhausting memory.
+const maxGenBytes = 16 << 20 // 16 MiB
+
 // randomBytes generates n random bytes.
-func randomBytes(n int) []byte {
+func randomBytes(n int) ([]byte, error) {
+	if n < 0 {
+		return nil, fmt.Errorf("size must be >= 0, got %d", n)
+	}
+	if n > maxGenBytes {
+		return nil, fmt.Errorf("size must be <= %d bytes, got %d", maxGenBytes, n)
+	}
 	b := make([]byte, n)
-	_, _ = io.ReadFull(rand.Reader, b)
-	return b
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return nil, fmt.Errorf("generating random bytes: %w", err)
+	}
+	return b, nil
 }
 
 func sppGenCmd() *cobra.Command {
@@ -48,7 +61,7 @@ func sppGenCmd() *cobra.Command {
   astro spp gen --apid 100 --count 5 --size 32 --crc`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var pktType uint8
-			switch packetType {
+			switch strings.ToLower(packetType) {
 			case "tm", "0":
 				pktType = spp.PacketTypeTM
 			case "tc", "1":
@@ -57,8 +70,15 @@ func sppGenCmd() *cobra.Command {
 				return fmt.Errorf("invalid --type: %s (use 'tm' or 'tc')", packetType)
 			}
 
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(size)
+				data, err := randomBytes(size)
+				if err != nil {
+					return err
+				}
 				opts := []spp.PacketOption{
 					spp.WithSequenceCount(uint16(i) & 0x3FFF),
 				}
@@ -116,8 +136,15 @@ func tmGenCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var frameSize int
 
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				// Build a base frame to get a valid structure, then
 				// reconstruct with correct counters. NewTMTransferFrame
@@ -192,8 +219,15 @@ func tcGenCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var frameSize int
 
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				var opts []tcdl.FrameOption
 				opts = append(opts, tcdl.WithSequenceNumber(uint8(i)&0xFF))
@@ -257,8 +291,15 @@ func caduGenCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var caduSize int
 
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				frame := &tmdl.TMTransferFrame{
 					Header: tmdl.PrimaryHeader{
@@ -329,8 +370,15 @@ func cltuGenCmd() *cobra.Command {
   # Generate and inspect the first one
   astro cltu gen --scid 26 --vcid 1 --count 1 --data-size 32 --format hex | astro cltu inspect --input hex`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				frame, err := tcdl.NewTCTransferFrame(scid, vcid, data,
 					tcdl.WithSequenceNumber(uint8(i)&0xFF))
@@ -390,8 +438,15 @@ func eppGenCmd() *cobra.Command {
   # Generate user-defined packets with long headers
   astro epp gen --pid 6 --count 5 --size 32 --long-length`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(size)
+				data, err := randomBytes(size)
+				if err != nil {
+					return err
+				}
 				var opts []epp.PacketOption
 				if longLength {
 					opts = append(opts, epp.WithLongLength())

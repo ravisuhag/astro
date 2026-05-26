@@ -471,7 +471,10 @@ func demuxFrames(data []byte, frameLen int, vcid uint8, outputFmt string) error 
 		switch outputFmt {
 		case "json":
 			j := toTMFrameJSON(frame)
-			b, _ := json.Marshal(j)
+			b, err := json.Marshal(j)
+			if err != nil {
+				return fmt.Errorf("encoding JSON output: %w", err)
+			}
 			fmt.Println(string(b))
 		case "hex":
 			fmt.Println(hex.EncodeToString(chunk))

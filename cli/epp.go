@@ -405,7 +405,10 @@ func eppStreamCmd() *cobra.Command {
 				switch outputFmt {
 				case "json":
 					pj := toEPPPacketJSON(pkt)
-					b, _ := json.Marshal(pj)
+					b, err := json.Marshal(pj)
+					if err != nil {
+						return fmt.Errorf("encoding JSON output: %w", err)
+					}
 					fmt.Println(string(b))
 				case "hex":
 					fmt.Println(hex.EncodeToString(pktData))

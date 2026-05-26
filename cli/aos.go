@@ -254,8 +254,15 @@ func aosGenCmd() *cobra.Command {
   astro aos gen --scid 50 --vcid 1 --count 5 --data-size 32 --fecf`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var frameSize int
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				opts := []aos.FrameOption{
 					aos.WithVCFrameCount(uint32(i) & aos.MaxVCFrameCount),

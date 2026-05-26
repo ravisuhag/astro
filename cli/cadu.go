@@ -294,7 +294,10 @@ func syncCADUs(data []byte, frameLen int, outputFmt string) error {
 				"cadu":   hex.EncodeToString(cadu),
 				"length": frameLen,
 			}
-			b, _ := json.Marshal(j)
+			b, err := json.Marshal(j)
+			if err != nil {
+				return fmt.Errorf("encoding JSON output: %w", err)
+			}
 			fmt.Println(string(b))
 		case "hex":
 			fmt.Println(hex.EncodeToString(cadu))
