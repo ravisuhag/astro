@@ -85,7 +85,8 @@ func toUSDLFrameJSON(f *usdl.TransferFrame) usdlFrameJSON {
 
 func usdlDecodeCmd() *cobra.Command {
 	var inputFmt, outputFmt string
-	var crc32 bool
+	var crc32, ocf bool
+	var insertZoneLen int
 
 	cmd := &cobra.Command{
 		Use:   "decode [file]",
@@ -108,7 +109,12 @@ func usdlDecodeCmd() *cobra.Command {
 				fecSize = usdl.FECSize32
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, fecSize, 0)
+			var frame *usdl.TransferFrame
+			if ocf {
+				frame, err = usdl.DecodeTransferFrameWithOCF(data, fecSize, insertZoneLen)
+			} else {
+				frame, err = usdl.DecodeTransferFrame(data, fecSize, insertZoneLen)
+			}
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -120,6 +126,8 @@ func usdlDecodeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
 	cmd.Flags().StringVar(&outputFmt, "format", "text", "Output format: text, json, or hex")
 	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
+	cmd.Flags().BoolVar(&ocf, "ocf", false, "Frame includes a 4-byte OCF")
+	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
 
 	return cmd
 }
@@ -203,7 +211,8 @@ func usdlEncodeCmd() *cobra.Command {
 
 func usdlInspectCmd() *cobra.Command {
 	var inputFmt string
-	var crc32 bool
+	var crc32, ocf bool
+	var insertZoneLen int
 
 	cmd := &cobra.Command{
 		Use:   "inspect [file]",
@@ -226,7 +235,12 @@ func usdlInspectCmd() *cobra.Command {
 				fecSize = usdl.FECSize32
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, fecSize, 0)
+			var frame *usdl.TransferFrame
+			if ocf {
+				frame, err = usdl.DecodeTransferFrameWithOCF(data, fecSize, insertZoneLen)
+			} else {
+				frame, err = usdl.DecodeTransferFrame(data, fecSize, insertZoneLen)
+			}
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -238,6 +252,8 @@ func usdlInspectCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
 	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
+	cmd.Flags().BoolVar(&ocf, "ocf", false, "Frame includes a 4-byte OCF")
+	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
 
 	return cmd
 }
@@ -265,8 +281,15 @@ func usdlGenCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var frameSize int
 
+			if count < 0 {
+				return fmt.Errorf("count must be >= 0, got %d", count)
+			}
+
 			for i := range count {
-				data := randomBytes(dataSize)
+				data, err := randomBytes(dataSize)
+				if err != nil {
+					return err
+				}
 
 				opts := []usdl.FrameOption{
 					usdl.WithSequenceNumber(uint16(i) & 0xFFFF),
@@ -413,4 +436,3 @@ func printUSDLInspect(f *usdl.TransferFrame, raw []byte) {
 	fmt.Printf("Raw Frame (%d bytes)\n", len(raw))
 	fmt.Print(hexDump(raw, "  "))
 }
-
