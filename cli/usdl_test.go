@@ -55,3 +55,45 @@ func TestUSDLDecodeWithoutOCFFlag(t *testing.T) {
 		t.Errorf("ocf = %q, want empty without --ocf", frame.OCF)
 	}
 }
+
+func TestUSDLRoundTripCRC32(t *testing.T) {
+	encoded, err := runCLI(t, nil, "usdl", "encode",
+		"--scid", "42", "--data", "0102030405", "--crc32", "--format", "hex")
+	if err != nil {
+		t.Fatalf("encode --crc32 failed: %v", err)
+	}
+
+	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "usdl", "decode",
+		"--crc32", "--input", "hex", "--format", "json")
+	if err != nil {
+		t.Fatalf("decode --crc32 failed: %v", err)
+	}
+
+	var frame usdlFrameJSON
+	if err := json.Unmarshal([]byte(out), &frame); err != nil {
+		t.Fatalf("unmarshal %q: %v", out, err)
+	}
+	if frame.DataField != "0102030405" {
+		t.Errorf("data_field = %q, want 0102030405", frame.DataField)
+	}
+	// A CRC-32 FECF is 4 bytes, so 8 hex characters.
+	if len(frame.FECF) != 8 {
+		t.Errorf("fecf = %q, want an 8-character CRC-32 value", frame.FECF)
+	}
+}
+
+func TestUSDLInspect(t *testing.T) {
+	encoded, err := runCLI(t, nil, "usdl", "encode",
+		"--scid", "42", "--data", "0102030405", "--format", "hex")
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+
+	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "usdl", "inspect", "--input", "hex")
+	if err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if !strings.Contains(out, "42") {
+		t.Errorf("inspect output does not mention SCID 42:\n%s", out)
+	}
+}
