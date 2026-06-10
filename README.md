@@ -39,13 +39,13 @@ astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate
 
 | Command | Description | Docs |
 |---------|-------------|------|
-| `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream | [Reference](docs/cli/spp.md) |
-| `astro epp` | Encapsulation Packet Protocol — encode, decode, inspect, validate, stream | [Reference](docs/cli/epp.md) |
+| `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream, gen | [Reference](docs/cli/spp.md) |
+| `astro epp` | Encapsulation Packet Protocol — encode, decode, inspect, validate, stream, gen | [Reference](docs/cli/epp.md) |
 | `astro time` | CCSDS Time Code Formats — encode, decode, inspect, now | [Reference](docs/cli/time.md) |
-| `astro tm` | TM Transfer Frames — encode, decode, inspect, gaps, demux | [Reference](docs/cli/tm.md) |
-| `astro tc` | TC Transfer Frames — encode, decode, inspect | [Reference](docs/cli/tc.md) |
-| `astro cadu` | Channel Access Data Units — wrap, unwrap, inspect, sync | [Reference](docs/cli/cadu.md) |
-| `astro cltu` | Command Link Transmission Units — wrap, unwrap, inspect | [Reference](docs/cli/cltu.md) |
+| `astro tm` | TM Transfer Frames — encode, decode, inspect, gaps, demux, gen | [Reference](docs/cli/tm.md) |
+| `astro tc` | TC Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/tc.md) |
+| `astro cadu` | Channel Access Data Units — wrap, unwrap, inspect, sync, gen | [Reference](docs/cli/cadu.md) |
+| `astro cltu` | Command Link Transmission Units — wrap, unwrap, inspect, gen | [Reference](docs/cli/cltu.md) |
 | `astro usdl` | USLP Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/usdl.md) |
 | `astro aos` | AOS Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/aos.md) |
 
@@ -80,24 +80,24 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Protocol | Standard | Package | Docs |
 |----------|----------|---------|------|
 | **Space Packet and Transport** | | | |
-| Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/spp.md) \| [CLI](docs/cli/spp.md) \| [PICS](docs/pics/spp-pics.md) |
-| Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](pkg/epp) | [Guide](docs/epp.md) \| [CLI](docs/cli/epp.md) \| [PICS](docs/pics/epp-pics.md) |
+| Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/guides/spp.md) \| [CLI](docs/cli/spp.md) \| [PICS](docs/pics/spp-pics.md) |
+| Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](pkg/epp) | [Reference](docs/reference/epp.md) \| [CLI](docs/cli/epp.md) \| [PICS](docs/pics/epp-pics.md) |
 | CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5.pdf) | | |
 | Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | | |
 | Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | | |
 | **Space Data Link** | | | |
-| TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
+| TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/guides/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
 | Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | | |
-| TC Space Data Link Protocol | [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](pkg/tcdl) | [Guide](docs/tcdl.md) \| [CLI](docs/cli/tc.md) \| [PICS](docs/pics/tcdl-pics.md) |
-| Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/cop.md) \| [PICS](docs/pics/cop-pics.md) |
+| TC Space Data Link Protocol | [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](pkg/tcdl) | [Guide](docs/guides/tcdl.md) \| [CLI](docs/cli/tc.md) \| [PICS](docs/pics/tcdl-pics.md) |
+| Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/guides/cop.md) \| [PICS](docs/pics/cop-pics.md) |
 | Space Data Link Security | [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) | | |
 | AOS Space Data Link Protocol | [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) | [`pkg/aos`](pkg/aos) | [Guide](docs/guides/aos.md) \| [CLI](docs/cli/aos.md) \| [PICS](docs/pics/aos-pics.md) |
 | Unified Space Data Link Protocol | [CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf) | [`pkg/usdl`](pkg/usdl) | [Guide](docs/guides/usdl.md) \| [CLI](docs/cli/usdl.md) \| [PICS](docs/pics/usdl-pics.md) |
 | **Synchronization and Channel Coding** | | | |
-| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
+| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/guides/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | | |
 | Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | | |
-| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/tcsc.md) \| [CLI](docs/cli/cltu.md) \| [PICS](docs/pics/tcsc-pics.md) |
+| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/guides/tcsc.md) \| [CLI](docs/cli/cltu.md) \| [PICS](docs/pics/tcsc-pics.md) |
 | **Space Link Extension** | | | |
 | SLE Return All Frames | [CCSDS 911.1-B-4](https://public.ccsds.org/Pubs/911x1b4.pdf) | | |
 | SLE Return Channel Frames | [CCSDS 911.2-B-3](https://public.ccsds.org/Pubs/911x2b3.pdf) | | |
@@ -111,7 +111,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Low-Complexity Lossless Image Compression | [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) | | |
 | Robust Compression of Housekeeping Data | [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) | | |
 | **Time** | | | |
-| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/tcf.md) |
+| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/guides/tcf.md) |
 | **Packet Utilization** | | | |
 | Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | | |
 | Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
