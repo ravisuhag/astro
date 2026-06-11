@@ -215,7 +215,8 @@ func WithDecodeErrorControl() DecodeOption {
 	return func(cfg *decodeConfig) { cfg.errorControl = true }
 }
 
-// Decode parses a byte slice into a SpacePacket.
+// Decode parses a byte slice into a SpacePacket. The returned packet does not
+// retain the input slice; all fields are copied.
 func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 	var cfg decodeConfig
 	for _, o := range opts {
@@ -273,7 +274,8 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 		remainingDataField -= 2
 	}
 
-	userData := data[offset : offset+remainingDataField]
+	userData := make([]byte, remainingDataField)
+	copy(userData, data[offset:offset+remainingDataField])
 
 	packet := &SpacePacket{
 		PrimaryHeader:   primaryHeader,

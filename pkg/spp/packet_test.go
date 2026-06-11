@@ -781,3 +781,27 @@ func TestAllSequenceFlagsEncodeDecode(t *testing.T) {
 		})
 	}
 }
+
+func TestDecode_DoesNotAliasInput(t *testing.T) {
+	pkt, err := spp2.NewTMPacket(123, []byte("original"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := spp2.Decode(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate the caller reusing its read buffer.
+	for i := range encoded {
+		encoded[i] = 0xFF
+	}
+	if string(decoded.UserData) != "original" {
+		t.Fatalf("UserData aliases the input buffer: %q", decoded.UserData)
+	}
+}
