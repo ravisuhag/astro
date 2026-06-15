@@ -357,10 +357,13 @@ func (s *BitstreamService) Flush() error {
 	}
 	// BDP is bit position of last valid bit; for octet-aligned data with
 	// n valid bytes, the last valid bit index is n*8 - 1.
-	bdp := uint16(len(s.sendBuf)*8 - 1)
-	if bdp > BPDUMaxBitstreamDataPointer {
-		bdp = BPDUMaxBitstreamDataPointer
+	// Clamp in int before narrowing: a zone over 8192 bytes exceeds uint16
+	// and would wrap to a small value before the clamp could catch it.
+	bits := len(s.sendBuf)*8 - 1
+	if bits > BPDUMaxBitstreamDataPointer {
+		bits = BPDUMaxBitstreamDataPointer
 	}
+	bdp := uint16(bits)
 	chunk := padDataField(s.sendBuf, capacity)
 	s.sendBuf = nil
 	return s.emitFrame(chunk, bdp)

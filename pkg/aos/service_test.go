@@ -344,3 +344,42 @@ func bytesEqual(a, b []byte) bool {
 	}
 	return true
 }
+
+func TestBitstreamService_FlushLargeZoneClampsBDP(t *testing.T) {
+	// A zone over 8192 bytes makes the last-valid-bit index exceed uint16.
+	// Converting before clamping wrapped it to a small value and truncated
+	// the frame on receive.
+	config := aos.ChannelConfig{FrameLength: 8300}
+	vc := aos.NewVirtualChannel(1, 10)
+	tx := aos.NewBitstreamService(50, 1, vc, config, nil)
+
+	capacity := config.DataFieldCapacity() - aos.BPDUHeaderSize
+	if capacity <= 8192 {
+		t.Fatalf("zone capacity %d does not exceed 8192; adjust FrameLength", capacity)
+	}
+
+	// One byte short of capacity, so Send buffers without emitting a frame.
+	data := make([]byte, capacity-1)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	if err := tx.Send(data); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if err := tx.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatalf("no frame emitted: %v", err)
+	}
+	var hdr aos.BPDUHeader
+	if err := hdr.Decode(frame.DataField); err != nil {
+		t.Fatalf("decoding BPDU header: %v", err)
+	}
+	if hdr.BitstreamDataPointer != aos.BDPAllValid {
+		t.Errorf("BDP = 0x%04X, want BDPAllValid (0x%04X)",
+			hdr.BitstreamDataPointer, aos.BDPAllValid)
+	}
+}
