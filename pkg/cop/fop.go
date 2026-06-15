@@ -7,7 +7,7 @@ type FOPState int
 
 const (
 	FOPActive  FOPState = iota // S1: active, accepting frames
-	FOPInitial                  // S6: initial (not started)
+	FOPInitial                 // S6: initial (not started)
 )
 
 // SentFrame tracks a transmitted Type-A frame awaiting acknowledgment.
@@ -26,18 +26,18 @@ type SentFrame struct {
 //  1. Create with NewFOP
 //  2. Call Initialize() to start
 //  3. Call TransmitFrame() to queue Type-A frames
-//  4. Call GetNextFrame() to get the next frame to send
+//  4. Call GetNextFrame() to get the next frame to send, with its N(S)
 //  5. Call ProcessCLCW() when a CLCW arrives on the TM return link
 type FOP struct {
-	mu           sync.Mutex
-	state        FOPState
-	vs           uint8        // V(S): next sequence number to assign
-	nnr          uint8        // N(N)R: last acknowledged sequence number from CLCW
-	sentQueue    []SentFrame  // frames sent, awaiting acknowledgment
-	waitQueue    [][]byte     // encoded frames waiting to be transmitted
-	windowWidth  uint8        // FW: sliding window width
-	scid         uint16
-	vcid         uint8
+	mu          sync.Mutex
+	state       FOPState
+	vs          uint8       // V(S): next sequence number to assign
+	nnr         uint8       // N(N)R: last acknowledged sequence number from CLCW
+	sentQueue   []SentFrame // frames sent, awaiting acknowledgment
+	waitQueue   []SentFrame // frames waiting to be transmitted, with their N(S)
+	windowWidth uint8       // FW: sliding window width
+	scid        uint16
+	vcid        uint8
 }
 
 // NewFOP creates a new FOP-1 instance.
@@ -86,22 +86,24 @@ func (f *FOP) TransmitFrame(encodedFrame []byte) error {
 		Data:        encodedFrame,
 	}
 	f.sentQueue = append(f.sentQueue, sf)
+	f.waitQueue = append(f.waitQueue, sf)
 	f.vs++
 
 	return nil
 }
 
-// GetNextFrame returns the next frame to transmit.
-// First serves new frames from the wait queue, then retransmissions
-// if the retransmit flag was set by ProcessCLCW.
+// GetNextFrame returns the next frame to transmit along with the sequence
+// number N(S) assigned to it by TransmitFrame. Frames come back in queue
+// order: newly queued frames first, then any re-queued by a retransmit CLCW.
+// The third return value is false when nothing is pending.
 func (f *FOP) GetNextFrame() ([]byte, uint8, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if len(f.waitQueue) > 0 {
-		data := f.waitQueue[0]
+		sf := f.waitQueue[0]
 		f.waitQueue = f.waitQueue[1:]
-		return data, 0, true
+		return sf.Data, sf.SequenceNum, true
 	}
 
 	return nil, 0, false
@@ -133,11 +135,22 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	}
 	f.sentQueue = remaining
 
-	// If retransmit flag is set, re-queue unacknowledged frames
-	if clcw.RetransmitFlag && len(f.sentQueue) > 0 {
-		for _, sf := range f.sentQueue {
-			f.waitQueue = append(f.waitQueue, sf.Data)
+	// Drop acknowledged frames the caller never pulled, so they are not sent
+	// after the receiver has already accepted them.
+	var stillWaiting []SentFrame
+	for _, sf := range f.waitQueue {
+		diff := (vr - sf.SequenceNum) & 0xFF
+		if diff == 0 || diff > 128 {
+			stillWaiting = append(stillWaiting, sf)
 		}
+	}
+	f.waitQueue = stillWaiting
+
+	// A retransmit request means every unacknowledged frame must go out again.
+	// Rebuilding from sentQueue covers frames already pulled and frames still
+	// waiting, without queueing either of them twice.
+	if clcw.RetransmitFlag && len(f.sentQueue) > 0 {
+		f.waitQueue = append([]SentFrame(nil), f.sentQueue...)
 	}
 
 	return nil

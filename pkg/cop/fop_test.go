@@ -127,3 +127,111 @@ func TestFOP_FARM_Integration(t *testing.T) {
 		t.Errorf("PendingCount = %d, want 0", fop.PendingCount())
 	}
 }
+
+func TestFOP_GetNextFrameServesQueuedFrames(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	want := [][]byte{[]byte("frame-0"), []byte("frame-1"), []byte("frame-2")}
+	for _, f := range want {
+		if err := fop.TransmitFrame(f); err != nil {
+			t.Fatalf("TransmitFrame(%q): %v", f, err)
+		}
+	}
+
+	for i, w := range want {
+		data, seq, ok := fop.GetNextFrame()
+		if !ok {
+			t.Fatalf("frame %d: GetNextFrame returned nothing", i)
+		}
+		if !bytes.Equal(data, w) {
+			t.Errorf("frame %d data = %q, want %q", i, data, w)
+		}
+		if seq != uint8(i) {
+			t.Errorf("frame %d sequence number = %d, want %d", i, seq, i)
+		}
+	}
+
+	if _, _, ok := fop.GetNextFrame(); ok {
+		t.Error("expected the queue to be drained")
+	}
+}
+
+func TestFOP_RetransmitCarriesSequenceNumbers(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+
+	// Drain both, as a caller pulling frames to send would.
+	for i := 0; i < 2; i++ {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			t.Fatalf("frame %d not served", i)
+		}
+	}
+
+	// ReportValue 0 acknowledges neither frame.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+
+	want := [][]byte{[]byte("frame-0"), []byte("frame-1")}
+	for i, w := range want {
+		data, seq, ok := fop.GetNextFrame()
+		if !ok {
+			t.Fatalf("retransmit %d: GetNextFrame returned nothing", i)
+		}
+		if !bytes.Equal(data, w) {
+			t.Errorf("retransmit %d data = %q, want %q", i, data, w)
+		}
+		if seq != uint8(i) {
+			t.Errorf("retransmit %d sequence number = %d, want the original %d", i, seq, i)
+		}
+	}
+}
+
+func TestFOP_AckPrunesWaitQueue(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+
+	// Never pulled. ReportValue 2 acknowledges both (V(R) is the next
+	// expected sequence number, so 0 and 1 are accepted).
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 2}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+
+	if data, seq, ok := fop.GetNextFrame(); ok {
+		t.Errorf("acknowledged frame still queued: %q (N(S)=%d)", data, seq)
+	}
+}
+
+func TestFOP_RetransmitDoesNotDuplicateUnpulledFrames(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+
+	// Frames are still waiting when a retransmit request arrives.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+
+	count := 0
+	for {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			break
+		}
+		count++
+		if count > 4 {
+			t.Fatal("queue never drains; frames are being duplicated")
+		}
+	}
+	if count != 2 {
+		t.Errorf("served %d frames, want 2 (no duplicates)", count)
+	}
+}
