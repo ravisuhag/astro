@@ -29,3 +29,10 @@ go.work.sum
 .idea
 
 .DS_Store
+
+# Local agent tooling and working notes
+.agents/
+.claude/
+skills-lock.json
+plans/
+ROADMAP.md
