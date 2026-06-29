@@ -32,3 +32,6 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeCCS -fuzztime $(FUZZTIME) ./pkg/tcf/
 	go test -run '^$$' -fuzz FuzzDecodeSecurityHeader -fuzztime $(FUZZTIME) ./pkg/sdls/
 	go test -run '^$$' -fuzz FuzzProcessSecurity -fuzztime $(FUZZTIME) ./pkg/sdls/
+	go test -run '^$$' -fuzz FuzzDecodePDU -fuzztime $(FUZZTIME) ./pkg/cfdp/
+	go test -run '^$$' -fuzz FuzzDecodeTLV -fuzztime $(FUZZTIME) ./pkg/cfdp/
+	go test -run '^$$' -fuzz FuzzReceiverHandle -fuzztime $(FUZZTIME) ./pkg/cfdp/
