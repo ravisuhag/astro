@@ -113,7 +113,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | **Time** | | | |
 | Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/guides/tcf.md) |
 | **Packet Utilization** | | | |
-| Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | | |
+| Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | [`pkg/pus`](pkg/pus) | [Guide](docs/guides/pus.md) \| [PICS](docs/pics/pus-pics.md) |
 | Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
 | Space Data Links — Service Specification | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-rev-1-space-data-links-telemetry-transfer-frame-protocol/) | | |
 | **Mission Database** | | | |
