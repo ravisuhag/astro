@@ -38,3 +38,5 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeTCHeader -fuzztime $(FUZZTIME) ./pkg/pus/
 	go test -run '^$$' -fuzz FuzzDecodeTMHeader -fuzztime $(FUZZTIME) ./pkg/pus/
 	go test -run '^$$' -fuzz FuzzRegistryDecode -fuzztime $(FUZZTIME) ./pkg/pus/
+	go test -run '^$$' -fuzz FuzzDecode -fuzztime $(FUZZTIME) ./pkg/sdnv/
+	go test -run '^$$' -fuzz FuzzRoundTrip -fuzztime $(FUZZTIME) ./pkg/sdnv/
