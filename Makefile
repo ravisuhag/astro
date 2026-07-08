@@ -42,3 +42,6 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzRoundTrip -fuzztime $(FUZZTIME) ./pkg/sdnv/
 	go test -run '^$$' -fuzz FuzzDecodeSegment -fuzztime $(FUZZTIME) ./pkg/ltp/
 	go test -run '^$$' -fuzz FuzzReceiverHandle -fuzztime $(FUZZTIME) ./pkg/ltp/
+	go test -run '^$$' -fuzz FuzzDecodeBundle -fuzztime $(FUZZTIME) ./pkg/bp/
+	go test -run '^$$' -fuzz FuzzDecodeAdminRecord -fuzztime $(FUZZTIME) ./pkg/bp/
+	go test -run '^$$' -fuzz FuzzReassemble -fuzztime $(FUZZTIME) ./pkg/bp/

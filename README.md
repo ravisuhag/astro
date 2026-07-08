@@ -84,7 +84,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](pkg/epp) | [Reference](docs/reference/epp.md) \| [CLI](docs/cli/epp.md) \| [PICS](docs/pics/epp-pics.md) |
 | CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf) | [`pkg/cfdp`](pkg/cfdp) | [Guide](docs/guides/cfdp.md) \| [PICS](docs/pics/cfdp-pics.md) |
 | Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | [`pkg/ltp`](pkg/ltp) | [Guide](docs/guides/ltp.md) \| [PICS](docs/pics/ltp-pics.md) |
-| Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | | |
+| Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | [`pkg/bp`](pkg/bp) | [Guide](docs/guides/bp.md) \| [PICS](docs/pics/bp-pics.md) |
 | **Space Data Link** | | | |
 | TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/guides/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
 | Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | | |
