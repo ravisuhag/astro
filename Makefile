@@ -45,3 +45,6 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeBundle -fuzztime $(FUZZTIME) ./pkg/bp/
 	go test -run '^$$' -fuzz FuzzDecodeAdminRecord -fuzztime $(FUZZTIME) ./pkg/bp/
 	go test -run '^$$' -fuzz FuzzReassemble -fuzztime $(FUZZTIME) ./pkg/bp/
+	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
+	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/
+	go test -run '^$$' -fuzz FuzzReassembler -fuzztime $(FUZZTIME) ./pkg/pxdl/

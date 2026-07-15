@@ -87,7 +87,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | [`pkg/bp`](pkg/bp) | [Guide](docs/guides/bp.md) \| [PICS](docs/pics/bp-pics.md) |
 | **Space Data Link** | | | |
 | TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/guides/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
-| Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | | |
+| Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | [`pkg/pxdl`](pkg/pxdl) | [Guide](docs/guides/pxdl.md) \| [PICS](docs/pics/pxdl-pics.md) |
 | TC Space Data Link Protocol | [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](pkg/tcdl) | [Guide](docs/guides/tcdl.md) \| [CLI](docs/cli/tc.md) \| [PICS](docs/pics/tcdl-pics.md) |
 | Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/guides/cop.md) \| [PICS](docs/pics/cop-pics.md) |
 | Space Data Link Security | [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) | [`pkg/sdls`](pkg/sdls) | [Guide](docs/guides/sdls.md) \| [PICS](docs/pics/sdls-pics.md) |
