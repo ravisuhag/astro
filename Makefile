@@ -48,3 +48,6 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzReassembler -fuzztime $(FUZZTIME) ./pkg/pxdl/
+	go test -run '^$$' -fuzz FuzzUnwrapPLTU -fuzztime $(FUZZTIME) ./pkg/pxsc/
+	go test -run '^$$' -fuzz FuzzSynchronizer -fuzztime $(FUZZTIME) ./pkg/pxsc/
+	go test -run '^$$' -fuzz FuzzCRC32 -fuzztime $(FUZZTIME) ./pkg/pxsc/
