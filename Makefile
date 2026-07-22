@@ -51,3 +51,6 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzUnwrapPLTU -fuzztime $(FUZZTIME) ./pkg/pxsc/
 	go test -run '^$$' -fuzz FuzzSynchronizer -fuzztime $(FUZZTIME) ./pkg/pxsc/
 	go test -run '^$$' -fuzz FuzzCRC32 -fuzztime $(FUZZTIME) ./pkg/pxsc/
+	go test -run '^$$' -fuzz FuzzConditionRoundTrip -fuzztime $(FUZZTIME) ./pkg/ocsc/
+	go test -run '^$$' -fuzz FuzzRandomizer -fuzztime $(FUZZTIME) ./pkg/ocsc/
+	go test -run '^$$' -fuzz FuzzCRCVerify -fuzztime $(FUZZTIME) ./pkg/ocsc/
