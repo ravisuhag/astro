@@ -99,11 +99,11 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | [`pkg/pxsc`](pkg/pxsc) | [Guide](docs/guides/pxsc.md) \| [PICS](docs/pics/pxsc-pics.md) |
 | TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/guides/tcsc.md) \| [CLI](docs/cli/cltu.md) \| [PICS](docs/pics/tcsc-pics.md) |
 | **Space Link Extension** | | | |
-| SLE Return All Frames | [CCSDS 911.1-B-4](https://public.ccsds.org/Pubs/911x1b4.pdf) | | |
-| SLE Return Channel Frames | [CCSDS 911.2-B-3](https://public.ccsds.org/Pubs/911x2b3.pdf) | | |
-| SLE Forward CLTU | [CCSDS 912.1-B-4](https://public.ccsds.org/Pubs/912x1b4.pdf) | | |
-| SLE Return Operational Control Fields | [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) | | |
-| SLE Internet Protocol for Transfer Services | [CCSDS 914.0-B-2](https://public.ccsds.org/Pubs/914x0b2.pdf) | | |
+| SLE Return All Frames | [CCSDS 911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
+| SLE Return Channel Frames | [CCSDS 911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
+| SLE Return Operational Control Fields | [CCSDS 911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
+| SLE Forward CLTU | [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
+| SLE Internet Protocol for Transfer Services | [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
 | **Data Compression** | | | |
 | Lossless Data Compression | [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) | | |
 | Image Data Compression | [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) | | |

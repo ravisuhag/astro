@@ -54,3 +54,11 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzConditionRoundTrip -fuzztime $(FUZZTIME) ./pkg/ocsc/
 	go test -run '^$$' -fuzz FuzzRandomizer -fuzztime $(FUZZTIME) ./pkg/ocsc/
 	go test -run '^$$' -fuzz FuzzCRCVerify -fuzztime $(FUZZTIME) ./pkg/ocsc/
+	go test -run '^$$' -fuzz FuzzBERDecoder -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeTMLMessage -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeSLEPDUs -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzCredentialsVerify -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeRAFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeRCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeROCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzDecodeFCLTUPDU -fuzztime $(FUZZTIME) ./pkg/sle/
