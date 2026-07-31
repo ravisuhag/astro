@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A two-level SpaceSystem tree, for the reference resolver.
+
+  Exercises: an absolute reference (/Spacecraft/Power/BusVoltage), a relative
+  one going up a level (../Bus/PacketID), a bare name resolving within its own
+  system, and a ContainerRefEntry pointing across systems.
+-->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Spacecraft">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="Counter_t" sizeInBits="16" signed="false">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="PacketID" parameterTypeRef="Counter_t"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Common">
+        <EntryList>
+          <ParameterRefEntry parameterRef="PacketID"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+
+  <SpaceSystem name="Power">
+    <TelemetryMetaData>
+      <ParameterTypeSet>
+        <FloatParameterType name="Volts_t" sizeInBits="32">
+          <UnitSet>
+            <Unit description="volts">V</Unit>
+          </UnitSet>
+          <IntegerDataEncoding encoding="unsigned" sizeInBits="12">
+            <DefaultCalibrator>
+              <PolynomialCalibrator>
+                <Term coefficient="0" exponent="0"/>
+                <Term coefficient="0.00732" exponent="1"/>
+              </PolynomialCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </FloatParameterType>
+
+        <FloatParameterType name="Amps_t" sizeInBits="32">
+          <IntegerDataEncoding encoding="unsigned" sizeInBits="12">
+            <DefaultCalibrator>
+              <SplineCalibrator order="1">
+                <SplinePoint raw="0" calibrated="0.0"/>
+                <SplinePoint raw="2048" calibrated="5.0"/>
+                <SplinePoint raw="4095" calibrated="9.5"/>
+              </SplineCalibrator>
+            </DefaultCalibrator>
+          </IntegerDataEncoding>
+        </FloatParameterType>
+      </ParameterTypeSet>
+
+      <ParameterSet>
+        <Parameter name="BusVoltage" parameterTypeRef="Volts_t"/>
+        <Parameter name="BusCurrent" parameterTypeRef="Amps_t"/>
+      </ParameterSet>
+
+      <ContainerSet>
+        <SequenceContainer name="PowerPacket">
+          <EntryList>
+            <ContainerRefEntry containerRef="../Common"/>
+            <ParameterRefEntry parameterRef="BusVoltage"/>
+            <ParameterRefEntry parameterRef="BusCurrent"/>
+          </EntryList>
+        </SequenceContainer>
+      </ContainerSet>
+    </TelemetryMetaData>
+  </SpaceSystem>
+
+  <SpaceSystem name="Thermal">
+    <TelemetryMetaData>
+      <ParameterTypeSet>
+        <AbsoluteTimeParameterType name="Timestamp_t">
+          <Encoding units="seconds" scale="1">
+            <IntegerDataEncoding encoding="unsigned" sizeInBits="32"/>
+          </Encoding>
+          <ReferenceTime>
+            <Epoch>TAI</Epoch>
+          </ReferenceTime>
+        </AbsoluteTimeParameterType>
+      </ParameterTypeSet>
+
+      <ParameterSet>
+        <Parameter name="SampleTime" parameterTypeRef="Timestamp_t"/>
+      </ParameterSet>
+
+      <ContainerSet>
+        <SequenceContainer name="ThermalPacket">
+          <EntryList>
+            <ParameterRefEntry parameterRef="SampleTime"/>
+            <ParameterRefEntry parameterRef="/Spacecraft/Power/BusVoltage"/>
+          </EntryList>
+          <BaseContainer containerRef="/Spacecraft/Common"/>
+        </SequenceContainer>
+      </ContainerSet>
+    </TelemetryMetaData>
+  </SpaceSystem>
+</SpaceSystem>

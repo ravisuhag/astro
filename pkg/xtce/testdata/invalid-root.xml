@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A well-formed XML document that is not an XTCE database. -->
+<Mission xmlns="http://example.invalid/mission" name="Nope"/>

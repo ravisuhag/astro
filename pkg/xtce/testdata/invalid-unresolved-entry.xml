@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A container entry naming a parameter that does not exist. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Broken">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="Counter_t" sizeInBits="16">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="PacketID" parameterTypeRef="Counter_t"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="Packet">
+        <EntryList>
+          <ParameterRefEntry parameterRef="PacketID"/>
+          <ParameterRefEntry parameterRef="Missing"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

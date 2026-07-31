@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A inherits from B, B inherits from A. -->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Broken">
+  <TelemetryMetaData>
+    <ContainerSet>
+      <SequenceContainer name="A">
+        <EntryList/>
+        <BaseContainer containerRef="B"/>
+      </SequenceContainer>
+      <SequenceContainer name="B">
+        <EntryList/>
+        <BaseContainer containerRef="A"/>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

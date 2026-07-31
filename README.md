@@ -117,7 +117,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
 | Space Data Links — Service Specification | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-rev-1-space-data-links-telemetry-transfer-frame-protocol/) | | |
 | **Mission Database** | | | |
-| XML Telemetric and Command Exchange | [XTCE](https://www.omg.org/spec/XTCE/) / [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) | | |
+| XML Telemetric and Command Exchange | [XTCE 1.2](https://www.omg.org/spec/XTCE/) / [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) | [`pkg/xtce`](pkg/xtce) | [Guide](docs/guides/xtce.md) \| [Coverage](docs/pics/xtce-coverage.md) |
 | **Shared Utilities** | | | |
 | CRC-16-CCITT | [CCSDS 130.0-G-3](https://public.ccsds.org/Pubs/130x0g3.pdf) | [`pkg/crc`](pkg/crc) | |
 

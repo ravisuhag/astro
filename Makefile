@@ -62,3 +62,4 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeRCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzDecodeROCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzDecodeFCLTUPDU -fuzztime $(FUZZTIME) ./pkg/sle/
+	go test -run '^$$' -fuzz FuzzLoad -fuzztime $(FUZZTIME) ./pkg/xtce/

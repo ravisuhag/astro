@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The CCSDS Space Packet primary header, described as an XTCE database.
+
+  Hand-written for this repository against CCSDS 133.0-B-2 and the layout in
+  pkg/spp/header.go. Seven fields, 3 + 1 + 1 + 11 + 2 + 14 + 16 = 48 bits,
+  which is the six octets of spp.PrimaryHeaderSize.
+
+  This file uses the XTCE namespace as the default namespace. See
+  ccsds-header-prefixed.xml for the same content with a prefix.
+-->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="CCSDS">
+  <Header version="1.0" date="2026-08-23" validationStatus="Working"/>
+
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="Version_t" sizeInBits="8" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="3"/>
+      </IntegerParameterType>
+
+      <EnumeratedParameterType name="PacketType_t">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="1"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Telemetry"/>
+          <Enumeration value="1" label="Telecommand"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+
+      <BooleanParameterType name="SecondaryHeaderFlag_t" zeroStringValue="Absent" oneStringValue="Present">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="1"/>
+      </BooleanParameterType>
+
+      <IntegerParameterType name="APID_t" sizeInBits="16" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="11"/>
+      </IntegerParameterType>
+
+      <EnumeratedParameterType name="SequenceFlags_t">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="2"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Continuation"/>
+          <Enumeration value="1" label="FirstSegment"/>
+          <Enumeration value="2" label="LastSegment"/>
+          <Enumeration value="3" label="Unsegmented"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+
+      <IntegerParameterType name="SequenceCount_t" sizeInBits="16" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="14"/>
+      </IntegerParameterType>
+
+      <IntegerParameterType name="PacketLength_t" sizeInBits="16" signed="false">
+        <UnitSet>
+          <Unit description="octets">octet</Unit>
+        </UnitSet>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+
+    <ParameterSet>
+      <Parameter name="Version" parameterTypeRef="Version_t" shortDescription="Packet version number, 0 for CCSDS v1"/>
+      <Parameter name="PacketType" parameterTypeRef="PacketType_t" shortDescription="Telemetry or telecommand"/>
+      <Parameter name="SecondaryHeaderFlag" parameterTypeRef="SecondaryHeaderFlag_t"/>
+      <Parameter name="APID" parameterTypeRef="APID_t" shortDescription="Application process identifier"/>
+      <Parameter name="SequenceFlags" parameterTypeRef="SequenceFlags_t"/>
+      <Parameter name="SequenceCount" parameterTypeRef="SequenceCount_t"/>
+      <Parameter name="PacketLength" parameterTypeRef="PacketLength_t" shortDescription="Data field length minus one"/>
+    </ParameterSet>
+
+    <ContainerSet>
+      <SequenceContainer name="PrimaryHeader" abstract="true"
+                         shortDescription="The six-octet CCSDS primary header">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Version"/>
+          <ParameterRefEntry parameterRef="PacketType"/>
+          <ParameterRefEntry parameterRef="SecondaryHeaderFlag"/>
+          <ParameterRefEntry parameterRef="APID"/>
+          <ParameterRefEntry parameterRef="SequenceFlags"/>
+          <ParameterRefEntry parameterRef="SequenceCount"/>
+          <ParameterRefEntry parameterRef="PacketLength"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>

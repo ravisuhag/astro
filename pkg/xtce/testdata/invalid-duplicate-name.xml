@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two parameters called Reading in one SpaceSystem. The schema's
+  parameterNameKey forbids it, and it spans TelemetryMetaData and
+  CommandMetaData: the second Reading here is in the command side, and it still
+  collides.
+-->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Broken">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="Counter_t" sizeInBits="16">
+        <IntegerDataEncoding sizeInBits="16"/>
+      </IntegerParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Reading" parameterTypeRef="Counter_t"/>
+    </ParameterSet>
+  </TelemetryMetaData>
+  <CommandMetaData>
+    <ParameterSet>
+      <Parameter name="Reading" parameterTypeRef="Counter_t"/>
+    </ParameterSet>
+  </CommandMetaData>
+</SpaceSystem>

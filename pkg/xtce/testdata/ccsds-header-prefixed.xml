@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A cut-down copy of ccsds-header.xml written with a namespace prefix instead
+  of a default namespace. The two must decode to the same thing: encoding/xml
+  matches on namespace plus local name, so the prefix should make no
+  difference — this file is what proves it.
+-->
+<xtce:SpaceSystem xmlns:xtce="http://www.omg.org/spec/XTCE/20180204" name="CCSDS">
+  <xtce:TelemetryMetaData>
+    <xtce:ParameterTypeSet>
+      <xtce:IntegerParameterType name="Version_t" sizeInBits="8" signed="false">
+        <xtce:UnitSet/>
+        <xtce:IntegerDataEncoding encoding="unsigned" sizeInBits="3"/>
+      </xtce:IntegerParameterType>
+    </xtce:ParameterTypeSet>
+
+    <xtce:ParameterSet>
+      <xtce:Parameter name="Version" parameterTypeRef="Version_t"/>
+    </xtce:ParameterSet>
+
+    <xtce:ContainerSet>
+      <xtce:SequenceContainer name="PrimaryHeader">
+        <xtce:EntryList>
+          <xtce:ParameterRefEntry parameterRef="Version"/>
+        </xtce:EntryList>
+      </xtce:SequenceContainer>
+    </xtce:ContainerSet>
+  </xtce:TelemetryMetaData>
+</xtce:SpaceSystem>
