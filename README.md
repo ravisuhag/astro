@@ -105,7 +105,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | SLE Forward CLTU | [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
 | SLE Internet Protocol for Transfer Services | [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
 | **Data Compression** | | | |
-| Lossless Data Compression | [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) | | |
+| Lossless Data Compression | [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) | [`pkg/ldc`](pkg/ldc) | [Guide](docs/guides/ldc.md) \| [PICS](docs/pics/ldc-pics.md) |
 | Image Data Compression | [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) | | |
 | Spectral Preprocessing Transform | [CCSDS 122.1-B-1](https://public.ccsds.org/Pubs/122x1b1e1.pdf) | | |
 | Low-Complexity Lossless Image Compression | [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) | | |
