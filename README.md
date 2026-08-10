@@ -109,7 +109,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Image Data Compression | [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) | | |
 | Spectral Preprocessing Transform | [CCSDS 122.1-B-1](https://public.ccsds.org/Pubs/122x1b1e1.pdf) | | |
 | Low-Complexity Lossless Image Compression | [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) | | |
-| Robust Compression of Housekeeping Data | [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) | | |
+| Robust Compression of Housekeeping Data | [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) | [`pkg/rhc`](pkg/rhc) | [Guide](docs/guides/rhc.md) \| [PICS](docs/pics/rhc-pics.md) |
 | **Time** | | | |
 | Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/guides/tcf.md) |
 | **Packet Utilization** | | | |
