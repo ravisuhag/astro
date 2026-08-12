@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/epp"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tcdl"
@@ -162,13 +161,6 @@ func tmGenCmd() *cobra.Command {
 					DataField: data,
 				}
 
-				// Compute CRC over frame without FEC
-				frameWithoutFEC, err := frame.EncodeWithoutFEC()
-				if err != nil {
-					return fmt.Errorf("frame #%d: %w", i+1, err)
-				}
-				frame.FrameErrorControl = crc.ComputeCRC16(frameWithoutFEC)
-
 				encoded, err := frame.Encode()
 				if err != nil {
 					return fmt.Errorf("frame #%d: %w", i+1, err)
@@ -312,12 +304,6 @@ func caduGenCmd() *cobra.Command {
 					},
 					DataField: data,
 				}
-
-				frameWithoutFEC, err := frame.EncodeWithoutFEC()
-				if err != nil {
-					return fmt.Errorf("CADU #%d: %w", i+1, err)
-				}
-				frame.FrameErrorControl = crc.ComputeCRC16(frameWithoutFEC)
 
 				frameBytes, err := frame.Encode()
 				if err != nil {

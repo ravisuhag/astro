@@ -761,3 +761,29 @@ func TestUninitializedFrame(t *testing.T) {
 		t.Error("Encoded frame should not be zero-length")
 	}
 }
+
+func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
+	frame, err := tmdl.NewTMTransferFrame(42, 1, []byte("payload"), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Stamping counters after construction is the normal caller workflow.
+	frame.Header.MCFrameCount = 9
+	frame.Header.VCFrameCount = 4
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	if err != nil {
+		t.Fatalf("re-encoded frame does not decode: %v", err)
+	}
+	if decoded.Header.MCFrameCount != 9 {
+		t.Errorf("MCFrameCount = %d, want 9", decoded.Header.MCFrameCount)
+	}
+	if decoded.Header.VCFrameCount != 4 {
+		t.Errorf("VCFrameCount = %d, want 4", decoded.Header.VCFrameCount)
+	}
+}

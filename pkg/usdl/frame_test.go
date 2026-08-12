@@ -475,3 +475,24 @@ func TestTransferFrame_Humanize(t *testing.T) {
 		t.Error("Humanize() returned empty string")
 	}
 }
+
+func TestUSDLFrame_EncodeRecomputesFECFAfterMutation(t *testing.T) {
+	frame, err := usdl.NewTransferFrame(42, 1, 0, []byte("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frame.Header.VCID = 3
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	if err != nil {
+		t.Fatalf("re-encoded frame does not decode: %v", err)
+	}
+	if decoded.Header.VCID != 3 {
+		t.Errorf("VCID = %d, want 3", decoded.Header.VCID)
+	}
+}

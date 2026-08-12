@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/tmdl"
 )
 
@@ -21,14 +20,6 @@ func buildTMFrame(t *testing.T, scid uint16, vcid, mcCount, vcCount uint8, data 
 	}
 	frame.Header.MCFrameCount = mcCount
 	frame.Header.VCFrameCount = vcCount
-
-	// Encode() emits the CRC stored at construction time, so changing header
-	// fields afterwards requires recomputing it by hand.
-	withoutFEC, err := frame.EncodeWithoutFEC()
-	if err != nil {
-		t.Fatalf("encoding frame without FEC: %v", err)
-	}
-	frame.FrameErrorControl = crc.ComputeCRC16(withoutFEC)
 
 	encoded, err := frame.Encode()
 	if err != nil {

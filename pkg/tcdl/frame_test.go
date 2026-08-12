@@ -277,3 +277,24 @@ func TestDecodeTCFrame_MalformedLengthDoesNotPanic(t *testing.T) {
 		})
 	}
 }
+
+func TestTCFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
+	frame, err := tcdl.NewTCTransferFrame(42, 1, []byte("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frame.Header.FrameSequenceNum = 9
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	if err != nil {
+		t.Fatalf("re-encoded frame does not decode: %v", err)
+	}
+	if decoded.Header.FrameSequenceNum != 9 {
+		t.Errorf("FrameSequenceNum = %d, want 9", decoded.Header.FrameSequenceNum)
+	}
+}

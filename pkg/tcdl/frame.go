@@ -261,11 +261,21 @@ func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOptio
 }
 
 // Encode converts the TC Transfer Frame to a byte slice including CRC.
+//
+// The Frame Error Control Field is computed from the frame's current
+// contents on every call, so header or data changes made after construction
+// are always covered. Use EncodeWithoutFEC to build a frame with a
+// deliberately invalid CRC.
 func (tf *TCTransferFrame) Encode() ([]byte, error) {
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
 		return nil, err
 	}
+
+	// Compute the CRC from the frame's current contents, so header fields
+	// changed after construction are covered, and refresh the exported field.
+	tf.FrameErrorControl = crc.ComputeCRC16(frameData)
+
 	crcBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(crcBytes, tf.FrameErrorControl)
 	return append(frameData, crcBytes...), nil

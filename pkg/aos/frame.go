@@ -352,6 +352,13 @@ func (f *TransferFrame) computeFECF() error {
 	return nil
 }
 
+// EncodeWithoutFECF serializes the frame excluding the Frame Error Control
+// Field. Use it to build frames with a deliberately invalid FECF; Encode
+// always writes a correct one.
+func (f *TransferFrame) EncodeWithoutFECF() ([]byte, error) {
+	return f.encodeWithoutFECF()
+}
+
 // encodeWithoutFECF encodes the frame excluding the FECF.
 func (f *TransferFrame) encodeWithoutFECF() ([]byte, error) {
 	header, err := f.Header.Encode()
@@ -375,15 +382,26 @@ func (f *TransferFrame) encodeWithoutFECF() ([]byte, error) {
 }
 
 // Encode converts the AOS Transfer Frame to a byte slice.
+//
+// When the frame carries a Frame Error Control Field, it is computed from
+// the frame's current contents on every call, so changes made after
+// construction are always covered. Use EncodeWithoutFECF to build a frame
+// with a deliberately invalid FECF.
 func (f *TransferFrame) Encode() ([]byte, error) {
 	buf, err := f.encodeWithoutFECF()
 	if err != nil {
 		return nil, err
 	}
-	if f.HasFECF {
-		buf = append(buf, f.FECF...)
+	if !f.HasFECF {
+		return buf, nil
 	}
-	return buf, nil
+
+	// Compute the FECF from the frame's current contents, so fields changed
+	// after construction are covered, and refresh the exported field.
+	if err := f.computeFECF(); err != nil {
+		return nil, err
+	}
+	return append(buf, f.FECF...), nil
 }
 
 // DecodeTransferFrame parses a byte slice into an AOS Transfer Frame.

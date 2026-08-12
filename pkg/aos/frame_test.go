@@ -1,6 +1,7 @@
 package aos_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/aos"
@@ -365,5 +366,45 @@ func TestTransferFrame_Humanize(t *testing.T) {
 	}
 	if s := frame.Humanize(); s == "" {
 		t.Error("Humanize() returned empty string")
+	}
+}
+
+func TestAOSFrame_EncodeRecomputesFECFAfterMutation(t *testing.T) {
+	frame, err := aos.NewTransferFrame(42, 1, []byte("payload"), aos.WithFECF())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frame.Header.VCFrameCount = 9
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := aos.DecodeTransferFrame(encoded, 0, false, true)
+	if err != nil {
+		t.Fatalf("re-encoded frame does not decode: %v", err)
+	}
+	if decoded.Header.VCFrameCount != 9 {
+		t.Errorf("VCFrameCount = %d, want 9", decoded.Header.VCFrameCount)
+	}
+}
+
+func TestAOSFrame_EncodeWithoutFECFAllowsInvalidChecksum(t *testing.T) {
+	// The escape hatch for building deliberately corrupt frames, now that
+	// Encode always writes a correct FECF.
+	frame, err := aos.NewTransferFrame(42, 1, []byte("payload"), aos.WithFECF())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := frame.EncodeWithoutFECF()
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupt := append(append([]byte{}, body...), 0xDE, 0xAD)
+
+	if _, err := aos.DecodeTransferFrame(corrupt, 0, false, true); !errors.Is(err, aos.ErrCRCMismatch) {
+		t.Errorf("error = %v, want ErrCRCMismatch", err)
 	}
 }
