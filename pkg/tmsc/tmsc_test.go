@@ -152,3 +152,34 @@ func TestWrapUnwrapCADU_Deterministic(t *testing.T) {
 		t.Error("same input should produce same CADU")
 	}
 }
+
+func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
+	// CCSDS 131.0-B specifies h(x) = x^8 + x^7 + x^5 + x^3 + 1 with the
+	// register preset to all ones. CCSDS 142.0-B-1 §3.5.2.1, which adopts the
+	// same sequence by reference, publishes the first 40 digits:
+	//
+	//   1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
+	//
+	// A polynomial this short admits several plausible register layouts that
+	// produce entirely different sequences, which is why the standard prints
+	// the digits. Checking against them is the only test that can catch a
+	// wrong tap position: XOR is self-inverse, so a round trip passes with any
+	// sequence at all.
+	want := []byte{0xFF, 0x48, 0x0E, 0xC0, 0x9A}
+
+	got := tmsc.GeneratePNSequence(len(want))
+	if !bytes.Equal(got, want) {
+		t.Errorf("PN sequence = % X, want % X", got, want)
+	}
+}
+
+func TestPNSequencePeriodIs255(t *testing.T) {
+	// The sequence repeats every 255 digits, so 255 octets' worth of output
+	// brings the register back to where it started.
+	const periodBytes = 255
+	seq := tmsc.GeneratePNSequence(periodBytes * 2)
+
+	if !bytes.Equal(seq[:periodBytes], seq[periodBytes:]) {
+		t.Error("the sequence does not repeat after 255 octets; the taps are wrong")
+	}
+}

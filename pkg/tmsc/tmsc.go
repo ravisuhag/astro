@@ -81,8 +81,12 @@ func GeneratePNSequence(length int) []byte {
 		for bit := 7; bit >= 0; bit-- {
 			output := (reg >> 7) & 1
 			b |= output << uint(bit)
-			// Taps: x^8(bit7), x^7(bit6), x^5(bit4), x^3(bit2)
-			feedback := ((reg >> 7) ^ (reg >> 6) ^ (reg >> 4) ^ (reg >> 2)) & 1
+			// Feedback taps for h(x) = x^8 + x^7 + x^5 + x^3 + 1, at register
+			// bits 7, 4, 2 and 0. Verified against the sequence CCSDS
+			// publishes; see TestPNSequenceMatchesTheCCSDSVector. Reading the
+			// polynomial exponents directly as bit indices gives a different
+			// maximal-length sequence that no round-trip test can distinguish.
+			feedback := ((reg >> 7) ^ (reg >> 4) ^ (reg >> 2) ^ reg) & 1
 			reg = ((reg << 1) | feedback) & 0xFF
 		}
 		seq[i] = b

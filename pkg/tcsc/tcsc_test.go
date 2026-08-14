@@ -304,3 +304,22 @@ func TestWrapCLTU_StartSequencePresent(t *testing.T) {
 		t.Errorf("CLTU tail = %x, want %x", cltu[len(cltu)-len(tail):], tail)
 	}
 }
+
+func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
+	// The same sequence and the same check as pkg/tmsc: CCSDS 231.0-B and
+	// CCSDS 131.0-B share the randomizer h(x) = x^8 + x^7 + x^5 + x^3 + 1
+	// with the register preset to all ones. CCSDS 142.0-B-1 §3.5.2.1
+	// publishes its first 40 digits:
+	//
+	//   1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
+	//
+	// Testing against the published digits is what catches a wrong tap
+	// position. A randomize-then-derandomize round trip cannot, because XOR
+	// is self-inverse whatever the sequence.
+	want := []byte{0xFF, 0x48, 0x0E, 0xC0, 0x9A}
+
+	got := tcsc.GeneratePNSequence(len(want))
+	if !bytes.Equal(got, want) {
+		t.Errorf("PN sequence = % X, want % X", got, want)
+	}
+}
