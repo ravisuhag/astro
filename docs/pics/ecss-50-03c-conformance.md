@@ -39,7 +39,7 @@
 | Specification | ECSS-E-ST-50-03C, *Space data links — Telemetry transfer frame protocol*, 31 July 2008 |
 | Relationship to CCSDS | The European profile of the CCSDS TM Space Data Link Protocol (CCSDS 132.0-B). It defines no new frame; it adopts the CCSDS frame and constrains its options. |
 | Obtained from | `https://ecss.nl/wp-content/uploads/standards/ecss-e/ECSS-E-ST-50-03C31July2008.pdf` — public, no registration required |
-| Have any exceptions been required? | **Yes** — five gaps, see A3 |
+| Have any exceptions been required? | **No** — the five gaps of the first pass were closed on 23/08/2026; see A3 |
 
 **A note on the version.** Plan 024 called for "ECSS-E-ST-50-03C Rev.1". No such revision is published: the active document on ecss.nl is ECSS-E-ST-50-03C dated 31 July 2008, whose own change log records the 2008 issue as editorial renumbering of the 6 November 2007 text. This audit is against that document.
 
@@ -136,7 +136,7 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.2.7.6d | If at least one packet starts in the Transfer Frame Data Field, the First Header Pointer shall contain the location… | FHP gives the location of the first packet header | `service.go:214` `emitFrame` takes the pointer; `service.go:236` `Receive` reads from it | **conforms** |
 | 5.2.7.6e | The locations of the octets in the Transfer Frame Data Field shall be numbered in ascending order starting with '0'. | octets numbered from zero | `service.go:236` indexes the data field from 0 | **conforms** |
 | 5.2.7.6f | If no packet starts in the Transfer Frame Data Field, the First Header Pointer shall be set to '11111111111'. | no packet starts, FHP '11111111111' | `service.go:214` is called with 0x7FF for a continuation frame | **conforms** |
-| 5.2.7.6g | If the Transfer Frame Data Field contains only idle data, the First Header Pointer shall be set to '11111111110'. | idle data only, FHP '11111111110' | `frame.go:330` `NewIdleFrame` sets 0x7FF, not the 0x7FE the clause requires; `frame.go:363` `IsIdleFrame` recognises only 0x7FF | **gap** |
+| 5.2.7.6g | If the Transfer Frame Data Field contains only idle data, the First Header Pointer shall be set to '11111111110'. | idle data only, FHP '11111111110' | `frame.go` `NewIdleFrame` sets FHPOnlyIdleData (0x7FE); `IsIdleFrame` matches it | **conforms** |
 
 ### 5.3 Transfer Frame Secondary Header
 
@@ -144,7 +144,7 @@ identifiers plus a paraphrase are enough to find the original.
 |---|---|---|---|---|
 | 5.3.1a | If present, the Transfer Frame Secondary Header shall follow, without gap, the Transfer Frame Primary Header. | secondary header follows the primary without gap | `frame.go:287` | **conforms** |
 | 5.3.1b | The presence or absence of the Transfer Frame Secondary Header shall be signalled by the Transfer Frame Secondary… | presence signalled by the Secondary Header Flag | `frame.go:287` | **conforms** |
-| 5.3.1c | If present, the Transfer Frame Secondary Header shall comprise an integral number of octets: between 2 and 64 octets. | secondary header total 2 to 64 octets | `frame.go:186` allows a length field up to 63 with a 64-octet data field, giving a 65-octet total | **gap** |
+| 5.3.1c | If present, the Transfer Frame Secondary Header shall comprise an integral number of octets: between 2 and 64 octets. | secondary header total 2 to 64 octets | `frame.go` `Validate` rejects a total above MaxSecondaryHeaderSize (64) | **conforms** |
 | 5.3.1d | The Transfer Frame Secondary Header shall be associated with either a master channel or a virtual channel. | associated with one channel, fixed length throughout a phase | the caller supplies the data at `frame.go:219`; keeping it fixed is the caller's | **configurable** |
 | 5.3.1e | The Transfer Frame Secondary Header shall have a fixed length in the associated master channel or in the associated… | associated with one channel, fixed length throughout a phase | the caller supplies the data at `frame.go:219`; keeping it fixed is the caller's | **configurable** |
 | 5.3.1f | The Transfer Frame Secondary Header shall consist of two fields, positioned contiguously, in the following sequence: | two fields: identification then data | `frame.go:152` writes the identification octet then the data field | **conforms** |
@@ -158,12 +158,12 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.3.2.2c | The Transfer Frame Secondary Header Version Number shall be set to '00'. | secondary header version set to '00' | `frame.go:188` rejects any other value | **conforms** |
 | 5.3.2.3a | The Transfer Frame Secondary Header Length shall always be present in a Transfer Frame Secondary Header… | length field present, bits 2-7 | `frame.go:147`; packed at `frame.go:152` | **conforms** |
 | 5.3.2.3b | The Transfer Frame Secondary Header Length shall be contained in bits 2-7 of the Transfer Frame Secondary Header. | length field present, bits 2-7 | `frame.go:147`; packed at `frame.go:152` | **conforms** |
-| 5.3.2.3c | The Transfer Frame Secondary Header Length shall contain the total length of the Transfer Frame Secondary Header in… | length field is TOTAL secondary header octets minus one | `frame.go:193` requires the field to equal `len(DataField)-1`, one less than the clause requires; `frame.go:176` decodes with the same off-by-one | **gap** |
+| 5.3.2.3c | The Transfer Frame Secondary Header Length shall contain the total length of the Transfer Frame Secondary Header in… | length field is TOTAL secondary header octets minus one | `frame.go` `Validate` requires the field to equal the data field length, i.e. the total minus one; `Decode` reads it the same way | **conforms** |
 | 5.3.2.3d | The value of the Transfer Frame Secondary Header Length shall be static within a specific master channel or a… | length static per channel throughout a phase | the caller keeps the data field length fixed | **configurable** |
 | 5.3.3a | The Transfer Frame Secondary Header Data Field shall always be present in a Transfer Frame Secondary Header. | data field present, follows the identification, carries the data | `frame.go:152` and `frame.go:165` | **conforms** |
 | 5.3.3b | The Transfer Frame Secondary Header Data Field shall follow, without gap, the Transfer Frame Secondary Header… | data field present, follows the identification, carries the data | `frame.go:152` and `frame.go:165` | **conforms** |
 | 5.3.3c | The Transfer Frame Secondary Header Data Field shall contain the Transfer Frame Secondary Header data. | data field present, follows the identification, carries the data | `frame.go:152` and `frame.go:165` | **conforms** |
-| 5.3.4.2a | The length of the Transfer Frame Secondary Header shall be 32 bits. | extended count needs a 32-bit secondary header | a 4-octet total needs a length field of 3; `frame.go:193` writes 2 for the 3-octet data field. Same defect as 5.3.2.3c | **gap** |
+| 5.3.4.2a | The length of the Transfer Frame Secondary Header shall be 32 bits. | extended count needs a 32-bit secondary header | `frame.go` — closed together with 5.3.2.3c; a 4-octet header now writes 3 | **conforms** |
 | 5.3.4.2b | The Transfer Frame Secondary Header Data Field shall contain the 24-bit extension to the virtual channel frame count. | 24-bit extension counting roll-overs of the 8-bit count | the caller places the extension in `frame.go:148` `DataField`; the package does not maintain the roll-over count | **configurable** |
 | 5.3.4.2c | The extension to the virtual channel frame count shall be a binary count of the roll-overs of the 8-bit value… | 24-bit extension counting roll-overs of the 8-bit count | the caller places the extension in `frame.go:148` `DataField`; the package does not maintain the roll-over count | **configurable** |
 | 5.3.4.2d | The use of the extended virtual channel frame count shall be associated with either a master channel or a virtual… | extended count associated with a channel and static | a caller-side convention | **configurable** |
@@ -225,116 +225,92 @@ identifiers plus a paraphrase are enough to find the original.
 |---|---|---|---|---|
 | 5.6.1a | If present, the Frame Error Control Field shall occupy the two octets following, without gap, one of the following: | FECF occupies the two octets after the OCF or data field | `frame.go:271` appends it last, after whatever `frame.go:287` produced | **conforms** |
 | 5.6.1b | The Frame Error Control Field shall be present in a TM Transfer Frame if the TM Transfer Frame is not Reed-Solomon… | FECF present when the frame is not Reed-Solomon encoded | `frame.go:271` always appends it, so the mandatory case is always met | **conforms** |
-| 5.6.1c | If present, the Frame Error Control Field shall occur within every TM Transfer Frame transmitted within the same… | FECF consistently present or absent across the physical channel | only 'always present' is supported. `frame.go:271` always appends and `frame.go:368` always verifies, so the FECF cannot be omitted even under Reed-Solomon coding where the clause's NOTE makes it optional. `physical.go:15` `HasFEC` is not consulted by the frame codec | **gap** |
+| 5.6.1c | If present, the Frame Error Control Field shall occur within every TM Transfer Frame transmitted within the same… | FECF consistently present or absent across the physical channel | `frame.go` `EncodeWithConfig` and `DecodeTMTransferFrameWithConfig` honour `ChannelConfig.HasFEC` | **conforms** |
 | 5.6.2a | The encoding procedure shall be as follows: | encoding procedure, CRC-16 with generator X^16+X^12+X^5+1, preset to ones | `frame.go:271` calls `crc.ComputeCRC16`; `pkg/crc/crc.go:16` implements that polynomial with an all-ones preset | **conforms** |
 | 5.6.3a | The decoding procedure shall use an error detection syndrome, S(X), given by S(X) = [(X16 ⋅ C*(X)) + (Xn ⋅ L(X))]… | decoding uses the error detection syndrome | `frame.go:368` recomputes the CRC over the frame and compares | **conforms** |
 | 5.6.3b | The Frame Error Control Field shall not be used for error correction. | the FECF is not used for error correction | `frame.go:368` rejects a mismatching frame; nothing attempts correction | **conforms** |
 ---
 
-## A3 GAPS
+## A3 GAPS — ALL CLOSED
 
-Five clauses cannot be satisfied by `pkg/tmdl` as it stands. Two of them —
-the secondary header length and the idle-frame pointer — put wrong values on
-the wire, so a conforming receiver would misread frames this package produces.
-The other three are limits that are simply not enforced or not offered.
+The audit of 23/08/2026 found five gaps. All five were fixed the same day; this
+section records what they were, since the reasoning is worth keeping and two of
+them describe a failure mode this codebase has now hit three times.
 
-Nothing here was fixed. This plan is read-only by design; the follow-up stubs
-are in `plans/024-ecss-space-data-links-conformance.md`.
+Fixed in `fix(tmdl): correct four ECSS-E-ST-50-03C conformance defects`.
 
-### 5.3.2.3c — the secondary header length field is one too small
+### 5.3.2.3c — the secondary header length field was one too small
 
-**This is the serious one.** §5.3.2.3c requires the six-bit length field to
-hold *the total length of the Transfer Frame Secondary Header in octets minus
-one*. The total is the one-octet Identification plus the Data Field, so for an
-N-octet data field the field should read N.
+§5.3.2.3c requires the six-bit field to hold *the total secondary header length
+in octets minus one*, the total being the identification octet plus the data
+field. So for an N-octet data field the field reads N.
 
-`frame.go:193` requires it to equal `len(DataField)-1`, and `frame.go:176`
-decodes with the same offset. A secondary header with three data octets — four
-octets in total — goes out with a length field of 2 where the standard wants 3.
+The code required it to equal `len(DataField)-1` and decoded with the same
+offset. A four-octet header went out saying 2 where the standard wants 3.
 
-Encoder and decoder agree with each other, so every round trip inside this
-library passes and the package's own tests are silent about it. A conforming
-receiver is not silent: reading 2 it computes a three-octet total and starts
-the Transfer Frame Data Field one octet early, corrupting every frame that
-carries a secondary header.
+Encoder and decoder agreed, so every round trip passed and the package's own
+tests were silent — one of them asserted the wrong value outright, which is how
+the defect looked deliberate. A conforming receiver reading 2 computes a
+three-octet total and starts the Transfer Frame Data Field an octet early,
+corrupting every frame with a secondary header.
 
-The same off-by-one appears in CCSDS 132.0-B-3 §4.1.3.2.2.3, whose wording is
-equivalent, so this is not an ECSS-only defect and
-[`tmdl-pics.md`](tmdl-pics.md)'s claim for that item deserves revisiting. That
-file is out of scope here and was left untouched.
+The same wording is in CCSDS 132.0-B-3 §4.1.3.2.2.3, so this was never an
+ECSS-only defect.
 
-**Impact for an ECSS mission:** any use of the secondary header is broken on
-the wire. There is no workaround at the API boundary — the caller cannot
-compensate, because `Validate` rejects the correct value. **Effort to close: S**
-(one comparison in `Validate`, one in `Decode`, and the tests that pin them).
+**Now:** the field equals the data field length, `SetDataField` derives it, and
+the test asserts the octet on the wire plus the offset a receiver would compute
+from it.
 
-### 5.3.4.2a — the extended virtual channel frame count inherits the same defect
+### 5.3.4.2a — the extended virtual channel frame count inherited it
 
 §5.3.4.2a fixes the secondary header at 32 bits when it carries the extended
-virtual channel frame count: four octets total, one Identification and three
-data. The length field must therefore read 3, and by 5.3.2.3c above the package
-writes 2.
+count: four octets, so the field must read 3. Closed by the fix above.
 
-Listed separately because it is the one place the standard names an exact
-secondary header size, so it is the clause an implementer would test first.
+### 5.2.7.6g — idle frames used the wrong First Header Pointer
 
-**Impact:** the extended count cannot be carried conformantly. **Effort: S** —
-closed by fixing 5.3.2.3c; no separate work.
+§5.2.7.6 gives two codes to two conditions: `11111111111` (0x7FF) when no
+packet starts in the data field, `11111111110` (0x7FE) when the field holds
+only idle data. `NewIdleFrame` filled with idle and then set 0x7FF, and
+`IsIdleFrame` matched on 0x7FF, so OID frames were mislabelled and conformant
+ones from other senders went unrecognised.
 
-### 5.2.7.6g — idle frames use the wrong First Header Pointer
+Fixing this exposed a second defect the audit had not found: the packet service
+had the two codes **swapped on both paths at once**. It discarded continuation
+frames as idle — losing payload — and appended idle fill into the reassembly
+buffer. Consistent on both sides, so round trips passed here too.
 
-§5.2.7.6 gives two different pointer values to two different conditions:
+**Now:** both codes are named constants, `FHPNoPacketStart` and
+`FHPOnlyIdleData`, and the service uses each for its own condition.
 
-| Condition | Clause | Pointer |
-|---|---|---|
-| no packet starts in the data field | 5.2.7.6f | `11111111111` (0x7FF) |
-| the data field holds only idle data | 5.2.7.6g | `11111111110` (0x7FE) |
+### 5.3.1c — the secondary header could exceed 64 octets
 
-`frame.go:330` `NewIdleFrame` fills the data field with idle 0xFF and then sets
-0x7FF, which claims the first condition while the second is what happened.
-`frame.go:363` `IsIdleFrame` matches on 0x7FF for the same reason, so it does
-not recognise a conformant OID frame from another sender.
+§5.3.1c caps the whole secondary header at 64 octets. A 63-value length field
+with a 64-octet data field encoded to 65, and nothing rejected it.
 
-The value itself is representable: 0x7FE passes `PrimaryHeader.Validate`. Only
-the two helpers are wrong.
+**Now:** `MaxSecondaryHeaderSize` is enforced by `Validate`.
 
-**Impact:** idle frames are mislabelled, and a receiver distinguishing "nothing
-started here" from "this frame is filler" — which is the whole point of having
-two codes — is misled. A caller can work around it by setting
-`Header.FirstHeaderPtr = 0x7FE` after calling `NewIdleFrame`, but must then
-avoid `IsIdleFrame`. **Effort: S.**
+### 5.6.1c — the Frame Error Control Field could not be omitted
 
-### 5.3.1c — the secondary header can be built one octet too long
+§5.6.1b makes the field mandatory when the frame is not Reed-Solomon encoded,
+and its NOTE makes it optional inside a code block, which already protects the
+frame. §5.6.1c requires the choice to hold across the physical channel.
 
-§5.3.1c caps the secondary header at 64 octets in total. `frame.go:186` accepts
-a length field up to 63 alongside a 64-octet data field, which encodes to 65
-octets. Nothing rejects it.
+Only "always present" was supported: `Encode` always appended the field,
+`DecodeTMTransferFrame` always verified it, and `ChannelConfig.HasFEC` was
+never consulted by the frame codec. A Reed-Solomon mission omitting the field —
+a normal configuration — could not use the package.
 
-**Impact:** small. A mission would have to ask for the oversized header
-deliberately; the package will not produce one by accident. **Effort: S.**
+**Now:** `EncodeWithConfig` and `DecodeTMTransferFrameWithConfig` honour
+`HasFEC`. The original entry points keep the field, so existing callers are
+unaffected, and `VirtualChannelFrameService.SetChannelConfig` carries the
+choice through the pass-through path.
 
-### 5.6.1c — the Frame Error Control Field cannot be omitted
+### And one that was recorded as configurable
 
-§5.6.1b makes the FECF mandatory when the frame is not Reed-Solomon encoded,
-and `frame.go:271` always appends it, so that clause is met. §5.6.1c then
-requires the field to be *consistently* present or absent across a physical
-channel for a mission phase — and the NOTE under 5.6.1b makes it optional when
-the frame travels inside a Reed-Solomon code block.
-
-`pkg/tmdl` supports only "always present". `Encode` always appends the two
-octets and `DecodeTMTransferFrame` at `frame.go:368` always reads the last two
-as a checksum and rejects the frame if it does not verify. `ChannelConfig` has
-a `HasFEC` field (`physical.go:15`) that the frame codec never consults — it is
-used only to size the data field.
-
-**Impact:** a mission using Reed-Solomon coding and choosing to omit the FECF —
-a normal choice, since the code block already protects the frame — cannot use
-this package. Its frames would be built two octets too long and its received
-frames rejected. There is no workaround: `EncodeWithoutFEC` exists but produces
-a frame the package's own decoder will not read, since the decoder always
-treats the last two octets as a checksum. **Effort: M** — the flag must reach
-both the encoder and the decoder, and the decoder's frame-length arithmetic
-changes with it.
+§5.1b caps the frame at 2048 octets and nothing enforced it. It is still
+*configurable* rather than a gap — the caller sets `FrameLength`, and a
+CCSDS-only mission may legitimately exceed the European ceiling — but
+`ChannelConfig.Validate` now checks it for missions that care.
 
 ---
 
@@ -342,10 +318,10 @@ changes with it.
 
 | Verdict | Count | Share |
 |---|---|---|
-| conforms | 93 | 69% |
+| conforms | 98 | 73% |
 | configurable | 30 | 22% |
 | out-of-scope | 7 | 5% |
-| **gap** | **5** | **4%** |
+| **gap** | **0** | — |
 | **Total** | **135** | |
 
 **Inventory total 135, matrix rows 135.** The two numbers are stated here so
@@ -353,16 +329,21 @@ the check is self-contained.
 
 ### Reading the result
 
-`pkg/tmdl` implements the European TM transfer frame profile substantially. Of
-the five gaps, three are one-line value errors and one is a missing bound; only
-the FECF option needs real work.
+`pkg/tmdl` conforms to the European TM transfer frame profile. Every mandatory
+clause is either satisfied outright or satisfiable by configuration, and the
+rows that say *configurable* name the configuration.
 
-But two of them put wrong bytes on the wire, and both are the kind that hide:
-the secondary header length is self-consistent within this library, so nothing
-in the existing test suite notices, and the idle-frame pointer is wrong in a
-field most tests do not assert. **A mission using the secondary header would
-find every such frame misparsed by a conforming ground system.** That is worth
-fixing before anyone relies on the profile.
+The five gaps the first pass of this audit found were all closed on the same
+day. Two of them had been putting wrong bytes on the wire, and both were the
+kind that hide: the secondary header length was self-consistent within the
+library, so nothing in the test suite noticed, and the idle-frame pointer sat
+in a field most tests do not assert. Fixing the second exposed a third defect
+of the same shape in the packet service.
+
+That is the pattern worth carrying forward. Three separate defects in this
+codebase — the PN randomizer, this length field, and the swapped pointer codes
+— were each perfectly symmetric and perfectly wrong. A round trip cannot catch
+any of them. Assert the octet.
 
 ### On the 22% "configurable" share
 

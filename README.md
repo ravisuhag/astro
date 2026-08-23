@@ -115,7 +115,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | **Packet Utilization** | | | |
 | Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | [`pkg/pus`](pkg/pus) | [Guide](docs/guides/pus.md) \| [PICS](docs/pics/pus-pics.md) |
 | Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
-| Space Data Links — Telemetry Transfer Frame Protocol | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/) | [`pkg/tmdl`](pkg/tmdl) | [Conformance](docs/pics/ecss-50-03c-conformance.md) (partial) |
+| Space Data Links — Telemetry Transfer Frame Protocol | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/) | [`pkg/tmdl`](pkg/tmdl) | [Conformance](docs/pics/ecss-50-03c-conformance.md) |
 | **Mission Database** | | | |
 | XML Telemetric and Command Exchange | [XTCE 1.2](https://www.omg.org/spec/XTCE/) / [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) | [`pkg/xtce`](pkg/xtce) | [Guide](docs/guides/xtce.md) \| [Coverage](docs/pics/xtce-coverage.md) |
 | **Shared Utilities** | | | |
