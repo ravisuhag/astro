@@ -1,0 +1,57 @@
+name: Fuzz
+
+# The fuzz-smoke target in CI runs each target for seconds, which is enough to
+# catch a target that no longer builds but not enough to explore. This job runs
+# them for minutes, nightly, and keeps any crasher it finds.
+on:
+  schedule:
+    # 03:00 UTC daily.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: "Time per fuzz target"
+        required: false
+        default: "120s"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      # Go writes crashers into testdata/fuzz next to the package, and keeps
+      # its generated corpus in the build cache. Restoring the cache carries
+      # the corpus between runs, so each night starts from what the last one
+      # learned rather than from the seeds.
+      - name: Restore fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-corpus-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-
+
+      - name: Fuzz
+        run: make fuzz-smoke FUZZTIME=${{ inputs.fuzztime || '120s' }}
+
+      # A crasher is written to testdata/fuzz/<Target>/<hash> and is a
+      # regression test as it stands: `go test ./...` replays it. Upload it so
+      # the failure can be reproduced without re-running the fuzzer.
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore

@@ -4,6 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"math/big"
+
+	"github.com/ravisuhag/astro/internal/cmac"
 )
 
 // Mode is the Security Association service type of CCSDS 355.0-B-2 §4.2.2.4.
@@ -12,10 +14,8 @@ type Mode uint8
 
 const (
 	// Authentication proves integrity and origin without hiding the data.
-	// This package implements it as GMAC: AES-GCM over an empty plaintext
-	// with the whole Authentication Payload supplied as associated data.
-	//
-	// TODO(sdls): AES-CMAC, the §E2 TC baseline, is not implemented.
+	// The algorithm is chosen by AuthAlgorithm: GMAC for the §E1 TM and AOS
+	// baselines, AES-CMAC for the §E2 telecommand baseline.
 	Authentication Mode = iota + 1
 
 	// Encryption hides the data without authenticating it. §2.3.3 warns that
@@ -28,6 +28,39 @@ const (
 	// 96-bit IV and a 128-bit MAC.
 	AuthenticatedEncryption
 )
+
+// AuthAlgorithm selects the MAC algorithm used when Mode is Authentication.
+//
+// CCSDS 355.0-B-2 keeps the service type and the algorithm apart, and so does
+// this: §4.2.2.4 defines the three modes, while the annexes name a different
+// algorithm per link. §E1 gives GMAC for TM and §E3/§E4 for AOS and USLP;
+// §E2 gives AES-CMAC for telecommand.
+type AuthAlgorithm uint8
+
+const (
+	// AuthGMAC is AES-GCM over an empty plaintext with the whole
+	// Authentication Payload as associated data — the §E1, §E3 and §E4
+	// baseline. It is the zero value, so an SA that does not choose keeps the
+	// behaviour it had before CMAC existed.
+	AuthGMAC AuthAlgorithm = iota
+
+	// AuthCMAC is AES-CMAC, the §E2 telecommand baseline: a 256-bit key and a
+	// 128-bit MAC.
+	//
+	// §E2.2 note: CMAC performs no encryption and needs no initialization
+	// vector, so the §E2 Security Header is six octets — a 16-bit SPI and a
+	// 32-bit Sequence Number, with the IV and Pad Length fields zero octets
+	// wide. An SA using CMAC must set FieldLengths.IV to 0.
+	AuthCMAC
+)
+
+// String names the algorithm.
+func (a AuthAlgorithm) String() string {
+	if a == AuthCMAC {
+		return "AES-CMAC"
+	}
+	return "GMAC"
+}
 
 // String names the mode.
 func (m Mode) String() string {
@@ -79,6 +112,10 @@ type SecurityAssociation struct {
 	// not copy it, load it, or store it anywhere; key management is out of
 	// scope for this package.
 	Key []byte
+
+	// AuthAlgorithm selects the MAC algorithm when Mode is Authentication. It
+	// is ignored for AuthenticatedEncryption, which is always AES-GCM.
+	AuthAlgorithm AuthAlgorithm
 
 	// FieldLengths is the wire layout of this SA's header and trailer fields.
 	FieldLengths FieldLengths
@@ -154,8 +191,16 @@ func (sa *SecurityAssociation) Validate() error {
 	}
 
 	if sa.needsMAC() {
-		// GCM and GMAC both need a 96-bit nonce.
-		if sa.FieldLengths.IV != GCMIVSize {
+		if sa.usesCMAC() {
+			// §E2.2 note: CMAC performs no encryption and needs no
+			// initialization vector, so the field is zero octets wide. A
+			// non-zero IV here means the SA was configured for the wrong
+			// baseline.
+			if sa.FieldLengths.IV != 0 {
+				return ErrInvalidFieldLengths
+			}
+		} else if sa.FieldLengths.IV != GCMIVSize {
+			// GCM and GMAC both need a 96-bit nonce.
 			return ErrInvalidFieldLengths
 		}
 		if sa.FieldLengths.MAC < MinMACSize || sa.FieldLengths.MAC > MaxMACSize {
@@ -164,6 +209,18 @@ func (sa *SecurityAssociation) Validate() error {
 	}
 
 	return nil
+}
+
+// usesCMAC reports whether this SA authenticates with AES-CMAC rather than
+// GMAC. It is only meaningful for Mode == Authentication; authenticated
+// encryption is always AES-GCM.
+func (sa *SecurityAssociation) usesCMAC() bool {
+	return sa.Mode == Authentication && sa.AuthAlgorithm == AuthCMAC
+}
+
+// newCMAC builds the CMAC for this SA.
+func (sa *SecurityAssociation) newCMAC() (*cmac.CMAC, error) {
+	return cmac.New(sa.Key)
 }
 
 // newGCM builds the AEAD for this SA at its configured tag width.

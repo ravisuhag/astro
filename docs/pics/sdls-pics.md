@@ -93,7 +93,6 @@
 
 | Feature | Reference | Support | Rationale |
 |---|---|---|---|
-| AES-CMAC authentication (TC baseline) | §E2.1 | N | Absent from the Go standard library; this package takes no external dependencies. Tracked as `TODO(sdls): AES-CMAC`. |
 | Encryption without authentication | §2.3.3, §4.2.3.2.2.1 | N | `ApplySecurity` returns `ErrUnsupportedMode`. §2.3.3 itself warns that encryption without authentication can give a false sense of security. |
 | Block padding generation | §4.2.3.3 b | N | GCM is a stream mode and needs none (§E1.2 note 2). A non-zero Pad Length is still honored on receive. |
 | SDLS Extended Procedures (key management, OTAR) | CCSDS 355.1 | N | A separate standard, out of scope for this package. |
@@ -103,7 +102,10 @@
 
 ## A1.6 BASELINE MODE CONFORMANCE
 
-The §E1 (TM), §E3 (AOS), and §E4 (USLP) baselines are supported in full.
+All four baselines are supported in full: §E1 (TM), §E2 (TC), §E3 (AOS) and
+§E4 (USLP).
+
+### §E1, §E3 and §E4 — AES-GCM
 
 | Baseline parameter | Reference | Value | Support |
 |---|---|---|---|
@@ -116,4 +118,22 @@ The §E1 (TM), §E3 (AOS), and §E4 (USLP) baselines are supported in full.
 | Sequence Number field | §E1.2 note 1 | 0 octets — IV serves as the counter | Y |
 | Pad Length field | §E1.2 note 2 | 0 octets | Y |
 
-The §E2 (TC) baseline is **not** supported: it specifies AES-CMAC. See A1.5.
+### §E2 — AES-CMAC (telecommand)
+
+Selected with `SecurityAssociation.AuthAlgorithm = AuthCMAC`.
+
+| Baseline parameter | Reference | Value | Support |
+|---|---|---|---|
+| Algorithm | §E2.1 | AES-CMAC | Y — `internal/cmac`, NIST SP 800-38B |
+| Key length | §E2.1 a | 256 bits | Y — exactly 32 octets, enforced |
+| Sequence number | §E2.1 b | 32 bits, transmitted in-line | Y |
+| MAC length | §E2.1 c | 128 bits | Y |
+| Security Header length | §E2.2 | 6 octets | Y |
+| Initialization Vector field | §E2.2 note | 0 octets | Y — a non-zero IV is rejected by `Validate` |
+| Pad Length field | §E2.2 note | 0 octets | Y |
+
+AES-CMAC is absent from the Go standard library, so it is implemented in
+`internal/cmac` rather than taken as a dependency. It is verified against the
+AES-128 vectors of RFC 4493 §4 and the CMAC-AES256 vectors of the NIST
+SP 800-38B example set — eight published vectors in all, the AES-256 ones being
+the sizes §E2.1 a actually requires.

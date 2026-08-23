@@ -15,11 +15,10 @@
 // come from the Security Association named by the Security Parameter Index,
 // which both ends agree on before the link opens (§2.3.1.4).
 //
-// This package ships the AES-256-GCM baseline of §E1: authenticated
-// encryption, plus GMAC for authentication without confidentiality.
-//
-// TODO(sdls): AES-CMAC, the TC baseline of §E2, needs a hand-rolled
-// implementation because it is absent from the Go standard library.
+// This package ships two baselines: the AES-256-GCM of §E1 — authenticated
+// encryption, plus GMAC for authentication without confidentiality — and the
+// AES-CMAC of §E2 for telecommand. Pick between the two MAC algorithms with
+// SecurityAssociation.AuthAlgorithm.
 package sdls
 
 import "encoding/binary"

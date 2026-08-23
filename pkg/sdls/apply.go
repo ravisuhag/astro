@@ -96,12 +96,29 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 		return nil, err
 	}
 
+	var body, mac []byte
+
+	// CMAC is not an AEAD and needs no nonce, so it does not go through the
+	// GCM construction at all.
+	if sa.usesCMAC() {
+		mac, err = sa.cmacTag(prefix, plaintext)
+		if err != nil {
+			return nil, err
+		}
+		body = plaintext
+
+		out := make([]byte, 0, len(headerBytes)+len(body)+len(mac))
+		out = append(out, headerBytes...)
+		out = append(out, body...)
+		out = append(out, mac...)
+		return out, nil
+	}
+
 	gcm, err := sa.newGCM()
 	if err != nil {
 		return nil, err
 	}
 
-	var body, mac []byte
 	switch sa.Mode {
 	case AuthenticatedEncryption:
 		// §4.2.3.2.2.3: plaintext is the data field, associated data is the
@@ -115,6 +132,7 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 		// §4.2.3.2.2.2: the data field travels unencrypted and the MAC covers
 		// the whole Authentication Payload. Sealing an empty plaintext with
 		// prefix||plaintext as associated data is GMAC over exactly that.
+		// The CMAC alternative of §E2 returned above.
 		aad := make([]byte, 0, len(prefix)+len(plaintext))
 		aad = append(aad, prefix...)
 		aad = append(aad, plaintext...)
@@ -131,4 +149,23 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 	out = append(out, body...)
 	out = append(out, mac...)
 	return out, nil
+}
+
+// cmacTag computes the AES-CMAC over the Authentication Payload, per §E2.
+//
+// The payload is the same one GMAC covers: the masked frame header and
+// security header, then the data field. §E2c fixes the MAC at 128 bits, but
+// the SA's declared width is honoured so a mission that truncates still
+// interoperates with itself.
+func (sa *SecurityAssociation) cmacTag(prefix, plaintext []byte) ([]byte, error) {
+	mac, err := sa.newCMAC()
+	if err != nil {
+		return nil, err
+	}
+
+	payload := make([]byte, 0, len(prefix)+len(plaintext))
+	payload = append(payload, prefix...)
+	payload = append(payload, plaintext...)
+
+	return mac.SumTruncated(payload, sa.FieldLengths.MAC)
 }

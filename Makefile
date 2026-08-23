@@ -30,6 +30,7 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeCUC -fuzztime $(FUZZTIME) ./pkg/tcf/
 	go test -run '^$$' -fuzz FuzzDecodeCDS -fuzztime $(FUZZTIME) ./pkg/tcf/
 	go test -run '^$$' -fuzz FuzzDecodeCCS -fuzztime $(FUZZTIME) ./pkg/tcf/
+	go test -run '^$$' -fuzz FuzzSumNeverPanics -fuzztime $(FUZZTIME) ./internal/cmac/
 	go test -run '^$$' -fuzz FuzzDecodeSecurityHeader -fuzztime $(FUZZTIME) ./pkg/sdls/
 	go test -run '^$$' -fuzz FuzzProcessSecurity -fuzztime $(FUZZTIME) ./pkg/sdls/
 	go test -run '^$$' -fuzz FuzzDecodePDU -fuzztime $(FUZZTIME) ./pkg/cfdp/

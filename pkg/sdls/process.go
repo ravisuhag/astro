@@ -1,6 +1,9 @@
 package sdls
 
-import "encoding/binary"
+import (
+	"crypto/subtle"
+	"encoding/binary"
+)
 
 // SALookup returns the Security Association registered for an SPI. It should
 // return ErrUnknownSPI when the index is not configured.
@@ -80,6 +83,25 @@ func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityH
 		return nil, nil, err
 	}
 
+	var plaintext []byte
+
+	// CMAC is not an AEAD: verify the tag directly and take the body as it
+	// stands, since §E2 authenticates without encrypting.
+	if sa.usesCMAC() {
+		expected, err := sa.cmacTag(prefix, body)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Constant time: a variable-time compare here would leak how many
+		// leading octets of a forged tag were correct.
+		if subtle.ConstantTimeCompare(expected, mac) != 1 {
+			return nil, nil, ErrAuthenticationFailed
+		}
+		plaintext = copySlice(body)
+
+		return sa.finishProcessing(header, plaintext)
+	}
+
 	gcm, err := sa.newGCM()
 	if err != nil {
 		return nil, nil, err
@@ -88,7 +110,6 @@ func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityH
 		return nil, nil, ErrInvalidFieldLengths
 	}
 
-	var plaintext []byte
 	switch sa.Mode {
 	case AuthenticatedEncryption:
 		sealed := make([]byte, 0, len(body)+len(mac))
@@ -114,6 +135,12 @@ func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityH
 		return nil, nil, ErrUnsupportedMode
 	}
 
+	return sa.finishProcessing(header, plaintext)
+}
+
+// finishProcessing runs the steps that follow a verified MAC, whichever
+// algorithm produced it: anti-replay, then padding removal.
+func (sa *SecurityAssociation) finishProcessing(header *SecurityHeader, plaintext []byte) (*SecurityHeader, []byte, error) {
 	// Anti-replay runs only now, after the MAC has verified, so a forged frame
 	// cannot advance the receiver's window (§4.2.4.4).
 	counter := header.SeqNum
