@@ -8,7 +8,11 @@
 //   - Channel Access Data Unit (CADU) wrapping and unwrapping
 package tmsc
 
-import "bytes"
+import (
+	"bytes"
+
+	"github.com/ravisuhag/astro/internal/pn"
+)
 
 // DefaultASM returns the standard CCSDS Attached Sync Marker (0x1ACFFC1D)
 // used to identify the start of each Transfer Frame in the bitstream.
@@ -22,13 +26,7 @@ func DefaultASM() []byte {
 // for both randomization and de-randomization since XOR is self-inverse.
 // Returns a new slice; the input is not modified.
 func Randomize(data []byte) []byte {
-	out := make([]byte, len(data))
-	copy(out, data)
-	pn := GeneratePNSequence(len(data))
-	for i := range out {
-		out[i] ^= pn[i]
-	}
-	return out
+	return pn.Apply(data)
 }
 
 // WrapCADU produces a Channel Access Data Unit from encoded frame data.
@@ -73,23 +71,10 @@ func UnwrapCADU(cadu, asm []byte, randomize bool) ([]byte, error) {
 // GeneratePNSequence produces the CCSDS pseudo-random sequence using an
 // 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1,
 // initialized to all 1s per CCSDS 131.0-B-4.
+//
+// The generator lives in internal/pn, shared with the other synchronization
+// and channel coding package: the two standards specify the same randomizer,
+// and one copy means one place for the feedback taps to be wrong.
 func GeneratePNSequence(length int) []byte {
-	seq := make([]byte, length)
-	reg := uint8(0xFF)
-	for i := range length {
-		var b uint8
-		for bit := 7; bit >= 0; bit-- {
-			output := (reg >> 7) & 1
-			b |= output << uint(bit)
-			// Feedback taps for h(x) = x^8 + x^7 + x^5 + x^3 + 1, at register
-			// bits 7, 4, 2 and 0. Verified against the sequence CCSDS
-			// publishes; see TestPNSequenceMatchesTheCCSDSVector. Reading the
-			// polynomial exponents directly as bit indices gives a different
-			// maximal-length sequence that no round-trip test can distinguish.
-			feedback := ((reg >> 7) ^ (reg >> 4) ^ (reg >> 2) ^ reg) & 1
-			reg = ((reg << 1) | feedback) & 0xFF
-		}
-		seq[i] = b
-	}
-	return seq
+	return pn.Sequence(length)
 }

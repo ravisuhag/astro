@@ -54,8 +54,8 @@ func TestRS255_223_CorrectErrors(t *testing.T) {
 	rng := rand.New(rand.NewPCG(42, 0))
 
 	tests := []struct {
-		name   string
-		nerrs  int
+		name  string
+		nerrs int
 	}{
 		{"1 error", 1},
 		{"8 errors", 8},
