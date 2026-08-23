@@ -66,37 +66,24 @@ func NewUSDLServiceManager() *USDLServiceManager {
 // FrameGapDetector tracks per-VC frame sequence numbers to detect gaps
 // caused by lost frames.
 type FrameGapDetector struct {
-	expectedVC map[uint8]uint16
-	vcInit     map[uint8]bool
-	lastVCGap  int
+	vc *sdl.GapCounter[uint16]
 }
 
 // NewFrameGapDetector creates a new detector.
 func NewFrameGapDetector() *FrameGapDetector {
-	return &FrameGapDetector{
-		expectedVC: make(map[uint8]uint16),
-		vcInit:     make(map[uint8]bool),
-	}
+	// The USLP sequence number is sixteen bits.
+	return &FrameGapDetector{vc: sdl.NewGapCounter[uint16](0xFFFF)}
 }
 
 // Track examines the frame's sequence number and records any gap.
 // Returns the VC gap (0 means no gap or first frame).
 func (d *FrameGapDetector) Track(frame *TransferFrame) int {
-	vcid := frame.Header.VCID
-	seq := frame.DataFieldHeader.SequenceNumber
-	if d.vcInit[vcid] {
-		d.lastVCGap = int((seq - d.expectedVC[vcid]) & 0xFFFF)
-	} else {
-		d.vcInit[vcid] = true
-		d.lastVCGap = 0
-	}
-	d.expectedVC[vcid] = seq + 1
-	return d.lastVCGap
+	return d.vc.Track(frame.Header.VCID, frame.DataFieldHeader.SequenceNumber)
 }
 
 // VCFrameGap returns the VC gap detected by the last Track call.
 func (d *FrameGapDetector) VCFrameGap() int {
-	return d.lastVCGap
+	return d.vc.LastGap()
 }
 
 // MasterChannel manages USLP Transfer Frames for a Master Channel identified by SCID.

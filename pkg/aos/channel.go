@@ -63,37 +63,24 @@ func scidKey(scid uint8) uint16 { return uint16(scid) }
 // FrameGapDetector tracks per-VC 24-bit frame counts to detect gaps
 // caused by lost frames during transmission.
 type FrameGapDetector struct {
-	expectedVC map[uint8]uint32
-	vcInit     map[uint8]bool
-	lastVCGap  int
+	vc *sdl.GapCounter[uint32]
 }
 
 // NewFrameGapDetector creates a new detector.
 func NewFrameGapDetector() *FrameGapDetector {
-	return &FrameGapDetector{
-		expectedVC: make(map[uint8]uint32),
-		vcInit:     make(map[uint8]bool),
-	}
+	// The AOS VC Frame Count is twenty-four bits.
+	return &FrameGapDetector{vc: sdl.NewGapCounter[uint32](MaxVCFrameCount)}
 }
 
 // Track examines the frame's VC frame count and records any gap.
 // Returns the VC gap (0 means no gap or first frame for that VCID).
 func (d *FrameGapDetector) Track(frame *TransferFrame) int {
-	vcid := frame.Header.VCID
-	count := frame.Header.VCFrameCount
-	if d.vcInit[vcid] {
-		d.lastVCGap = int((count - d.expectedVC[vcid]) & MaxVCFrameCount)
-	} else {
-		d.vcInit[vcid] = true
-		d.lastVCGap = 0
-	}
-	d.expectedVC[vcid] = (count + 1) & MaxVCFrameCount
-	return d.lastVCGap
+	return d.vc.Track(frame.Header.VCID, frame.Header.VCFrameCount)
 }
 
 // VCFrameGap returns the VC gap detected by the last Track call.
 func (d *FrameGapDetector) VCFrameGap() int {
-	return d.lastVCGap
+	return d.vc.LastGap()
 }
 
 // MasterChannel manages AOS Transfer Frames for a Master Channel

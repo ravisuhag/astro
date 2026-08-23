@@ -37,23 +37,23 @@ func NewTMServiceManager() *TMServiceManager {
 // Per CCSDS 132.0-B-3, MCFrameCount and VCFrameCount are 8-bit counters
 // that wrap from 255 to 0.
 type FrameGapDetector struct {
-	expectedMC uint8
-	mcInit     bool
-
-	expectedVC map[uint8]uint8
-	vcInit     map[uint8]bool
+	// TM is the only protocol here that counts frames per master channel as
+	// well as per virtual channel, so it keeps two counters. The master
+	// channel is tracked as a single pseudo-channel.
+	mc *sdl.GapCounter[uint8]
+	vc *sdl.GapCounter[uint8]
 
 	lastMCGap int
-	lastVCGap int
 	lastVCID  uint8
 }
 
 // NewFrameGapDetector creates a new detector. The first frame seen
 // initializes the expected counts (no gap reported).
 func NewFrameGapDetector() *FrameGapDetector {
+	// Both TM frame counts are eight bits.
 	return &FrameGapDetector{
-		expectedVC: make(map[uint8]uint8),
-		vcInit:     make(map[uint8]bool),
+		mc: sdl.NewGapCounter[uint8](0xFF),
+		vc: sdl.NewGapCounter[uint8](0xFF),
 	}
 }
 
@@ -63,26 +63,11 @@ func NewFrameGapDetector() *FrameGapDetector {
 func (d *FrameGapDetector) Track(frame *TMTransferFrame) (mcGap, vcGap int) {
 	vcid := frame.Header.VirtualChannelID
 
-	// MC gap detection
-	if d.mcInit {
-		d.lastMCGap = int((frame.Header.MCFrameCount - d.expectedMC) & 0xFF)
-	} else {
-		d.mcInit = true
-		d.lastMCGap = 0
-	}
-	d.expectedMC = frame.Header.MCFrameCount + 1
-
-	// VC gap detection
-	if d.vcInit[vcid] {
-		d.lastVCGap = int((frame.Header.VCFrameCount - d.expectedVC[vcid]) & 0xFF)
-	} else {
-		d.vcInit[vcid] = true
-		d.lastVCGap = 0
-	}
-	d.expectedVC[vcid] = frame.Header.VCFrameCount + 1
+	d.lastMCGap = d.mc.Track(0, frame.Header.MCFrameCount)
+	vcGap = d.vc.Track(vcid, frame.Header.VCFrameCount)
 	d.lastVCID = vcid
 
-	return d.lastMCGap, d.lastVCGap
+	return d.lastMCGap, vcGap
 }
 
 // MCFrameGap returns the MC gap detected by the last Track call.
@@ -94,7 +79,7 @@ func (d *FrameGapDetector) MCFrameGap() int {
 // VCFrameGap returns the VC gap detected by the last Track call.
 // 0 means no gap (or first frame for that VCID).
 func (d *FrameGapDetector) VCFrameGap() int {
-	return d.lastVCGap
+	return d.vc.LastGap()
 }
 
 // MasterChannel manages TM Transfer Frames for a Master Channel identified by SCID.
