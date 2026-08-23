@@ -6,6 +6,14 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
+// MaxFrameLength is the longest TM Transfer Frame ECSS-E-ST-50-03C 5.1b
+// allows, in octets.
+//
+// CCSDS 132.0-B-3 sets no such ceiling; this is the European profile
+// constraining it. A mission following CCSDS alone may exceed it, so the limit
+// is checked by Validate rather than enforced silently.
+const MaxFrameLength = 2048
+
 // ChannelConfig defines the fixed parameters of a physical channel
 // per CCSDS 132.0-B-3. All frames on a physical channel share the
 // same fixed length and optional field configuration.
@@ -13,6 +21,21 @@ type ChannelConfig struct {
 	FrameLength int  // Total frame length in octets (fixed per physical channel)
 	HasOCF      bool // Whether Operational Control Field (4 bytes) is present
 	HasFEC      bool // Whether Frame Error Control (2-byte CRC) is present
+}
+
+// Validate checks the configuration against the profile limits.
+//
+// It is not called automatically: a CCSDS-only mission may legitimately run
+// frames longer than the ECSS ceiling. Call it when conformance to
+// ECSS-E-ST-50-03C matters.
+func (c ChannelConfig) Validate() error {
+	if c.FrameLength < 8 {
+		return ErrDataFieldTooSmall
+	}
+	if c.FrameLength > MaxFrameLength {
+		return ErrFrameTooLong
+	}
+	return nil
 }
 
 // DataFieldCapacity returns the maximum data field size available

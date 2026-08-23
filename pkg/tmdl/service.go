@@ -85,11 +85,11 @@ type VirtualChannelPacketService struct {
 	packetOffsets []int
 
 	// Receive-side state for FHP-based extraction
-	recvBuf      []byte
-	synced       bool
-	sizer        PacketSizer
-	gapDetector  *FrameGapDetector
-	gapResync    bool // when true, discard partial packets on frame gaps
+	recvBuf     []byte
+	synced      bool
+	sizer       PacketSizer
+	gapDetector *FrameGapDetector
+	gapResync   bool // when true, discard partial packets on frame gaps
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
@@ -163,7 +163,7 @@ func (s *VirtualChannelPacketService) Flush() error {
 	}
 	chunk := padDataField(s.sendBuf, capacity)
 
-	fhp := uint16(0x07FE)
+	fhp := FHPNoPacketStart
 	for _, off := range s.packetOffsets {
 		if off < len(s.sendBuf) {
 			fhp = uint16(off)
@@ -189,11 +189,11 @@ func (s *VirtualChannelPacketService) emitFullFrames() error {
 		copy(chunk, s.sendBuf[:capacity])
 
 		// Find first packet start in this chunk
-		fhp := uint16(0x07FE)
+		fhp := FHPNoPacketStart
 		var remaining []int
 		for _, off := range s.packetOffsets {
 			if off < capacity {
-				if fhp == 0x07FE {
+				if fhp == FHPNoPacketStart {
 					fhp = uint16(off)
 				}
 			} else {
@@ -287,11 +287,13 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		data := frame.DataField
 
 		switch fhp {
-		case 0x07FF:
-			continue // idle
+		case FHPOnlyIdleData:
+			// The data field is nothing but fill; there is no payload here.
+			continue
 
-		case 0x07FE:
-			// Continuation only
+		case FHPNoPacketStart:
+			// No packet *starts* here, but the field continues one that began
+			// in an earlier frame, so it is payload and must be appended.
 			if s.synced {
 				s.recvBuf = append(s.recvBuf, data...)
 			}
@@ -335,13 +337,25 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 
 // VirtualChannelFrameService implements the VCF service.
 type VirtualChannelFrameService struct {
+	// config carries HasFEC so pass-through frames are decoded and re-encoded
+	// the way the channel actually frames them. It defaults to a channel with
+	// an error control field, which is the mandatory case under §5.6.1b.
+	config ChannelConfig
+
 	vcid uint8
 	vc   *VirtualChannel
 }
 
 // NewVirtualChannelFrameService creates a new VCF service instance.
 func NewVirtualChannelFrameService(vcid uint8, vc *VirtualChannel) *VirtualChannelFrameService {
-	return &VirtualChannelFrameService{vcid: vcid, vc: vc}
+	return &VirtualChannelFrameService{vcid: vcid, vc: vc, config: ChannelConfig{HasFEC: true}}
+}
+
+// SetChannelConfig tells the service how its channel is framed, which matters
+// only for HasFEC: a channel carrying no Frame Error Control Field needs the
+// pass-through decode and re-encode to agree with it.
+func (s *VirtualChannelFrameService) SetChannelConfig(config ChannelConfig) {
+	s.config = config
 }
 
 // Send decodes the provided bytes as a TM Transfer Frame and pushes it into the Virtual Channel.
@@ -349,7 +363,7 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-	frame, err := DecodeTMTransferFrame(data)
+	frame, err := DecodeTMTransferFrameWithConfig(data, s.config)
 	if err != nil {
 		return err
 	}
@@ -362,7 +376,7 @@ func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return frame.Encode()
+	return frame.EncodeWithConfig(s.config)
 }
 
 // Flush is a no-op for VCF service.
@@ -427,7 +441,10 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	}
 
 	frame.Header.SyncFlag = true
-	frame.Header.FirstHeaderPtr = 0x07FF
+	// §5.2.7.6c: with the Synchronization Flag set the data field carries a
+	// VCA_SDU rather than packets, so the pointer has no meaning and is set
+	// to all ones.
+	frame.Header.FirstHeaderPtr = FHPNoPacketStart
 
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err

@@ -263,8 +263,8 @@ func TestVCPService_Packing_FHPValues(t *testing.T) {
 	}
 
 	f2, _ := vc.Next()
-	if f2.Header.FirstHeaderPtr != 0x07FE {
-		t.Errorf("Frame 2: FHP = 0x%04X, want 0x07FE", f2.Header.FirstHeaderPtr)
+	if f2.Header.FirstHeaderPtr != 0x07FF {
+		t.Errorf("Frame 2: FHP = 0x%04X, want 0x07FF", f2.Header.FirstHeaderPtr)
 	}
 }
 
@@ -293,8 +293,8 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 
 	// Frame 2 should have FHP=0x07FE (continuation of pkt2)
 	f2, _ := vc.Next()
-	if f2.Header.FirstHeaderPtr != 0x07FE {
-		t.Errorf("Frame 2 FHP = 0x%04X, want 0x07FE", f2.Header.FirstHeaderPtr)
+	if f2.Header.FirstHeaderPtr != 0x07FF {
+		t.Errorf("Frame 2 FHP = 0x%04X, want 0x07FF", f2.Header.FirstHeaderPtr)
 	}
 }
 

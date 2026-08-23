@@ -166,7 +166,7 @@ func TestPrimaryHeader_EncodeDecode_ValidHeader(t *testing.T) {
 func TestSecondaryHeader_EncodeDecode(t *testing.T) {
 	sh := tmdl.SecondaryHeader{
 		VersionNumber: 0,
-		HeaderLength:  2,
+		HeaderLength:  3,
 		DataField:     []byte{0xAA, 0xBB, 0xCC},
 	}
 
@@ -188,22 +188,40 @@ func TestSecondaryHeader_EncodeDecode(t *testing.T) {
 }
 
 func TestSecondaryHeader_MaxLength63(t *testing.T) {
-	data := make([]byte, 64)
+	// 63 data octets plus the identification octet is the 64-octet maximum of
+	// CCSDS 132.0-B-3 §4.1.3.2 and ECSS-E-ST-50-03C 5.3.1c.
 	sh := tmdl.SecondaryHeader{
 		VersionNumber: 0,
 		HeaderLength:  63,
-		DataField:     data,
+		DataField:     make([]byte, 63),
 	}
-	_, err := sh.Encode()
+	encoded, err := sh.Encode()
 	if err != nil {
 		t.Errorf("Expected no error for max length 63, got %v", err)
+	}
+	if len(encoded) != tmdl.MaxSecondaryHeaderSize {
+		t.Errorf("encoded %d octets, want %d", len(encoded), tmdl.MaxSecondaryHeaderSize)
+	}
+}
+
+// TestSecondaryHeader_RejectsOversize covers ECSS-E-ST-50-03C 5.3.1c: the
+// whole secondary header, identification octet included, may not exceed 64
+// octets. A 64-octet data field would make 65.
+func TestSecondaryHeader_RejectsOversize(t *testing.T) {
+	sh := tmdl.SecondaryHeader{
+		VersionNumber: 0,
+		HeaderLength:  64,
+		DataField:     make([]byte, 64),
+	}
+	if _, err := sh.Encode(); err == nil {
+		t.Error("Encode() accepted a 65-octet secondary header")
 	}
 }
 
 func TestSecondaryHeader_MinLength1(t *testing.T) {
 	sh := tmdl.SecondaryHeader{
 		VersionNumber: 0,
-		HeaderLength:  0,
+		HeaderLength:  1,
 		DataField:     []byte{0xFF},
 	}
 	_, err := sh.Encode()
@@ -252,11 +270,11 @@ func TestSecondaryHeader_Validate(t *testing.T) {
 	}{
 		{
 			name: "valid",
-			sh:   tmdl.SecondaryHeader{VersionNumber: 0, HeaderLength: 1, DataField: []byte{0xAA, 0xBB}},
+			sh:   tmdl.SecondaryHeader{VersionNumber: 0, HeaderLength: 2, DataField: []byte{0xAA, 0xBB}},
 		},
 		{
 			name:    "invalid version",
-			sh:      tmdl.SecondaryHeader{VersionNumber: 1, HeaderLength: 0, DataField: []byte{0xAA}},
+			sh:      tmdl.SecondaryHeader{VersionNumber: 1, HeaderLength: 1, DataField: []byte{0xAA}},
 			wantErr: true,
 		},
 		{
@@ -441,6 +459,18 @@ func TestMalformedFrame(t *testing.T) {
 	}
 }
 
+// TestSecondaryHeaderLength_CCSDS pins the length field to the value that goes
+// on the wire, not to a round trip.
+//
+// CCSDS 132.0-B-3 §4.1.3.2.2.3 and ECSS-E-ST-50-03C 5.3.2.3c both define the
+// field as the TOTAL secondary header length in octets minus one, where the
+// total counts the identification octet. Three data octets make a four-octet
+// header, so the field reads 3.
+//
+// This test previously asserted 2 and so locked in an off-by-one. Encoder and
+// decoder agreed with each other, which is exactly why a round-trip test could
+// never have caught it — the same shape as the PN randomizer defect in
+// pkg/tmsc. Assert the octet, not the symmetry.
 func TestSecondaryHeaderLength_CCSDS(t *testing.T) {
 	shData := []byte{0xAA, 0xBB, 0xCC}
 	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("data"), shData, nil)
@@ -448,16 +478,41 @@ func TestSecondaryHeaderLength_CCSDS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if frame.SecondaryHeader.HeaderLength != 2 {
-		t.Errorf("HeaderLength = %d, want 2 (len(DataField)-1 per CCSDS)", frame.SecondaryHeader.HeaderLength)
+	if frame.SecondaryHeader.HeaderLength != 3 {
+		t.Errorf("HeaderLength = %d, want 3 (total octets minus one)", frame.SecondaryHeader.HeaderLength)
+	}
+	if got := frame.SecondaryHeader.TotalLength(); got != 4 {
+		t.Errorf("TotalLength() = %d, want 4", got)
 	}
 
 	encoded, err := frame.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wireLen := encoded[6] & 0x3F; wireLen != 2 {
-		t.Errorf("Wire HeaderLength = %d, want 2", wireLen)
+	if wireLen := encoded[6] & 0x3F; wireLen != 3 {
+		t.Errorf("wire length field = %d, want 3", wireLen)
+	}
+	// The data field must start at octet 6+4 = 10, which is what a conforming
+	// receiver computes from the field.
+	if got := 6 + 1 + int(encoded[6]&0x3F); got != 10 {
+		t.Errorf("a receiver would start the data field at octet %d, want 10", got)
+	}
+}
+
+// TestSetDataFieldDerivesLength covers the helper that keeps the two in step.
+func TestSetDataFieldDerivesLength(t *testing.T) {
+	var sh tmdl.SecondaryHeader
+	if err := sh.SetDataField([]byte{1, 2, 3, 4, 5}); err != nil {
+		t.Fatalf("SetDataField() = %v", err)
+	}
+	if sh.HeaderLength != 5 {
+		t.Errorf("HeaderLength = %d, want 5", sh.HeaderLength)
+	}
+	if err := sh.Validate(); err != nil {
+		t.Errorf("Validate() = %v", err)
+	}
+	if err := sh.SetDataField(make([]byte, 64)); err == nil {
+		t.Error("SetDataField accepted a data field that overflows the 64-octet header")
 	}
 }
 
@@ -590,8 +645,14 @@ func TestNewIdleFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if frame.Header.FirstHeaderPtr != 0x07FF {
-		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x07FF", frame.Header.FirstHeaderPtr)
+	// ECSS-E-ST-50-03C 5.2.7.6g: a data field of only idle data takes the OID
+	// pointer 0x7FE, not the 0x7FF that means "no packet starts here".
+	if frame.Header.FirstHeaderPtr != tmdl.FHPOnlyIdleData {
+		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x%04X (OID)",
+			frame.Header.FirstHeaderPtr, tmdl.FHPOnlyIdleData)
+	}
+	if !tmdl.IsIdleFrame(frame) {
+		t.Error("IsIdleFrame() = false for a frame built by NewIdleFrame")
 	}
 	if len(frame.DataField) != capacity {
 		t.Errorf("DataField len = %d, want %d", len(frame.DataField), capacity)
@@ -785,5 +846,101 @@ func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 	}
 	if decoded.Header.VCFrameCount != 4 {
 		t.Errorf("VCFrameCount = %d, want 4", decoded.Header.VCFrameCount)
+	}
+}
+
+// TestFECFOptionalUnderReedSolomon covers ECSS-E-ST-50-03C 5.6.1b and its
+// NOTE: the Frame Error Control Field is mandatory when the frame is not
+// Reed-Solomon encoded, and optional when it travels inside a code block,
+// which already protects it. §5.6.1c then requires the choice to hold for the
+// whole physical channel.
+//
+// Before this, Encode always appended the field and DecodeTMTransferFrame
+// always demanded it, so a Reed-Solomon mission that omitted it could not use
+// the package at all.
+func TestFECFOptionalUnderReedSolomon(t *testing.T) {
+	withFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	noFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: false}
+
+	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	withBytes, err := frame.EncodeWithConfig(withFEC)
+	if err != nil {
+		t.Fatalf("EncodeWithConfig(HasFEC) = %v", err)
+	}
+	withoutBytes, err := frame.EncodeWithConfig(noFEC)
+	if err != nil {
+		t.Fatalf("EncodeWithConfig(no FEC) = %v", err)
+	}
+
+	if len(withBytes)-len(withoutBytes) != 2 {
+		t.Errorf("with FECF is %d octets and without is %d; the difference should be exactly 2",
+			len(withBytes), len(withoutBytes))
+	}
+
+	// Each decodes under its own configuration.
+	back, err := tmdl.DecodeTMTransferFrameWithConfig(withoutBytes, noFEC)
+	if err != nil {
+		t.Fatalf("decoding a frame with no FECF = %v", err)
+	}
+	if string(back.DataField) != "payload" {
+		t.Errorf("data field = %q, want %q", back.DataField, "payload")
+	}
+
+	back, err = tmdl.DecodeTMTransferFrameWithConfig(withBytes, withFEC)
+	if err != nil {
+		t.Fatalf("decoding a frame with a FECF = %v", err)
+	}
+	if string(back.DataField) != "payload" {
+		t.Errorf("data field = %q, want %q", back.DataField, "payload")
+	}
+
+	// The default entry points keep the field, which is the mandatory case.
+	defaultBytes, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(defaultBytes) != len(withBytes) {
+		t.Error("Encode() no longer appends the error control field")
+	}
+}
+
+// TestFECFMismatchIsDetected checks the configuration is not merely ignored:
+// reading a no-FECF frame as though it had one must not silently succeed.
+func TestFECFMismatchIsDetected(t *testing.T) {
+	noFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: false}
+
+	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := frame.EncodeWithConfig(noFEC)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The last two octets are payload, not a checksum, so verifying them
+	// should fail rather than quietly truncating the data field.
+	if _, err := tmdl.DecodeTMTransferFrame(raw); err == nil {
+		t.Error("a frame with no FECF decoded cleanly as though it had one")
+	}
+}
+
+// TestChannelConfigValidate covers the ECSS-E-ST-50-03C 5.1b frame ceiling.
+func TestChannelConfigValidate(t *testing.T) {
+	if err := (tmdl.ChannelConfig{FrameLength: 1115}).Validate(); err != nil {
+		t.Errorf("a 1115-octet frame was rejected: %v", err)
+	}
+	if err := (tmdl.ChannelConfig{FrameLength: tmdl.MaxFrameLength}).Validate(); err != nil {
+		t.Errorf("the maximum frame length was rejected: %v", err)
+	}
+	if err := (tmdl.ChannelConfig{FrameLength: tmdl.MaxFrameLength + 1}).Validate(); !errors.Is(err, tmdl.ErrFrameTooLong) {
+		t.Errorf("a 2049-octet frame gave %v, want ErrFrameTooLong", err)
+	}
+	if err := (tmdl.ChannelConfig{FrameLength: 4}).Validate(); err == nil {
+		t.Error("a 4-octet frame was accepted; it cannot hold a primary header")
 	}
 }

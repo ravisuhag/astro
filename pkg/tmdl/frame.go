@@ -141,12 +141,35 @@ func (h *PrimaryHeader) Humanize() string {
 	}, "\n")
 }
 
+// MaxSecondaryHeaderSize is the largest Transfer Frame Secondary Header,
+// counting the identification octet: CCSDS 132.0-B-3 §4.1.3.2 and
+// ECSS-E-ST-50-03C 5.3.1c both cap it at 64 octets.
+const MaxSecondaryHeaderSize = 64
+
 // SecondaryHeader represents the Transfer Frame Secondary Header as per CCSDS 132.0-B-3.
 type SecondaryHeader struct {
-	VersionNumber uint8  // 2 bits (0-1) - Always `00` for Version 1
-	HeaderLength  uint8  // 6 bits (2-7) - Length of Secondary Header Data Field
-	DataField     []byte // Transfer Frame Secondary Header Data
+	VersionNumber uint8 // 2 bits (0-1) - Always `00` for Version 1
+	// HeaderLength is the field of bits 2-7. CCSDS 132.0-B-3 §4.1.3.2.2.3 and
+	// ECSS-E-ST-50-03C 5.3.2.3c define it as the TOTAL secondary header length
+	// in octets minus one — the total being this identification octet plus the
+	// data field. So for an N-octet data field the value is N, not N-1.
+	HeaderLength uint8
+	DataField    []byte // Transfer Frame Secondary Header Data
 }
+
+// SetDataField installs the data field and derives HeaderLength from it, which
+// is the safe way to build a secondary header by hand.
+func (sh *SecondaryHeader) SetDataField(data []byte) error {
+	if len(data) < 1 || len(data) > MaxSecondaryHeaderSize-1 {
+		return ErrInvalidHeaderLength
+	}
+	sh.DataField = data
+	sh.HeaderLength = uint8(len(data))
+	return nil
+}
+
+// TotalLength returns the encoded size of the secondary header in octets.
+func (sh *SecondaryHeader) TotalLength() int { return 1 + len(sh.DataField) }
 
 // Encode serializes the SecondaryHeader into a byte slice.
 func (sh *SecondaryHeader) Encode() ([]byte, error) {
@@ -170,8 +193,13 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 	sh.VersionNumber = data[0] >> 6
 	sh.HeaderLength = data[0] & 0x3F
 
-	// Per CCSDS 132.0-B-3 §4.1.3.2.2: HeaderLength = (Data Field octets) - 1
-	dataFieldLen := int(sh.HeaderLength) + 1
+	// §4.1.3.2.2.3: the field is the total length minus one, and the total
+	// includes the identification octet just read. So the data field is
+	// HeaderLength octets, not HeaderLength+1.
+	dataFieldLen := int(sh.HeaderLength)
+	if dataFieldLen < 1 {
+		return ErrInvalidHeaderLength
+	}
 	expectedLen := 1 + dataFieldLen
 	if len(data) < expectedLen {
 		return ErrDataTooShort
@@ -190,8 +218,13 @@ func (sh *SecondaryHeader) Validate() error {
 	if sh.HeaderLength > 0x3F {
 		return ErrInvalidHeaderLength
 	}
-	// Per CCSDS: HeaderLength = len(DataField) - 1
-	if len(sh.DataField) > 0 && sh.HeaderLength != uint8(len(sh.DataField)-1) {
+	// §4.1.3.2.2.3: the field carries the total length minus one, so it must
+	// equal the data field length exactly.
+	if len(sh.DataField) > 0 && sh.HeaderLength != uint8(len(sh.DataField)) {
+		return ErrInvalidHeaderLength
+	}
+	// ECSS-E-ST-50-03C 5.3.1c caps the whole secondary header at 64 octets.
+	if sh.TotalLength() > MaxSecondaryHeaderSize {
 		return ErrInvalidHeaderLength
 	}
 	return nil
@@ -225,8 +258,10 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 		DataField: secondaryHeaderData,
 	}
 	if len(secondaryHeaderData) > 0 {
-		// Per CCSDS 132.0-B-3 §4.1.3.2.2: HeaderLength = (Data Field octets) - 1
-		secondaryHeader.HeaderLength = uint8(len(secondaryHeaderData) - 1)
+		// §4.1.3.2.2.3: the field is the total secondary header length minus
+		// one, and the total counts the identification octet, so it equals the
+		// data field length.
+		secondaryHeader.HeaderLength = uint8(len(secondaryHeaderData))
 	}
 
 	frame := &TMTransferFrame{
@@ -269,6 +304,22 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 // are always covered. Use EncodeWithoutFEC to build a frame with a
 // deliberately invalid CRC.
 func (tf *TMTransferFrame) Encode() ([]byte, error) {
+	return tf.EncodeWithConfig(ChannelConfig{HasFEC: true})
+}
+
+// EncodeWithConfig converts the frame to bytes, appending the Frame Error
+// Control Field only when the channel carries one.
+//
+// CCSDS 132.0-B-3 §4.1.6 and ECSS-E-ST-50-03C 5.6.1b make the field mandatory
+// when the frame is not Reed-Solomon encoded, and optional when it travels
+// inside a code block — the code block already protects it. §5.6.1c then
+// requires the choice to hold for the whole physical channel, which is why it
+// belongs to ChannelConfig rather than to a single frame.
+func (tf *TMTransferFrame) EncodeWithConfig(config ChannelConfig) ([]byte, error) {
+	if !config.HasFEC {
+		return tf.EncodeWithoutFEC()
+	}
+
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
 		return nil, err
@@ -325,8 +376,23 @@ func padDataField(data []byte, capacity int) []byte {
 	return padded
 }
 
-// NewIdleFrame creates an idle TM Transfer Frame with all-idle data field
-// and FirstHeaderPtr set to 0x07FF per CCSDS 132.0-B-3.
+// FirstHeaderPtr values with a meaning of their own, from CCSDS 132.0-B-3
+// §4.1.2.7.6 and ECSS-E-ST-50-03C 5.2.7.6f and g.
+//
+// The two are not interchangeable. A frame whose data field simply continues a
+// packet started earlier says NoPacketStart; a frame that is nothing but fill
+// says OnlyIdleData. Telling them apart is the whole reason there are two
+// codes: the first still carries payload, the second can be dropped.
+const (
+	// FHPNoPacketStart means no packet begins in this data field.
+	FHPNoPacketStart uint16 = 0x07FF
+	// FHPOnlyIdleData marks an OID frame: the data field is entirely idle.
+	FHPOnlyIdleData uint16 = 0x07FE
+)
+
+// NewIdleFrame creates an idle (OID) TM Transfer Frame: an all-idle data field
+// with the First Header Pointer set to FHPOnlyIdleData, per
+// ECSS-E-ST-50-03C 5.2.7.6g.
 func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFrame, error) {
 	capacity := config.DataFieldCapacity(0)
 	if capacity <= 0 {
@@ -344,7 +410,7 @@ func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFra
 	if err != nil {
 		return nil, err
 	}
-	frame.Header.FirstHeaderPtr = 0x07FF
+	frame.Header.FirstHeaderPtr = FHPOnlyIdleData
 	return frame, recomputeCRC(frame)
 }
 
@@ -358,15 +424,35 @@ func recomputeCRC(frame *TMTransferFrame) error {
 	return nil
 }
 
-// IsIdleFrame reports whether the frame is an idle frame
-// (SyncFlag=false with FirstHeaderPtr=0x07FF).
+// IsIdleFrame reports whether the frame is an OID frame: a data field holding
+// nothing but idle data, per ECSS-E-ST-50-03C 5.2.7.6g.
+//
+// FHPNoPacketStart is deliberately not accepted here. A frame carrying the
+// continuation of a packet started in an earlier frame also has no packet
+// header in it, and discarding that as idle would lose real payload.
 func IsIdleFrame(frame *TMTransferFrame) bool {
-	return !frame.Header.SyncFlag && frame.Header.FirstHeaderPtr == 0x07FF
+	return !frame.Header.SyncFlag && frame.Header.FirstHeaderPtr == FHPOnlyIdleData
 }
 
-// DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame.
+// DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame, treating
+// the last two octets as a Frame Error Control Field and verifying them.
+//
+// Use DecodeTMTransferFrameWithConfig for a channel that carries no such
+// field, which §5.6.1b permits under Reed-Solomon coding.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
-	if len(data) < 8 {
+	return DecodeTMTransferFrameWithConfig(data, ChannelConfig{HasFEC: true})
+}
+
+// DecodeTMTransferFrameWithConfig parses a frame, verifying the Frame Error
+// Control Field only when the channel carries one.
+func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
+	// A frame needs its six-octet primary header, and two more for the error
+	// control field when the channel carries one.
+	minimum := 6
+	if config.HasFEC {
+		minimum = 8
+	}
+	if len(data) < minimum {
 		return nil, ErrDataTooShort
 	}
 
@@ -376,17 +462,20 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 		return nil, err
 	}
 
-	// Compute and verify CRC-16
-	receivedCRC := binary.BigEndian.Uint16(data[len(data)-2:])
-	computedCRC := crc.ComputeCRC16(data[:len(data)-2])
-	if receivedCRC != computedCRC {
-		return nil, ErrCRCMismatch
+	dataEnd := len(data)
+	var receivedCRC uint16
+	if config.HasFEC {
+		// §5.6.3: verify the field over everything preceding it.
+		dataEnd = len(data) - 2
+		receivedCRC = binary.BigEndian.Uint16(data[dataEnd:])
+		if computed := crc.ComputeCRC16(data[:dataEnd]); receivedCRC != computed {
+			return nil, ErrCRCMismatch
+		}
 	}
 
 	// Extract Data Field
 	primaryHeaderLength := 6
 	dataStart := primaryHeaderLength
-	dataEnd := len(data) - 2
 	operationalControl := []byte{}
 
 	// Decode Secondary Header if present, using self-describing length

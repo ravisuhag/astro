@@ -31,6 +31,10 @@ var (
 	// ErrInvalidSecondaryHeaderVersion indicates the secondary header version is not 0.
 	ErrInvalidSecondaryHeaderVersion = errors.New("invalid secondary header version: must be 0 for Version 1")
 
+	// ErrFrameTooLong indicates a frame length past the 2048-octet maximum of
+	// ECSS-E-ST-50-03C 5.1b.
+	ErrFrameTooLong = errors.New("frame length exceeds the 2048-octet ECSS maximum")
+
 	// ErrInvalidHeaderLength indicates the secondary header length is out of range.
 	ErrInvalidHeaderLength = errors.New("invalid header length: must be in range 0-63 (6 bits)")
 
