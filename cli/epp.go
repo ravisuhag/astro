@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -375,37 +376,25 @@ func eppStreamCmd() *cobra.Command {
   cat packets.hex | astro epp stream --input hex --format json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := readInput(args, inputFmt)
+			source, closer, err := openInput(args, inputFmt)
 			if err != nil {
 				return err
 			}
+			defer closer.Close() //nolint:errcheck // read-only
 
 			count := 0
 			offset := 0
-			for offset < len(data) {
-				remaining := data[offset:]
 
-				if len(remaining) < 1 {
-					break
-				}
-
-				pktSize := epp.PacketSizer(remaining)
-				if pktSize < 0 || pktSize > len(remaining) {
-					return fmt.Errorf("packet #%d at offset %d: incomplete packet (need %d bytes, have %d)",
-						count+1, offset, pktSize, len(remaining))
-				}
-
-				pktData := remaining[:pktSize]
+			handle := func(pktData []byte) error {
 				pkt, err := epp.Decode(pktData)
 				if err != nil {
 					return fmt.Errorf("packet #%d at offset %d: %w", count+1, offset, err)
 				}
-
 				count++
+
 				switch outputFmt {
 				case "json":
-					pj := toEPPPacketJSON(pkt)
-					b, err := json.Marshal(pj)
+					b, err := json.Marshal(toEPPPacketJSON(pkt))
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
@@ -413,7 +402,7 @@ func eppStreamCmd() *cobra.Command {
 				case "hex":
 					fmt.Println(hex.EncodeToString(pktData))
 				case "text":
-					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, pktSize)
+					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.Header
 					fmt.Printf("  PID: %d (%s)  Format: %d  DataLen: %d\n",
 						h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Format(), len(pkt.Data))
@@ -425,7 +414,18 @@ func eppStreamCmd() *cobra.Command {
 					}
 				}
 
-				offset += pktSize
+				offset += len(pktData)
+				return nil
+			}
+
+			trailing := func(n int) {
+				fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", n)
+			}
+
+			// An Encapsulation Packet's length is readable from its first
+			// octet, so one is enough to size the unit.
+			if err := streamUnits(source, epp.PacketSizer, 1, handle, trailing); err != nil {
+				return err
 			}
 
 			if outputFmt == "text" {

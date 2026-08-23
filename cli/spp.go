@@ -70,18 +70,18 @@ func readInput(args []string, inputFmt string) ([]byte, error) {
 
 // packetJSON is the JSON-serializable representation of a decoded space packet.
 type packetJSON struct {
-	Version             uint8  `json:"version"`
-	Type                uint8  `json:"type"`
-	TypeName            string `json:"type_name"`
-	SecondaryHeaderFlag uint8  `json:"secondary_header_flag"`
-	APID                uint16 `json:"apid"`
-	SequenceFlags       uint8  `json:"sequence_flags"`
-	SequenceFlagsName   string `json:"sequence_flags_name"`
-	SequenceCount       uint16 `json:"sequence_count"`
-	PacketLength        uint16 `json:"packet_length"`
-	UserData            string `json:"user_data"`
+	Version             uint8   `json:"version"`
+	Type                uint8   `json:"type"`
+	TypeName            string  `json:"type_name"`
+	SecondaryHeaderFlag uint8   `json:"secondary_header_flag"`
+	APID                uint16  `json:"apid"`
+	SequenceFlags       uint8   `json:"sequence_flags"`
+	SequenceFlagsName   string  `json:"sequence_flags_name"`
+	SequenceCount       uint16  `json:"sequence_count"`
+	PacketLength        uint16  `json:"packet_length"`
+	UserData            string  `json:"user_data"`
 	ErrorControl        *uint16 `json:"error_control,omitempty"`
-	IsIdle              bool   `json:"is_idle"`
+	IsIdle              bool    `json:"is_idle"`
 }
 
 func toPacketJSON(pkt *spp.SpacePacket) packetJSON {
@@ -446,41 +446,25 @@ func sppStreamCmd() *cobra.Command {
   cat packets.hex | astro spp stream --input hex --format json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := readInput(args, inputFmt)
+			source, closer, err := openInput(args, inputFmt)
 			if err != nil {
 				return err
 			}
+			defer closer.Close() //nolint:errcheck // read-only
 
 			count := 0
 			offset := 0
-			for offset < len(data) {
-				remaining := data[offset:]
 
-				// Need at least 6 bytes for header to determine packet size
-				if len(remaining) < spp.PrimaryHeaderSize {
-					if len(remaining) > 0 {
-						fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", len(remaining))
-					}
-					break
-				}
-
-				pktSize := spp.PacketSizer(remaining)
-				if pktSize < 0 || pktSize > len(remaining) {
-					return fmt.Errorf("packet #%d at offset %d: incomplete packet (need %d bytes, have %d)",
-						count+1, offset, pktSize, len(remaining))
-				}
-
-				pktData := remaining[:pktSize]
+			handle := func(pktData []byte) error {
 				pkt, err := spp.Decode(pktData)
 				if err != nil {
 					return fmt.Errorf("packet #%d at offset %d: %w", count+1, offset, err)
 				}
-
 				count++
+
 				switch outputFmt {
 				case "json":
-					pj := toPacketJSON(pkt)
-					b, err := json.Marshal(pj)
+					b, err := json.Marshal(toPacketJSON(pkt))
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
@@ -488,7 +472,7 @@ func sppStreamCmd() *cobra.Command {
 				case "hex":
 					fmt.Println(hex.EncodeToString(pktData))
 				case "text":
-					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, pktSize)
+					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.PrimaryHeader
 					fmt.Printf("  Type: %s  APID: %d  SeqFlags: %s  SeqCount: %d  DataLen: %d\n",
 						typeName(h.Type), h.APID, seqFlagsName(h.SequenceFlags), h.SequenceCount,
@@ -501,7 +485,16 @@ func sppStreamCmd() *cobra.Command {
 					}
 				}
 
-				offset += pktSize
+				offset += len(pktData)
+				return nil
+			}
+
+			trailing := func(n int) {
+				fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", n)
+			}
+
+			if err := streamUnits(source, spp.PacketSizer, spp.PrimaryHeaderSize, handle, trailing); err != nil {
+				return err
 			}
 
 			if outputFmt == "text" {
