@@ -1,6 +1,10 @@
 package sdl
 
-import "slices"
+import (
+	"errors"
+	"slices"
+	"sync"
+)
 
 // MCSource is the interface that master channels must implement
 // to participate in physical-channel multiplexing.
@@ -12,7 +16,9 @@ type MCSource[F any] interface {
 
 // MCMultiplexer handles weighted round-robin scheduling across
 // master channels, keyed by Spacecraft ID (uint16).
+// A MCMultiplexer is safe for concurrent use.
 type MCMultiplexer[F any] struct {
+	mu              sync.Mutex
 	channels        map[uint16]MCSource[F]
 	priority        map[uint16]int
 	sortedSCIDs     []uint16
@@ -31,6 +37,9 @@ func NewMCMultiplexer[F any]() *MCMultiplexer[F] {
 // Add registers a master channel with a priority weight.
 // Priority must be at least 1; values below 1 are clamped to 1.
 func (m *MCMultiplexer[F]) Add(mc MCSource[F], priority int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if priority < 1 {
 		priority = 1
 	}
@@ -52,6 +61,9 @@ func (m *MCMultiplexer[F]) Add(mc MCSource[F], priority int) {
 
 // Next selects the next frame for transmission using weighted round-robin.
 func (m *MCMultiplexer[F]) Next() (F, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if len(m.sortedSCIDs) == 0 {
 		var zero F
 		return zero, ErrNoMasterChannels
@@ -61,17 +73,20 @@ func (m *MCMultiplexer[F]) Next() (F, error) {
 		scid := m.sortedSCIDs[m.currentIndex]
 		mc := m.channels[scid]
 
-		if mc.HasPendingFrames() {
-			frame, err := mc.GetNextFrame()
-			if err != nil {
-				var zero F
-				return zero, err
-			}
+		// Take the frame directly rather than asking HasPendingFrames first:
+		// the two calls lock the master channel separately, so it could empty
+		// in between and this would fail instead of trying the next one.
+		frame, err := mc.GetNextFrame()
+		if err == nil {
 			m.remainingWeight--
 			if m.remainingWeight <= 0 {
 				m.advanceToNext()
 			}
 			return frame, nil
+		}
+		if !errors.Is(err, ErrNoFramesAvailable) {
+			var zero F
+			return zero, err
 		}
 
 		m.advanceToNext()
@@ -83,6 +98,9 @@ func (m *MCMultiplexer[F]) Next() (F, error) {
 
 // HasPending checks if any master channel has pending frames.
 func (m *MCMultiplexer[F]) HasPending() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, mc := range m.channels {
 		if mc.HasPendingFrames() {
 			return true
@@ -93,9 +111,12 @@ func (m *MCMultiplexer[F]) HasPending() bool {
 
 // Len returns the number of registered master channels.
 func (m *MCMultiplexer[F]) Len() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return len(m.channels)
 }
 
+// advanceToNext moves the round-robin cursor on. The caller holds m.mu.
 func (m *MCMultiplexer[F]) advanceToNext() {
 	m.currentIndex = (m.currentIndex + 1) % len(m.sortedSCIDs)
 	scid := m.sortedSCIDs[m.currentIndex]
