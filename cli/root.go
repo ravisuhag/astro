@@ -19,6 +19,7 @@ func New(docsFS embed.FS) *cobra.Command {
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       buildInfo().String(),
 	}
 
 	cmd.AddCommand(sppCmd())
@@ -31,6 +32,7 @@ func New(docsFS embed.FS) *cobra.Command {
 	cmd.AddCommand(usdlCmd())
 	cmd.AddCommand(aosCmd())
 	cmd.AddCommand(manualCmd(docsFS))
+	cmd.AddCommand(versionCmd())
 
 	mgr := commander.New(cmd)
 	mgr.Init()

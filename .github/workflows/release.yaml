@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      # A tag that does not build, or whose tests fail, should not become a
+      # release. The other workflows run on push and pull_request, which does
+      # not cover a tag pushed onto an already-merged commit.
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build release binaries
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          commit="${GITHUB_SHA}"
+          date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          pkg="github.com/ravisuhag/astro/cli"
+          mkdir -p dist
+
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            out="dist/astro_${version}_${os}_${arch}"
+            binary="astro"
+            if [ "$os" = "windows" ]; then binary="astro.exe"; fi
+
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
+              -trimpath \
+              -ldflags "-s -w -X ${pkg}.version=${version} -X ${pkg}.commit=${commit} -X ${pkg}.date=${date}" \
+              -o "${binary}" .
+
+            if [ "$os" = "windows" ]; then
+              zip -q "${out}.zip" "${binary}"
+            else
+              tar -czf "${out}.tar.gz" "${binary}"
+            fi
+            rm -f "${binary}"
+          done
+
+          cd dist && sha256sum * > checksums.txt
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
