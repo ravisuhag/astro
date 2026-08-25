@@ -118,6 +118,26 @@ func TestDecodeRejectsOverflow(t *testing.T) {
 	}
 }
 
+func TestDecodeRejectsOverlongPaddedEncoding(t *testing.T) {
+	// RFC 6256 §3.2: leading 0x80 octets pad a value without changing it.
+	// Eleven octets can still describe a small value, but this package caps
+	// what it reads at ten and refuses with ErrTooLong, not ErrOverflow.
+	padded := append(bytes.Repeat([]byte{0x80}, 10), 0x01)
+	if _, _, err := sdnv.Decode(padded); !errors.Is(err, sdnv.ErrTooLong) {
+		t.Errorf("Decode: error = %v, want ErrTooLong", err)
+	}
+	if _, err := sdnv.DecodeFrom(bytes.NewReader(padded)); !errors.Is(err, sdnv.ErrTooLong) {
+		t.Errorf("DecodeFrom: error = %v, want ErrTooLong", err)
+	}
+
+	// A ten-octet padded encoding is within the cap and decodes.
+	ok := append(bytes.Repeat([]byte{0x80}, 9), 0x01)
+	v, n, err := sdnv.Decode(ok)
+	if err != nil || v != 1 || n != 10 {
+		t.Errorf("Decode(10-octet padded 1) = %d, %d, %v; want 1, 10, nil", v, n, err)
+	}
+}
+
 func TestAppendEncodeMatchesEncode(t *testing.T) {
 	dst := []byte{0xAA, 0xBB}
 	dst = sdnv.AppendEncode(dst, 0x4234)

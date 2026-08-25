@@ -7,7 +7,7 @@
 //
 //	   0x7F  ->  01111111                    one octet
 //	  0x80   ->  10000001 00000000           two octets
-//	0x4234   ->  10000100 11000100 00110100  three octets
+//	0x4234   ->  10000001 10000100 00110100  three octets
 //
 // The scheme comes from ASN.1 Object Identifier encoding. Two protocols in
 // this library use it for nearly every variable-length field: LTP
@@ -32,6 +32,13 @@ var (
 
 	// ErrOverflow indicates a value too large for a uint64.
 	ErrOverflow = errors.New("sdnv: value does not fit in 64 bits")
+
+	// ErrTooLong indicates an encoding running past MaxEncodedSize octets.
+	// RFC 6256 §3.2 allows leading zero-padding octets (0x80), so an encoding
+	// this long is not necessarily a value overflow — but this package caps
+	// what it will read at ten octets, the width a canonical 64-bit value
+	// needs, and refuses longer inputs with this distinct error.
+	ErrTooLong = errors.New("sdnv: encoding is longer than the 10-octet maximum")
 )
 
 // EncodedSize returns how many octets Encode will produce for v.
@@ -76,7 +83,7 @@ func Decode(data []byte) (uint64, int, error) {
 	var v uint64
 	for i := 0; i < len(data); i++ {
 		if i >= MaxEncodedSize {
-			return 0, 0, ErrOverflow
+			return 0, 0, ErrTooLong
 		}
 		b := data[i]
 
@@ -99,7 +106,7 @@ func DecodeFrom(r io.ByteReader) (uint64, error) {
 	var v uint64
 	for i := 0; ; i++ {
 		if i >= MaxEncodedSize {
-			return 0, ErrOverflow
+			return 0, ErrTooLong
 		}
 		b, err := r.ReadByte()
 		if err != nil {
