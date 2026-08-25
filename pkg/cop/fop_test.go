@@ -111,7 +111,7 @@ func TestFOP_FARM_Integration(t *testing.T) {
 	}
 
 	for i := range 3 {
-		accepted, err := farm.ProcessFrame(0, 0, uint8(i))
+		accepted, err := farm.ProcessFrame(0, 0, uint8(i), nil)
 		if err != nil || !accepted {
 			t.Fatalf("frame %d: accepted=%v err=%v", i, accepted, err)
 		}
@@ -206,6 +206,269 @@ func TestFOP_AckPrunesWaitQueue(t *testing.T) {
 
 	if data, seq, ok := fop.GetNextFrame(); ok {
 		t.Errorf("acknowledged frame still queued: %q (N(S)=%d)", data, seq)
+	}
+}
+
+func TestFOP_T1Expiry_RetransmitThenAlertLimit(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(2); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	if !fop.TimerRunning() {
+		t.Fatal("T1 must start when a frame is queued")
+	}
+	// Pull it, as the sender would.
+	if _, _, ok := fop.GetNextFrame(); !ok {
+		t.Fatal("frame not served")
+	}
+
+	// First expiry: transmission count 1 < limit 2 -> retransmission.
+	if err := fop.Tick(5); err != nil {
+		t.Fatalf("first T1 expiry: %v", err)
+	}
+	if fop.State() != cop.FOPRetransmitWithoutWait {
+		t.Errorf("state = %d, want FOPRetransmitWithoutWait", fop.State())
+	}
+	data, seq, ok := fop.GetNextFrame()
+	if !ok || seq != 0 || !bytes.Equal(data, []byte("frame-0")) {
+		t.Fatalf("expected retransmission of frame-0, got %q (N(S)=%d, ok=%v)", data, seq, ok)
+	}
+	if !fop.TimerRunning() {
+		t.Fatal("T1 must restart after a timer-driven retransmission")
+	}
+
+	// Second expiry: limit reached -> Alert(LIMIT), purge, Initial.
+	err := fop.Tick(5)
+	if !errors.Is(err, cop.ErrFOPLimit) {
+		t.Fatalf("expected ErrFOPLimit, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertLimit {
+		t.Errorf("alert = %d, want AlertLimit", fop.LastAlert())
+	}
+	if fop.PendingCount() != 0 {
+		t.Errorf("queues must be purged on alert, %d frames left", fop.PendingCount())
+	}
+	if _, _, ok := fop.GetNextFrame(); ok {
+		t.Error("no frame may be served after the alert purge")
+	}
+}
+
+func TestFOP_TimeoutType1_SuspendAndResume(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	_ = fop.SetT1Initial(1)
+	_ = fop.SetTransmissionLimit(1)
+	if err := fop.SetTimeoutType(cop.TT1); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	err := fop.Tick(1)
+	if !errors.Is(err, cop.ErrFOPSuspended) {
+		t.Fatalf("expected ErrFOPSuspended, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial || fop.SuspendState() != 1 {
+		t.Fatalf("state = %d ss = %d, want FOPInitial with SS=1", fop.State(), fop.SuspendState())
+	}
+
+	if err := fop.ResumeAD(); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPActive || fop.SuspendState() != 0 {
+		t.Errorf("state = %d ss = %d, want FOPActive with SS=0", fop.State(), fop.SuspendState())
+	}
+}
+
+func TestFOP_WaitFlag_HoldsRetransmissions(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	if _, _, ok := fop.GetNextFrame(); !ok {
+		t.Fatal("frame not served")
+	}
+
+	// Retransmit requested but the FARM has no buffer: hold.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true, WaitFlag: true}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPRetransmitWithWait {
+		t.Errorf("state = %d, want FOPRetransmitWithWait", fop.State())
+	}
+	if _, _, ok := fop.GetNextFrame(); ok {
+		t.Error("no retransmission may be served while the Wait flag is set")
+	}
+
+	// Wait cleared, retransmit still requested: retransmit now.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPRetransmitWithoutWait {
+		t.Errorf("state = %d, want FOPRetransmitWithoutWait", fop.State())
+	}
+	data, _, ok := fop.GetNextFrame()
+	if !ok || !bytes.Equal(data, []byte("frame-0")) {
+		t.Errorf("expected retransmission of frame-0, got %q (ok=%v)", data, ok)
+	}
+}
+
+func TestFOP_InvalidNR_AlertNNR(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	_ = fop.TransmitFrame([]byte("frame-0")) // V(S)=1
+
+	// N(R)=5 acknowledges frames that were never sent.
+	err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 5})
+	if !errors.Is(err, cop.ErrFOPInvalidNR) {
+		t.Fatalf("expected ErrFOPInvalidNR, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial || fop.LastAlert() != cop.AlertNNR {
+		t.Errorf("state = %d alert = %d, want FOPInitial with AlertNNR", fop.State(), fop.LastAlert())
+	}
+}
+
+func TestFOP_SynchAlert_RetransmitWithNothingOutstanding(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true})
+	if !errors.Is(err, cop.ErrFOPSynch) {
+		t.Fatalf("expected ErrFOPSynch, got %v", err)
+	}
+	if fop.LastAlert() != cop.AlertSynch {
+		t.Errorf("alert = %d, want AlertSynch", fop.LastAlert())
+	}
+}
+
+func TestFOP_Directives_Validation(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 0) // window 0 clamps to 1
+	fop.Initialize(0)
+	_ = fop.TransmitFrame([]byte("a"))
+	if err := fop.TransmitFrame([]byte("b")); !errors.Is(err, cop.ErrFOPWindowFull) {
+		t.Errorf("window must clamp to 1: expected ErrFOPWindowFull, got %v", err)
+	}
+
+	if err := fop.SetSlidingWindow(0); !errors.Is(err, cop.ErrFOPInvalidWindow) {
+		t.Errorf("expected ErrFOPInvalidWindow, got %v", err)
+	}
+	if err := fop.SetSlidingWindow(255); err != nil {
+		t.Errorf("SetSlidingWindow(255): %v", err)
+	}
+	if err := fop.SetTransmissionLimit(0); !errors.Is(err, cop.ErrFOPInvalidLimit) {
+		t.Errorf("expected ErrFOPInvalidLimit, got %v", err)
+	}
+	if err := fop.SetTimeoutType(2); !errors.Is(err, cop.ErrFOPInvalidTimeoutType) {
+		t.Errorf("expected ErrFOPInvalidTimeoutType, got %v", err)
+	}
+	if err := fop.SetVS(9); !errors.Is(err, cop.ErrFOPNotInitial) {
+		t.Errorf("SetVS outside S6: expected ErrFOPNotInitial, got %v", err)
+	}
+	if err := fop.ResumeAD(); !errors.Is(err, cop.ErrFOPNotSuspended) {
+		t.Errorf("expected ErrFOPNotSuspended, got %v", err)
+	}
+
+	fop.TerminateAD()
+	if fop.State() != cop.FOPInitial {
+		t.Fatalf("state = %d, want FOPInitial after Terminate", fop.State())
+	}
+	if err := fop.SetVS(9); err != nil {
+		t.Errorf("SetVS in S6: %v", err)
+	}
+	if fop.VS() != 9 {
+		t.Errorf("V(S) = %d, want 9", fop.VS())
+	}
+	if err := fop.TransmitFrame([]byte("c")); !errors.Is(err, cop.ErrFOPNotActive) {
+		t.Errorf("expected ErrFOPNotActive in S6, got %v", err)
+	}
+}
+
+func TestFOP_InitiateADWithCLCWCheck(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	if err := fop.InitiateADWithCLCWCheck(); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPInitialisingWithoutBC {
+		t.Fatalf("state = %d, want FOPInitialisingWithoutBC", fop.State())
+	}
+
+	// A dirty CLCW does not complete initialisation.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 7, RetransmitFlag: true}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPInitialisingWithoutBC {
+		t.Errorf("state = %d, want still FOPInitialisingWithoutBC", fop.State())
+	}
+
+	// A clean CLCW does, adopting its V(R).
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive", fop.State())
+	}
+	if fop.VS() != 7 {
+		t.Errorf("V(S) = %d, want 7 (adopted from CLCW)", fop.VS())
+	}
+}
+
+func TestFOP_InitiateADWithUnlock(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	bc := []byte("encoded-unlock-frame")
+	if err := fop.InitiateADWithUnlock(bc); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPInitialisingWithBC {
+		t.Fatalf("state = %d, want FOPInitialisingWithBC", fop.State())
+	}
+
+	data, _, ok := fop.GetNextFrame()
+	if !ok || !bytes.Equal(data, bc) {
+		t.Fatalf("expected the BC frame to be served, got %q (ok=%v)", data, ok)
+	}
+
+	// While lockout persists, keep waiting.
+	if err := fop.ProcessCLCW(&cop.CLCW{LockoutFlag: true, ReportValue: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPInitialisingWithBC {
+		t.Errorf("state = %d, want still FOPInitialisingWithBC", fop.State())
+	}
+
+	// Lockout cleared: the Unlock took effect.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive", fop.State())
+	}
+	if fop.VS() != 3 {
+		t.Errorf("V(S) = %d, want 3 (adopted from CLCW after Unlock)", fop.VS())
+	}
+}
+
+func TestFOP_BDPath_ServedAheadOfAD(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	_ = fop.TransmitFrame([]byte("ad-frame"))
+	if err := fop.TransmitBDFrame([]byte("bd-frame")); err != nil {
+		t.Fatal(err)
+	}
+
+	data, seq, ok := fop.GetNextFrame()
+	if !ok || !bytes.Equal(data, []byte("bd-frame")) || seq != 0 {
+		t.Fatalf("expected BD frame first, got %q (N(S)=%d)", data, seq)
+	}
+	data, _, ok = fop.GetNextFrame()
+	if !ok || !bytes.Equal(data, []byte("ad-frame")) {
+		t.Fatalf("expected AD frame second, got %q", data)
 	}
 }
 

@@ -76,7 +76,28 @@ FOP-1 runs on the **ground side**. It is responsible for:
 | State | Name | Description |
 |-------|------|-------------|
 | S1 | Active | Normal operation. Accepting and transmitting frames. |
-| S6 | Initial | Not started or lockout detected. Must be re-initialized. |
+| S2 | Retransmit without Wait | The spacecraft asked for a retransmission; unacknowledged frames are going out again. |
+| S3 | Retransmit with Wait | Retransmission is needed, but the spacecraft has no buffer (Wait flag). Hold until it clears. |
+| S4 | Initialising without BC Frame | Started with "Initiate AD with CLCW check"; waiting for a clean CLCW. |
+| S5 | Initialising with BC Frame | Started with "Initiate AD with Unlock/Set V(R)"; the BC frame is out, waiting for the CLCW to confirm it. |
+| S6 | Initial | Not started, terminated, or an Alert fired. Directives are needed to (re)start. |
+
+An **Alert** (lockout seen, invalid N(R), transmission limit reached, inconsistent CLCW, terminate) purges every queue and drops the machine to S6, with a reason code the operator can read.
+
+The service can also be **suspended** (timeout type TT1): when the T1 timer expires with the transmission limit reached, the machine remembers which state it was in (SS 1–4) and a later Resume directive continues from there.
+
+### Directives
+
+The standard defines the operator's control surface, all implemented here:
+
+- Initiate AD Service — plain, with CLCW check, with Unlock, or with Set V(R)
+- Terminate AD Service
+- Resume AD Service
+- Set V(S), Set FOP Sliding Window, Set T1 Initial, Set Transmission Limit, Set Timeout Type
+
+### The T1 Timer
+
+Every transmission arms the T1 timer. If no useful CLCW arrives before it expires, the FOP retransmits (up to the transmission limit) and then either raises an Alert (timeout type TT0) or suspends the service (TT1). Without T1, a single lost CLCW would stall the machine forever. In this library the timer is caller-driven: you set its initial value in your own time units and advance it with `Tick`.
 
 ### Key Variables
 
@@ -84,7 +105,8 @@ FOP-1 runs on the **ground side**. It is responsible for:
 |----------|------|-------------|
 | V(S) | Transmitter Frame Sequence Number | Next sequence number to assign. Increments with each Type-A frame. |
 | N(N)R | Receiver Frame Sequence Number (from CLCW) | Last acknowledged sequence number. All frames with N(S) < N(N)R are confirmed received. |
-| FW | Window Width | Maximum number of unacknowledged frames allowed. |
+| FW | Window Width | Maximum number of unacknowledged frames allowed (1–255). |
+| Transmission_Limit / Count | Retransmission budget | How many times the same set of frames may be (re)transmitted before an Alert or suspension. |
 
 ### Sliding Window
 
@@ -123,27 +145,43 @@ FARM-1 runs on the **spacecraft side**. It is responsible for:
 | Variable | Name | Description |
 |----------|------|-------------|
 | V(R) | Receiver Frame Sequence Number | Next expected sequence number. Incremented when an in-sequence frame arrives. |
-| W | Window Width | Positive sliding window width. Must match FOP-1's window. |
+| W | Window Width | Sliding window width, an even number split into a positive half (PW = W/2) and a negative half (NW = W/2). |
 
 ### Frame Acceptance Rules
+
+The window W (an even number) is split in half: a **positive window** PW = W/2 ahead of V(R), and a **negative window** NW = W/2 behind it.
 
 When a Type-A data frame arrives with sequence number N(S):
 
 ```
-                V(R)            V(R) + W
-                 |                 |
-    ... [past] [ | in-sequence | within window | outside ] ...
-                 |      ^           ^                ^
-                 |   Accept     Reject+Retransmit  Lockout
+     V(R) - NW           V(R)         V(R) + PW
+         |                |                |
+  ...    [ negative half  |  positive half ]    ...
+outside        ^          ^        ^           outside
+Lockout   silent discard  Accept   Reject+Retransmit
 ```
 
 | Condition | Action |
 |-----------|--------|
-| N(S) == V(R) | **Accept**. Increment V(R). Clear retransmit flag. |
-| V(R) < N(S) < V(R) + W | **Reject**. Set retransmit flag. Frame is within the window but out of order — likely a frame was lost. |
-| N(S) outside window | **Lockout**. Reject frame. Enter lockout state. Something is seriously wrong — ground must send an unlock command to recover. |
+| N(S) == V(R) | **Accept**. Increment V(R). Clear retransmit flag. (If no frame buffer is free, the frame is instead discarded and the Wait and Retransmit flags are set.) |
+| V(R) < N(S) <= V(R) + PW - 1 | **Discard, set retransmit flag**. The frame is ahead of the expected one — an earlier frame was lost. |
+| V(R) - NW <= N(S) < V(R) | **Discard silently**. This is a duplicate of a frame already accepted (for example, a retransmission that crossed its own acknowledgment). No flags change; no lockout. |
+| Anything else | **Lockout**. Reject the frame and enter the lockout state. Something is seriously wrong — ground must send an Unlock to recover. |
 
-Type-B frames **always** bypass this check and are accepted unconditionally.
+The negative window is why a duplicate never causes a lockout: without it, retransmitted frames arriving late would look like catastrophic sequence errors.
+
+Type-B frames **always** bypass this check and are accepted unconditionally. Every accepted Type-B frame — expedited data (BD) and control commands (BC) alike — bumps the 2-bit FARM-B counter reported in the CLCW.
+
+### Control Commands (Type-BC Frames)
+
+A control command is a frame with **Bypass=1 and Control Command=1**. (Bypass=0 with Control Command=1 is an invalid frame type and is discarded.) Its data field holds exactly one of two directives:
+
+| Directive | Data field | Effect |
+|-----------|-----------|--------|
+| **Unlock** | `0x00` | Clears the Lockout, Wait, and Retransmit flags. Does **not** touch V(R). |
+| **Set V(R)** | `0x82 0x00 <V(R)>` | Sets V(R) to the value in the payload and clears the Retransmit flag. Ignored (except for the FARM-B count) while in lockout — only Unlock ends a lockout. |
+
+`pkg/tcdl` builds and parses these contents (`NewUnlockFrame`, `NewSetVRFrame`, `ParseControlCommand`).
 
 ## CLCW (Communications Link Control Word)
 
@@ -184,12 +222,12 @@ Lockout is COP-1's safety mechanism. When FARM-1 receives a frame whose sequence
 
 **Recovery:**
 1. Ground detects lockout via the Lockout flag in the CLCW.
-2. Ground sends a **control command** (Type-A frame with ControlCommandFlag=1) containing the desired new V(R) value.
-3. FARM-1 processes the control command: clears lockout, resets to Open state, sets V(R) to the specified value.
-4. Ground re-initializes FOP-1 with matching V(S).
+2. Ground issues "Initiate AD Service with Unlock": FOP-1 transmits a **Type-BC frame** (Bypass=1, Control Command=1) whose data field is the single octet `0x00`.
+3. FARM-1 processes the Unlock: clears the Lockout, Wait, and Retransmit flags. V(R) is left as it was.
+4. Ground reads V(R) from the next CLCW and sets V(S) to match (or issues "Initiate AD with Set V(R)" to pick a fresh value with a `0x82 0x00 <V(R)>` BC frame).
 5. Normal operation resumes.
 
-If the normal unlock mechanism cannot be used (COP-1 itself is broken), the ground can send the unlock as a Type-B frame, which bypasses all sequence checking.
+BC frames are bypass frames, so they get through regardless of the sequence state — that is what makes recovery from a lockout possible at all.
 
 ## Design Rationale
 

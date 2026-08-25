@@ -321,6 +321,7 @@ func main() {
 			frame.Header.BypassFlag,
 			frame.Header.ControlCommandFlag,
 			frame.Header.FrameSequenceNum,
+			frame.DataField,
 		)
 
 		if !accepted {
