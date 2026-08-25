@@ -19,7 +19,7 @@ pid, data, err := svc.ReceiveBytes()
 
 Unlike the Space Packet Protocol (SPP), which provides APID-based routing, sequence counting, and segmentation, EPP is a thin encapsulation shim. It wraps a payload with a minimal variable-length header that identifies the encapsulated protocol. This makes it well suited for carrying IP datagrams and other network-layer PDUs that have their own addressing and sequencing.
 
-The first four bits of an Encapsulation Packet are always `0111` (PVN = 7), which distinguishes it from a Space Packet (PVN = 0). This allows both packet types to coexist on the same data link.
+The first three bits of an Encapsulation Packet are always `111` (PVN = 7), which distinguishes it from a Space Packet (PVN = 0). This allows both packet types to coexist on the same data link. The 1-octet idle packet is the single byte `0xE0`.
 
 ## Service Layer
 
@@ -27,7 +27,7 @@ The `Service` type provides send/receive operations over an `io.ReadWriter` tran
 
 ```go
 svc := epp.NewService(conn, epp.ServiceConfig{
-    MaxPacketLength: 65535, // optional, defaults to 65535
+    MaxPacketLength: 65535, // optional; defaults to 4,294,967,295 (no spec-valid packet rejected)
 })
 ```
 
@@ -39,9 +39,9 @@ The simplest way to send and receive data. The service wraps your bytes in a val
 // Send an IPv4 datagram
 err := svc.SendBytes(epp.ProtocolIDIPE, ipv4Datagram)
 
-// Send with extended protocol ID
+// Send with an extended protocol ID
 err := svc.SendBytes(epp.ProtocolIDExtended, data,
-    epp.WithExtendedProtocolID(42),
+    epp.WithExtendedProtocolID(9),
 )
 
 // Receive — returns Protocol ID and data zone
@@ -68,35 +68,46 @@ For use cases outside the Service layer (testing, offline encoding, custom trans
 // Internet Protocol Extension packet (carries IPv4/IPv6)
 packet, err := epp.NewIPEPacket(ipDatagram)
 
-// User-defined protocol packet
-packet, err := epp.NewUserDefinedPacket(payload)
+// LTP packet
+packet, err := epp.NewLTPPacket(segment)
 
-// Idle packet (fill data, 1-byte header, no payload)
+// Mission-specific (privately defined) packet
+packet, err := epp.NewMissionPacket(payload)
+
+// 1-octet idle packet (0xE0)
 packet, err := epp.NewIdlePacket()
+
+// Idle fill packet of an exact total size (for frame fill)
+packet, err := epp.NewIdleFillPacket(120, 0xFF)
 
 // Generic constructor with explicit Protocol ID
 packet, err := epp.NewPacket(epp.ProtocolIDIPE, data)
 ```
 
+`NewPacket` picks the smallest header that fits the data. Passing more data
+than an 8-bit length field can describe automatically selects the 4-octet
+header, and so on.
+
 ### Packet Options
 
-Options configure the header format and optional fields:
+Options configure the header size and optional fields:
 
 ```go
-// Force 4-byte header with 16-bit length field (Format 3)
+// Force at least a 4-octet header (2-octet length field)
 packet, err := epp.NewIPEPacket(data, epp.WithLongLength())
 
-// Set the user-defined field (Format 3, also sets LengthOfLength=1)
-packet, err := epp.NewUserDefinedPacket(data, epp.WithUserDefined(0xAB))
+// Set the 4-bit User Defined Field (needs a 4- or 8-octet header)
+packet, err := epp.NewMissionPacket(data, epp.WithUserDefined(0xA))
 
-// Extended Protocol ID (Format 4)
+// Extended Protocol ID: sets PID '110' and the 4-bit extension value
 packet, err := epp.NewPacket(epp.ProtocolIDExtended, data,
-    epp.WithExtendedProtocolID(42),
+    epp.WithExtendedProtocolID(9),
 )
 
-// Extended Protocol ID with CCSDS-defined field (Format 5, 8-byte header)
+// CCSDS Defined Field (forces the 8-octet header)
 packet, err := epp.NewPacket(epp.ProtocolIDExtended, data,
-    epp.WithCCSDSDefined(42, 0x1234),
+    epp.WithExtendedProtocolID(9),
+    epp.WithCCSDSDefined(0x1234),
 )
 ```
 
@@ -130,26 +141,29 @@ decoded, err := epp.Decode(encoded)
 
 // Access decoded fields
 fmt.Println(decoded.Header.ProtocolID)
-fmt.Println(decoded.Header.Format())
+fmt.Println(decoded.Header.Size())
 fmt.Println(decoded.Data)
 ```
 
-## Header Formats
+## Header Layout
 
-The Encapsulation Packet uses a variable-length header. The format is determined by the Protocol ID and Length of Length (LoL) fields in the first byte:
+The Encapsulation Packet uses a variable-length header of 1, 2, 4, or 8
+octets. The size is a pure function of the 2-bit Length of Length (LoL)
+field in the first byte (CCSDS 133.1-B-3 table 4-1):
 
 ```
 Octet 0 (always present):
 +---+---+---+---+---+---+---+---+
-| 0   1   1   1 | P   I   D | L |
-| (PVN = 7)     | (3 bits)  |oL |
+| 1   1   1 | P   I   D | L o L |
+| (PVN = 7) | (3 bits)  |(2 bit)|
 +---+---+---+---+---+---+---+---+
-  7   6   5   4   3   2   1   0
+ MSB                         LSB
 ```
 
-### Format 1 — Idle (1 byte)
+### LoL '00' — 1-octet header (idle only)
 
-PID = 0, LoL = 0. No packet length field, no data zone.
+No Packet Length field and no data zone. The Protocol ID must be '000'
+(idle), so the whole packet is the single byte `0xE0`.
 
 ```
 +--------+
@@ -157,9 +171,9 @@ PID = 0, LoL = 0. No packet length field, no data zone.
 +--------+
 ```
 
-### Format 2 — Short (2 bytes)
+### LoL '01' — 2-octet header
 
-PID = 1–6, LoL = 0. 8-bit packet length, max 255 bytes total.
+8-bit Packet Length, max 255 octets total.
 
 ```
 +--------+------------------+
@@ -167,50 +181,56 @@ PID = 1–6, LoL = 0. 8-bit packet length, max 255 bytes total.
 +--------+------------------+
 ```
 
-### Format 3 — Medium (4 bytes)
+### LoL '10' — 4-octet header
 
-PID = 1–6, LoL = 1. Includes a user-defined field and 16-bit packet length, max 65,535 bytes total.
-
-```
-+--------+--------------+---------------------+
-| Octet0 | User Defined | Packet Length 16b   |
-+--------+--------------+---------------------+
-```
-
-### Format 4 — Extended Medium (4 bytes)
-
-PID = 7, LoL = 0. Extended Protocol ID and 16-bit packet length, max 65,535 bytes total.
+Octet 1 carries the 4-bit User Defined Field and the 4-bit Protocol ID
+Extension. 16-bit Packet Length, max 65,535 octets total.
 
 ```
-+--------+----------+---------------------+
-| Octet0 | Ext PID  | Packet Length 16b   |
-+--------+----------+---------------------+
++--------+-----------+-----------+---------------------+
+| Octet0 | UDF (4b)  | PIE (4b)  | Packet Length 16b   |
++--------+-----------+-----------+---------------------+
 ```
 
-### Format 5 — Extended Long (8 bytes)
+### LoL '11' — 8-octet header
 
-PID = 7, LoL = 1. Extended Protocol ID, CCSDS-defined field, and 32-bit packet length, max 4,294,967,295 bytes total.
+Adds the 2-octet CCSDS Defined Field (reserved, 'all zeros' by convention)
+and a 32-bit Packet Length, max 4,294,967,295 octets total.
 
 ```
-+--------+----------+----------------+---------------------+
-| Octet0 | Ext PID  | CCSDS Defined  | Packet Length 32b   |
-+--------+----------+----------------+---------------------+
++--------+-----------+-----------+----------------+---------------------+
+| Octet0 | UDF (4b)  | PIE (4b)  | CCSDS Defined  | Packet Length 32b   |
++--------+-----------+-----------+----------------+---------------------+
 ```
 
 ### Protocol IDs
 
+Per CCSDS 133.1-B-3 4.1.2.3 and the SANA Encapsulation Protocol ID registry:
+
 | Value | Name | Description |
 |-------|------|-------------|
-| 0 | Idle | Fill/idle packet (Format 1 only) |
-| 1 | Reserved | Reserved for future use |
+| 0 | Idle | Encapsulation Idle Packet (fill data) |
+| 1 | LTP | Licklider Transmission Protocol (CCSDS 734.1) |
 | 2 | IPE | Internet Protocol Extension (IPv4/IPv6) |
 | 3–5 | Reserved | Reserved for future use |
-| 6 | User-Defined | Mission-specific protocol |
-| 7 | Extended | Protocol ID Extension (extended PID in next byte) |
+| 6 | Extended | Protocol identified by the 4-bit Protocol ID Extension |
+| 7 | Mission | Mission-specific, privately defined data |
+
+The Protocol ID Extension field must be zero unless the Protocol ID is 6
+('110'), and Protocol ID 6 requires a 4- or 8-octet header so the extension
+field exists.
 
 ### Packet Length
 
-The Packet Length field contains the total number of octets in the entire Encapsulation Packet, including the header. This differs from SPP, where the Packet Data Length field contains the data field size minus 1.
+The Packet Length field contains the total number of octets in the entire Encapsulation Packet, including the header (4.1.2.8.2). This differs from SPP, where the Packet Data Length field contains the data field size minus 1.
+
+### Idle Packets
+
+Protocol ID 0 marks an idle packet. The 1-octet form (`0xE0`) has no data.
+Multi-octet idle packets carry mission-defined fill data and are useful for
+filling the remainder of a fixed-length transfer frame; build them with
+`NewIdleFillPacket(totalLength, fillByte)`. A packet whose length equals its
+header size (no data field) is only legal with the idle Protocol ID.
 
 ## Full Pipeline Example
 
@@ -247,17 +267,25 @@ All errors are exported package-level variables, suitable for use with `errors.I
 
 | Error | Meaning |
 |-------|---------|
-| `ErrInvalidPVN` | PVN is not 7 |
+| `ErrInvalidPVN` | PVN is not 7 ('111') |
 | `ErrInvalidProtocolID` | Protocol ID outside 0–7 |
-| `ErrInvalidLengthOfLength` | Length of Length field is not 0 or 1 |
-| `ErrIdleWithData` | Idle packet created with non-empty data zone |
+| `ErrInvalidLengthOfLength` | Length of Length field outside 0–3 |
+| `ErrInvalidUserDefined` | User Defined Field does not fit in 4 bits |
+| `ErrInvalidExtendedProtocolID` | Protocol ID Extension does not fit in 4 bits |
+| `ErrNonIdleOneOctetHeader` | 1-octet header with a non-idle Protocol ID |
+| `ErrExtendedNeedsLongHeader` | Protocol ID '110' with a header under 4 octets |
+| `ErrExtensionMustBeZero` | Non-zero extension with a Protocol ID other than '110' |
+| `ErrFieldNeedsLongerHeader` | Field set that the selected header size cannot carry |
+| `ErrIdleWithData` | 1-octet idle packet given a data zone |
 | `ErrEmptyData` | Non-idle packet has no data |
 | `ErrDataTooShort` | Input data too short to decode |
 | `ErrPacketLengthMismatch` | Packet length field doesn't match actual size |
 | `ErrPacketTooLarge` | Packet exceeds maximum for header format |
+| `ErrInvalidIdleLength` | Idle fill packet requested with total length < 1 |
 | `ErrNilPacket` | Nil packet provided |
 
 ## Reference
 
-- [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) — Encapsulation Packet Protocol Blue Book
+- [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) — Encapsulation Packet Protocol Blue Book (Issue 3, May 2020)
 - [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol Blue Book (companion protocol)
+- [SANA Encapsulation Protocol ID registry](https://sanaregistry.org/r/protocol_id/)

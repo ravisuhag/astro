@@ -52,6 +52,30 @@ func TestServiceSendReceiveIdlePacket(t *testing.T) {
 	}
 }
 
+func TestServiceSendReceiveIdleFillPacket(t *testing.T) {
+	var buf bytes.Buffer
+	svc := epp.NewService(&buf, epp.ServiceConfig{})
+
+	idle, err := epp.NewIdleFillPacket(16, 0x55)
+	if err != nil {
+		t.Fatalf("NewIdleFillPacket failed: %v", err)
+	}
+	if err := svc.SendPacket(idle); err != nil {
+		t.Fatalf("SendPacket(idle fill) failed: %v", err)
+	}
+
+	received, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket failed: %v", err)
+	}
+	if !received.IsIdle() {
+		t.Error("Expected idle packet")
+	}
+	if len(received.Data) != 14 {
+		t.Errorf("Idle fill data = %d bytes, want 14", len(received.Data))
+	}
+}
+
 func TestServiceSendReceiveBytes(t *testing.T) {
 	var buf bytes.Buffer
 	svc := epp.NewService(&buf, epp.ServiceConfig{})
@@ -78,7 +102,7 @@ func TestServiceSendBytesWithOptions(t *testing.T) {
 	svc := epp.NewService(&buf, epp.ServiceConfig{})
 
 	data := []byte{0x01, 0x02}
-	if err := svc.SendBytes(epp.ProtocolIDExtended, data, epp.WithExtendedProtocolID(99)); err != nil {
+	if err := svc.SendBytes(epp.ProtocolIDExtended, data, epp.WithExtendedProtocolID(9)); err != nil {
 		t.Fatalf("SendBytes failed: %v", err)
 	}
 
@@ -86,8 +110,8 @@ func TestServiceSendBytesWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReceivePacket failed: %v", err)
 	}
-	if received.Header.ExtendedProtocolID != 99 {
-		t.Errorf("ExtendedProtocolID = %d, want 99", received.Header.ExtendedProtocolID)
+	if received.Header.ExtendedProtocolID != 9 {
+		t.Errorf("ExtendedProtocolID = %d, want 9", received.Header.ExtendedProtocolID)
 	}
 	if !bytes.Equal(received.Data, data) {
 		t.Errorf("Data mismatch")
@@ -116,6 +140,28 @@ func TestServiceMaxPacketLength(t *testing.T) {
 	}
 }
 
+func TestServiceDefaultAcceptsLargePackets(t *testing.T) {
+	// EPP-F11: the default limit must not reject spec-valid packets that
+	// need the 32-bit length field.
+	var buf bytes.Buffer
+	svc := epp.NewService(&buf, epp.ServiceConfig{})
+
+	data := make([]byte, 70000)
+	data[0] = 0xAA
+	data[69999] = 0xBB
+	if err := svc.SendBytes(epp.ProtocolIDIPE, data); err != nil {
+		t.Fatalf("SendBytes(70000) failed: %v", err)
+	}
+
+	received, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket failed: %v", err)
+	}
+	if received.Data[0] != 0xAA || received.Data[69999] != 0xBB {
+		t.Error("Large packet data corrupted with default config")
+	}
+}
+
 func TestServiceMultiplePacketsRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	svc := epp.NewService(&buf, epp.ServiceConfig{})
@@ -125,8 +171,8 @@ func TestServiceMultiplePacketsRoundTrip(t *testing.T) {
 		data []byte
 	}{
 		{epp.ProtocolIDIPE, []byte{0x01}},
-		{epp.ProtocolIDUserDef, []byte{0x02, 0x03}},
-		{epp.ProtocolIDIPE, []byte{0x04, 0x05, 0x06}},
+		{epp.ProtocolIDMission, []byte{0x02, 0x03}},
+		{epp.ProtocolIDLTP, []byte{0x04, 0x05, 0x06}},
 	}
 
 	for _, p := range payloads {
@@ -149,7 +195,7 @@ func TestServiceMultiplePacketsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestServiceFormat5RoundTrip(t *testing.T) {
+func TestService8OctetHeaderRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	svc := epp.NewService(&buf, epp.ServiceConfig{
 		MaxPacketLength: 100000,
@@ -159,7 +205,8 @@ func TestServiceFormat5RoundTrip(t *testing.T) {
 	data[0] = 0xAA
 	data[69999] = 0xBB
 
-	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithCCSDSDefined(1, 0))
+	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data,
+		epp.WithExtendedProtocolID(1), epp.WithCCSDSDefined(0))
 	if err != nil {
 		t.Fatalf("NewPacket failed: %v", err)
 	}

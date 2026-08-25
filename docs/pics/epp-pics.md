@@ -10,8 +10,8 @@
 
 | Field | Value |
 |---|---|
-| Date of Statement (DD/MM/YYYY) | 27/03/2026 |
-| PICS Serial Number | ASTRO-EPP-PICS-001 |
+| Date of Statement (DD/MM/YYYY) | 25/08/2026 |
+| PICS Serial Number | ASTRO-EPP-PICS-002 |
 | System Conformance Statement Cross-Reference | This document |
 
 ### A2.1.2 Identification of Implementation Under Test (IUT)
@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/epp |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing CCSDS Encapsulation Packet Protocol encoding, decoding, validation, and service-layer I/O for all five header formats |
+| Other Information | Go library implementing CCSDS Encapsulation Packet Protocol encoding, decoding, validation, and service-layer I/O for all four header sizes. Wire layout pinned by spec-derived golden vectors (e.g. 1-octet idle packet = 0xE0). |
 
 ### A2.1.3 Identification of Supplier
 
@@ -36,7 +36,7 @@
 
 | Field | Value |
 |---|---|
-| Specification | CCSDS 133.1-B-3 (Encapsulation Packet Protocol, Blue Book, Issue 3, October 2014) |
+| Specification | CCSDS 133.1-B-3 (Encapsulation Packet Protocol, Blue Book, Issue 3, May 2020) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
 NOTE — Non-supported optional capabilities are identified in section A2.2 with explanations.
@@ -49,50 +49,51 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| EPP-1 | Encapsulation Packet | 4.1 | M | Yes | `EncapsulationPacket` struct with `Header` and `Data` fields. `Encode()` / `Decode()` round-trip support. |
-| EPP-2 | Packet Version Number | 4.1.2.2 | M | Yes | `Header.PVN` — 4 bits, enforced as 7 (0111) via `ErrInvalidPVN`. Distinguishes from Space Packets (PVN = 0). |
-| EPP-3 | Protocol ID | 4.1.2.3 | M | Yes | `Header.ProtocolID` — 3 bits (0–7). Named constants: `ProtocolIDIdle` (0), `ProtocolIDIPE` (2), `ProtocolIDUserDef` (6), `ProtocolIDExtended` (7). Validated in `Header.Validate()`. |
-| EPP-4 | Length of Length | 4.1.2.4 | M | Yes | `Header.LengthOfLength` — 1 bit. Determines header format together with Protocol ID. Configurable via `WithLongLength()` option. |
-| EPP-5 | Variable-Length Header | 4.1.2 | M | Yes | Five header formats (1, 2, 4, 4, 8 bytes) determined by Protocol ID and Length of Length. `Header.Format()` returns 1–5, `Header.Size()` returns byte count. |
-| EPP-6 | Packet Length Field | 4.1.2.5 | M | Yes | `Header.PacketLength` — total packet length in octets (including header). 8-bit (Format 2), 16-bit (Formats 3, 4), or 32-bit (Format 5). Auto-computed in `NewPacket()`. |
-| EPP-7 | Data Zone | 4.1.3 | M | Yes | `Data []byte` field. Contains the encapsulated protocol data unit. Required for non-idle packets (`ErrEmptyData`). Empty for idle packets (`ErrIdleWithData`). |
+| EPP-1 | Encapsulation Packet | 4.1.1 | M | Yes | `EncapsulationPacket` struct with `Header` and `Data` fields. `Encode()` / `Decode()` with golden wire-vector tests in addition to round-trips. |
+| EPP-2 | Packet Version Number | 4.1.2.2 | M | Yes | Bits 0–2 of octet 0, enforced as '111' (7) via `ErrInvalidPVN`. Distinguishes from Space Packets (PVN '000'). |
+| EPP-3 | Encapsulation Protocol ID | 4.1.2.3 | M | Yes | Bits 3–5 of octet 0. Named constants per the SANA registry: `ProtocolIDIdle` (0), `ProtocolIDLTP` (1), `ProtocolIDIPE` (2), `ProtocolIDExtended` (6), `ProtocolIDMission` (7). Validated in `Header.Validate()`. |
+| EPP-4 | Length of Length | 4.1.2.4 | M | Yes | Bits 6–7 of octet 0 (2 bits). Header size derived from this field alone per table 4-1: '00'→1, '01'→2, '10'→4, '11'→8 octets (`Header.Size()`). 4.1.2.4.4 enforced: LoL '00' requires Protocol ID '000' (`ErrNonIdleOneOctetHeader`). |
+| EPP-5 | User Defined Field | 4.1.2.5 | M | Yes | 4-bit field in octet 1 of 4- and 8-octet headers (`Header.UserDefined`, set via `WithUserDefined()`). Rejected when it cannot be encoded (`ErrFieldNeedsLongerHeader`). |
+| EPP-6 | Encapsulation Protocol ID Extension | 4.1.2.6 | M | Yes | 4-bit field sharing octet 1 with the User Defined Field. Used for protocol identification when the Protocol ID is '110' (4.1.2.6.2); enforced as 'all zeros' otherwise (4.1.2.6.3, `ErrExtensionMustBeZero`). Protocol ID '110' requires a 4- or 8-octet header (`ErrExtendedNeedsLongHeader`). |
+| EPP-7 | CCSDS Defined Field | 4.1.2.7 | M | Yes | 2-octet field, 8-octet header only (`Header.CCSDSDefined`, set via `WithCCSDSDefined()`). Reserved; 'all zeros' by convention (not enforced on receive, per 4.1.2.7.2 being a convention). |
+| EPP-8 | Packet Length Field | 4.1.2.8 | M | Yes | Total packet length in octets, header included (4.1.2.8.2). 1, 2, or 4 octets per the Length of Length field; absent in the 1-octet header. Auto-computed in `NewPacket()`; bounds checked against table 4-2 in `Header.Validate()`. |
+| EPP-9 | Encapsulated Data Field | 4.1.3 | M | Yes | `Data []byte`. Absent-data conditions enforced per 4.1.3.1.4/4.1.3.1.5: a packet without a data field must carry Protocol ID '000' (`ErrEmptyData` otherwise). |
 
-### Table A-2: Header Formats
-
-| Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
-| EPP-8 | Format 1 — Idle (1 byte) | 4.1.2 | M | Yes | PID=0, LoL=0. `NewIdlePacket()` constructor. `IsIdle()` detection. No data zone. |
-| EPP-9 | Format 2 — Short (2 bytes) | 4.1.2 | M | Yes | PID=1–6, LoL=0. 8-bit packet length. Max total packet size 255 bytes. `NewIPEPacket()` and `NewUserDefinedPacket()` default to this format. |
-| EPP-10 | Format 3 — Medium (4 bytes) | 4.1.2 | M | Yes | PID=1–6, LoL=1. Includes `UserDefined` field (8 bits) and 16-bit packet length. Max 65,535 bytes. Selectable via `WithLongLength()` or `WithUserDefined()`. |
-| EPP-11 | Format 4 — Extended Medium (4 bytes) | 4.1.2 | M | Yes | PID=7, LoL=0. `ExtendedProtocolID` (8 bits) and 16-bit packet length. Selectable via `WithExtendedProtocolID()`. |
-| EPP-12 | Format 5 — Extended Long (8 bytes) | 4.1.2 | M | Yes | PID=7, LoL=1. `ExtendedProtocolID` (8 bits), `CCSDSDefined` (16 bits), and 32-bit packet length. Max 4,294,967,295 bytes. Selectable via `WithCCSDSDefined()`. |
-
-### Table A-3: Protocol ID Values
+### Table A-2: Header Sizes (figure 4-2 / table 4-1)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| EPP-13 | Idle Packet (PID=0) | 4.1.2.3 | M | Yes | `ProtocolIDIdle` constant. `NewIdlePacket()` constructor. `IsIdle()` method for detection. |
-| EPP-14 | Internet Protocol Extension (PID=2) | 4.1.2.3 | M | Yes | `ProtocolIDIPE` constant. `NewIPEPacket()` convenience constructor. Carries IPv4 or IPv6 datagrams. |
-| EPP-15 | User-Defined Protocol (PID=6) | 4.1.2.3 | M | Yes | `ProtocolIDUserDef` constant. `NewUserDefinedPacket()` convenience constructor. |
-| EPP-16 | Protocol ID Extension (PID=7) | 4.1.2.3 | M | Yes | `ProtocolIDExtended` constant. Extended Protocol ID in second header byte. Configurable via `WithExtendedProtocolID()` and `WithCCSDSDefined()`. |
-| EPP-17 | Reserved Protocol IDs (1, 3, 4, 5) | 4.1.2.3 | M | Partial | Constants not defined for reserved values. Packets with reserved PIDs can be constructed via `NewPacket()` but are identified as reserved in `Humanize()`. |
+| EPP-10 | 1-octet header (LoL '00') | 4.1.2 | M | Yes | Idle packets only; encodes as 0xE0. `NewIdlePacket()` constructor; golden vector test. |
+| EPP-11 | 2-octet header (LoL '01') | 4.1.2 | M | Yes | 1-octet Packet Length, max total 255. Default for small payloads. |
+| EPP-12 | 4-octet header (LoL '10') | 4.1.2 | M | Yes | UDF + PIE octet, 2-octet Packet Length, max total 65,535. Selected automatically for larger payloads or via `WithLongLength()` / `WithUserDefined()` / `WithExtendedProtocolID()`. |
+| EPP-13 | 8-octet header (LoL '11') | 4.1.2 | M | Yes | UDF + PIE octet, CCSDS Defined Field, 4-octet Packet Length, max total 4,294,967,295. Selected automatically or via `WithCCSDSDefined()`. |
+| EPP-14 | Receive fixed- or variable-length headers | 4.1.2.1.2 | M | Yes | `Decode()` and `Service.ReceivePacket()` accept any of the four header sizes; the sender adapts the header size to the payload per the 4.1.2.1.2 NOTE. |
+
+### Table A-3: Protocol ID Values (SANA registry)
+
+| Item | Description | Reference | Status | Support | Notes |
+|------|-------------|-----------|--------|---------|-------|
+| EPP-15 | Idle Packet (PID 0) | 4.1.2.3 NOTE 1 | M | Yes | `NewIdlePacket()` (1-octet form) and `NewIdleFillPacket(totalLength, fill)` for multi-octet idle fill packets used to fill fixed-length transfer frames. `IsIdle()` detection. |
+| EPP-16 | LTP (PID 1) | SANA registry | O | Yes | `ProtocolIDLTP` constant; `NewLTPPacket()` constructor. |
+| EPP-17 | Internet Protocol Extension (PID 2) | SANA registry | O | Yes | `ProtocolIDIPE` constant; `NewIPEPacket()` constructor. |
+| EPP-18 | Protocol ID Extension (PID 6, '110') | 4.1.2.3 NOTE 2 | M | Yes | `ProtocolIDExtended` constant; `WithExtendedProtocolID()` sets the 4-bit extension. Extension values are carried opaquely; the SANA extended-protocol registry is not modeled. |
+| EPP-19 | Mission-specific data (PID 7, '111') | 4.1.2.3 NOTE 3 | O | Yes | `ProtocolIDMission` constant; `NewMissionPacket()` constructor. |
+| EPP-20 | Reserved Protocol IDs (3, 4, 5) | SANA registry | — | Partial | Packets with reserved PIDs can be constructed and decoded (identified as "Reserved" in `Humanize()`); no named constants. |
 
 ### Table A-4: Service Interface
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| EPP-18 | Packet Send | — | M | Yes | `Service.SendPacket(packet)` encodes and writes to transport. Enforces configurable maximum packet length. |
-| EPP-19 | Packet Receive | — | M | Yes | `Service.ReceivePacket()` reads header to determine format, reads remaining bytes, decodes into `*EncapsulationPacket`. |
-| EPP-20 | Byte Send | — | M | Yes | `Service.SendBytes(protocolID, data, opts...)` constructs packet from raw bytes and sends via `SendPacket()`. |
-| EPP-21 | Byte Receive | — | M | Yes | `Service.ReceiveBytes()` reads packet and returns Protocol ID and data zone. |
-| EPP-22 | Packet Sizing | — | M | Yes | `PacketSizer(data)` implements `sdl.PacketSizer` signature. Returns total packet length from header bytes, or -1 if too short. Compatible with `tmdl` and `tcdl` VCP services. |
+| EPP-21 | ENCAPSULATION.request | 3.3 | M | Yes | `Service.SendBytes(protocolID, data, opts...)` and `Service.SendPacket(packet)`. |
+| EPP-22 | ENCAPSULATION.indication | 3.3 | M | Yes | `Service.ReceiveBytes()` and `Service.ReceivePacket()` with header-size-aware streaming reads. |
+| EPP-23 | Packet Sizing | — | — | Yes | `PacketSizer(data)` implements `sdl.PacketSizer`: total length from the first octet's LoL field (1 for the idle byte). Compatible with `tmdl` and `tcdl` VCP services. |
 
 ### Table A-5: Management Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
-| EPP-23 | Maximum Packet Length | — | M | Integer | Yes | Configurable via `ServiceConfig.MaxPacketLength`. Defaults to 65,535 octets. Enforced in `Service.SendPacket()` and `Service.ReceivePacket()`. |
-| EPP-24 | Packet Multiplexing | — | O | Mission specific | No | No multiplexing or scheduling logic. Caller controls ordering of `SendPacket()` calls. |
+| EPP-24 | Maximum Packet Length | 5 | M | Integer | Yes | `ServiceConfig.MaxPacketLength`. Defaults to 4,294,967,295 (the protocol maximum) so no spec-valid packet is rejected unless a mission sets a lower limit. |
+| EPP-25 | Packet Multiplexing | — | O | Mission specific | No | No multiplexing or scheduling logic. Caller controls ordering of `SendPacket()` calls. |
 
 ---
 
@@ -102,45 +103,30 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 
 | Category | Total Items | Supported | Partial | Not Supported |
 |----------|-------------|-----------|---------|---------------|
-| Mandatory (M) | 23 | 22 | 1 | 0 |
-| Optional (O) | 1 | 0 | 0 | 1 |
-| **Total** | **24** | **22** | **1** | **1** |
+| Mandatory (M) | 17 | 17 | 0 | 0 |
+| Optional (O) | 4 | 3 | 0 | 1 |
+| Unclassified (—) | 2 | 1 | 1 | 0 |
+| **Total** | **23** | **21** | **1** | **1** |
 
 ### Non-Conformances (Optional Items Not Supported)
 
 | Item | Description | Reason |
 |------|-------------|--------|
-| EPP-24 | Packet Multiplexing | No multiplexing, scheduling, or interleaving logic. |
+| EPP-25 | Packet Multiplexing | No multiplexing, scheduling, or interleaving logic. |
 
 ### Partial Conformances (Items Requiring Attention)
 
 | Item | Description | Reason |
 |------|-------------|--------|
-| EPP-17 | Reserved Protocol IDs | Packets with reserved PIDs (1, 3, 4, 5) can be constructed and encoded but no named constants or dedicated constructors are provided. |
+| EPP-20 | Reserved Protocol IDs | Reserved PIDs (3, 4, 5) can be constructed and decoded, but no named constants are provided. |
 
-### Fully Supported Items
+### Verification Notes
 
-| Item | Description | Implementation |
-|------|-------------|----------------|
-| EPP-1 | Encapsulation Packet | `EncapsulationPacket` struct with encode/decode round-trip. |
-| EPP-2 | Packet Version Number | `Header.PVN` enforced as 7 via `ErrInvalidPVN`. |
-| EPP-3 | Protocol ID | `Header.ProtocolID` with named constants and validation. |
-| EPP-4 | Length of Length | `Header.LengthOfLength` with `WithLongLength()` option. |
-| EPP-5 | Variable-Length Header | All five formats (1, 2, 4, 4, 8 bytes) with `Header.Format()` and `Header.Size()`. |
-| EPP-6 | Packet Length Field | Auto-computed in `NewPacket()`. 8/16/32-bit depending on format. |
-| EPP-7 | Data Zone | `Data []byte` with idle/non-idle validation. |
-| EPP-8 | Format 1 — Idle | `NewIdlePacket()` and `IsIdle()`. |
-| EPP-9 | Format 2 — Short | Default format for standard Protocol IDs. |
-| EPP-10 | Format 3 — Medium | `WithLongLength()` and `WithUserDefined()`. |
-| EPP-11 | Format 4 — Extended Medium | `WithExtendedProtocolID()`. |
-| EPP-12 | Format 5 — Extended Long | `WithCCSDSDefined()`. |
-| EPP-13 | Idle Packet | `ProtocolIDIdle`, `NewIdlePacket()`, `IsIdle()`. |
-| EPP-14 | Internet Protocol Extension | `ProtocolIDIPE`, `NewIPEPacket()`. |
-| EPP-15 | User-Defined Protocol | `ProtocolIDUserDef`, `NewUserDefinedPacket()`. |
-| EPP-16 | Protocol ID Extension | `ProtocolIDExtended`, `WithExtendedProtocolID()`, `WithCCSDSDefined()`. |
-| EPP-18 | Packet Send | `Service.SendPacket()` with max length enforcement. |
-| EPP-19 | Packet Receive | `Service.ReceivePacket()` with format-aware streaming read. |
-| EPP-20 | Byte Send | `Service.SendBytes()` with packet options. |
-| EPP-21 | Byte Receive | `Service.ReceiveBytes()` returns Protocol ID and data. |
-| EPP-22 | Packet Sizing | `PacketSizer()` compatible with `sdl.PacketSizer`. |
-| EPP-23 | Maximum Packet Length | Configurable via `ServiceConfig.MaxPacketLength`, default 65,535. |
+- Octet 0 layout (PVN '111' | Protocol ID | 2-bit Length of Length), the
+  pure-LoL header sizing, the octet-1 UDF/PIE split, and the
+  total-length-including-header Packet Length semantics were verified against
+  the fetched CCSDS 133.1-B-3 (May 2020) text and are pinned by golden wire
+  vectors in `header_test.go` and `packet_test.go` (e.g. the 1-octet idle
+  packet 0xE0).
+- Protocol ID names follow the SANA Encapsulation Protocol ID registry
+  (1 = LTP, 2 = IPE, 6 = extension, 7 = mission-specific).

@@ -24,7 +24,8 @@ func TestNewIdlePacket(t *testing.T) {
 	}
 }
 
-func TestNewIdlePacketEncodeDecode(t *testing.T) {
+// TestIdlePacketWireVector pins the spec-derived 1-octet idle packet: 0xE0.
+func TestIdlePacketWireVector(t *testing.T) {
 	pkt, err := epp.NewIdlePacket()
 	if err != nil {
 		t.Fatalf("NewIdlePacket failed: %v", err)
@@ -34,8 +35,8 @@ func TestNewIdlePacketEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
 	}
-	if len(encoded) != 1 {
-		t.Fatalf("Expected 1 byte, got %d", len(encoded))
+	if !bytes.Equal(encoded, []byte{0xE0}) {
+		t.Fatalf("1-octet idle = % X, want E0", encoded)
 	}
 
 	decoded, err := epp.Decode(encoded)
@@ -47,14 +48,161 @@ func TestNewIdlePacketEncodeDecode(t *testing.T) {
 	}
 }
 
-func TestIdlePacketWithDataFails(t *testing.T) {
-	_, err := epp.NewPacket(epp.ProtocolIDIdle, []byte{0x01})
-	if !errors.Is(err, epp.ErrIdleWithData) {
-		t.Errorf("Expected ErrIdleWithData, got %v", err)
+// TestPacketGoldenVectors pins complete packets to spec-derived wire bytes.
+func TestPacketGoldenVectors(t *testing.T) {
+	ipe, err := epp.NewIPEPacket([]byte{0x61, 0x62, 0x63, 0x64})
+	if err != nil {
+		t.Fatalf("NewIPEPacket failed: %v", err)
+	}
+	got, err := ipe.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PVN '111', PID '010', LoL '01' -> 0xE9; total length 6.
+	want := []byte{0xE9, 0x06, 0x61, 0x62, 0x63, 0x64}
+	if !bytes.Equal(got, want) {
+		t.Errorf("IPE packet = % X, want % X", got, want)
+	}
+
+	ltp, err := epp.NewLTPPacket([]byte{0xAA})
+	if err != nil {
+		t.Fatalf("NewLTPPacket failed: %v", err)
+	}
+	got, err = ltp.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PVN '111', PID '001' (LTP per SANA), LoL '01' -> 0xE5; total length 3.
+	want = []byte{0xE5, 0x03, 0xAA}
+	if !bytes.Equal(got, want) {
+		t.Errorf("LTP packet = % X, want % X", got, want)
+	}
+
+	mission, err := epp.NewMissionPacket([]byte{0x01, 0x02})
+	if err != nil {
+		t.Fatalf("NewMissionPacket failed: %v", err)
+	}
+	got, err = mission.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PVN '111', PID '111', LoL '01' -> 0xFD; total length 4.
+	want = []byte{0xFD, 0x04, 0x01, 0x02}
+	if !bytes.Equal(got, want) {
+		t.Errorf("Mission packet = % X, want % X", got, want)
+	}
+
+	ext, err := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x0A, 0x0B}, epp.WithExtendedProtocolID(3))
+	if err != nil {
+		t.Fatalf("NewPacket(extended) failed: %v", err)
+	}
+	got, err = ext.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PVN '111', PID '110', LoL '10' -> 0xFA; octet 1 = UDF 0 | PIE 3; length 6.
+	want = []byte{0xFA, 0x03, 0x00, 0x06, 0x0A, 0x0B}
+	if !bytes.Equal(got, want) {
+		t.Errorf("Extended packet = % X, want % X", got, want)
 	}
 }
 
-func TestNewIPEPacketFormat2(t *testing.T) {
+func TestIdleFillPacket(t *testing.T) {
+	tests := []struct {
+		total      int
+		wantHeader int
+	}{
+		{1, 1},
+		{2, 2},
+		{3, 2},
+		{255, 2},
+		{256, 4},
+		{300, 4},
+		{65535, 4},
+		{65536, 8},
+	}
+
+	for _, tt := range tests {
+		pkt, err := epp.NewIdleFillPacket(tt.total, 0xAA)
+		if err != nil {
+			t.Fatalf("NewIdleFillPacket(%d) failed: %v", tt.total, err)
+		}
+		if !pkt.IsIdle() {
+			t.Errorf("NewIdleFillPacket(%d): expected idle", tt.total)
+		}
+		if got := pkt.Header.Size(); got != tt.wantHeader {
+			t.Errorf("NewIdleFillPacket(%d): header size = %d, want %d", tt.total, got, tt.wantHeader)
+		}
+		encoded, err := pkt.Encode()
+		if err != nil {
+			t.Fatalf("Encode(%d) failed: %v", tt.total, err)
+		}
+		if len(encoded) != tt.total {
+			t.Errorf("NewIdleFillPacket(%d): encoded %d bytes", tt.total, len(encoded))
+		}
+		for _, b := range encoded[tt.wantHeader:] {
+			if b != 0xAA {
+				t.Errorf("NewIdleFillPacket(%d): fill byte = 0x%02X, want 0xAA", tt.total, b)
+				break
+			}
+		}
+		decoded, err := epp.Decode(encoded)
+		if err != nil {
+			t.Fatalf("Decode idle fill (%d) failed: %v", tt.total, err)
+		}
+		if !decoded.IsIdle() {
+			t.Errorf("Decoded idle fill (%d) not idle", tt.total)
+		}
+	}
+
+	if _, err := epp.NewIdleFillPacket(0, 0x00); !errors.Is(err, epp.ErrInvalidIdleLength) {
+		t.Errorf("NewIdleFillPacket(0) = %v, want ErrInvalidIdleLength", err)
+	}
+}
+
+func TestIdleFillPacketWireVector(t *testing.T) {
+	pkt, err := epp.NewIdleFillPacket(6, 0xFF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PVN '111', PID '000', LoL '01' -> 0xE1; total length 6; 4 fill octets.
+	want := []byte{0xE1, 0x06, 0xFF, 0xFF, 0xFF, 0xFF}
+	if !bytes.Equal(encoded, want) {
+		t.Errorf("idle fill = % X, want % X", encoded, want)
+	}
+}
+
+func TestIdlePacketWithDataAllowed(t *testing.T) {
+	// EPP-F5: multi-octet idle packets with fill data are legal.
+	pkt, err := epp.NewPacket(epp.ProtocolIDIdle, []byte{0x00, 0x00, 0x00})
+	if err != nil {
+		t.Fatalf("NewPacket(idle, data) failed: %v", err)
+	}
+	if !pkt.IsIdle() {
+		t.Error("Expected idle")
+	}
+	if pkt.Header.LengthOfLength != epp.LoL1Octet {
+		t.Errorf("LoL = %d, want %d", pkt.Header.LengthOfLength, epp.LoL1Octet)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := epp.Decode(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decoded.IsIdle() || len(decoded.Data) != 3 {
+		t.Errorf("Decoded idle fill: idle=%v dataLen=%d", decoded.IsIdle(), len(decoded.Data))
+	}
+}
+
+func TestNewIPEPacket(t *testing.T) {
 	data := []byte{0x45, 0x00, 0x00, 0x14} // IPv4 header start
 	pkt, err := epp.NewIPEPacket(data)
 	if err != nil {
@@ -64,80 +212,74 @@ func TestNewIPEPacketFormat2(t *testing.T) {
 	if pkt.Header.ProtocolID != epp.ProtocolIDIPE {
 		t.Errorf("ProtocolID = %d, want %d", pkt.Header.ProtocolID, epp.ProtocolIDIPE)
 	}
-	if pkt.Header.Format() != 2 {
-		t.Errorf("Format = %d, want 2", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize2 {
+		t.Errorf("Header size = %d, want 2", pkt.Header.Size())
 	}
 	if pkt.Header.PacketLength != uint32(2+len(data)) {
 		t.Errorf("PacketLength = %d, want %d", pkt.Header.PacketLength, 2+len(data))
 	}
 }
 
-func TestFormat2EncodeDecode(t *testing.T) {
-	data := []byte{0x01, 0x02, 0x03, 0x04}
+func TestAutoHeaderSizing(t *testing.T) {
+	// 300 bytes of data cannot fit a 1-octet length field; the constructor
+	// must pick the 4-octet header on its own (4.1.2.1.2 NOTE).
+	data := make([]byte, 300)
 	pkt, err := epp.NewIPEPacket(data)
 	if err != nil {
-		t.Fatalf("NewIPEPacket failed: %v", err)
+		t.Fatalf("NewIPEPacket(300) failed: %v", err)
+	}
+	if pkt.Header.Size() != epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want 4", pkt.Header.Size())
+	}
+	if pkt.Header.PacketLength != 304 {
+		t.Errorf("PacketLength = %d, want 304", pkt.Header.PacketLength)
 	}
 
-	encoded, err := pkt.Encode()
+	// Beyond 65535 total, the 8-octet header is required.
+	big := make([]byte, 70000)
+	pkt, err = epp.NewIPEPacket(big)
 	if err != nil {
-		t.Fatalf("Encode failed: %v", err)
+		t.Fatalf("NewIPEPacket(70000) failed: %v", err)
 	}
-
-	decoded, err := epp.Decode(encoded)
-	if err != nil {
-		t.Fatalf("Decode failed: %v", err)
-	}
-
-	if decoded.Header.ProtocolID != epp.ProtocolIDIPE {
-		t.Errorf("ProtocolID = %d, want %d", decoded.Header.ProtocolID, epp.ProtocolIDIPE)
-	}
-	if !bytes.Equal(decoded.Data, data) {
-		t.Errorf("Data mismatch. Got %v, want %v", decoded.Data, data)
+	if pkt.Header.Size() != epp.HeaderSize8 {
+		t.Errorf("Header size = %d, want 8", pkt.Header.Size())
 	}
 }
 
-func TestFormat3EncodeDecode(t *testing.T) {
-	data := make([]byte, 300) // exceeds 8-bit length → need Format 3
-	data[0] = 0xAA
-	data[299] = 0xBB
-
-	pkt, err := epp.NewIPEPacket(data, epp.WithLongLength())
+func TestWithLongLength(t *testing.T) {
+	pkt, err := epp.NewIPEPacket([]byte{0x01, 0x02}, epp.WithLongLength())
 	if err != nil {
 		t.Fatalf("NewIPEPacket failed: %v", err)
 	}
-
-	if pkt.Header.Format() != 3 {
-		t.Errorf("Format = %d, want 3", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want 4", pkt.Header.Size())
 	}
 
 	encoded, err := pkt.Encode()
 	if err != nil {
-		t.Fatalf("Encode failed: %v", err)
+		t.Fatal(err)
 	}
-
 	decoded, err := epp.Decode(encoded)
 	if err != nil {
-		t.Fatalf("Decode failed: %v", err)
+		t.Fatal(err)
 	}
-
-	if !bytes.Equal(decoded.Data, data) {
+	if !bytes.Equal(decoded.Data, []byte{0x01, 0x02}) {
 		t.Error("Data mismatch after round-trip")
 	}
 }
 
-func TestFormat3WithUserDefined(t *testing.T) {
+func TestWithUserDefined(t *testing.T) {
 	data := []byte{0x01, 0x02}
-	pkt, err := epp.NewUserDefinedPacket(data, epp.WithUserDefined(0xFE))
+	pkt, err := epp.NewMissionPacket(data, epp.WithUserDefined(0xE))
 	if err != nil {
 		t.Fatalf("Failed: %v", err)
 	}
 
-	if pkt.Header.Format() != 3 {
-		t.Errorf("Format = %d, want 3", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want 4", pkt.Header.Size())
 	}
-	if pkt.Header.UserDefined != 0xFE {
-		t.Errorf("UserDefined = 0x%02X, want 0xFE", pkt.Header.UserDefined)
+	if pkt.Header.UserDefined != 0xE {
+		t.Errorf("UserDefined = 0x%X, want 0xE", pkt.Header.UserDefined)
 	}
 
 	encoded, err := pkt.Encode()
@@ -148,20 +290,25 @@ func TestFormat3WithUserDefined(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Header.UserDefined != 0xFE {
-		t.Errorf("Decoded UserDefined = 0x%02X, want 0xFE", decoded.Header.UserDefined)
+	if decoded.Header.UserDefined != 0xE {
+		t.Errorf("Decoded UserDefined = 0x%X, want 0xE", decoded.Header.UserDefined)
+	}
+
+	// The field is 4 bits wide.
+	if _, err := epp.NewMissionPacket(data, epp.WithUserDefined(0x10)); !errors.Is(err, epp.ErrInvalidUserDefined) {
+		t.Errorf("WithUserDefined(16) = %v, want ErrInvalidUserDefined", err)
 	}
 }
 
-func TestFormat4EncodeDecode(t *testing.T) {
+func TestWithExtendedProtocolID(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03}
-	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithExtendedProtocolID(42))
+	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithExtendedProtocolID(12))
 	if err != nil {
 		t.Fatalf("NewPacket failed: %v", err)
 	}
 
-	if pkt.Header.Format() != 4 {
-		t.Errorf("Format = %d, want 4", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want 4", pkt.Header.Size())
 	}
 
 	encoded, err := pkt.Encode()
@@ -172,23 +319,43 @@ func TestFormat4EncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Header.ExtendedProtocolID != 42 {
-		t.Errorf("ExtendedProtocolID = %d, want 42", decoded.Header.ExtendedProtocolID)
+	if decoded.Header.ExtendedProtocolID != 12 {
+		t.Errorf("ExtendedProtocolID = %d, want 12", decoded.Header.ExtendedProtocolID)
 	}
 	if !bytes.Equal(decoded.Data, data) {
 		t.Errorf("Data mismatch")
 	}
+
+	// The field is 4 bits wide.
+	if _, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithExtendedProtocolID(16)); !errors.Is(err, epp.ErrInvalidExtendedProtocolID) {
+		t.Errorf("WithExtendedProtocolID(16) = %v, want ErrInvalidExtendedProtocolID", err)
+	}
 }
 
-func TestFormat5EncodeDecode(t *testing.T) {
+func TestExtendedPIDRequiresLongHeader(t *testing.T) {
+	// EPP-F7: PID '110' needs the extension field, so the constructor must
+	// pick at least the 4-octet header even without options.
+	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01})
+	if err != nil {
+		t.Fatalf("NewPacket(extended) failed: %v", err)
+	}
+	if pkt.Header.Size() < epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want >= 4", pkt.Header.Size())
+	}
+}
+
+func TestWithCCSDSDefined(t *testing.T) {
 	data := []byte{0x01, 0x02, 0x03, 0x04, 0x05}
-	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithCCSDSDefined(55, 0x9876))
+	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data,
+		epp.WithExtendedProtocolID(9),
+		epp.WithCCSDSDefined(0x9876),
+	)
 	if err != nil {
 		t.Fatalf("NewPacket failed: %v", err)
 	}
 
-	if pkt.Header.Format() != 5 {
-		t.Errorf("Format = %d, want 5", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize8 {
+		t.Errorf("Header size = %d, want 8", pkt.Header.Size())
 	}
 
 	encoded, err := pkt.Encode()
@@ -199,8 +366,8 @@ func TestFormat5EncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Header.ExtendedProtocolID != 55 {
-		t.Errorf("ExtendedProtocolID = %d, want 55", decoded.Header.ExtendedProtocolID)
+	if decoded.Header.ExtendedProtocolID != 9 {
+		t.Errorf("ExtendedProtocolID = %d, want 9", decoded.Header.ExtendedProtocolID)
 	}
 	if decoded.Header.CCSDSDefined != 0x9876 {
 		t.Errorf("CCSDSDefined = 0x%04X, want 0x9876", decoded.Header.CCSDSDefined)
@@ -210,12 +377,16 @@ func TestFormat5EncodeDecode(t *testing.T) {
 	}
 }
 
-func TestFormat2MaxData(t *testing.T) {
-	// Format 2: 2-byte header + data, total ≤ 255
+func TestMax2OctetHeaderData(t *testing.T) {
+	// 2-octet header + data, total <= 255
 	data := make([]byte, 253) // 2 + 253 = 255
 	pkt, err := epp.NewIPEPacket(data)
 	if err != nil {
-		t.Fatalf("Max format 2 packet failed: %v", err)
+		t.Fatalf("Max 2-octet header packet failed: %v", err)
+	}
+
+	if pkt.Header.Size() != epp.HeaderSize2 {
+		t.Errorf("Header size = %d, want 2", pkt.Header.Size())
 	}
 
 	encoded, err := pkt.Encode()
@@ -232,15 +403,6 @@ func TestFormat2MaxData(t *testing.T) {
 	}
 	if len(decoded.Data) != 253 {
 		t.Errorf("Decoded data length = %d, want 253", len(decoded.Data))
-	}
-}
-
-func TestFormat2ExceedsMax(t *testing.T) {
-	// 2-byte header + 254 bytes data = 256 > 255
-	data := make([]byte, 254)
-	_, err := epp.NewIPEPacket(data)
-	if !errors.Is(err, epp.ErrPacketTooLarge) {
-		t.Errorf("Expected ErrPacketTooLarge, got %v", err)
 	}
 }
 
@@ -276,7 +438,7 @@ func TestDecodeDataTooShort(t *testing.T) {
 }
 
 func TestDecodeTruncatedPacket(t *testing.T) {
-	// Create a valid format 2 packet, then truncate
+	// Create a valid 2-octet-header packet, then truncate
 	pkt, _ := epp.NewIPEPacket([]byte{0x01, 0x02, 0x03})
 	encoded, _ := pkt.Encode()
 
@@ -293,6 +455,11 @@ func TestIsIdle(t *testing.T) {
 		t.Error("Expected IsIdle()=true for idle packet")
 	}
 
+	fill, _ := epp.NewIdleFillPacket(10, 0x00)
+	if !fill.IsIdle() {
+		t.Error("Expected IsIdle()=true for idle fill packet")
+	}
+
 	nonIdle, _ := epp.NewIPEPacket([]byte{0x01})
 	if nonIdle.IsIdle() {
 		t.Error("Expected IsIdle()=false for IPE packet")
@@ -307,18 +474,33 @@ func TestPacketSizer(t *testing.T) {
 		t.Errorf("PacketSizer(idle) = %d, want 1", got)
 	}
 
-	// Format 2 packet
+	// 2-octet header packet
 	f2, _ := epp.NewIPEPacket([]byte{0x01, 0x02, 0x03})
 	f2Bytes, _ := f2.Encode()
 	if got := epp.PacketSizer(f2Bytes); got != len(f2Bytes) {
-		t.Errorf("PacketSizer(format2) = %d, want %d", got, len(f2Bytes))
+		t.Errorf("PacketSizer(2-octet header) = %d, want %d", got, len(f2Bytes))
 	}
 
-	// Format 5 packet
-	f5, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01}, epp.WithCCSDSDefined(10, 0))
-	f5Bytes, _ := f5.Encode()
-	if got := epp.PacketSizer(f5Bytes); got != len(f5Bytes) {
-		t.Errorf("PacketSizer(format5) = %d, want %d", got, len(f5Bytes))
+	// 4-octet header packet
+	f4, _ := epp.NewIPEPacket([]byte{0x01, 0x02}, epp.WithLongLength())
+	f4Bytes, _ := f4.Encode()
+	if got := epp.PacketSizer(f4Bytes); got != len(f4Bytes) {
+		t.Errorf("PacketSizer(4-octet header) = %d, want %d", got, len(f4Bytes))
+	}
+
+	// 8-octet header packet
+	f8, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01},
+		epp.WithExtendedProtocolID(10), epp.WithCCSDSDefined(0))
+	f8Bytes, _ := f8.Encode()
+	if got := epp.PacketSizer(f8Bytes); got != len(f8Bytes) {
+		t.Errorf("PacketSizer(8-octet header) = %d, want %d", got, len(f8Bytes))
+	}
+
+	// Idle fill packet
+	fill, _ := epp.NewIdleFillPacket(12, 0x55)
+	fillBytes, _ := fill.Encode()
+	if got := epp.PacketSizer(fillBytes); got != 12 {
+		t.Errorf("PacketSizer(idle fill) = %d, want 12", got)
 	}
 
 	// Too short
@@ -327,6 +509,33 @@ func TestPacketSizer(t *testing.T) {
 	}
 	if got := epp.PacketSizer([]byte{}); got != -1 {
 		t.Errorf("PacketSizer(empty) = %d, want -1", got)
+	}
+
+	// Wrong PVN
+	if got := epp.PacketSizer([]byte{0x70, 0x06}); got != -1 {
+		t.Errorf("PacketSizer(wrong PVN) = %d, want -1", got)
+	}
+}
+
+func TestPacketSizerMalformedLength(t *testing.T) {
+	// 2-octet header with PacketLength=0 (less than header size 2) -> -1
+	data := []byte{0xE9, 0x00}
+	if got := epp.PacketSizer(data); got != -1 {
+		t.Errorf("PacketSizer(malformed) = %d, want -1", got)
+	}
+
+	// 2-octet header with PacketLength=1 (less than header size 2) -> -1
+	data = []byte{0xE9, 0x01}
+	if got := epp.PacketSizer(data); got != -1 {
+		t.Errorf("PacketSizer(malformed) = %d, want -1", got)
+	}
+}
+
+func TestPacketSizerTruncatedHeader(t *testing.T) {
+	// 4-octet header needs 4 bytes, provide only 1
+	data := []byte{0xFA} // PVN=7, PID=6, LoL='10'
+	if got := epp.PacketSizer(data); got != -1 {
+		t.Errorf("PacketSizer(truncated 4-octet header) = %d, want -1", got)
 	}
 }
 
@@ -339,64 +548,52 @@ func TestHumanize(t *testing.T) {
 }
 
 func TestAllProtocolIDsEncodeDecode(t *testing.T) {
-	// Test non-reserved, non-idle protocol IDs
-	pids := []struct {
-		pid  uint8
-		name string
-	}{
-		{epp.ProtocolIDIPE, "IPE"},
-		{epp.ProtocolIDUserDef, "UserDef"},
+	// All PIDs except the extension PID ('110', which needs the extension
+	// field) build directly; reserved values 3-5 still encode/decode.
+	pids := []uint8{
+		epp.ProtocolIDLTP,
+		epp.ProtocolIDIPE,
+		3, 4, 5,
+		epp.ProtocolIDMission,
 	}
 
-	for _, p := range pids {
-		t.Run(p.name, func(t *testing.T) {
-			data := []byte{0x01, 0x02}
-			pkt, err := epp.NewPacket(p.pid, data)
-			if err != nil {
-				t.Fatalf("NewPacket failed: %v", err)
-			}
-			encoded, err := pkt.Encode()
-			if err != nil {
-				t.Fatal(err)
-			}
-			decoded, err := epp.Decode(encoded)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if decoded.Header.ProtocolID != p.pid {
-				t.Errorf("ProtocolID = %d, want %d", decoded.Header.ProtocolID, p.pid)
-			}
-			if !bytes.Equal(decoded.Data, data) {
-				t.Error("Data mismatch")
-			}
-		})
+	for _, pid := range pids {
+		data := []byte{0x01, 0x02}
+		pkt, err := epp.NewPacket(pid, data)
+		if err != nil {
+			t.Fatalf("NewPacket(PID=%d) failed: %v", pid, err)
+		}
+		encoded, err := pkt.Encode()
+		if err != nil {
+			t.Fatalf("Encode(PID=%d) failed: %v", pid, err)
+		}
+		decoded, err := epp.Decode(encoded)
+		if err != nil {
+			t.Fatalf("Decode(PID=%d) failed: %v", pid, err)
+		}
+		if decoded.Header.ProtocolID != pid {
+			t.Errorf("ProtocolID = %d, want %d", decoded.Header.ProtocolID, pid)
+		}
+		if !bytes.Equal(decoded.Data, data) {
+			t.Errorf("Data mismatch for PID %d", pid)
+		}
 	}
 }
 
-func TestNewUserDefinedPacket(t *testing.T) {
-	data := []byte{0x01, 0x02, 0x03}
-	pkt, err := epp.NewUserDefinedPacket(data)
-	if err != nil {
-		t.Fatalf("NewUserDefinedPacket failed: %v", err)
-	}
-	if pkt.Header.ProtocolID != epp.ProtocolIDUserDef {
-		t.Errorf("ProtocolID = %d, want %d", pkt.Header.ProtocolID, epp.ProtocolIDUserDef)
-	}
-}
-
-func TestFormat5LargePacket(t *testing.T) {
-	// Create a packet that requires 32-bit length (> 65535 bytes)
+func TestLargePacket(t *testing.T) {
+	// A packet that requires the 32-bit length field (> 65535 bytes)
 	data := make([]byte, 70000)
 	data[0] = 0xAA
 	data[69999] = 0xBB
 
-	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data, epp.WithCCSDSDefined(1, 0))
+	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, data,
+		epp.WithExtendedProtocolID(1), epp.WithCCSDSDefined(0))
 	if err != nil {
 		t.Fatalf("NewPacket failed: %v", err)
 	}
 
-	if pkt.Header.Format() != 5 {
-		t.Errorf("Format = %d, want 5", pkt.Header.Format())
+	if pkt.Header.Size() != epp.HeaderSize8 {
+		t.Errorf("Header size = %d, want 8", pkt.Header.Size())
 	}
 
 	encoded, err := pkt.Encode()
@@ -418,7 +615,7 @@ func TestValidateMismatchedLength(t *testing.T) {
 		Header: epp.Header{
 			PVN:            epp.PVN,
 			ProtocolID:     epp.ProtocolIDIPE,
-			LengthOfLength: 0,
+			LengthOfLength: epp.LoL1Octet,
 			PacketLength:   100, // wrong — doesn't match data
 		},
 		Data: []byte{0x01, 0x02},
@@ -443,101 +640,18 @@ func TestDecodeExtraTrailingData(t *testing.T) {
 	}
 }
 
-// --- Edge cases found during code review ---
-
 func TestDecodeMalformedPacketLengthLessThanHeader(t *testing.T) {
-	// Format 2 header: PVN=7, PID=2, LoL=0, PacketLength=1 (less than header size of 2)
-	// This previously caused a panic via invalid slice indices.
-	data := []byte{0x74, 0x01}
+	// 2-octet header: PVN=7, PID=2, LoL='01', PacketLength=1 (< header size 2)
+	data := []byte{0xE9, 0x01}
 	_, err := epp.Decode(data)
 	if !errors.Is(err, epp.ErrPacketLengthMismatch) {
 		t.Errorf("Expected ErrPacketLengthMismatch for PacketLength < headerSize, got %v", err)
 	}
 }
 
-func TestPacketSizerMalformedLength(t *testing.T) {
-	// Format 2 with PacketLength=0 (less than header size 2) should return -1
-	data := []byte{0x74, 0x00}
-	if got := epp.PacketSizer(data); got != -1 {
-		t.Errorf("PacketSizer(malformed) = %d, want -1", got)
-	}
-
-	// Format 2 with PacketLength=1 (less than header size 2) should return -1
-	data = []byte{0x74, 0x01}
-	if got := epp.PacketSizer(data); got != -1 {
-		t.Errorf("PacketSizer(malformed) = %d, want -1", got)
-	}
-}
-
-func TestPacketSizerFormat3(t *testing.T) {
-	pkt, _ := epp.NewIPEPacket([]byte{0x01, 0x02}, epp.WithLongLength())
-	encoded, _ := pkt.Encode()
-	if got := epp.PacketSizer(encoded); got != len(encoded) {
-		t.Errorf("PacketSizer(format3) = %d, want %d", got, len(encoded))
-	}
-}
-
-func TestPacketSizerFormat4(t *testing.T) {
-	pkt, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01}, epp.WithExtendedProtocolID(10))
-	encoded, _ := pkt.Encode()
-	if got := epp.PacketSizer(encoded); got != len(encoded) {
-		t.Errorf("PacketSizer(format4) = %d, want %d", got, len(encoded))
-	}
-}
-
-func TestPacketSizerTruncatedFormat4(t *testing.T) {
-	// Format 4 needs 4 bytes, provide only 1
-	data := []byte{0x7E} // PVN=7, PID=7, LoL=0 → Format 4
-	if got := epp.PacketSizer(data); got != -1 {
-		t.Errorf("PacketSizer(truncated format4) = %d, want -1", got)
-	}
-}
-
-func TestReservedProtocolIDs(t *testing.T) {
-	// Reserved PIDs (1, 3, 4, 5) should still encode/decode without error
-	reserved := []uint8{1, 3, 4, 5}
-	for _, pid := range reserved {
-		pkt, err := epp.NewPacket(pid, []byte{0x01})
-		if err != nil {
-			t.Fatalf("NewPacket(PID=%d) failed: %v", pid, err)
-		}
-		encoded, err := pkt.Encode()
-		if err != nil {
-			t.Fatalf("Encode(PID=%d) failed: %v", pid, err)
-		}
-		decoded, err := epp.Decode(encoded)
-		if err != nil {
-			t.Fatalf("Decode(PID=%d) failed: %v", pid, err)
-		}
-		if decoded.Header.ProtocolID != pid {
-			t.Errorf("PID = %d, want %d", decoded.Header.ProtocolID, pid)
-		}
-	}
-}
-
-func TestHeaderValidateInvalidLengthOfLength(t *testing.T) {
-	h := epp.Header{PVN: epp.PVN, ProtocolID: 2, LengthOfLength: 2}
-	if err := h.Validate(); err != epp.ErrInvalidLengthOfLength {
-		t.Errorf("Expected ErrInvalidLengthOfLength, got %v", err)
-	}
-}
-
-func TestWithLongLengthAndExtendedPID(t *testing.T) {
-	// WithLongLength on an extended PID should produce Format 5
-	pkt, err := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01},
-		epp.WithExtendedProtocolID(42),
-		epp.WithLongLength(),
-	)
-	if err != nil {
-		t.Fatalf("NewPacket failed: %v", err)
-	}
-	if pkt.Header.Format() != 5 {
-		t.Errorf("Format = %d, want 5", pkt.Header.Format())
-	}
-}
-
-func TestIdleWithLongLengthForcesFormat1(t *testing.T) {
-	// PID=0 must always produce Format 1 idle, even if WithLongLength is used
+func TestIdleWithLongLength(t *testing.T) {
+	// PID=0 with a forced longer header yields a header-only idle packet
+	// (packet length equals the header size; data field absent, 4.1.3.1.4 b).
 	pkt, err := epp.NewPacket(epp.ProtocolIDIdle, nil, epp.WithLongLength())
 	if err != nil {
 		t.Fatalf("NewPacket failed: %v", err)
@@ -545,45 +659,50 @@ func TestIdleWithLongLengthForcesFormat1(t *testing.T) {
 	if !pkt.IsIdle() {
 		t.Error("Expected IsIdle()=true")
 	}
-	if pkt.Header.LengthOfLength != 0 {
-		t.Errorf("LengthOfLength = %d, want 0 (forced to Format 1)", pkt.Header.LengthOfLength)
+	if pkt.Header.Size() != epp.HeaderSize4 {
+		t.Errorf("Header size = %d, want 4", pkt.Header.Size())
 	}
-	if pkt.Header.Format() != 1 {
-		t.Errorf("Format = %d, want 1", pkt.Header.Format())
+	if pkt.Header.PacketLength != epp.HeaderSize4 {
+		t.Errorf("PacketLength = %d, want 4", pkt.Header.PacketLength)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := epp.Decode(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decoded.IsIdle() || len(decoded.Data) != 0 {
+		t.Errorf("Decoded: idle=%v dataLen=%d, want idle with no data", decoded.IsIdle(), len(decoded.Data))
 	}
 }
 
-func TestIdleWithDataAndLongLengthFails(t *testing.T) {
-	// PID=0 with data must fail regardless of LoL
-	_, err := epp.NewPacket(epp.ProtocolIDIdle, []byte{0x01}, epp.WithLongLength())
-	if !errors.Is(err, epp.ErrIdleWithData) {
-		t.Errorf("Expected ErrIdleWithData, got %v", err)
+func TestHeaderOnlyNonIdleRejected(t *testing.T) {
+	// A packet whose length equals the header size has no data field, which
+	// requires the idle protocol ID (4.1.3.1.5).
+	data := []byte{0xE9, 0x02} // IPE, 2-octet header, total length 2
+	_, err := epp.Decode(data)
+	if !errors.Is(err, epp.ErrEmptyData) {
+		t.Errorf("Expected ErrEmptyData, got %v", err)
 	}
 }
 
-func TestHumanizeAllFormats(t *testing.T) {
-	// Format 1 — idle
+func TestHumanizeAllHeaderSizes(t *testing.T) {
 	idle, _ := epp.NewIdlePacket()
 	if s := idle.Humanize(); s == "" {
 		t.Error("Humanize(idle) returned empty")
 	}
 
-	// Format 3 — medium with user-defined
-	f3, _ := epp.NewIPEPacket([]byte{0x01}, epp.WithUserDefined(0xAB))
-	s := f3.Humanize()
-	if s == "" {
-		t.Error("Humanize(format3) returned empty")
-	}
-
-	// Format 4 — extended medium
-	f4, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01}, epp.WithExtendedProtocolID(42))
+	f4, _ := epp.NewIPEPacket([]byte{0x01}, epp.WithUserDefined(0xB))
 	if s := f4.Humanize(); s == "" {
-		t.Error("Humanize(format4) returned empty")
+		t.Error("Humanize(4-octet header) returned empty")
 	}
 
-	// Format 5 — extended long
-	f5, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01}, epp.WithCCSDSDefined(42, 0x1234))
-	if s := f5.Humanize(); s == "" {
-		t.Error("Humanize(format5) returned empty")
+	f8, _ := epp.NewPacket(epp.ProtocolIDExtended, []byte{0x01},
+		epp.WithExtendedProtocolID(2), epp.WithCCSDSDefined(0x1234))
+	if s := f8.Humanize(); s == "" {
+		t.Error("Humanize(8-octet header) returned empty")
 	}
 }

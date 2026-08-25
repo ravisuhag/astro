@@ -6,19 +6,23 @@ import "io"
 // for Encapsulation Packets per CCSDS 133.1-B-3.
 type Service struct {
 	rw           io.ReadWriter
-	maxPacketLen int
+	maxPacketLen int64
 }
 
 // ServiceConfig holds configuration for a Service.
 type ServiceConfig struct {
-	MaxPacketLength int // maximum total packet size in octets; default 65535
+	// MaxPacketLength is the maximum total packet size in octets.
+	// It defaults to MaxPacketLength8 (4,294,967,295), the largest packet
+	// the protocol can represent, so that spec-valid packets are never
+	// rejected unless the mission configures a lower limit.
+	MaxPacketLength int
 }
 
 // NewService creates a new EPP service over the given transport.
 func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
-	maxLen := cfg.MaxPacketLength
-	if maxLen <= 0 || maxLen > int(MaxPacketLengthExtendedLong) {
-		maxLen = MaxPacketLengthMedium
+	maxLen := int64(cfg.MaxPacketLength)
+	if maxLen <= 0 || maxLen > MaxPacketLength8 {
+		maxLen = MaxPacketLength8
 	}
 	return &Service{
 		rw:           rw,
@@ -36,7 +40,7 @@ func (s *Service) SendPacket(packet *EncapsulationPacket) error {
 	if err != nil {
 		return err
 	}
-	if len(data) > s.maxPacketLen {
+	if int64(len(data)) > s.maxPacketLen {
 		return ErrPacketTooLarge
 	}
 	_, err = s.rw.Write(data)
@@ -45,7 +49,7 @@ func (s *Service) SendPacket(packet *EncapsulationPacket) error {
 
 // ReceivePacket reads and decodes a complete encapsulation packet from the transport.
 func (s *Service) ReceivePacket() (*EncapsulationPacket, error) {
-	// Read the first byte to determine header format
+	// Read the first byte to determine the header size
 	first := make([]byte, 1)
 	if _, err := io.ReadFull(s.rw, first); err != nil {
 		return nil, err
@@ -53,7 +57,7 @@ func (s *Service) ReceivePacket() (*EncapsulationPacket, error) {
 
 	hdrSize := HeaderSize(first)
 	if hdrSize < 0 {
-		return nil, ErrDataTooShort
+		return nil, ErrInvalidPVN
 	}
 
 	// Read remaining header bytes if needed
@@ -71,18 +75,18 @@ func (s *Service) ReceivePacket() (*EncapsulationPacket, error) {
 		return nil, err
 	}
 
-	// Idle packet: no data to read
-	if header.Format() == 1 {
+	// 1-octet idle packet: no data to read
+	if header.LengthOfLength == LoLNone {
 		return &EncapsulationPacket{Header: header}, nil
 	}
 
-	totalSize := int(header.PacketLength)
+	totalSize := int64(header.PacketLength)
 	if totalSize > s.maxPacketLen {
 		return nil, ErrPacketTooLarge
 	}
 
 	// Read the data zone
-	dataSize := totalSize - hdrSize
+	dataSize := totalSize - int64(hdrSize)
 	if dataSize < 0 {
 		return nil, ErrPacketLengthMismatch
 	}

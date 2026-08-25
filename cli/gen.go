@@ -421,8 +421,8 @@ func eppGenCmd() *cobra.Command {
   # Generate packets and pipe to stream
   astro epp gen --pid 2 --count 50 --size 128 --format bin | astro epp stream --input bin
 
-  # Generate user-defined packets with long headers
-  astro epp gen --pid 6 --count 5 --size 32 --long-length`,
+  # Generate mission-specific packets with long headers
+  astro epp gen --pid 7 --count 5 --size 32 --long-length`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if count < 0 {
 				return fmt.Errorf("count must be >= 0, got %d", count)
@@ -457,10 +457,10 @@ func eppGenCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Uint8Var(&protocolID, "pid", 2, "Protocol ID (2=IPE, 6=user-defined, 7=extended)")
+	cmd.Flags().Uint8Var(&protocolID, "pid", 2, "Protocol ID (1=LTP, 2=IPE, 7=mission)")
 	cmd.Flags().IntVar(&count, "count", 10, "Number of packets to generate")
 	cmd.Flags().IntVar(&size, "size", 64, "Data zone size in bytes per packet")
-	cmd.Flags().BoolVar(&longLength, "long-length", false, "Force longer header format (LoL=1)")
+	cmd.Flags().BoolVar(&longLength, "long-length", false, "Force at least a 4-octet header (2-octet length field)")
 	cmd.Flags().StringVar(&outputFmt, "format", "bin", "Output format: bin or hex")
 
 	return cmd

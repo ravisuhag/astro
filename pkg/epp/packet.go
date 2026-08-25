@@ -9,14 +9,20 @@ import (
 Encapsulation Packet Protocol (EPP):
 
 Per CCSDS 133.1-B-3, an Encapsulation Packet consists of:
-  - A variable-length Packet Header (1, 2, 4, or 8 bytes)
-  - A Data Zone (variable length, containing encapsulated protocol data)
+  - A variable-length Packet Header (1, 2, 4, or 8 bytes, selected by the
+    2-bit Length of Length field)
+  - An Encapsulated Data Field (variable length)
 
-The first four bits of the header are always 0111 (PVN=7), which distinguishes
-Encapsulation Packets from Space Packets (PVN=0).
+The first three bits of the header are always '111' (PVN=7), which
+distinguishes Encapsulation Packets from Space Packets (PVN=0). A 1-octet
+idle packet therefore encodes as the single byte 0xE0.
 
-The Protocol ID field identifies the encapsulated payload type (e.g., IPv4/IPv6,
-user-defined, or an extended protocol via extension byte).
+The Protocol ID field identifies the encapsulated payload type (e.g., LTP,
+Internet Protocol Extension, or an extended protocol via the 4-bit Protocol
+ID Extension field when the Protocol ID is '110').
+
+The Packet Length field carries the total packet length in octets, header
+included (4.1.2.8.2).
 
 Unlike SPP, EPP has no APID, sequence count, or error control field — it is a
 thin encapsulation shim designed to carry network-layer PDUs over space links.
@@ -25,55 +31,71 @@ thin encapsulation shim designed to carry network-layer PDUs over space links.
 // EncapsulationPacket represents a complete Encapsulation Packet per CCSDS 133.1-B-3.
 type EncapsulationPacket struct {
 	Header Header // Variable-length packet header
-	Data   []byte // Data zone (encapsulated protocol data)
+	Data   []byte // Encapsulated Data Field
 }
 
 // PacketOption defines a function type for configuring EncapsulationPacket options.
 type PacketOption func(*EncapsulationPacket) error
 
-// WithUserDefined sets the user-defined field (Format 3 header).
-// This also sets LengthOfLength to 1 to select the medium header format.
+// bumpLoL raises the header's Length of Length to at least min.
+func bumpLoL(ep *EncapsulationPacket, min uint8) {
+	if ep.Header.LengthOfLength < min {
+		ep.Header.LengthOfLength = min
+	}
+}
+
+// WithUserDefined sets the 4-bit User Defined Field, present in 4- and
+// 8-octet headers. This raises the header size to at least 4 octets.
 func WithUserDefined(value uint8) PacketOption {
 	return func(ep *EncapsulationPacket) error {
-		ep.Header.LengthOfLength = 1
+		if value > 0x0F {
+			return ErrInvalidUserDefined
+		}
 		ep.Header.UserDefined = value
+		bumpLoL(ep, LoL2Octet)
 		return nil
 	}
 }
 
-// WithExtendedProtocolID sets an extended protocol ID (Formats 4 and 5).
-// This sets ProtocolID to 7 (Protocol ID Extension).
+// WithExtendedProtocolID sets the 4-bit Protocol ID Extension field and the
+// Protocol ID to '110' (ProtocolIDExtended). This raises the header size to
+// at least 4 octets, since only 4- and 8-octet headers carry the field.
 func WithExtendedProtocolID(extPID uint8) PacketOption {
 	return func(ep *EncapsulationPacket) error {
+		if extPID > 0x0F {
+			return ErrInvalidExtendedProtocolID
+		}
 		ep.Header.ProtocolID = ProtocolIDExtended
 		ep.Header.ExtendedProtocolID = extPID
+		bumpLoL(ep, LoL2Octet)
 		return nil
 	}
 }
 
-// WithCCSDSDefined sets the CCSDS-defined field (Format 5 header).
-// This also sets LengthOfLength to 1 and ProtocolID to 7.
-func WithCCSDSDefined(extPID uint8, value uint16) PacketOption {
+// WithCCSDSDefined sets the 2-octet CCSDS Defined Field, present only in the
+// 8-octet header. This forces the 8-octet header. The field is reserved by
+// CCSDS and is by convention 'all zeros' (4.1.2.7.2).
+func WithCCSDSDefined(value uint16) PacketOption {
 	return func(ep *EncapsulationPacket) error {
-		ep.Header.ProtocolID = ProtocolIDExtended
-		ep.Header.LengthOfLength = 1
-		ep.Header.ExtendedProtocolID = extPID
 		ep.Header.CCSDSDefined = value
+		bumpLoL(ep, LoL4Octet)
 		return nil
 	}
 }
 
-// WithLongLength forces the use of longer header formats by setting LengthOfLength to 1.
-// For standard Protocol IDs this selects Format 3 (4-byte header with 16-bit length).
-// For extended Protocol IDs this selects Format 5 (8-byte header with 32-bit length).
+// WithLongLength forces at least a 4-octet header (2-octet Packet Length
+// field). NewPacket otherwise picks the smallest header that fits the data.
 func WithLongLength() PacketOption {
 	return func(ep *EncapsulationPacket) error {
-		ep.Header.LengthOfLength = 1
+		bumpLoL(ep, LoL2Octet)
 		return nil
 	}
 }
 
-// NewPacket creates a new EncapsulationPacket with the given Protocol ID and data.
+// NewPacket creates a new EncapsulationPacket with the given Protocol ID and
+// data. The smallest header that fits the data is selected, unless an option
+// forces a larger one. Protocol ID 0 with no data yields the 1-octet idle
+// packet; Protocol ID 0 with data yields a multi-octet idle fill packet.
 func NewPacket(protocolID uint8, data []byte, options ...PacketOption) (*EncapsulationPacket, error) {
 	if protocolID > 7 {
 		return nil, ErrInvalidProtocolID
@@ -83,7 +105,7 @@ func NewPacket(protocolID uint8, data []byte, options ...PacketOption) (*Encapsu
 		Header: Header{
 			PVN:            PVN,
 			ProtocolID:     protocolID,
-			LengthOfLength: 0,
+			LengthOfLength: LoLNone,
 		},
 		Data: data,
 	}
@@ -94,13 +116,16 @@ func NewPacket(protocolID uint8, data []byte, options ...PacketOption) (*Encapsu
 		}
 	}
 
-	// Idle packets: PID=0 is always idle per CCSDS 133.1-B-3 Section 4.1.2.3.
-	// Force Format 1 (LoL=0, 1-byte header, no data zone).
-	if ep.Header.ProtocolID == ProtocolIDIdle {
-		if len(data) > 0 {
-			return nil, ErrIdleWithData
-		}
-		ep.Header.LengthOfLength = 0
+	minLoL := ep.Header.LengthOfLength
+
+	// PID '110' needs the Protocol ID Extension field, which only 4- and
+	// 8-octet headers carry.
+	if ep.Header.ProtocolID == ProtocolIDExtended && minLoL < LoL2Octet {
+		minLoL = LoL2Octet
+	}
+
+	// 1-octet idle packet: idle protocol ID, no data, no forced longer header.
+	if ep.Header.ProtocolID == ProtocolIDIdle && len(ep.Data) == 0 && minLoL == LoLNone {
 		ep.Header.PacketLength = 1
 		if err := ep.Validate(); err != nil {
 			return nil, err
@@ -108,33 +133,20 @@ func NewPacket(protocolID uint8, data []byte, options ...PacketOption) (*Encapsu
 		return ep, nil
 	}
 
-	// Non-idle packets must have data
-	if len(ep.Data) == 0 {
+	// 4.1.3.1.5: only idle packets may omit the data field.
+	if ep.Header.ProtocolID != ProtocolIDIdle && len(ep.Data) == 0 {
 		return nil, ErrEmptyData
 	}
 
-	// Calculate and validate packet length
-	headerSize := ep.Header.Size()
-	totalSize := uint64(headerSize) + uint64(len(ep.Data))
-
-	// Check against maximum for the header format
-	format := ep.Header.Format()
-	switch format {
-	case 2:
-		if totalSize > MaxPacketLengthShort {
-			return nil, ErrPacketTooLarge
-		}
-	case 3, 4:
-		if totalSize > MaxPacketLengthMedium {
-			return nil, ErrPacketTooLarge
-		}
-	case 5:
-		if totalSize > MaxPacketLengthExtendedLong {
-			return nil, ErrPacketTooLarge
-		}
+	if minLoL == LoLNone {
+		minLoL = LoL1Octet
 	}
-
-	ep.Header.PacketLength = uint32(totalSize)
+	lol, err := fitLengthOfLength(minLoL, len(ep.Data))
+	if err != nil {
+		return nil, err
+	}
+	ep.Header.LengthOfLength = lol
+	ep.Header.PacketLength = uint32(ep.Header.Size() + len(ep.Data))
 
 	if err := ep.Validate(); err != nil {
 		return nil, err
@@ -143,9 +155,79 @@ func NewPacket(protocolID uint8, data []byte, options ...PacketOption) (*Encapsu
 	return ep, nil
 }
 
-// NewIdlePacket creates an idle Encapsulation Packet (Protocol ID = 0, 1-byte header).
+// fitLengthOfLength returns the smallest Length of Length value >= min whose
+// header plus dataLen octets of data stays within the format's maximum
+// total packet length.
+func fitLengthOfLength(min uint8, dataLen int) (uint8, error) {
+	for lol := min; lol <= LoL4Octet; lol++ {
+		total := uint64(1)<<lol + uint64(dataLen)
+		var max uint64
+		switch lol {
+		case LoL1Octet:
+			max = MaxPacketLength2
+		case LoL2Octet:
+			max = MaxPacketLength4
+		default:
+			max = MaxPacketLength8
+		}
+		if total <= max {
+			return lol, nil
+		}
+	}
+	return 0, ErrPacketTooLarge
+}
+
+// NewIdlePacket creates the 1-octet idle Encapsulation Packet (0xE0).
 func NewIdlePacket() (*EncapsulationPacket, error) {
 	return NewPacket(ProtocolIDIdle, nil)
+}
+
+// NewIdleFillPacket creates an idle Encapsulation Packet of exactly
+// totalLength octets, filling the data zone with the given fill byte.
+// Use it to fill a fixed-length transfer frame data field. A totalLength of
+// 1 yields the 1-octet idle packet.
+func NewIdleFillPacket(totalLength int, fill byte) (*EncapsulationPacket, error) {
+	if totalLength < 1 {
+		return nil, ErrInvalidIdleLength
+	}
+	if totalLength == 1 {
+		return NewIdlePacket()
+	}
+
+	var lol uint8
+	var headerSize int
+	switch {
+	case totalLength <= MaxPacketLength2:
+		lol, headerSize = LoL1Octet, HeaderSize2
+	case totalLength <= MaxPacketLength4:
+		lol, headerSize = LoL2Octet, HeaderSize4
+	case uint64(totalLength) <= MaxPacketLength8:
+		lol, headerSize = LoL4Octet, HeaderSize8
+	default:
+		return nil, ErrPacketTooLarge
+	}
+
+	var data []byte
+	if n := totalLength - headerSize; n > 0 {
+		data = make([]byte, n)
+		for i := range data {
+			data[i] = fill
+		}
+	}
+
+	ep := &EncapsulationPacket{
+		Header: Header{
+			PVN:            PVN,
+			ProtocolID:     ProtocolIDIdle,
+			LengthOfLength: lol,
+			PacketLength:   uint32(totalLength),
+		},
+		Data: data,
+	}
+	if err := ep.Validate(); err != nil {
+		return nil, err
+	}
+	return ep, nil
 }
 
 // NewIPEPacket creates an Internet Protocol Extension Encapsulation Packet.
@@ -153,13 +235,23 @@ func NewIPEPacket(data []byte, options ...PacketOption) (*EncapsulationPacket, e
 	return NewPacket(ProtocolIDIPE, data, options...)
 }
 
-// NewUserDefinedPacket creates a user-defined Encapsulation Packet.
-func NewUserDefinedPacket(data []byte, options ...PacketOption) (*EncapsulationPacket, error) {
-	return NewPacket(ProtocolIDUserDef, data, options...)
+// NewLTPPacket creates an LTP Encapsulation Packet.
+func NewLTPPacket(data []byte, options ...PacketOption) (*EncapsulationPacket, error) {
+	return NewPacket(ProtocolIDLTP, data, options...)
+}
+
+// NewMissionPacket creates a mission-specific ('111') Encapsulation Packet
+// carrying privately defined data.
+func NewMissionPacket(data []byte, options ...PacketOption) (*EncapsulationPacket, error) {
+	return NewPacket(ProtocolIDMission, data, options...)
 }
 
 // Encode converts the EncapsulationPacket into a byte slice for transmission.
 func (ep *EncapsulationPacket) Encode() ([]byte, error) {
+	if err := ep.Validate(); err != nil {
+		return nil, err
+	}
+
 	headerBytes, err := ep.Header.Encode()
 	if err != nil {
 		return nil, err
@@ -171,7 +263,8 @@ func (ep *EncapsulationPacket) Encode() ([]byte, error) {
 	return result, nil
 }
 
-// Decode parses a byte slice into an EncapsulationPacket.
+// Decode parses a byte slice into an EncapsulationPacket. Trailing bytes
+// beyond the declared packet length are ignored.
 // The returned packet's Data field is a sub-slice of the input and shares
 // the same backing array. Callers that reuse the input buffer should copy
 // the Data field before modifying the buffer.
@@ -185,21 +278,13 @@ func Decode(data []byte) (*EncapsulationPacket, error) {
 		return nil, err
 	}
 
+	// 1-octet idle packet: no data zone.
+	if header.LengthOfLength == LoLNone {
+		return &EncapsulationPacket{Header: header}, nil
+	}
+
 	headerSize := header.Size()
-
-	// For idle packets (Format 1), there is no data zone
-	if header.Format() == 1 {
-		ep := &EncapsulationPacket{
-			Header: header,
-		}
-		return ep, nil
-	}
-
-	// Verify packet length is at least as large as the header
 	totalSize := int(header.PacketLength)
-	if totalSize < headerSize {
-		return nil, ErrPacketLengthMismatch
-	}
 
 	// Verify we have enough data for the declared packet length
 	if len(data) < totalSize {
@@ -224,24 +309,22 @@ func (ep *EncapsulationPacket) Validate() error {
 		return err
 	}
 
-	format := ep.Header.Format()
-
-	// Idle packets must have no data
-	if format == 1 {
+	// 1-octet idle packet carries no data zone.
+	if ep.Header.LengthOfLength == LoLNone {
 		if len(ep.Data) > 0 {
 			return ErrIdleWithData
 		}
 		return nil
 	}
 
-	// Non-idle packets must have data
-	if len(ep.Data) == 0 {
+	// 4.1.3.1.4/4.1.3.1.5: the data field may be absent only in idle packets.
+	if len(ep.Data) == 0 && ep.Header.ProtocolID != ProtocolIDIdle {
 		return ErrEmptyData
 	}
 
 	// Verify packet length matches actual size
-	expectedLength := ep.Header.Size() + len(ep.Data)
-	if uint32(expectedLength) != ep.Header.PacketLength {
+	expectedLength := uint64(ep.Header.Size()) + uint64(len(ep.Data))
+	if expectedLength != uint64(ep.Header.PacketLength) {
 		return ErrPacketLengthMismatch
 	}
 
@@ -250,7 +333,7 @@ func (ep *EncapsulationPacket) Validate() error {
 
 // IsIdle reports whether the packet is an idle packet (Protocol ID = 0).
 func (ep *EncapsulationPacket) IsIdle() bool {
-	return ep.Header.ProtocolID == ProtocolIDIdle && ep.Header.LengthOfLength == 0
+	return ep.Header.ProtocolID == ProtocolIDIdle
 }
 
 // Humanize generates a human-readable representation of the EncapsulationPacket.
@@ -271,19 +354,13 @@ func (ep *EncapsulationPacket) Humanize() string {
 // starting at data[0], or -1 if the data is too short to determine length.
 // This implements the sdl.PacketSizer signature for use with data link services.
 func PacketSizer(data []byte) int {
-	if len(data) < 1 {
-		return -1
-	}
-
 	hdrSize := HeaderSize(data)
 	if hdrSize < 0 {
 		return -1
 	}
 
-	// Idle packets are exactly 1 byte
-	pid := (data[0] >> 1) & 0x07
-	lol := data[0] & 0x01
-	if pid == ProtocolIDIdle && lol == 0 {
+	// 1-octet idle packets are exactly 1 byte.
+	if hdrSize == HeaderSize1 {
 		return 1
 	}
 
@@ -297,10 +374,5 @@ func PacketSizer(data []byte) int {
 		return -1
 	}
 
-	pktLen := int(h.PacketLength)
-	if pktLen < hdrSize {
-		return -1
-	}
-
-	return pktLen
+	return int(h.PacketLength)
 }

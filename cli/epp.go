@@ -39,7 +39,6 @@ type eppPacketJSON struct {
 	ProtocolID         uint8  `json:"protocol_id"`
 	ProtocolIDName     string `json:"protocol_id_name"`
 	LengthOfLength     uint8  `json:"length_of_length"`
-	Format             int    `json:"format"`
 	HeaderSize         int    `json:"header_size"`
 	PacketLength       uint32 `json:"packet_length"`
 	UserDefined        uint8  `json:"user_defined,omitempty"`
@@ -55,20 +54,17 @@ func toEPPPacketJSON(pkt *epp.EncapsulationPacket) eppPacketJSON {
 		ProtocolID:     pkt.Header.ProtocolID,
 		ProtocolIDName: eppProtocolIDName(pkt.Header.ProtocolID),
 		LengthOfLength: pkt.Header.LengthOfLength,
-		Format:         pkt.Header.Format(),
 		HeaderSize:     pkt.Header.Size(),
 		PacketLength:   pkt.Header.PacketLength,
 		DataZone:       hex.EncodeToString(pkt.Data),
 		IsIdle:         pkt.IsIdle(),
 	}
 
-	switch pkt.Header.Format() {
-	case 3:
+	if pkt.Header.Size() >= epp.HeaderSize4 {
 		j.UserDefined = pkt.Header.UserDefined
-	case 4:
 		j.ExtendedProtocolID = pkt.Header.ExtendedProtocolID
-	case 5:
-		j.ExtendedProtocolID = pkt.Header.ExtendedProtocolID
+	}
+	if pkt.Header.Size() == epp.HeaderSize8 {
 		j.CCSDSDefined = pkt.Header.CCSDSDefined
 	}
 
@@ -79,12 +75,14 @@ func eppProtocolIDName(pid uint8) string {
 	switch pid {
 	case epp.ProtocolIDIdle:
 		return "idle"
+	case epp.ProtocolIDLTP:
+		return "ltp"
 	case epp.ProtocolIDIPE:
 		return "ipe"
-	case epp.ProtocolIDUserDef:
-		return "user-defined"
 	case epp.ProtocolIDExtended:
 		return "extended"
+	case epp.ProtocolIDMission:
+		return "mission"
 	default:
 		return "reserved"
 	}
@@ -115,13 +113,13 @@ func eppDecodeCmd() *cobra.Command {
 		Short: "Decode raw bytes into Encapsulation Packet fields",
 		Long:  "Decode a binary or hex-encoded Encapsulation Packet, printing its header fields and data zone.",
 		Example: `  # Decode hex from stdin
-  echo "740661626364" | astro epp decode --input hex
+  echo "e90661626364" | astro epp decode --input hex
 
   # Decode binary file
   astro epp decode --input bin packet.bin
 
   # Decode with JSON output
-  echo "740661626364" | astro epp decode --input hex --format json`,
+  echo "e90661626364" | astro epp decode --input hex --format json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := readInput(args, inputFmt)
@@ -172,16 +170,16 @@ func eppEncodeCmd() *cobra.Command {
 		Example: `  # Encode an IPE packet
   astro epp encode --pid 2 --data 4500001400
 
-  # Encode a user-defined packet with user-defined field
-  astro epp encode --pid 6 --data a1b2c3d4 --user-defined 42
+  # Encode a mission-specific packet with a user defined field value
+  astro epp encode --pid 7 --data a1b2c3d4 --user-defined 5
 
-  # Encode with extended protocol ID
-  astro epp encode --pid 7 --ext-pid 99 --data a1b2c3d4
+  # Encode with an extended protocol ID (4-octet header)
+  astro epp encode --pid 6 --ext-pid 9 --data a1b2c3d4
 
-  # Encode with CCSDS-defined field (Format 5)
-  astro epp encode --pid 7 --ext-pid 99 --ccsds-defined 4660 --data a1b2c3d4
+  # Encode with a CCSDS-defined field (8-octet header)
+  astro epp encode --pid 6 --ext-pid 9 --ccsds-defined 4660 --data a1b2c3d4
 
-  # Encode an idle packet
+  # Encode the 1-octet idle packet (0xE0)
   astro epp encode --pid 0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var data []byte
@@ -201,11 +199,10 @@ func eppEncodeCmd() *cobra.Command {
 				opts = append(opts, epp.WithUserDefined(userDef))
 			}
 			if cmd.Flags().Changed("ext-pid") {
-				if cmd.Flags().Changed("ccsds-defined") {
-					opts = append(opts, epp.WithCCSDSDefined(extPID, ccsdsDef))
-				} else {
-					opts = append(opts, epp.WithExtendedProtocolID(extPID))
-				}
+				opts = append(opts, epp.WithExtendedProtocolID(extPID))
+			}
+			if cmd.Flags().Changed("ccsds-defined") {
+				opts = append(opts, epp.WithCCSDSDefined(ccsdsDef))
 			}
 
 			pkt, err := epp.NewPacket(protocolID, data, opts...)
@@ -227,12 +224,12 @@ func eppEncodeCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Uint8Var(&protocolID, "pid", 2, "Protocol ID (0=idle, 2=IPE, 6=user-defined, 7=extended)")
-	cmd.Flags().StringVar(&dataHex, "data", "", "Data zone as hex string (omit for idle packets)")
-	cmd.Flags().BoolVar(&longLength, "long-length", false, "Force longer header format (LoL=1)")
-	cmd.Flags().Uint8Var(&userDef, "user-defined", 0, "User-defined field value (Format 3)")
-	cmd.Flags().Uint8Var(&extPID, "ext-pid", 0, "Extended Protocol ID (Formats 4 and 5)")
-	cmd.Flags().Uint16Var(&ccsdsDef, "ccsds-defined", 0, "CCSDS-defined field value (Format 5)")
+	cmd.Flags().Uint8Var(&protocolID, "pid", 2, "Protocol ID (0=idle, 1=LTP, 2=IPE, 6=extended, 7=mission)")
+	cmd.Flags().StringVar(&dataHex, "data", "", "Data zone as hex string (omit for the 1-octet idle packet)")
+	cmd.Flags().BoolVar(&longLength, "long-length", false, "Force at least a 4-octet header (2-octet length field)")
+	cmd.Flags().Uint8Var(&userDef, "user-defined", 0, "User Defined Field value, 4 bits (4- and 8-octet headers)")
+	cmd.Flags().Uint8Var(&extPID, "ext-pid", 0, "Protocol ID Extension, 4 bits (4- and 8-octet headers)")
+	cmd.Flags().Uint16Var(&ccsdsDef, "ccsds-defined", 0, "CCSDS Defined Field value (8-octet header)")
 	cmd.Flags().StringVar(&outputFmt, "format", "hex", "Output format: text, json, or hex")
 
 	return cmd
@@ -246,7 +243,7 @@ func eppInspectCmd() *cobra.Command {
 		Short: "Pretty-print packet breakdown with hex dump",
 		Long:  "Display an annotated breakdown of an Encapsulation Packet showing header fields, data zone, and hex dump.",
 		Example: `  # Inspect from hex stdin
-  echo "740661626364" | astro epp inspect --input hex
+  echo "e90661626364" | astro epp inspect --input hex
 
   # Inspect binary file
   astro epp inspect --input bin packet.bin`,
@@ -276,32 +273,25 @@ func printEPPInspect(pkt *epp.EncapsulationPacket, raw []byte) {
 	h := pkt.Header
 	hdrSize := h.Size()
 	totalLen := int(h.PacketLength)
-	if pkt.IsIdle() {
-		totalLen = 1
-	}
 
 	fmt.Println("Encapsulation Packet Inspector")
 	fmt.Println(strings.Repeat("─", 60))
 
 	// Header
-	fmt.Printf("Header (Format %d, %d bytes)\n", h.Format(), hdrSize)
+	fmt.Printf("Header (%d bytes, LoL %d)\n", hdrSize, h.LengthOfLength)
 	fmt.Printf("  PVN .................. %d\n", h.PVN)
 	fmt.Printf("  Protocol ID .......... %d (%s)\n", h.ProtocolID, eppProtocolIDName(h.ProtocolID))
 	fmt.Printf("  Length of Length ...... %d\n", h.LengthOfLength)
 
-	switch h.Format() {
-	case 3:
-		fmt.Printf("  User Defined ......... %d (0x%02X)\n", h.UserDefined, h.UserDefined)
-	case 4:
-		fmt.Printf("  Extended PID ......... %d\n", h.ExtendedProtocolID)
-	case 5:
-		fmt.Printf("  Extended PID ......... %d\n", h.ExtendedProtocolID)
+	if hdrSize >= epp.HeaderSize4 {
+		fmt.Printf("  User Defined ......... %d (0x%X)\n", h.UserDefined, h.UserDefined)
+		fmt.Printf("  Protocol ID Ext ...... %d\n", h.ExtendedProtocolID)
+	}
+	if hdrSize == epp.HeaderSize8 {
 		fmt.Printf("  CCSDS Defined ........ %d (0x%04X)\n", h.CCSDSDefined, h.CCSDSDefined)
 	}
 
-	if !pkt.IsIdle() {
-		fmt.Printf("  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
-	}
+	fmt.Printf("  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
 
 	if pkt.IsIdle() {
 		fmt.Println("  [IDLE PACKET]")
@@ -329,7 +319,7 @@ func eppValidateCmd() *cobra.Command {
 		Short: "Validate an Encapsulation Packet for correctness",
 		Long:  "Check PVN, Protocol ID, header format, and packet length consistency of an Encapsulation Packet.",
 		Example: `  # Validate hex input
-  echo "740661626364" | astro epp validate --input hex
+  echo "e90661626364" | astro epp validate --input hex
 
   # Validate a binary file
   astro epp validate --input bin packet.bin`,
@@ -351,8 +341,8 @@ func eppValidateCmd() *cobra.Command {
 
 			fmt.Println("Packet is valid.")
 			h := pkt.Header
-			fmt.Printf("  Protocol ID: %d (%s), Format: %d, Data: %d bytes\n",
-				h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Format(), len(pkt.Data))
+			fmt.Printf("  Protocol ID: %d (%s), Header: %d bytes, Data: %d bytes\n",
+				h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 			return nil
 		},
 	}
@@ -404,8 +394,8 @@ func eppStreamCmd() *cobra.Command {
 				case "text":
 					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.Header
-					fmt.Printf("  PID: %d (%s)  Format: %d  DataLen: %d\n",
-						h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Format(), len(pkt.Data))
+					fmt.Printf("  PID: %d (%s)  Header: %d bytes  DataLen: %d\n",
+						h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 					if len(pkt.Data) <= 32 {
 						fmt.Printf("  Data: %s\n", hex.EncodeToString(pkt.Data))
 					} else {
