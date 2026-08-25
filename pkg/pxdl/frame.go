@@ -113,11 +113,16 @@ func (d DFCID) String() string {
 // whether the SCID names the sender or the receiver.
 type SourceOrDest uint8
 
+// Polarity per §3.2.2.9.2, table 3-2: '0' means the SCID field carries the
+// SCID of the spacecraft sending the frame over this link (the MIB parameter
+// Local_Spacecraft_ID), '1' means it carries the SCID of the spacecraft
+// intended to receive it (Remote_Spacecraft_ID).
 const (
-	// SCIDIsDestination means the SCID field names the destination spacecraft.
-	SCIDIsDestination SourceOrDest = 0
-	// SCIDIsSource means the SCID field names the source spacecraft.
-	SCIDIsSource SourceOrDest = 1
+	// SCIDIsSource means the SCID field names the source spacecraft ('0').
+	SCIDIsSource SourceOrDest = 0
+	// SCIDIsDestination means the SCID field names the destination
+	// spacecraft ('1').
+	SCIDIsDestination SourceOrDest = 1
 )
 
 // String names the interpretation.
@@ -176,6 +181,11 @@ func (h *Header) Validate() error {
 	}
 	// §3.2.2.5.2: in a P-frame the DFC ID is not used and is set to '00'.
 	if h.PDUType == SupervisoryData && h.DFCID != 0 {
+		return ErrInvalidDFCID
+	}
+	// Table 3-1: DFC ID '10' is reserved for future CCSDS definition, so a
+	// U-frame carrying it must not reach the wire.
+	if h.PDUType == UserData && h.DFCID == DFCReserved {
 		return ErrInvalidDFCID
 	}
 	// §3.2.4.1: SPDUs travel only on the Expedited service.
@@ -308,12 +318,13 @@ func NewTransferFrame(scid uint16, portID uint8, data []byte, opts ...FrameOptio
 
 	f := &TransferFrame{
 		Header: Header{
-			QoS:         SequenceControlled,
-			PDUType:     UserData,
-			DFCID:       DFCPackets,
-			SCID:        scid,
-			PortID:      portID,
-			FrameLength: uint16(HeaderSize + len(data)),
+			QoS:          SequenceControlled,
+			PDUType:      UserData,
+			DFCID:        DFCPackets,
+			SCID:         scid,
+			PortID:       portID,
+			SourceOrDest: SCIDIsDestination,
+			FrameLength:  uint16(HeaderSize + len(data)),
 		},
 		DataField: data,
 	}
@@ -338,15 +349,20 @@ func NewSupervisoryFrame(scid uint16, portID uint8, spdus []byte, opts ...FrameO
 	if len(spdus) > MaxDataFieldSize {
 		return nil, ErrDataTooLarge
 	}
+	// §3.2.4.1: a P-frame exists to carry SPDUs; an empty run is malformed.
+	if len(spdus) == 0 {
+		return nil, ErrInvalidSPDU
+	}
 
 	f := &TransferFrame{
 		Header: Header{
-			QoS:         Expedited,
-			PDUType:     SupervisoryData,
-			DFCID:       0,
-			SCID:        scid,
-			PortID:      portID,
-			FrameLength: uint16(HeaderSize + len(spdus)),
+			QoS:          Expedited,
+			PDUType:      SupervisoryData,
+			DFCID:        0,
+			SCID:         scid,
+			PortID:       portID,
+			SourceOrDest: SCIDIsDestination,
+			FrameLength:  uint16(HeaderSize + len(spdus)),
 		},
 		DataField: spdus,
 	}

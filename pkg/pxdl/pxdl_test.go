@@ -152,6 +152,10 @@ func TestHeaderValidation(t *testing.T) {
 			h.PDUType = pxdl.SupervisoryData
 			h.QoS = pxdl.SequenceControlled
 		}, pxdl.ErrInvalidQoS},
+		// Table 3-1: DFC ID '10' is reserved for future CCSDS definition.
+		{"U-frame with the reserved DFC ID", func(h *pxdl.Header) {
+			h.DFCID = pxdl.DFCReserved
+		}, pxdl.ErrInvalidDFCID},
 	}
 
 	for _, tt := range tests {
@@ -252,6 +256,65 @@ func TestSupervisoryFrameForcesExpedited(t *testing.T) {
 	}
 	if !f.IsSupervisoryFrame() {
 		t.Error("IsSupervisoryFrame() = false")
+	}
+}
+
+func TestSupervisoryFrameRejectsEmptySPDURun(t *testing.T) {
+	// §3.2.4.1: a P-frame exists to carry SPDUs, so an empty run is refused.
+	if _, err := pxdl.NewSupervisoryFrame(42, 0, nil); !errors.Is(err, pxdl.ErrInvalidSPDU) {
+		t.Errorf("error = %v, want ErrInvalidSPDU", err)
+	}
+	if _, err := pxdl.NewSupervisoryFrame(42, 0, []byte{}); !errors.Is(err, pxdl.ErrInvalidSPDU) {
+		t.Errorf("error = %v, want ErrInvalidSPDU", err)
+	}
+}
+
+func TestSourceOrDestPolarityOnTheWire(t *testing.T) {
+	// §3.2.2.9.2, table 3-2: '0' means the SCID names the source spacecraft,
+	// '1' means it names the destination. Bit 20 of the header is bit 3 of
+	// octet 2. Getting this backwards misroutes every frame, so the wire bit
+	// is pinned here, not just round-tripped.
+	source := pxdl.Header{SCID: 1, FrameLength: pxdl.HeaderSize,
+		SourceOrDest: pxdl.SCIDIsSource}
+	encoded, err := source.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded[2]>>3&1 != 0 {
+		t.Error("SCIDIsSource encoded bit 20 as 1, table 3-2 says '0' = source")
+	}
+
+	dest := pxdl.Header{SCID: 1, FrameLength: pxdl.HeaderSize,
+		SourceOrDest: pxdl.SCIDIsDestination}
+	encoded, err = dest.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded[2]>>3&1 != 1 {
+		t.Error("SCIDIsDestination encoded bit 20 as 0, table 3-2 says '1' = destination")
+	}
+}
+
+func TestManagedParameters(t *testing.T) {
+	m := pxdl.DefaultManagedParameters()
+	if err := m.Validate(); err != nil {
+		t.Fatalf("default parameters invalid: %v", err)
+	}
+	if m.SendMaximumFrameLength != pxdl.MaxFrameSize ||
+		m.ReceiveMaximumFrameLength != pxdl.MaxFrameSize {
+		t.Error("default maximum frame lengths are not the Version-3 bound")
+	}
+
+	bad := m
+	bad.LocalSpacecraftID = 0x400
+	if err := bad.Validate(); !errors.Is(err, pxdl.ErrInvalidSCID) {
+		t.Errorf("error = %v, want ErrInvalidSCID", err)
+	}
+
+	bad = m
+	bad.ReceiveMaximumFrameLength = pxdl.MaxFrameSize + 1
+	if err := bad.Validate(); !errors.Is(err, pxdl.ErrInvalidFrameLength) {
+		t.Errorf("error = %v, want ErrInvalidFrameLength", err)
 	}
 }
 

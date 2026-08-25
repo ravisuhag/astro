@@ -50,6 +50,11 @@ const MaxVariableSPDUData = 15
 //
 //	format ID(1) │ type ID(1) │ retransmit(1) │ PCID(1) │ spare(1) │
 //	expedited frame counter(3) │ report value(8)
+//
+// This order is verified against CCSDS 211.0-B-6 §3.2.4.3.2.1.1, which lists
+// the seven fields from bit 15 up — Report Value, Expedited Frame Counter,
+// Reserved Spare, PCID, Retransmit Flag, SPDU Type Identifier, SPDU Format
+// ID — and §3.2.4.3.2.2.1, which puts the Report Value in bits 8–15.
 type PLCW struct {
 	// RetransmitFlag says the receiver is missing frames and wants them again.
 	RetransmitFlag bool

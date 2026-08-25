@@ -37,7 +37,7 @@
 | Field | Value |
 |---|---|
 | Specification | CCSDS 211.0-B-6 (Proximity-1 Space Link Protocol — Data Link Layer, Blue Book, Issue 6, July 2020) |
-| Have any exceptions been required? | Yes [X] No [ ] — see A1.5 |
+| Have any exceptions been required? | Yes [X] No [ ] — see A1.6 |
 
 ---
 
@@ -54,7 +54,7 @@
 | Spacecraft Identifier, 10 bits | §3.2.2.6 | M | Y |
 | Physical Channel Identifier | §3.2.2.7 | M | Y |
 | Port Identifier, 3 bits | §3.2.2.8 | M | Y |
-| Source-or-Destination Identifier | §3.2.2.9 | M | Y |
+| Source-or-Destination Identifier | §3.2.2.9 | M | Y — '0' = source, '1' = destination, per table 3-2 |
 | Frame Length as a count less one | §3.2.2.10.2 | M | Y — 5 to 2048 octets enforced |
 | Frame Sequence Number | §3.2.2.11 | M | Y — carried; COP-P is out of scope |
 
@@ -85,13 +85,26 @@
 | SPDUs are self-delimiting | §3.2.4.1 | M | Y — a mixed run decodes without a count |
 | SPDUs only on the Expedited service | §3.2.4.1 | M | Y — enforced by the constructor |
 | Type F1: Proximity Link Control Word | §3.2.4.3.2 | M | Y |
-| PLCW field layout of figure 3-5 | §3.2.4.3.2.1.1 | M | Y — all seven fields |
+| PLCW field layout of figure 3-5 | §3.2.4.3.2.1.1 | M | Y — all seven fields, verified against the published figure |
 | PLCW Report Value = V(R) | §3.2.4.3.2.2.2 | M | Y |
 | Type F2 fixed-length SPDU | table 3-5 | — | N — reserved for future CCSDS use |
 
 ---
 
-## A1.5 EXCEPTIONS AND UNSUPPORTED FEATURES
+## A1.5 MANAGED PARAMETERS
+
+| Feature | Reference | Status | Support |
+|---|---|---|---|
+| Managed parameter representation | §4, annex C | M | P — `ManagedParameters` holds the frame-layer subset |
+| Local_Spacecraft_ID, Remote_Spacecraft_ID | annex C | M | Y |
+| Maximum_Frame_Length, per direction | annex C | M | Y — send and receive maxima held separately |
+| Maximum_Packet_Size | §4.4.2.1 | M | Y |
+| Synch_Timeout, PLCW_Repeat_Interval | annex C | M | Y — carried; nothing in this package acts on timers |
+| MAC, hailing, and COP-P parameters | annex C | M | N — out of scope with those sublayers, see A1.6 |
+
+---
+
+## A1.6 EXCEPTIONS AND UNSUPPORTED FEATURES
 
 | Feature | Reference | Support | Rationale |
 |---|---|---|---|
@@ -104,7 +117,7 @@
 
 ---
 
-## A1.6 IMPLEMENTATION LIMITS
+## A1.7 IMPLEMENTATION LIMITS
 
 | Limit | Value | Source |
 |---|---|---|

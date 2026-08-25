@@ -75,7 +75,9 @@ One bit, two services (§3.2.2.3):
 ### Source or destination
 
 A single SCID field serves both directions, and one bit says which end it
-names (§3.2.2.9). Set `WithSourceSCID()` when the SCID is yours; leave it
+names (§3.2.2.9). The polarity comes from table 3-2: `0` means the SCID is the
+**source** spacecraft (the sender's own ID), `1` means it is the
+**destination**. Set `WithSourceSCID()` when the SCID is yours; leave it
 alone when it is the far end's.
 
 ## Sending user data
@@ -103,6 +105,9 @@ The **Data Field Construction ID** says how the data field is arranged
 | `01` | One segment of a packet, behind a segment header |
 | `10` | Reserved |
 | `11` | User defined |
+
+The reserved value `10` is rejected on encode and validate, so it cannot reach
+the wire.
 
 ## Segmentation
 
