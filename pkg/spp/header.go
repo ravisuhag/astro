@@ -21,9 +21,13 @@ const (
 	SeqFlagUnsegmented  uint8 = 3 // Unsegmented (standalone)
 )
 
+// APIDIdle is the idle-packet APID ('all ones') per CCSDS 133.0-B-2 4.1.3.3.4.
+const APIDIdle uint16 = 0x7FF
+
 // SecondaryHeader is implemented by mission-specific secondary headers.
-// The CCSDS standard defines the existence and size constraints of the
-// secondary header (1-63 octets), but its format is mission-defined.
+// The CCSDS standard defines the existence of the secondary header, but its
+// format and length are mission-defined; the only structural constraint is
+// that it contains at least one octet and fits within the packet data field.
 type SecondaryHeader interface {
 	// Encode serializes the secondary header into bytes.
 	Encode() ([]byte, error)
@@ -113,14 +117,13 @@ func (ph *PrimaryHeader) Humanize() string {
 	}, "\n")
 }
 
-// validateSecondaryHeader checks the CCSDS structural constraints on a secondary header.
+// validateSecondaryHeader checks the CCSDS structural constraints on a
+// secondary header. The Blue Book sets no upper size limit on the secondary
+// header beyond the packet data field maximum, which the packet-level length
+// checks enforce.
 func validateSecondaryHeader(sh SecondaryHeader) error {
-	size := sh.Size()
-	if size < 1 {
+	if sh.Size() < 1 {
 		return ErrSecondaryHeaderTooSmall
-	}
-	if size > 63 {
-		return ErrSecondaryHeaderTooLarge
 	}
 	return nil
 }

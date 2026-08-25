@@ -452,7 +452,7 @@ func (h *minSecondaryHeader) Decode(data []byte) error {
 }
 func (h *minSecondaryHeader) Size() int { return 1 }
 
-// maxSecondaryHeader is a 63-byte secondary header (CCSDS maximum).
+// maxSecondaryHeader is a 63-byte secondary header.
 type maxSecondaryHeader struct{ Data [63]byte }
 
 func (h *maxSecondaryHeader) Encode() ([]byte, error) { return h.Data[:], nil }
@@ -469,10 +469,10 @@ func (h *maxSecondaryHeader) Size() int { return 63 }
 type zeroSecondaryHeader struct{}
 
 func (h *zeroSecondaryHeader) Encode() ([]byte, error) { return nil, nil }
-func (h *zeroSecondaryHeader) Decode([]byte) error      { return nil }
-func (h *zeroSecondaryHeader) Size() int                 { return 0 }
+func (h *zeroSecondaryHeader) Decode([]byte) error     { return nil }
+func (h *zeroSecondaryHeader) Size() int               { return 0 }
 
-// oversizedSecondaryHeader has size 64 (above CCSDS maximum).
+// oversizedSecondaryHeader has size 64 (above the old, invented 63-octet cap).
 type oversizedSecondaryHeader struct{ Data [64]byte }
 
 func (h *oversizedSecondaryHeader) Encode() ([]byte, error) { return h.Data[:], nil }
@@ -541,11 +541,21 @@ func TestSecondaryHeaderTooSmall(t *testing.T) {
 	}
 }
 
-func TestSecondaryHeaderTooLarge(t *testing.T) {
+func TestSecondaryHeaderOver63Accepted(t *testing.T) {
+	// SPP-F2: CCSDS 133.0-B-2 sets no 63-octet cap on the secondary header
+	// (that limit belongs to TM's FSH). A 64-byte secondary header is valid.
 	sh := &oversizedSecondaryHeader{}
-	_, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
-	if !errors.Is(err, spp2.ErrSecondaryHeaderTooLarge) {
-		t.Errorf("Expected ErrSecondaryHeaderTooLarge, got %v", err)
+	pkt, err := spp2.NewSpacePacket(100, spp2.PacketTypeTM, []byte{0x01}, spp2.WithSecondaryHeader(sh))
+	if err != nil {
+		t.Fatalf("64-byte secondary header should be valid: %v", err)
+	}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spp2.Decode(encoded, spp2.WithDecodeSecondaryHeader(&oversizedSecondaryHeader{})); err != nil {
+		t.Fatalf("Decode with 64-byte secondary header failed: %v", err)
 	}
 }
 
@@ -803,5 +813,151 @@ func TestDecode_DoesNotAliasInput(t *testing.T) {
 	}
 	if string(decoded.UserData) != "original" {
 		t.Fatalf("UserData aliases the input buffer: %q", decoded.UserData)
+	}
+}
+
+// --- Audit fixes (SPP-F1, F2, F4, F5, F10) ---
+
+// TestGoldenWireVectors pins the primary header bit layout to spec-derived
+// wire bytes so a symmetric encode/decode bug cannot hide (SPP-F10).
+func TestGoldenWireVectors(t *testing.T) {
+	tests := []struct {
+		name string
+		pkt  func() (*spp2.SpacePacket, error)
+		want []byte
+	}{
+		{
+			name: "TM APID 100, unsegmented, seq 5",
+			pkt: func() (*spp2.SpacePacket, error) {
+				return spp2.NewTMPacket(100, []byte{0xDE, 0xAD, 0xBE, 0xEF}, spp2.WithSequenceCount(5))
+			},
+			// version 000, type 0, SH flag 0, APID 0x064, flags '11',
+			// count 5, length 4-1=3
+			want: []byte{0x00, 0x64, 0xC0, 0x05, 0x00, 0x03, 0xDE, 0xAD, 0xBE, 0xEF},
+		},
+		{
+			name: "TC APID 0x123, unsegmented, seq 0",
+			pkt: func() (*spp2.SpacePacket, error) {
+				return spp2.NewTCPacket(0x123, []byte{0x42})
+			},
+			want: []byte{0x11, 0x23, 0xC0, 0x00, 0x00, 0x00, 0x42},
+		},
+		{
+			name: "idle APID 0x7FF with two fill octets",
+			pkt: func() (*spp2.SpacePacket, error) {
+				return spp2.NewIdlePacket([]byte{0xFF, 0xFF})
+			},
+			want: []byte{0x07, 0xFF, 0xC0, 0x00, 0x00, 0x01, 0xFF, 0xFF},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkt, err := tt.pkt()
+			if err != nil {
+				t.Fatalf("constructor failed: %v", err)
+			}
+			got, err := pkt.Encode()
+			if err != nil {
+				t.Fatalf("Encode failed: %v", err)
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Fatalf("Encode() = % X, want % X", got, tt.want)
+			}
+			decoded, err := spp2.Decode(tt.want)
+			if err != nil {
+				t.Fatalf("Decode failed: %v", err)
+			}
+			if decoded.PrimaryHeader != pkt.PrimaryHeader {
+				t.Errorf("Decoded header = %+v, want %+v", decoded.PrimaryHeader, pkt.PrimaryHeader)
+			}
+		})
+	}
+}
+
+func TestNewIdlePacket(t *testing.T) {
+	pkt, err := spp2.NewIdlePacket([]byte{0xFF, 0xFF, 0xFF})
+	if err != nil {
+		t.Fatalf("NewIdlePacket failed: %v", err)
+	}
+	if !pkt.IsIdle() {
+		t.Error("Expected IsIdle()=true")
+	}
+	if pkt.PrimaryHeader.APID != 0x7FF {
+		t.Errorf("APID = 0x%03X, want 0x7FF", pkt.PrimaryHeader.APID)
+	}
+	if pkt.PrimaryHeader.SecondaryHeaderFlag != 0 {
+		t.Error("Idle packet must not set the secondary header flag")
+	}
+}
+
+func TestIdleWithSecondaryHeaderRejected(t *testing.T) {
+	// SPP-F1: CCSDS 4.1.4.2.1.4 — idle packets carry no secondary header.
+	sh := &testSecondaryHeader{Timestamp: 1}
+	_, err := spp2.NewSpacePacket(0x7FF, spp2.PacketTypeTM, []byte{0xFF}, spp2.WithSecondaryHeader(sh))
+	if !errors.Is(err, spp2.ErrIdleWithSecondaryHeader) {
+		t.Errorf("NewSpacePacket(idle+SH) = %v, want ErrIdleWithSecondaryHeader", err)
+	}
+
+	_, err = spp2.NewIdlePacket([]byte{0xFF}, spp2.WithSecondaryHeader(sh))
+	if !errors.Is(err, spp2.ErrIdleWithSecondaryHeader) {
+		t.Errorf("NewIdlePacket(+SH) = %v, want ErrIdleWithSecondaryHeader", err)
+	}
+
+	// Decode path: raw idle packet with the secondary header flag set.
+	raw := []byte{0x0F, 0xFF, 0xC0, 0x00, 0x00, 0x01, 0xFF, 0xFF}
+	_, err = spp2.Decode(raw)
+	if !errors.Is(err, spp2.ErrIdleWithSecondaryHeader) {
+		t.Errorf("Decode(idle+SH flag) = %v, want ErrIdleWithSecondaryHeader", err)
+	}
+}
+
+func TestEncodeRecomputesLength(t *testing.T) {
+	// SPP-F4: mutating UserData after construction must not emit an
+	// inconsistent length field.
+	pkt, err := spp2.NewTMPacket(42, []byte{0x01, 0x02})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkt.UserData = []byte{0x01, 0x02, 0x03, 0x04, 0x05}
+
+	encoded, err := pkt.Encode()
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+	if got := binary.BigEndian.Uint16(encoded[4:6]); got != 4 {
+		t.Errorf("Packet length field = %d, want 4", got)
+	}
+	decoded, err := spp2.Decode(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+	if !bytes.Equal(decoded.UserData, pkt.UserData) {
+		t.Error("UserData mismatch after mutation and re-encode")
+	}
+
+	// Emptying the data field must fail, not underflow the length field.
+	pkt.UserData = nil
+	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrEmptyPacket) {
+		t.Errorf("Encode(empty) = %v, want ErrEmptyPacket", err)
+	}
+}
+
+// lyingSecondaryHeader reports Size()=4 but encodes 2 bytes.
+type lyingSecondaryHeader struct{}
+
+func (h *lyingSecondaryHeader) Encode() ([]byte, error) { return []byte{0x01, 0x02}, nil }
+func (h *lyingSecondaryHeader) Decode([]byte) error     { return nil }
+func (h *lyingSecondaryHeader) Size() int               { return 4 }
+
+func TestEncodeSecondaryHeaderSizeMismatch(t *testing.T) {
+	// SPP-F5: Encode must verify SecondaryHeader.Encode() returns Size() bytes.
+	pkt, err := spp2.NewSpacePacket(7, spp2.PacketTypeTM, []byte{0x01},
+		spp2.WithSecondaryHeader(&lyingSecondaryHeader{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrSecondaryHeaderSizeMismatch) {
+		t.Errorf("Encode = %v, want ErrSecondaryHeaderSizeMismatch", err)
 	}
 }

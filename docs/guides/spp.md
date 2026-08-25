@@ -159,7 +159,8 @@ The Packet Data Field contains the actual payload and optional framing fields:
 ```
 ┌─────────────────────┬───────────────────┬──────────────────┐
 │  Secondary Header   │   User Data       │  Error Control   │
-│  (optional, 1-63B)  │   (variable)      │  (optional, 2B)  │
+│  (optional,         │   (variable)      │  (optional, 2B,  │
+│   mission-defined)  │                   │   extension)     │
 └─────────────────────┴───────────────────┴──────────────────┘
 ```
 
@@ -173,7 +174,7 @@ When the Secondary Header Flag is set, the first bytes of the Packet Data Field 
 - **Packet subcategory**: Further classifying data within an APID
 - **Data quality flags**: Indicating sensor status at acquisition time
 
-The CCSDS standard limits the secondary header to **1–63 bytes** and requires the format to be fixed for a given APID — all packets from the same APID must use the same secondary header structure.
+The CCSDS standard does not fix the secondary header's length — it is mission-defined (at least 1 byte, and it must fit within the packet data field). The standard requires the format to be fixed for a given APID — all packets from the same APID must use the same secondary header structure. Idle packets (APID `0x7FF`) must not carry a secondary header.
 
 #### User Data
 
@@ -181,7 +182,7 @@ The application payload. This is the actual telemetry measurement, command param
 
 #### Error Control (optional)
 
-An optional 2-byte CRC-16-CCITT checksum appended at the end of the Packet Data Field. When present, it covers the entire packet (header + data field, excluding the CRC itself) and allows the receiver to detect bit errors.
+An optional 2-byte CRC-16-CCITT checksum appended at the end of the Packet Data Field. This field is **not defined by CCSDS 133.0-B-2** — it is a mission/PUS-style extension that lives inside the packet data field, which the standard leaves to the mission. It is wire-compatible with the standard. When present, it covers the entire packet (header + data field, excluding the CRC itself) and allows the receiver to detect bit errors.
 
 The polynomial used is the standard CCITT CRC-16: `x^16 + x^12 + x^5 + 1` (0x1021), with an initial value of `0xFFFF`.
 
@@ -192,7 +193,7 @@ Idle packets (APID = `0x7FF`) serve as **fill data**. They are used when:
 - Transfer Frame slots need to be filled to maintain the fixed frame length.
 - Timing synchronization requires continuous transmission.
 
-Receivers should recognize and discard idle packets. Their data field content is meaningless (typically all `0xFF` or zeros).
+Receivers should recognize and discard idle packets. Their data field content is meaningless (typically all `0xFF` or zeros), and they never carry a secondary header. Build them with `spp.NewIdlePacket(fill)`.
 
 ## Services
 
@@ -200,7 +201,7 @@ The standard defines two service interfaces for applications to send and receive
 
 ### Packet Service
 
-The application constructs a complete `SpacePacket` and hands it to the service layer. The service stamps it with a sequence count and transmits it. On the receive side, the service delivers complete decoded packets.
+The application constructs a complete `SpacePacket` and hands it to the service layer. The service stamps it with the next per-APID sequence count (mutating the packet) and transmits it. A packet whose count was pinned with `WithSequenceCount()` is sent as-is, and the service counter is left untouched. On the receive side, the service delivers complete decoded packets.
 
 This service gives the application full control over the packet structure, including secondary headers and segmentation.
 

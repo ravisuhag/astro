@@ -45,18 +45,23 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 // --- Packet Service (CCSDS 3.3) ---
 
 // SendPacket writes a pre-built space packet to the transport.
-// It stamps the packet with the next sequence count for its APID
-// per CCSDS 133.0-B-2 Section 4.1.3.5.
+// It stamps the packet with the next sequence count for its APID per
+// CCSDS 133.0-B-2 Section 4.1.3.5, mutating the caller's packet in place.
+// A packet whose sequence count was pinned with WithSequenceCount is sent
+// as-is: the service neither overwrites the count nor advances its own
+// per-APID counter for that packet.
 func (s *Service) SendPacket(packet *SpacePacket) error {
 	if packet == nil {
 		return ErrNilPacket
 	}
 
-	s.mu.Lock()
-	apid := packet.PrimaryHeader.APID
-	packet.PrimaryHeader.SequenceCount = s.counters[apid]
-	s.counters[apid] = (s.counters[apid] + 1) & 0x3FFF
-	s.mu.Unlock()
+	if !packet.seqCountSet {
+		s.mu.Lock()
+		apid := packet.PrimaryHeader.APID
+		packet.PrimaryHeader.SequenceCount = s.counters[apid]
+		s.counters[apid] = (s.counters[apid] + 1) & 0x3FFF
+		s.mu.Unlock()
+	}
 
 	data, err := packet.Encode()
 	if err != nil {
@@ -148,6 +153,12 @@ func (s *Service) SendBytes(apid uint16, data []byte, opts ...SendOption) error 
 
 // ReceiveBytes reads a space packet from the transport and returns the APID
 // and user data, stripping away the packet structure.
+//
+// Note: when the service is configured with a SecondaryHeader decoder, the
+// decoded secondary header is not part of the returned data and is discarded
+// by this octet-string primitive; the CCSDS 3.4.3.3 secondary header
+// indication is not surfaced here. Callers that need the secondary header
+// should use ReceivePacket instead.
 func (s *Service) ReceiveBytes() (apid uint16, data []byte, err error) {
 	packet, err := s.ReceivePacket()
 	if err != nil {
@@ -164,4 +175,3 @@ func calculatePacketSize(header []byte) (int, error) {
 	packetLength := binary.BigEndian.Uint16(header[4:6])
 	return PrimaryHeaderSize + int(packetLength) + 1, nil
 }
-

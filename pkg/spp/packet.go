@@ -20,7 +20,7 @@ Space Packet Protocol (SPP):
 +----------------+----------------+----------------+----------------+
 | Packet Length (16b)                                             |
 +----------------+----------------+----------------+----------------+
-| Secondary Header (Optional, mission-specific, 1-63 bytes)      |
+| Secondary Header (Optional, mission-specific length/format)    |
 |                                                                |
 +----------------+----------------+----------------+----------------+
 | User Data Field (Variable Length)                              |
@@ -35,6 +35,11 @@ Legend:
 - APID = Application Process Identifier
 - Sequence Flags: 00 (continuation), 01 (start), 10 (end), 11 (standalone)
 - Packet Length: (Packet Data Field size) - 1, where Data Field = Secondary Header + User Data + Error Control
+
+The Error Control field is not defined by CCSDS 133.0-B-2; it is a
+mission/PUS-style extension carried inside the packet data field. It is
+wire-compatible with the standard because the standard leaves the data
+field content to the mission.
 */
 
 // SpacePacket represents a complete space packet as per CCSDS standards.
@@ -43,6 +48,10 @@ type SpacePacket struct {
 	SecondaryHeader SecondaryHeader // Optional mission-specific secondary header
 	UserData        []byte          // User data contained in the packet
 	ErrorControl    *uint16         // Optional error control field (e.g., CRC)
+
+	// seqCountSet records that the caller pinned the sequence count via
+	// WithSequenceCount, so Service.SendPacket must not overwrite it.
+	seqCountSet bool
 }
 
 // NewSpacePacket creates a new SpacePacket instance.
@@ -113,6 +122,13 @@ func NewTCPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacke
 	return NewSpacePacket(apid, PacketTypeTC, data, options...)
 }
 
+// NewIdlePacket creates an idle SpacePacket (APID 0x7FF) carrying the given
+// fill data. Per CCSDS 133.0-B-2 4.1.4.2.1.4 an idle packet has no secondary
+// header; its data field content is mission-defined fill (at least 1 octet).
+func NewIdlePacket(fill []byte, options ...PacketOption) (*SpacePacket, error) {
+	return NewSpacePacket(APIDIdle, PacketTypeTM, fill, options...)
+}
+
 // PacketOption defines a function type for configuring SpacePacket options.
 type PacketOption func(*SpacePacket) error
 
@@ -128,14 +144,16 @@ func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 	}
 }
 
-// WithSequenceCount sets the sequence count on the SpacePacket.
-// Use this when constructing packets outside of a Service.
+// WithSequenceCount pins the sequence count on the SpacePacket.
+// Service.SendPacket honors a pinned count: it sends the packet as-is
+// instead of stamping the service's per-APID counter onto it.
 func WithSequenceCount(n uint16) PacketOption {
 	return func(packet *SpacePacket) error {
 		if n > 16383 {
 			return ErrInvalidSequenceCount
 		}
 		packet.PrimaryHeader.SequenceCount = n
+		packet.seqCountSet = true
 		return nil
 	}
 }
@@ -162,7 +180,35 @@ func WithErrorControl() PacketOption {
 }
 
 // Encode converts the SpacePacket into a byte slice for transmission.
+// The Packet Data Length field is recomputed from the current secondary
+// header, user data, and error control sizes, so mutating those fields after
+// construction cannot produce an inconsistent length on the wire. The packet
+// is validated before encoding.
 func (sp *SpacePacket) Encode() ([]byte, error) {
+	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader == nil {
+		return nil, ErrSecondaryHeaderMissing
+	}
+
+	// Recompute the length field from the actual data field composition.
+	dataFieldSize := len(sp.UserData)
+	if sp.SecondaryHeader != nil {
+		dataFieldSize += sp.SecondaryHeader.Size()
+	}
+	if sp.ErrorControl != nil {
+		dataFieldSize += 2
+	}
+	if dataFieldSize == 0 {
+		return nil, ErrEmptyPacket
+	}
+	if PrimaryHeaderSize+dataFieldSize > 65542 {
+		return nil, ErrPacketTooLarge
+	}
+	sp.PrimaryHeader.PacketLength = uint16(dataFieldSize) - 1
+
+	if err := sp.Validate(); err != nil {
+		return nil, err
+	}
+
 	headerBytes, err := sp.PrimaryHeader.Encode()
 	if err != nil {
 		return nil, err
@@ -172,12 +218,12 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 
 	// Encode secondary header if present
 	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
-		if sp.SecondaryHeader == nil {
-			return nil, ErrSecondaryHeaderMissing
-		}
 		secondaryBytes, err := sp.SecondaryHeader.Encode()
 		if err != nil {
 			return nil, err
+		}
+		if len(secondaryBytes) != sp.SecondaryHeader.Size() {
+			return nil, ErrSecondaryHeaderSizeMismatch
 		}
 		packetData = append(packetData, secondaryBytes...)
 	}
@@ -216,7 +262,9 @@ func WithDecodeErrorControl() DecodeOption {
 }
 
 // Decode parses a byte slice into a SpacePacket. The returned packet does not
-// retain the input slice; all fields are copied.
+// retain the input slice; all fields are copied. Trailing bytes beyond the
+// packet length declared in the primary header are ignored, so a buffer may
+// carry more than one packet; use PacketSizer to find the packet boundary.
 func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 	var cfg decodeConfig
 	for _, o := range opts {
@@ -302,6 +350,12 @@ func (sp *SpacePacket) Validate() error {
 		if err := validateSecondaryHeader(sp.SecondaryHeader); err != nil {
 			return err
 		}
+	}
+
+	// CCSDS 4.1.4.2.1.4: idle packets (APID 0x7FF) carry no secondary header.
+	if sp.PrimaryHeader.APID == APIDIdle &&
+		(sp.PrimaryHeader.SecondaryHeaderFlag == 1 || sp.SecondaryHeader != nil) {
+		return ErrIdleWithSecondaryHeader
 	}
 
 	// CCSDS C1/C2: packet must contain at least a secondary header or user data.

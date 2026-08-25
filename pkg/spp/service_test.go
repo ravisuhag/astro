@@ -378,3 +378,43 @@ func TestServiceWithBoundaryAPIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestSendPacketRespectsPinnedSequenceCount verifies SPP-F6: a packet whose
+// sequence count was pinned with WithSequenceCount is sent unmodified, and
+// the service counter is not consumed.
+func TestSendPacketRespectsPinnedSequenceCount(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	pinned, err := spp2.NewTMPacket(9, []byte{0x01}, spp2.WithSequenceCount(1234))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(pinned); err != nil {
+		t.Fatalf("SendPacket(pinned) failed: %v", err)
+	}
+
+	received, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received.PrimaryHeader.SequenceCount != 1234 {
+		t.Errorf("Pinned seq count = %d, want 1234", received.PrimaryHeader.SequenceCount)
+	}
+
+	// The next unpinned packet on the same APID starts the counter at 0.
+	unpinned, err := spp2.NewTMPacket(9, []byte{0x02})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(unpinned); err != nil {
+		t.Fatalf("SendPacket(unpinned) failed: %v", err)
+	}
+	received, err = svc.ReceivePacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received.PrimaryHeader.SequenceCount != 0 {
+		t.Errorf("Unpinned seq count = %d, want 0", received.PrimaryHeader.SequenceCount)
+	}
+}

@@ -42,8 +42,13 @@ var (
 	// ErrSecondaryHeaderTooSmall indicates the secondary header is less than 1 octet.
 	ErrSecondaryHeaderTooSmall = errors.New("secondary header must be at least 1 octet")
 
-	// ErrSecondaryHeaderTooLarge indicates the secondary header exceeds 63 octets.
-	ErrSecondaryHeaderTooLarge = errors.New("secondary header must not exceed 63 octets")
+	// ErrSecondaryHeaderSizeMismatch indicates SecondaryHeader.Encode() returned
+	// a byte count different from SecondaryHeader.Size().
+	ErrSecondaryHeaderSizeMismatch = errors.New("secondary header encoded size does not match Size()")
+
+	// ErrIdleWithSecondaryHeader indicates an idle packet (APID 0x7FF) carries a
+	// secondary header, which CCSDS 133.0-B-2 4.1.4.2.1.4 forbids.
+	ErrIdleWithSecondaryHeader = errors.New("idle packet must not contain a secondary header")
 
 	// ErrCRCValidationFailed indicates that the CRC validation of the packet failed.
 	ErrCRCValidationFailed = errors.New("CRC validation failed: data integrity check failed")
