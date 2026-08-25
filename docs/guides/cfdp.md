@@ -148,12 +148,55 @@ sender.ResendEOF()
 // Your timer fired and the file is still incomplete.
 receiver.RequestNAK()
 
-// The far end went quiet mid-pass.
+// You sent Finished but its ACK never came back.
 receiver.ResendFinished()
+
+// The check limit expired and the EOF never arrived: give up and close
+// out with Finished (check limit reached).
+receiver.ExpireCheckLimit()
+
+// A retry limit ran out for good. Raise the fault; table 4-1 decides
+// what happens next (the default is to cancel the transaction).
+sender.DeclareFault(cfdp.CondPositiveACKLimitReached)
+receiver.DeclareFault(cfdp.CondNAKLimitReached)
 ```
+
+Note that `ResendFinished` only repeats a Finished PDU that was already sent.
+If the far end goes quiet mid-transfer, the tool is `RequestNAK` (to ask for
+the missing data again) or, once your retry budget is spent, `DeclareFault`
+or `ExpireCheckLimit` to close the transaction out.
 
 The upside is that tests run instantly and deterministically, and scheduling
 policy stays where the mission can set it.
+
+## Faults and cancellation
+
+When something goes wrong — a checksum failure, a filestore rejection, a
+retry limit — CFDP looks up a **fault handler** for that condition (§4.8).
+There are four: cancel, suspend, ignore, and abandon. Table 4-1 defaults
+every condition to cancel: the transaction closes out with a Finished PDU
+carrying the fault's condition code, and the partial file is discarded.
+
+You can change the disposition per condition:
+
+```go
+// At this entity, deliver the file even if its checksum fails.
+config.FaultHandlers = map[cfdp.ConditionCode]cfdp.FaultHandler{
+    cfdp.CondFileChecksumFailure: cfdp.FaultHandlerIgnore,
+}
+
+// Or ask the receiver to do the same, via a TLV in the Metadata PDU.
+senderConfig.FaultHandlerOverrides = map[cfdp.ConditionCode]cfdp.FaultHandler{
+    cfdp.CondFileChecksumFailure: cfdp.FaultHandlerIgnore,
+}
+```
+
+Either side can cancel. `sender.Cancel()` sends an EOF whose condition code
+is "cancel request received" and whose file size is the progress made so
+far. `receiver.Cancel()` discards the partial file and answers with Finished
+(delivery incomplete). A receiver that gets an EOF with any fault condition
+treats it the same way: it acknowledges the EOF, stops sending NAKs, and
+closes out with Finished.
 
 ## Checksums
 

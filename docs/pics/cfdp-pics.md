@@ -69,7 +69,7 @@
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | Directive codes | §5.2.1.2, table 5-4 | M | Y — reserved codes rejected |
-| Condition codes | §5.2.1.3, table 5-5 | M | Y — all fifteen |
+| Condition codes | §5.2.1.3, table 5-5 | M | Y — all fourteen the table defines |
 | EOF PDU | §5.2.2, table 5-6 | M | Y — condition, checksum, file size, fault location |
 | Fault location omitted for 'no error' | table 5-6 | M | Y |
 | Finished PDU | §5.2.3, table 5-7 | M | Y — condition, delivery code, file status, responses |
@@ -111,14 +111,16 @@
 | Modular checksum | §4.2.2.3 | M | Y — verified against the Annex F worked example |
 | Null checksum | §4.2.2.4 | M | Y |
 | Additional checksum algorithms | §4.2.2.5 | O | Y — CRC-32C (type 2), CRC-32 (type 3) |
-| Class 1 unacknowledged transfer | §4.6 | M | Y |
-| Class 2 acknowledged transfer | §4.6 | O | Y — NAK-driven gap recovery |
+| Class 1 unacknowledged transfer | §4.6 | M | Y — file data arriving before Metadata is buffered and replayed |
+| Class 2 acknowledged transfer | §4.6 | O | Y — NAK-driven gap recovery; the last recovered segment triggers the Finished PDU |
+| Check limit | §4.6.3.3 | O | Y — caller-driven via `ExpireCheckLimit`; closes out Class 1 with closure |
+| Fault handlers: cancel, suspend, ignore, abandon | §4.8, table 4-1 | M | Y — every condition defaults to cancel; per-condition config overrides |
 | Suspend and resume | §4.11 | O | Y — state flags; the caller owns the clock |
-| Cancel | §4.11 | O | Y — EOF with the cancel condition code |
+| Cancel | §4.11 | O | Y — sender EOF (cancel) carries progress; receiver `Cancel()` and inbound EOF (cancel) close out with Finished (incomplete) |
 | Filestore requests | §5.4.1, table 5-16 | O | P — see A1.6 |
 | Filestore responses | §5.4.2, table 5-17 | O | Y — one per request |
 | Messages to user | §5.4.3 | O | Y — carried, not interpreted |
-| Fault handler override TLV | §5.4.4 | O | P — decoded, not acted on |
+| Fault handler override TLV | §5.4.4 | O | Y — sent from `SenderConfig`, applied by the receiver on arrival |
 | Flow label TLV | §5.4.5 | O | Y — carried, not interpreted |
 | Entity ID TLV | §5.4.6 | M | Y — used for fault location |
 
@@ -130,10 +132,9 @@
 |---|---|---|---|
 | Filestore actions: append, replace | table 5-16 | N | Decoded; execution returns status 'not performed' (table 5-18 allows this). |
 | Filestore actions: create/remove directory, deny directory | table 5-16 | N | Same. The `Filestore` interface is deliberately file-only. |
-| Fault handler override execution | §5.4.4 | N | The TLV decodes; overriding handler behavior is left to the application. |
 | Adaptive flow control from Keep Alive | §4.6 | N | Keep Alive and Prompt encode and decode; no rate adaptation. |
 | Proxy and remote operations | CFDP Part 2 | N | A separate standard, out of scope for this package. |
-| Timers and inactivity detection | §4.6 | N by design | The library owns no clock. Retransmission and timeout scheduling are the caller's, exposed as `ResendEOF`, `RequestNAK`, and `ResendFinished`. |
+| Timers and inactivity detection | §4.6 | N by design | The library owns no clock. Retransmission and timeout scheduling are the caller's, exposed as `ResendEOF`, `RequestNAK`, `ResendFinished`, `ExpireCheckLimit`, and `DeclareFault`. Limit and inactivity faults raised through `DeclareFault` take the table 4-1 route. |
 
 ---
 

@@ -79,4 +79,8 @@ var (
 	// ErrSegmentTooLarge indicates segment metadata beyond the 63 octets its
 	// 6-bit length field can describe.
 	ErrSegmentTooLarge = errors.New("segment metadata exceeds 63 octets")
+
+	// ErrInvalidFaultHandler indicates a fault handler override TLV whose
+	// handler code is not one of the four defined by §5.4.4.
+	ErrInvalidFaultHandler = errors.New("invalid fault handler code")
 )
