@@ -3,7 +3,7 @@ package tmsc
 // Galois Field GF(2^8) arithmetic for CCSDS Reed-Solomon.
 //
 // Field polynomial: x^8 + x^7 + x^2 + x + 1 (0x187)
-// per CCSDS 131.0-B-4.
+// per CCSDS 131.0-B-5 4.3.3.
 
 const fieldPoly = 0x187
 

@@ -1,6 +1,6 @@
 # TM Synchronization and Channel Coding
 
-> CCSDS 131.0-B-4 — TM Synchronization and Channel Coding
+> CCSDS 131.0-B-5 — TM Synchronization and Channel Coding
 
 ## Overview
 
@@ -105,6 +105,8 @@ The PN sequence is produced by an 8-bit Linear Feedback Shift Register (LFSR) wi
 
 The sequence has a period of 255 bits. It produces the same output every time (it is deterministic, not random), so both transmitter and receiver generate identical sequences.
 
+This is the **255-bit legacy sequence** of CCSDS 131.0-B-5 10.4.2, kept for backward compatibility. Issue 5 added a longer 131071-bit sequence (h(x) = x^17 + x^14 + 1, 10.4.1) to avoid spectral spikes on high-data-rate links; `pkg/tmsc` implements only the 255-bit sequence. Which randomizer a channel uses (long, short, or none) is a managed parameter.
+
 ### Self-Inverse Property
 
 XOR has a critical property: applying it twice with the same value restores the original. This means the same `Randomize()` function is used for both randomization (on transmit) and de-randomization (on receive).
@@ -124,17 +126,23 @@ Reed-Solomon (RS) codes add redundant **parity symbols** to each data block. The
 | RS(255,223) | 223 | 32 | 255 | 16 symbol errors |
 | RS(255,239) | 239 | 16 | 255 | 8 symbol errors |
 
-Each "symbol" is one byte (8 bits). RS(255,223) can correct up to 16 corrupted bytes in a 255-byte codeword — that is 6.3% of the data, or equivalently, any burst of up to 128 corrupted bits within a codeword.
+Each "symbol" is one byte (8 bits). RS(255,223) can correct up to 16 corrupted bytes in a 255-byte codeword — that is 6.3% of the data. Because a burst rarely lands on a byte boundary, 16 symbol errors guarantee correction of any single burst of up to 121 consecutive bits: a 122-bit unaligned burst can touch a 17th byte.
 
 ### Galois Field Arithmetic
 
 RS codes operate over the Galois Field GF(2^8) — a finite field with 256 elements where addition is XOR and multiplication is defined modulo an irreducible polynomial.
 
-The CCSDS field uses:
-- **Primitive polynomial**: x^8 + x^7 + x^2 + x + 1 (0x187)
-- **First consecutive root (FCR)**: 112 (α^112)
+The CCSDS field uses (CCSDS 131.0-B-5 4.3.3, 4.3.4):
+- **Field polynomial**: x^8 + x^7 + x^2 + x + 1 (0x187)
+- **Generator roots**: consecutive powers of β = α^11 starting at β^112 — g(x) = ∏(x − β^(112+j)). The roots are powers of β, not of α; α^11 is itself a primitive element, and this choice is what makes the CCSDS code different from a textbook RS(255,223).
 
 All RS operations (encoding, syndrome computation, error location, error correction) use GF(2^8) arithmetic.
+
+### The Dual (Berlekamp) Basis
+
+The standard adds one more twist (4.3.9): the bytes on the wire are not the conventional polynomial-basis representation of the field elements. Each symbol is transmitted in the **dual basis** — also called the Berlekamp representation — with bit z0 first. The two representations are related by a fixed linear transform over GF(2) (4.3.9.3 and annex F).
+
+This matters for interoperability: an implementation that encodes with the right field, the right generator, but conventional-basis symbols produces parity bytes that no compliant receiver can decode. `pkg/tmsc` converts incoming dual-basis bytes to the conventional basis, runs the codec arithmetic there, and converts back on the way out, so the bytes crossing `Encode`/`Decode` are wire-format symbols. The transform is verified against libfec-compatible golden vectors (the same tables used by gr-satellites).
 
 ### Encoding
 
@@ -159,6 +167,8 @@ The decoder performs four steps:
 
 4. **Forney algorithm**: Compute the error magnitude at each position using the error-evaluator polynomial Ω(x) and the formal derivative of σ(x).
 
+After correcting, the decoder recomputes the syndromes over the corrected codeword. If they are not all zero — or if the Forney derivative σ′ evaluates to zero at a claimed error position — the decoder was pushed past its correction capability and returns `ErrUncorrectable` instead of quietly returning wrong data.
+
 ### Symbol Interleaving
 
 Burst errors (caused by signal fading, interference, or other transient phenomena) can corrupt many consecutive bytes. If all corrupted bytes fall within a single RS codeword, they may exceed the correction capability.
@@ -176,6 +186,22 @@ With interleaving (depth=3):
 ```
 
 CCSDS supports interleave depths of 1, 2, 3, 4, 5, and 8. Depth 5 with RS(255,223) is common for deep-space missions, providing 5 × 255 = 1275 bytes per interleaved block.
+
+### Shortened Codeblocks (Virtual Fill)
+
+A full codeblock carries exactly `depth × 223` data bytes, but a mission's Transfer Frame is rarely that exact size. The standard's answer (131.0-B-5 4.3.7, 4.3.8) is **virtual fill**: both ends agree that Q zero symbols logically sit at the front of the codeblock. The encoder computes parity as if they were there; neither side ever transmits them.
+
+```
+Logical codeblock:   [Q zeros][   data   ][ parity ]   <- what the code sees
+Transmitted block:            [   data   ][ parity ]   <- what crosses the channel
+```
+
+The rules, all enforced by `EncodeShortened` / `DecodeShortened`:
+- The fill is all zeros and only ever at the beginning.
+- Q must be a multiple of the interleave depth (so each codeword is shortened equally), and must leave at least one data symbol per codeword. Anything else returns `ErrInvalidVirtualFill`.
+- Q is a managed parameter: it is not signaled in the stream, so encoder and decoder must be configured with the same value.
+
+Since zero is zero in both the dual and the conventional basis, the fill needs no basis conversion — the decoder simply prepends Q zero bytes, decodes, and strips them again. If error correction ever "corrects" a fill position to a nonzero value, the decoder rejects the block: the transmitter cannot have sent that codeword.
 
 ## Processing Order
 

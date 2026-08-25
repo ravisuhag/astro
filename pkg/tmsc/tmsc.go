@@ -1,5 +1,5 @@
 // Package tmsc implements the TM Synchronization and Channel Coding sublayer
-// per CCSDS 131.0-B-4 (TM Synchronization and Channel Coding).
+// per CCSDS 131.0-B-5 (TM Synchronization and Channel Coding).
 //
 // This sublayer sits between the TM Data Link Protocol (CCSDS 132.0-B-3)
 // and the physical layer, providing:
@@ -31,8 +31,8 @@ func Randomize(data []byte) []byte {
 
 // WrapCADU produces a Channel Access Data Unit from encoded frame data.
 // It optionally applies CCSDS pseudo-randomization and prepends the
-// Attached Sync Marker per CCSDS 131.0-B-4. If asm is nil, DefaultASM
-// is used.
+// Attached Sync Marker per CCSDS 131.0-B-5 section 9. If asm is nil,
+// DefaultASM is used.
 func WrapCADU(frameData, asm []byte, randomize bool) []byte {
 	if asm == nil {
 		asm = DefaultASM()
@@ -68,9 +68,10 @@ func UnwrapCADU(cadu, asm []byte, randomize bool) ([]byte, error) {
 	return data, nil
 }
 
-// GeneratePNSequence produces the CCSDS pseudo-random sequence using an
-// 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1,
-// initialized to all 1s per CCSDS 131.0-B-4.
+// GeneratePNSequence produces the CCSDS 255-bit pseudo-random sequence using
+// an 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1,
+// initialized to all 1s. This is the legacy-compatible sequence of CCSDS
+// 131.0-B-5 10.4.2; the 131071-bit sequence of 10.4.1 is not implemented.
 //
 // The generator lives in internal/pn, shared with the other synchronization
 // and channel coding package: the two standards specify the same randomizer,
