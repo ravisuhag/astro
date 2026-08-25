@@ -129,16 +129,28 @@ func (r *ReportSegment) Validate() error {
 	if r.UpperBound < r.LowerBound {
 		return ErrInvalidBounds
 	}
+	// §3.2.2: a report carries at least one reception claim.
+	if len(r.Claims) == 0 {
+		return ErrInvalidClaim
+	}
 	span := r.UpperBound - r.LowerBound
-	for _, c := range r.Claims {
+	var next uint64 // earliest offset the next claim may start at
+	for i, c := range r.Claims {
 		// §3.2.2: a claim's length is never less than 1, and never more than
 		// the gap between the bounds.
 		if c.Length < 1 || c.Length > span {
 			return ErrInvalidClaim
 		}
-		if c.Offset+c.Length > span {
+		if c.Offset > span-c.Length {
 			return ErrInvalidClaim
 		}
+		// Claims come in ascending offset order and never overlap. Two
+		// adjacent claims would describe one contiguous run, so each must
+		// start strictly past the end of the one before it.
+		if i > 0 && c.Offset < next {
+			return ErrInvalidClaim
+		}
+		next = c.Offset + c.Length
 	}
 	return nil
 }

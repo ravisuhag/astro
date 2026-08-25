@@ -63,6 +63,11 @@ type Receiver struct {
 	// awaitingAck holds report serials still unacknowledged.
 	awaitingAck map[uint64]bool
 
+	// reportsByCheckpoint remembers the report sent for each checkpoint
+	// serial, so a retransmitted checkpoint gets the same report back
+	// (§6.11) instead of a fresh serial every time.
+	reportsByCheckpoint map[uint64]*ReportSegment
+
 	cancelReason *CancelReason
 
 	// maxBlockSize caps the assembled block.
@@ -79,11 +84,12 @@ func NewReceiver(config ReceiverConfig) (*Receiver, error) {
 		maxBlock = DefaultMaxBlockSize
 	}
 	return &Receiver{
-		config:           config,
-		state:            StateActive,
-		nextReportSerial: config.FirstReportSerial,
-		awaitingAck:      make(map[uint64]bool),
-		maxBlockSize:     maxBlock,
+		config:              config,
+		state:               StateActive,
+		nextReportSerial:    config.FirstReportSerial,
+		awaitingAck:         make(map[uint64]bool),
+		reportsByCheckpoint: make(map[uint64]*ReportSegment),
+		maxBlockSize:        maxBlock,
 	}, nil
 }
 
@@ -116,6 +122,10 @@ func (r *Receiver) HandleSegment(seg *Segment) error {
 		if seg.ReportAck != nil {
 			delete(r.awaitingAck, seg.ReportAck.ReportSerial)
 		}
+		// §6.11, §6.16: the session closes once the red part is complete
+		// AND every report has been acknowledged — not before, or the
+		// closing report's retransmission machinery is torn down early.
+		r.maybeClose()
 
 	case t == TypeCancelFromSender:
 		r.state = StateCancelled
@@ -179,20 +189,47 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 	if t.IsEOB() {
 		r.blockLength = end
 		r.blockKnown = true
+
+		// §6.16: a wholly green block involves no reports at all, so the
+		// green EOB is the only close signal the session will ever get.
+		if t.IsGreenData() && !r.redPartKnown && r.highestRedEnd == 0 && r.state == StateActive {
+			r.state = StateClosed
+		}
 	}
 
 	// §6.13: a checkpoint prompts a report.
 	if t.IsCheckpoint() {
-		r.queueReport(d.CheckpointSerial)
+		r.queueReport(d.CheckpointSerial, end)
 	}
 	return nil
 }
 
-// queueReport builds a report covering the red part and queues it.
-func (r *Receiver) queueReport(checkpointSerial uint64) {
+// queueReport builds a report covering the red part and queues it. segEnd is
+// the end offset of the checkpoint segment that prompted it, or zero for an
+// asynchronous report.
+func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
+	// §6.11: a retransmitted checkpoint gets the same report again, not a
+	// fresh one — otherwise every timer expiry mints a new report serial and
+	// the two engines chase each other's acknowledgments.
+	if checkpointSerial != 0 {
+		if prior, ok := r.reportsByCheckpoint[checkpointSerial]; ok {
+			r.awaitingAck[prior.ReportSerial] = true
+			r.pending = append(r.pending, &Segment{Header: r.header(TypeReport), Report: prior})
+			return
+		}
+	}
+
 	upper := r.redPartLength
 	if !r.redPartKnown {
-		upper = r.received.contiguousFrom()
+		// §6.13: without the EORP the red-part length is unknown, so the
+		// report covers everything seen so far — the highest claimed end or
+		// the prompting checkpoint's own end, whichever is greater. The
+		// contiguous prefix alone would hide interior gaps from the sender
+		// and deadlock the session.
+		upper = segEnd
+		if n := len(r.received.spans); n > 0 && r.received.spans[n-1].end > upper {
+			upper = r.received.spans[n-1].end
+		}
 	}
 
 	report := &ReportSegment{
@@ -227,9 +264,19 @@ func (r *Receiver) queueReport(checkpointSerial uint64) {
 
 	r.awaitingAck[report.ReportSerial] = true
 	r.nextReportSerial++
+	if checkpointSerial != 0 {
+		r.reportsByCheckpoint[checkpointSerial] = report
+	}
 	r.pending = append(r.pending, &Segment{Header: r.header(TypeReport), Report: report})
+}
 
-	if r.redPartKnown && r.received.covers(r.redPartLength) {
+// maybeClose closes the session once the red part is fully received and no
+// report is still waiting for its acknowledgment (§6.11, §6.16).
+func (r *Receiver) maybeClose() {
+	if r.state != StateActive {
+		return
+	}
+	if r.redPartKnown && r.received.covers(r.redPartLength) && len(r.awaitingAck) == 0 {
 		r.state = StateClosed
 	}
 }
@@ -267,7 +314,7 @@ func (r *Receiver) NextSegment() (*Segment, bool, error) {
 func (r *Receiver) RequestReport() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.queueReport(0)
+	r.queueReport(0, 0)
 }
 
 // Cancel abandons the session from the receiver's end.

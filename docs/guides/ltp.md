@@ -169,8 +169,17 @@ Use `ReportSegment.ClaimedRanges()` to get absolute block offsets, and the
 addition is done for you.
 
 The sender folds the claims in, works out what is still missing, and queues
-those ranges for retransmission. It also acknowledges every report, because
-§3.2.3 requires it.
+those ranges for retransmission. The last segment of each retransmission
+cycle is a checkpoint — wherever it sits in the block — and carries the
+serial of the report that prompted it, so the receiver answers with a fresh
+report and the loop converges. The sender also acknowledges every report,
+because §3.2.3 requires it, including the final one after the session has
+closed.
+
+The receiver holds its session open until that final acknowledgment arrives,
+and answers a retransmitted checkpoint by resending the same report rather
+than minting a new serial. A report always carries at least one claim, in
+ascending order without overlaps; a report with nothing to claim is not sent.
 
 ## The library owns no clock
 
@@ -222,11 +231,14 @@ with the top bit set on every octet but the last:
 ```
      0x7F  ->  01111111
     0x80   ->  10000001 00000000
-  0x4234   ->  10000100 11000100 00110100
+  0x4234   ->  10000001 10000100 00110100
 ```
 
-The decoder refuses a value past 64 bits and refuses input that ends while the
-continuation bit is still set, rather than wrapping or guessing.
+The decoder refuses a value past 64 bits (`ErrOverflow`) and refuses input
+that ends while the continuation bit is still set (`ErrDataTooShort`), rather
+than wrapping or guessing. It also caps an encoding at ten octets: RFC 6256
+allows leading `0x80` padding octets, but a padded encoding running past ten
+octets is refused with `ErrTooLong` even when the value itself is small.
 
 ## What is not here yet
 

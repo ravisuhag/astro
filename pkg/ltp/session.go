@@ -184,6 +184,15 @@ type Sender struct {
 	// pendingReportAcks holds report serials awaiting acknowledgment.
 	pendingReportAcks []uint64
 
+	// respondingTo is the serial of the report whose gaps are being
+	// retransmitted; §3.2.1 requires the checkpoint that closes the cycle to
+	// carry it. Zero when no report prompted the transmission.
+	respondingTo uint64
+
+	// cancelAckPending is set when a cancel from the receiver still needs
+	// its acknowledgment, per §6.17.
+	cancelAckPending bool
+
 	// cancelReason is set once the session is cancelled.
 	cancelReason *CancelReason
 	cancelSent   bool
@@ -245,8 +254,10 @@ func (s *Sender) dataTypeFor(start, end uint64, forceCheckpoint bool) SegmentTyp
 	}
 }
 
-// buildData assembles a data segment for a range.
-func (s *Sender) buildData(start, end uint64, forceCheckpoint bool) (*Segment, error) {
+// buildData assembles a data segment for a range. reportSerial is the serial
+// of the report that prompted this transmission, or zero when none did;
+// §3.2.1 puts it on any checkpoint the range produces.
+func (s *Sender) buildData(start, end uint64, forceCheckpoint bool, reportSerial uint64) (*Segment, error) {
 	t := s.dataTypeFor(start, end, forceCheckpoint)
 
 	d := &DataSegment{
@@ -259,8 +270,9 @@ func (s *Sender) buildData(start, end uint64, forceCheckpoint bool) (*Segment, e
 		d.CheckpointSerial = s.nextCheckpoint
 		s.checkpointSerial = s.nextCheckpoint
 		s.nextCheckpoint++
-		// ReportSerial stays zero unless this checkpoint answers a report;
-		// §3.2.1 requires zero in that case.
+		// §3.2.1: the report serial of the prompting report, or zero when
+		// the checkpoint was not prompted by one.
+		d.ReportSerial = reportSerial
 	}
 
 	seg := &Segment{Header: s.header(t), Data: d}
@@ -277,10 +289,6 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.state == StateClosed {
-		return nil, false, nil
-	}
-
 	// A cancellation goes out before anything else, once.
 	if s.cancelReason != nil {
 		if s.cancelSent {
@@ -294,7 +302,18 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 		return seg, true, nil
 	}
 
-	// Acknowledge any reports received, per §3.2.3.
+	// §6.17: a cancel from the receiver is acknowledged, even though the
+	// session is over as far as this end is concerned. Without the ack the
+	// receiver's cancel timer retransmits forever.
+	if s.cancelAckPending {
+		s.cancelAckPending = false
+		return &Segment{Header: s.header(TypeCancelAckToReceiver)}, true, nil
+	}
+
+	// Acknowledge any reports received, per §3.2.3. This runs before the
+	// closed-state check on purpose: the report that completed the red part
+	// arrives an instant before the session closes, and §6.13 still requires
+	// its RA — a conformant peer retransmits the report until it gets one.
 	if len(s.pendingReportAcks) > 0 {
 		serial := s.pendingReportAcks[0]
 		s.pendingReportAcks = s.pendingReportAcks[1:]
@@ -303,6 +322,10 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 			ReportAck: &ReportAckSegment{ReportSerial: serial},
 		}
 		return seg, true, nil
+	}
+
+	if s.state == StateClosed || s.state == StateCancelled {
+		return nil, false, nil
 	}
 
 	// Retransmissions come before fresh data so gaps close promptly.
@@ -319,13 +342,18 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 			s.retransmit = append([]span{{end, gap.end}}, s.retransmit...)
 		}
 
-		// A retransmitted range that reaches the end of the red part is a
-		// checkpoint again, so the receiver knows to report.
-		seg, err := s.buildData(gap.start, end, end >= s.config.RedPartLength)
+		// §6.9: the last segment of a retransmission cycle is a checkpoint
+		// wherever it sits in the block, so the receiver reports again and
+		// the loop can converge. Reaching the end of the red part is a
+		// checkpoint for the same reason.
+		last := len(s.retransmit) == 0
+		seg, err := s.buildData(gap.start, end, last || end >= s.config.RedPartLength, s.respondingTo)
 		if err != nil {
 			return nil, false, err
 		}
-		s.state = StateWaitingReport
+		if seg.Header.Type.IsCheckpoint() {
+			s.state = StateWaitingReport
+		}
 		return seg, true, nil
 	}
 
@@ -345,7 +373,7 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 		}
 		s.nextOffset = end
 
-		seg, err := s.buildData(start, end, false)
+		seg, err := s.buildData(start, end, false, 0)
 		if err != nil {
 			return nil, false, err
 		}
@@ -386,6 +414,8 @@ func (s *Sender) HandleSegment(seg *Segment) error {
 		return s.handleReport(seg.Report)
 
 	case TypeCancelFromReceiver:
+		// §6.17: queue the acknowledgment before tearing the session down.
+		s.cancelAckPending = true
 		s.state = StateCancelled
 
 	case TypeCancelAckToSender:
@@ -409,6 +439,7 @@ func (s *Sender) handleReport(r *ReportSegment) error {
 	if s.acknowledged.covers(red) {
 		s.state = StateClosed
 		s.retransmit = nil
+		s.respondingTo = 0
 		return nil
 	}
 
@@ -419,6 +450,9 @@ func (s *Sender) handleReport(r *ReportSegment) error {
 		limit = red
 	}
 	s.retransmit = append(s.retransmit, s.acknowledged.gaps(limit)...)
+	// §3.2.1: the checkpoint closing this retransmission cycle carries the
+	// serial of the report that prompted it.
+	s.respondingTo = r.ReportSerial
 	s.state = StateActive
 	return nil
 }

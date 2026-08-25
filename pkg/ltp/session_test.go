@@ -452,6 +452,253 @@ func TestResendCheckpointRequeuesGaps(t *testing.T) {
 	}
 }
 
+func TestFinalReportIsAcknowledged(t *testing.T) {
+	// LTP-1, §6.13/§6.14: the report that completes the red part closes the
+	// session, but its acknowledgment must still go out — a conformant peer
+	// retransmits that report forever without it.
+	block := testBlock(100)
+	sender, err := ltp.NewSender(block, ltp.SenderConfig{
+		SessionID:             testSession(),
+		SegmentSize:           64,
+		RedPartLength:         uint64(len(block)),
+		FirstCheckpointSerial: 7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drain the data, then answer with a report claiming everything.
+	for {
+		if _, ok, _ := sender.NextSegment(); !ok {
+			break
+		}
+	}
+	report := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeReport, SessionID: testSession()},
+		Report: &ltp.ReportSegment{
+			ReportSerial: 31, CheckpointSerial: 7, UpperBound: 100,
+			Claims: []ltp.ReceptionClaim{{Offset: 0, Length: 100}},
+		},
+	}
+	if err := sender.HandleSegment(report); err != nil {
+		t.Fatal(err)
+	}
+	if sender.State() != ltp.StateClosed {
+		t.Fatalf("state = %s, want closed after a full claim", sender.State())
+	}
+
+	seg, ok, err := sender.NextSegment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("the closed sender never emitted the final report acknowledgment")
+	}
+	if seg.Header.Type != ltp.TypeReportAck {
+		t.Fatalf("type = %s, want report acknowledgment", seg.Header.Type)
+	}
+	if seg.ReportAck.ReportSerial != 31 {
+		t.Errorf("acknowledged serial = %d, want 31", seg.ReportAck.ReportSerial)
+	}
+}
+
+func TestInteriorGapRetransmissionEndsWithCheckpoint(t *testing.T) {
+	// LTP-2, §6.9: the last segment of a retransmission cycle is a checkpoint
+	// wherever it sits — an interior gap must not leave the sender wedged in
+	// StateWaitingReport with nothing prompting the next report.
+	// LTP-3, §3.2.1: that checkpoint carries the prompting report's serial.
+	block := testBlock(300)
+	sender, err := ltp.NewSender(block, ltp.SenderConfig{
+		SessionID:             testSession(),
+		SegmentSize:           100,
+		RedPartLength:         uint64(len(block)),
+		FirstCheckpointSerial: 40,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, ok, _ := sender.NextSegment(); !ok {
+			break
+		}
+	}
+
+	// The middle segment went missing: claims cover [0,100) and [200,300).
+	report := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeReport, SessionID: testSession()},
+		Report: &ltp.ReportSegment{
+			ReportSerial: 55, CheckpointSerial: 40, UpperBound: 300,
+			Claims: []ltp.ReceptionClaim{
+				{Offset: 0, Length: 100},
+				{Offset: 200, Length: 100},
+			},
+		},
+	}
+	if err := sender.HandleSegment(report); err != nil {
+		t.Fatal(err)
+	}
+
+	// First out is the report acknowledgment, then the retransmission.
+	seg, ok, err := sender.NextSegment()
+	if err != nil || !ok || seg.Header.Type != ltp.TypeReportAck {
+		t.Fatalf("expected a report ack first, got %v (ok=%t, err=%v)", seg, ok, err)
+	}
+
+	seg, ok, err = sender.NextSegment()
+	if err != nil || !ok {
+		t.Fatalf("no retransmission emitted (ok=%t, err=%v)", ok, err)
+	}
+	if !seg.Header.Type.IsCheckpoint() {
+		t.Fatalf("type = %s; the cycle's last segment must be a checkpoint", seg.Header.Type)
+	}
+	if seg.Data.Offset != 100 || len(seg.Data.Data) != 100 {
+		t.Errorf("retransmitted offset %d length %d, want the 100..200 gap",
+			seg.Data.Offset, len(seg.Data.Data))
+	}
+	if seg.Data.ReportSerial != 55 {
+		t.Errorf("checkpoint report serial = %d, want the prompting report's 55",
+			seg.Data.ReportSerial)
+	}
+	if sender.State() != ltp.StateWaitingReport {
+		t.Errorf("state = %s, want waiting for report", sender.State())
+	}
+}
+
+func TestSenderAcknowledgesCancelFromReceiver(t *testing.T) {
+	// LTP-4, §6.17: a cancel from the receiver is acknowledged, or the
+	// receiver's cancel timer retransmits it forever.
+	block := testBlock(100)
+	sender, err := ltp.NewSender(block, ltp.SenderConfig{
+		SessionID:             testSession(),
+		SegmentSize:           64,
+		RedPartLength:         uint64(len(block)),
+		FirstCheckpointSerial: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cancel := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeCancelFromReceiver, SessionID: testSession()},
+		Cancel: &ltp.CancelSegment{Reason: ltp.ReasonUserCancelled},
+	}
+	if err := sender.HandleSegment(cancel); err != nil {
+		t.Fatal(err)
+	}
+
+	seg, ok, err := sender.NextSegment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected a cancel acknowledgment to the receiver")
+	}
+	if seg.Header.Type != ltp.TypeCancelAckToReceiver {
+		t.Fatalf("type = %s, want cancel acknowledgment to block receiver", seg.Header.Type)
+	}
+	if !sender.Done() {
+		t.Error("sender is not done after the receiver cancelled")
+	}
+	// No data follows the teardown.
+	if _, ok, _ := sender.NextSegment(); ok {
+		t.Error("a segment was emitted after the session was cancelled")
+	}
+}
+
+func TestRetransmittedCheckpointGetsSameReport(t *testing.T) {
+	// LTP-6, §6.11: a checkpoint the receiver has already answered is
+	// answered with the same report, not a fresh serial.
+	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
+		SessionID: testSession(), FirstReportSerial: 9,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cp := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeRedDataCheckpointEORPEOB, SessionID: testSession()},
+		Data: &ltp.DataSegment{
+			ClientServiceID: 1, Offset: 0, Data: testBlock(50), CheckpointSerial: 3,
+		},
+	}
+	if err := receiver.HandleSegment(cp); err != nil {
+		t.Fatal(err)
+	}
+	first, ok, _ := receiver.NextSegment()
+	if !ok || first.Header.Type != ltp.TypeReport {
+		t.Fatal("expected a report for the checkpoint")
+	}
+
+	// The same checkpoint arrives again (the sender's timer fired).
+	if err := receiver.HandleSegment(cp); err != nil {
+		t.Fatal(err)
+	}
+	second, ok, _ := receiver.NextSegment()
+	if !ok || second.Header.Type != ltp.TypeReport {
+		t.Fatal("expected the report to be resent")
+	}
+	if second.Report.ReportSerial != first.Report.ReportSerial {
+		t.Errorf("resent report serial = %d, want the original %d",
+			second.Report.ReportSerial, first.Report.ReportSerial)
+	}
+}
+
+func TestReceiverClosureGatedOnReportAck(t *testing.T) {
+	// LTP-8, §6.11/§6.16: the receiver keeps the session open until its
+	// report is acknowledged, then closes. A green EOB closes an all-green
+	// session directly.
+	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
+		SessionID: testSession(), FirstReportSerial: 9,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeRedDataCheckpointEORPEOB, SessionID: testSession()},
+		Data: &ltp.DataSegment{
+			ClientServiceID: 1, Offset: 0, Data: testBlock(50), CheckpointSerial: 3,
+		},
+	}
+	if err := receiver.HandleSegment(cp); err != nil {
+		t.Fatal(err)
+	}
+	if receiver.State() != ltp.StateActive {
+		t.Fatalf("state = %s before the report ack, want active", receiver.State())
+	}
+
+	ack := &ltp.Segment{
+		Header:    &ltp.Header{Type: ltp.TypeReportAck, SessionID: testSession()},
+		ReportAck: &ltp.ReportAckSegment{ReportSerial: 9},
+	}
+	if err := receiver.HandleSegment(ack); err != nil {
+		t.Fatal(err)
+	}
+	if receiver.State() != ltp.StateClosed {
+		t.Errorf("state = %s after the report ack, want closed", receiver.State())
+	}
+}
+
+func TestAllGreenSessionClosesOnGreenEOB(t *testing.T) {
+	// LTP-8, §6.16: an all-green session involves no reports, so the green
+	// EOB is its only close signal.
+	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
+		SessionID: testSession(), FirstReportSerial: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eob := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeGreenDataEOB, SessionID: testSession()},
+		Data:   &ltp.DataSegment{ClientServiceID: 1, Offset: 0, Data: testBlock(40)},
+	}
+	if err := receiver.HandleSegment(eob); err != nil {
+		t.Fatal(err)
+	}
+	if receiver.State() != ltp.StateClosed {
+		t.Errorf("state = %s after the green EOB, want closed", receiver.State())
+	}
+}
+
 func TestReceiverRefusesOversizedOffset(t *testing.T) {
 	// A data segment offset is an SDNV and can name a position near 2^64.
 	// Sizing a buffer from it would exhaust memory, so the receiver refuses.
