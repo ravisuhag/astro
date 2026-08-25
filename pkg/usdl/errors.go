@@ -20,16 +20,41 @@ var (
 	ErrInvalidVCID = errors.New("invalid virtual channel ID: must be in range 0-63 (6 bits)")
 
 	// ErrInvalidMAPID indicates the MAP ID is out of range.
-	ErrInvalidMAPID = errors.New("invalid MAP ID: must be in range 0-63 (6 bits)")
+	ErrInvalidMAPID = errors.New("invalid MAP ID: must be in range 0-15 (4 bits)")
 
 	// ErrInvalidFrameLength indicates the frame length field is out of range.
 	ErrInvalidFrameLength = errors.New("invalid frame length: exceeds maximum of 65536 bytes")
 
+	// ErrFrameLengthMismatch indicates the decoded frame length field does
+	// not match the length of the delivered frame buffer.
+	ErrFrameLengthMismatch = errors.New("frame length field does not match buffer length")
+
+	// ErrInvalidVCFCountLen indicates the VCF Count length exceeds 7 octets.
+	ErrInvalidVCFCountLen = errors.New("invalid VCF count length: must be in range 0-7 octets")
+
+	// ErrInvalidVCFCount indicates the VCF Count does not fit its field width.
+	ErrInvalidVCFCount = errors.New("invalid VCF count: exceeds configured field width")
+
+	// ErrInvalidHeaderSpare indicates the reserved spare bits of the primary
+	// header are not zero.
+	ErrInvalidHeaderSpare = errors.New("invalid primary header: reserved spare bits must be 00")
+
+	// ErrTruncatedFrameFields indicates a truncated frame carries fields it
+	// cannot have (insert zone, OCF, FECF, or a pointer-carrying rule).
+	ErrTruncatedFrameFields = errors.New("truncated frame cannot carry insert zone, OCF, FECF, or a pointer")
+
+	// ErrInvalidFECSize indicates the FECF size is not 0, 2, or 4 octets.
+	ErrInvalidFECSize = errors.New("invalid FECF size: must be 0, 2, or 4 octets")
+
+	// ErrOctetStreamFixedLength indicates an octet stream was sent on a
+	// fixed-length channel (CCSDS 732.1-B-2 §4.2.4.1 forbids it).
+	ErrOctetStreamFixedLength = errors.New("octet stream service requires variable-length transfer frames")
+
 	// ErrInvalidConstructionRule indicates an invalid TFDZ construction rule.
 	ErrInvalidConstructionRule = errors.New("invalid TFDZ construction rule: must be in range 0-7 (3 bits)")
 
-	// ErrInvalidFirstHeaderOffset indicates the first header offset is out of range.
-	ErrInvalidFirstHeaderOffset = errors.New("invalid first header offset: exceeds data field length")
+	// ErrInvalidPointer indicates the FHP/LVOP is out of range for the TFDZ.
+	ErrInvalidPointer = errors.New("invalid pointer: exceeds data zone length")
 
 	// ErrCRCMismatch indicates the received CRC does not match the computed CRC.
 	ErrCRCMismatch = errors.New("CRC mismatch: received CRC does not match computed CRC")
@@ -48,9 +73,6 @@ var (
 
 	// ErrInvalidInsertZoneLength indicates the insert zone length is invalid.
 	ErrInvalidInsertZoneLength = errors.New("insert zone length exceeds maximum")
-
-	// ErrInvalidSequenceNumber indicates the sequence number is out of range.
-	ErrInvalidSequenceNumber = errors.New("invalid sequence number: exceeds field width")
 
 	// ErrNoFramesAvailable aliases sdl.ErrNoFramesAvailable.
 	ErrNoFramesAvailable = sdl.ErrNoFramesAvailable

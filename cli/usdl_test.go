@@ -13,34 +13,8 @@ func TestUSDLRoundTripWithOCF(t *testing.T) {
 		t.Fatalf("encode failed: %v", err)
 	}
 
-	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "usdl", "decode",
-		"--ocf", "--input", "hex", "--format", "json")
-	if err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-
-	var frame usdlFrameJSON
-	if err := json.Unmarshal([]byte(out), &frame); err != nil {
-		t.Fatalf("unmarshal %q: %v", out, err)
-	}
-	if frame.OCF != "deadbeef" {
-		t.Errorf("ocf = %q, want %q", frame.OCF, "deadbeef")
-	}
-	if frame.DataField != "0102030405" {
-		t.Errorf("data_field = %q, want %q", frame.DataField, "0102030405")
-	}
-}
-
-func TestUSDLDecodeWithoutOCFFlag(t *testing.T) {
-	// Documents the legacy behavior: without --ocf the decoder cannot know the
-	// trailing 4 bytes are an OCF, so they fold into the data field. Auto-
-	// detection is impossible per pkg/usdl/frame.go:507, hence the flag.
-	encoded, err := runCLI(t, nil, "usdl", "encode",
-		"--scid", "42", "--data", "0102030405", "--ocf", "deadbeef", "--format", "hex")
-	if err != nil {
-		t.Fatalf("encode failed: %v", err)
-	}
-
+	// OCF presence is signaled in-band by the OCF flag: no --ocf flag is
+	// needed on decode.
 	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "usdl", "decode",
 		"--input", "hex", "--format", "json")
 	if err != nil {
@@ -51,8 +25,14 @@ func TestUSDLDecodeWithoutOCFFlag(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &frame); err != nil {
 		t.Fatalf("unmarshal %q: %v", out, err)
 	}
-	if frame.OCF != "" {
-		t.Errorf("ocf = %q, want empty without --ocf", frame.OCF)
+	if !frame.OCFFlag {
+		t.Error("ocf_flag not set")
+	}
+	if frame.OCF != "deadbeef" {
+		t.Errorf("ocf = %q, want %q", frame.OCF, "deadbeef")
+	}
+	if frame.DataField != "0102030405" {
+		t.Errorf("data_field = %q, want %q", frame.DataField, "0102030405")
 	}
 }
 
@@ -79,6 +59,28 @@ func TestUSDLRoundTripCRC32(t *testing.T) {
 	// A CRC-32 FECF is 4 bytes, so 8 hex characters.
 	if len(frame.FECF) != 8 {
 		t.Errorf("fecf = %q, want an 8-character CRC-32 value", frame.FECF)
+	}
+}
+
+func TestUSDLRoundTripVCFCount(t *testing.T) {
+	encoded, err := runCLI(t, nil, "usdl", "encode",
+		"--scid", "42", "--data", "0102", "--vcf-len", "2", "--vcf-count", "258", "--format", "hex")
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+
+	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "usdl", "decode",
+		"--input", "hex", "--format", "json")
+	if err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	var frame usdlFrameJSON
+	if err := json.Unmarshal([]byte(out), &frame); err != nil {
+		t.Fatalf("unmarshal %q: %v", out, err)
+	}
+	if frame.VCFCountLen != 2 || frame.VCFCount != 258 {
+		t.Errorf("vcf = len %d count %d, want len 2 count 258", frame.VCFCountLen, frame.VCFCount)
 	}
 }
 

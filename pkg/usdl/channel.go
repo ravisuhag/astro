@@ -6,27 +6,27 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
-// ChannelConfig defines the fixed parameters of a USLP physical channel.
+// ChannelConfig defines the managed parameters of a USLP channel.
 type ChannelConfig struct {
-	FrameLength   int  // Total frame length in octets (fixed per physical channel; 0 = variable)
-	HasOCF        bool // Whether Operational Control Field (4 bytes) is present
-	HasFECF       bool // Whether Frame Error Control Field is present
-	UseCRC32      bool // true=CRC-32 (4 bytes), false=CRC-16 (2 bytes)
-	InsertZoneLen int  // Insert zone length in bytes (0 if none)
+	FrameLength   int    // Total frame length in octets (fixed per physical channel; 0 = variable)
+	HasOCF        bool   // Whether the Operational Control Field (4 bytes) is generated
+	HasFECF       bool   // Whether the Frame Error Control Field is present
+	UseCRC32      bool   // true = CRC-32 FECF (4 bytes), false = CRC-16 (2 bytes)
+	InsertZoneLen int    // Insert zone length in bytes (0 if none)
+	VCFCountLen   uint8  // VCF Count field length in octets (0-7; 0 = no count)
+	IdlePattern   []byte // Idle fill pattern (repeating); empty means DefaultIdleFill
 }
 
-// DataFieldCapacity returns the maximum data field size available
-// in frames on this physical channel. Only meaningful when FrameLength > 0
-// (fixed-length mode). For fixed-length frames, EndOfFPH=1 so the primary
-// header is 5 bytes (no Frame Length field). secondaryHeaderLen is reserved
-// for future use (pass 0).
-func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
-	// Fixed-length frames use the shorter 5-byte header (EndOfFPH=1)
-	capacity := c.FrameLength - PrimaryHeaderFixedSize
+// DataFieldCapacity returns the maximum Transfer Frame Data Zone size for
+// fixed-length frames, given the size of the TFDF header in use (1 octet,
+// or 3 when the construction rule carries a pointer). Fixed-length frames
+// use the full (non-truncated) primary header.
+func (c ChannelConfig) DataFieldCapacity(dfhSize int) int {
+	capacity := c.FrameLength - PrimaryHeaderBaseSize - int(c.VCFCountLen)
 	capacity -= c.InsertZoneLen
-	capacity -= DataFieldHeaderSize
+	capacity -= dfhSize
 	if c.HasOCF {
-		capacity -= 4
+		capacity -= OCFSize
 	}
 	if c.HasFECF {
 		if c.UseCRC32 {
@@ -63,22 +63,34 @@ func NewUSDLServiceManager() *USDLServiceManager {
 	return sdl.NewServiceManager[ServiceType, *TransferFrame]()
 }
 
-// FrameGapDetector tracks per-VC frame sequence numbers to detect gaps
-// caused by lost frames.
+// FrameGapDetector tracks per-VC Virtual Channel Frame Counts to detect
+// gaps caused by lost frames (CCSDS 732.1-B-2 §4.1.2.13-14). The count
+// width is the managed VCF Count Length of the channel.
 type FrameGapDetector struct {
-	vc *sdl.GapCounter[uint16]
+	countLen uint8
+	vc       *sdl.GapCounter[uint64]
 }
 
-// NewFrameGapDetector creates a new detector.
-func NewFrameGapDetector() *FrameGapDetector {
-	// The USLP sequence number is sixteen bits.
-	return &FrameGapDetector{vc: sdl.NewGapCounter[uint16](0xFFFF)}
+// NewFrameGapDetector creates a detector for the given VCF Count field
+// length in octets (0-7). With a length of zero, no count is carried and
+// Track always reports no gap.
+func NewFrameGapDetector(countLen uint8) *FrameGapDetector {
+	if countLen > MaxVCFCountLen {
+		countLen = MaxVCFCountLen
+	}
+	return &FrameGapDetector{
+		countLen: countLen,
+		vc:       sdl.NewGapCounter[uint64](maxVCFCount(countLen)),
+	}
 }
 
-// Track examines the frame's sequence number and records any gap.
+// Track examines the frame's VCF Count and records any gap.
 // Returns the VC gap (0 means no gap or first frame).
 func (d *FrameGapDetector) Track(frame *TransferFrame) int {
-	return d.vc.Track(frame.Header.VCID, frame.DataFieldHeader.SequenceNumber)
+	if d.countLen == 0 || frame.Header.VCFCountLen == 0 {
+		return 0
+	}
+	return d.vc.Track(frame.Header.VCID, frame.Header.VCFCount)
 }
 
 // VCFrameGap returns the VC gap detected by the last Track call.
@@ -88,21 +100,23 @@ func (d *FrameGapDetector) VCFrameGap() int {
 
 // MasterChannel manages USLP Transfer Frames for a Master Channel identified by SCID.
 type MasterChannel struct {
-	scid     uint16
-	config   ChannelConfig
-	mux      *VirtualChannelMultiplexer
-	channels map[uint8]*VirtualChannel
-	detector *FrameGapDetector
+	scid        uint16
+	config      ChannelConfig
+	mux         *VirtualChannelMultiplexer
+	channels    map[uint8]*VirtualChannel
+	detector    *FrameGapDetector
+	idleCounter *FrameCounter
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
 func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 	return &MasterChannel{
-		scid:     scid,
-		config:   config,
-		mux:      NewMultiplexer(),
-		channels: make(map[uint8]*VirtualChannel),
-		detector: NewFrameGapDetector(),
+		scid:        scid,
+		config:      config,
+		mux:         NewMultiplexer(),
+		channels:    make(map[uint8]*VirtualChannel),
+		detector:    NewFrameGapDetector(config.VCFCountLen),
+		idleCounter: NewFrameCounter(),
 	}
 }
 
@@ -133,7 +147,8 @@ func (mc *MasterChannel) GetNextFrame() (*TransferFrame, error) {
 	return mc.mux.Next()
 }
 
-// GetNextFrameOrIdle returns the next frame or an idle frame if none available.
+// GetNextFrameOrIdle returns the next frame or an OID idle frame if none
+// is available. OID frames exist only on fixed-length physical channels.
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	frame, err := mc.mux.Next()
 	if err == nil {
@@ -145,7 +160,16 @@ func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	if mc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	return NewIdleFrame(mc.scid, 63, mc.config)
+	idle, err := NewIdleFrame(mc.scid, mc.config)
+	if err != nil {
+		return nil, err
+	}
+	if mc.config.VCFCountLen > 0 {
+		if err := stampFrame(idle, mc.idleCounter, OIDVCID, mc.config.VCFCountLen); err != nil {
+			return nil, err
+		}
+	}
+	return idle, nil
 }
 
 // HasPendingFrames checks if any Virtual Channel has pending frames.

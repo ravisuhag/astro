@@ -65,8 +65,7 @@ func TestMasterChannel_SCIDMismatch(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 
 	frame, _ := usdl.NewTransferFrame(999, 1, 0, []byte{0x01})
-	err := mc.AddFrame(frame)
-	if err != usdl.ErrSCIDMismatch {
+	if err := mc.AddFrame(frame); err != usdl.ErrSCIDMismatch {
 		t.Errorf("expected ErrSCIDMismatch, got %v", err)
 	}
 }
@@ -78,48 +77,64 @@ func TestMasterChannel_VCNotFound(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 
 	frame, _ := usdl.NewTransferFrame(100, 5, 0, []byte{0x01})
-	err := mc.AddFrame(frame)
-	if err != usdl.ErrVirtualChannelNotFound {
+	if err := mc.AddFrame(frame); err != usdl.ErrVirtualChannelNotFound {
 		t.Errorf("expected ErrVirtualChannelNotFound, got %v", err)
 	}
 }
 
 func TestMasterChannel_GetNextFrameOrIdle(t *testing.T) {
-	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true}
+	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, VCFCountLen: 2}
 	mc := usdl.NewMasterChannel(100, config)
 
-	// No VCs registered, should get idle frame
-	frame, err := mc.GetNextFrameOrIdle()
+	// No VCs registered, should get idle frames with their own VC 63 count.
+	first, err := mc.GetNextFrameOrIdle()
 	if err != nil {
 		t.Fatalf("GetNextFrameOrIdle() error = %v", err)
 	}
-	if !usdl.IsIdleFrame(frame) {
+	if !usdl.IsIdleFrame(first) {
 		t.Error("expected idle frame")
+	}
+	second, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatalf("GetNextFrameOrIdle() error = %v", err)
+	}
+	if first.Header.VCFCount != 0 || second.Header.VCFCount != 1 {
+		t.Errorf("OID VCF counts = %d, %d; want 0, 1",
+			first.Header.VCFCount, second.Header.VCFCount)
 	}
 }
 
 func TestFrameGapDetector(t *testing.T) {
-	det := usdl.NewFrameGapDetector()
+	det := usdl.NewFrameGapDetector(2)
 
-	// First frame — no gap
-	f1, _ := usdl.NewTransferFrame(100, 1, 0, []byte{0x01}, usdl.WithSequenceNumber(0))
-	gap := det.Track(f1)
-	if gap != 0 {
+	mk := func(count uint64) *usdl.TransferFrame {
+		f, err := usdl.NewTransferFrame(100, 1, 0, []byte{0x01},
+			usdl.WithVCFCount(2, count))
+		if err != nil {
+			t.Fatalf("NewTransferFrame() error = %v", err)
+		}
+		return f
+	}
+
+	if gap := det.Track(mk(0)); gap != 0 {
 		t.Errorf("first frame gap = %d, want 0", gap)
 	}
-
-	// Sequential frame — no gap
-	f2, _ := usdl.NewTransferFrame(100, 1, 0, []byte{0x02}, usdl.WithSequenceNumber(1))
-	gap = det.Track(f2)
-	if gap != 0 {
+	if gap := det.Track(mk(1)); gap != 0 {
 		t.Errorf("sequential frame gap = %d, want 0", gap)
 	}
-
-	// Gap of 2 frames
-	f3, _ := usdl.NewTransferFrame(100, 1, 0, []byte{0x03}, usdl.WithSequenceNumber(4))
-	gap = det.Track(f3)
-	if gap != 2 {
+	if gap := det.Track(mk(4)); gap != 2 {
 		t.Errorf("gap = %d, want 2", gap)
+	}
+}
+
+func TestFrameGapDetector_NoCount(t *testing.T) {
+	det := usdl.NewFrameGapDetector(0)
+	f, err := usdl.NewTransferFrame(100, 1, 0, []byte{0x01})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gap := det.Track(f); gap != 0 {
+		t.Errorf("gap = %d, want 0 when no VCF count is carried", gap)
 	}
 }
 

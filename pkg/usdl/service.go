@@ -3,6 +3,7 @@ package usdl
 import (
 	"sync"
 
+	"github.com/ravisuhag/astro/pkg/epp"
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
@@ -13,7 +14,7 @@ type Service = sdl.Service
 // at data[0], or -1 if the data is too short to determine length.
 type PacketSizer = sdl.PacketSizer
 
-// ServiceType defines the types of USLP services available.
+// ServiceType identifies the USLP service carried on a MAP channel.
 type ServiceType int
 
 const (
@@ -22,49 +23,112 @@ const (
 	MAPO                    // MAP Octet Stream Service
 )
 
-// FrameCounter manages 16-bit per-VC frame sequence counts per CCSDS 732.1-B-2.
+// FrameCounter manages per-VC Virtual Channel Frame Counts per CCSDS
+// 732.1-B-2 §4.1.2.13-14. The count is carried in the primary header's
+// VCF Count field, whose width (0-7 octets) is a managed parameter.
 type FrameCounter struct {
 	mu       sync.Mutex
-	vcCounts map[uint8]uint16
+	vcCounts map[uint8]uint64
 }
 
 // NewFrameCounter creates a new FrameCounter.
 func NewFrameCounter() *FrameCounter {
-	return &FrameCounter{vcCounts: make(map[uint8]uint16)}
+	return &FrameCounter{vcCounts: make(map[uint8]uint64)}
 }
 
-// Next returns the current VC frame count for the given VCID,
-// then increments the counter.
-func (fc *FrameCounter) Next(vcid uint8) uint16 {
+// Next returns the current VC frame count for the given VCID, then
+// increments the counter. Callers mask the value to the managed VCF
+// Count field width.
+func (fc *FrameCounter) Next(vcid uint8) uint64 {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	seq := fc.vcCounts[vcid]
-	fc.vcCounts[vcid] = seq + 1
-	return seq
+	count := fc.vcCounts[vcid]
+	fc.vcCounts[vcid] = count + 1
+	return count
 }
 
-// stampFrame applies the frame sequence number and recomputes FECF.
-func stampFrame(frame *TransferFrame, counter *FrameCounter, vcid uint8) error {
-	if counter != nil {
-		seq := counter.Next(vcid)
-		frame.DataFieldHeader.SequenceNumber = seq
+// stampFrame applies the next VCF Count to the frame and refreshes the
+// FECF. The count field width must already match countLen (frames built
+// by the services always reserve it up front, so the frame length does
+// not change).
+func stampFrame(frame *TransferFrame, counter *FrameCounter, vcid uint8, countLen uint8) error {
+	if counter != nil && countLen > 0 {
+		frame.Header.VCFCountLen = countLen
+		frame.Header.VCFCount = counter.Next(vcid) & maxVCFCount(countLen)
 	}
 	return recomputeFECF(frame)
 }
 
-// isIdleFill checks if all bytes are 0xFF (idle fill pattern).
-func isIdleFill(data []byte) bool {
-	for _, b := range data {
-		if b != 0xFF {
+// vcfCountOpt returns the frame option carrying the next VCF Count, or
+// nothing when the channel carries no count.
+func vcfCountOpt(config ChannelConfig, counter *FrameCounter, vcid uint8) []FrameOption {
+	if counter == nil || config.VCFCountLen == 0 {
+		return nil
+	}
+	count := counter.Next(vcid) & maxVCFCount(config.VCFCountLen)
+	return []FrameOption{WithVCFCount(config.VCFCountLen, count)}
+}
+
+// channelOpts returns the frame options that derive directly from the
+// channel configuration: insert zone, OCF, and FECF selection.
+func channelOpts(config ChannelConfig) []FrameOption {
+	var opts []FrameOption
+	if config.InsertZoneLen > 0 {
+		opts = append(opts, WithInsertZone(make([]byte, config.InsertZoneLen)))
+	}
+	if config.HasOCF {
+		opts = append(opts, WithOCF(make([]byte, OCFSize)))
+	}
+	if !config.HasFECF {
+		opts = append(opts, WithoutFECF())
+	} else if config.UseCRC32 {
+		opts = append(opts, WithCRC32())
+	}
+	return opts
+}
+
+// isIdleFill reports whether all bytes match the repeating idle pattern.
+func isIdleFill(data []byte, pattern []byte) bool {
+	if len(pattern) == 0 {
+		pattern = []byte{DefaultIdleFill}
+	}
+	for i, b := range data {
+		if b != pattern[i%len(pattern)] {
 			return false
 		}
 	}
 	return true
 }
 
-// MAPPacketService implements the MAPP service for USLP.
-// Packets are multiplexed into USLP frames using FirstHeaderOffset
-// for boundary detection, with FHO-based resync on frame loss.
+// isIdleEncap reports whether data begins with an Encapsulation Idle
+// Packet header: packet version '111' with protocol ID '000'
+// (CCSDS 133.1-B-3), the fill mandated for partially completed
+// fixed-length TFDZs by CCSDS 732.1-B-2 §4.1.4.3.4.
+func isIdleEncap(data []byte) bool {
+	return len(data) > 0 && data[0]&0xFC == 0xE0
+}
+
+// stripIdleEncap removes leading Encapsulation Idle Packets from buf.
+// A trailing truncated or unparseable idle packet clears the buffer: what
+// remains after fill starts is fill.
+func stripIdleEncap(buf []byte) []byte {
+	for isIdleEncap(buf) {
+		n := epp.PacketSizer(buf)
+		if n < 1 || n > len(buf) {
+			return nil
+		}
+		buf = buf[n:]
+	}
+	return buf
+}
+
+// MAPPacketService implements the MAP Packet service (MAPP) for USLP.
+//
+// On fixed-length channels, packets are concatenated into fixed-length
+// TFDZs under construction rule '000' with the First Header Pointer for
+// boundary recovery; a partially filled final TFDZ is completed with an
+// Encapsulation Idle Packet (§4.1.4.3.4). On variable-length channels,
+// each Send emits one frame under rule '111' (No Segmentation).
 type MAPPacketService struct {
 	scid    uint16
 	vcid    uint8
@@ -77,7 +141,7 @@ type MAPPacketService struct {
 	sendBuf       []byte
 	packetOffsets []int
 
-	// Receive-side state for FHO-based extraction
+	// Receive-side state for FHP-based extraction
 	recvBuf     []byte
 	synced      bool
 	sizer       PacketSizer
@@ -102,10 +166,15 @@ func (s *MAPPacketService) SetPacketSizer(sizer PacketSizer) {
 	s.sizer = sizer
 }
 
-// Send appends packet data to the send buffer and generates full frames.
-// When ChannelConfig.FrameLength is 0, creates one frame per packet.
-// When set, packs packets into fixed-length frames with proper FirstHeaderOffset.
-// Call Flush() after the last Send() to emit any remaining partial frame.
+// dfhSize is the TFDF header size for pointer-carrying rules.
+const dfhSizeWithPointer = 3
+
+// dfhSizeNoPointer is the TFDF header size for rules without a pointer.
+const dfhSizeNoPointer = 1
+
+// Send accepts one packet. On variable-length channels it emits one frame
+// per packet; on fixed-length channels it buffers and emits full frames,
+// with Flush() emitting the final partial frame.
 func (s *MAPPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
@@ -115,7 +184,6 @@ func (s *MAPPacketService) Send(data []byte) error {
 		return s.sendVariableLength(data)
 	}
 
-	// Record packet boundary and buffer data
 	s.packetOffsets = append(s.packetOffsets, len(s.sendBuf))
 	s.sendBuf = append(s.sendBuf, data...)
 
@@ -123,65 +191,65 @@ func (s *MAPPacketService) Send(data []byte) error {
 }
 
 func (s *MAPPacketService) sendVariableLength(data []byte) error {
-	opts := s.frameOpts()
+	opts := []FrameOption{
+		WithConstructionRule(RuleNoSegmentation),
+		WithUPID(UPIDSpacePackets),
+	}
+	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
 	if err != nil {
-		return err
-	}
-	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
 	return s.vc.Add(frame)
 }
 
-func (s *MAPPacketService) frameOpts() []FrameOption {
-	opts := []FrameOption{
-		WithConstructionRule(RulePacketSpanning),
-	}
-	if s.config.FrameLength > 0 {
-		opts = append(opts, WithEndOfFPH())
-	}
-	if s.config.HasOCF {
-		opts = append(opts, WithOCF(make([]byte, 4)))
-	}
-	if s.config.UseCRC32 {
-		opts = append(opts, WithCRC32())
-	}
-	if s.config.InsertZoneLen > 0 {
-		opts = append(opts, WithInsertZone(make([]byte, s.config.InsertZoneLen)))
-	}
-	return opts
-}
-
-// Flush pads and emits any remaining buffered data as a final frame.
+// Flush completes any remaining buffered packet data with an
+// Encapsulation Idle Packet and emits the final frame (§4.1.4.3.4).
 func (s *MAPPacketService) Flush() error {
 	if s.config.FrameLength == 0 || len(s.sendBuf) == 0 {
 		return nil
 	}
 
-	capacity := s.config.DataFieldCapacity(0)
+	capacity := s.config.DataFieldCapacity(dfhSizeWithPointer)
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
-	chunk := padDataField(s.sendBuf, capacity)
 
-	fho := FHONoPacketStart
+	fhp := FHPNoPacketStart
 	for _, off := range s.packetOffsets {
 		if off < len(s.sendBuf) {
-			fho = uint16(off)
+			fhp = uint16(off)
 			break
 		}
 	}
 
+	fill := byte(DefaultIdleFill)
+	if len(s.config.IdlePattern) > 0 {
+		fill = s.config.IdlePattern[0]
+	}
+	idle, err := epp.NewIdleFillPacket(capacity-len(s.sendBuf), fill)
+	if err != nil {
+		return err
+	}
+	idleBytes, err := idle.Encode()
+	if err != nil {
+		return err
+	}
+
+	chunk := make([]byte, 0, capacity)
+	chunk = append(chunk, s.sendBuf...)
+	chunk = append(chunk, idleBytes...)
+
 	s.sendBuf = nil
 	s.packetOffsets = nil
 
-	return s.emitFrame(chunk, fho)
+	return s.emitFrame(chunk, fhp)
 }
 
 // emitFullFrames generates frames from sendBuf while it has >= capacity bytes.
 func (s *MAPPacketService) emitFullFrames() error {
-	capacity := s.config.DataFieldCapacity(0)
+	capacity := s.config.DataFieldCapacity(dfhSizeWithPointer)
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
@@ -191,12 +259,12 @@ func (s *MAPPacketService) emitFullFrames() error {
 		copy(chunk, s.sendBuf[:capacity])
 
 		// Find first packet start in this chunk
-		fho := FHONoPacketStart
+		fhp := FHPNoPacketStart
 		var remaining []int
 		for _, off := range s.packetOffsets {
 			if off < capacity {
-				if fho == FHONoPacketStart {
-					fho = uint16(off)
+				if fhp == FHPNoPacketStart {
+					fhp = uint16(off)
 				}
 			} else {
 				remaining = append(remaining, off-capacity)
@@ -205,7 +273,7 @@ func (s *MAPPacketService) emitFullFrames() error {
 		s.packetOffsets = remaining
 		s.sendBuf = s.sendBuf[capacity:]
 
-		if err := s.emitFrame(chunk, fho); err != nil {
+		if err := s.emitFrame(chunk, fhp); err != nil {
 			return err
 		}
 	}
@@ -213,25 +281,45 @@ func (s *MAPPacketService) emitFullFrames() error {
 	return nil
 }
 
-func (s *MAPPacketService) emitFrame(dataField []byte, fho uint16) error {
-	opts := s.frameOpts()
-	opts = append(opts, WithFirstHeaderOffset(fho))
+func (s *MAPPacketService) emitFrame(dataField []byte, fhp uint16) error {
+	opts := []FrameOption{
+		WithConstructionRule(RulePacketsSpanning),
+		WithUPID(UPIDSpacePackets),
+		WithPointer(fhp),
+	}
+	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, dataField, opts...)
 	if err != nil {
 		return err
 	}
-
-	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
-		return err
-	}
 	return s.vc.Add(frame)
+}
+
+// nextFrameForMAP pulls frames from the virtual channel until one for
+// this service's MAP ID arrives, skipping OID frames and frames belonging
+// to other MAP channels.
+func nextFrameForMAP(vc *VirtualChannel, mapid uint8) (*TransferFrame, error) {
+	for {
+		frame, err := vc.Next()
+		if err != nil {
+			return nil, err
+		}
+		if IsIdleFrame(frame) {
+			continue
+		}
+		if frame.Header.MAPID != mapid {
+			continue
+		}
+		return frame, nil
+	}
 }
 
 // Receive extracts the next complete packet from frame data.
 func (s *MAPPacketService) Receive() ([]byte, error) {
 	if s.config.FrameLength == 0 {
-		frame, err := s.vc.Next()
+		frame, err := nextFrameForMAP(s.vc, s.mapid)
 		if err != nil {
 			return nil, err
 		}
@@ -243,92 +331,93 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 	}
 	sizer := s.sizer
 	if s.gapDetector == nil {
-		s.gapDetector = NewFrameGapDetector()
+		s.gapDetector = NewFrameGapDetector(s.config.VCFCountLen)
 	}
+	pattern := s.config.IdlePattern
 
 	for {
-		// Try to extract a complete packet from buffer
-		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf) {
+		// Drop any idle fill packets before sizing user packets.
+		s.recvBuf = stripIdleEncap(s.recvBuf)
+
+		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf, pattern) {
 			pktLen := sizer(s.recvBuf)
 			if pktLen > 0 && pktLen <= len(s.recvBuf) {
 				pkt := make([]byte, pktLen)
 				copy(pkt, s.recvBuf[:pktLen])
-				s.recvBuf = s.recvBuf[pktLen:]
-				if isIdleFill(s.recvBuf) {
+				s.recvBuf = stripIdleEncap(s.recvBuf[pktLen:])
+				if isIdleFill(s.recvBuf, pattern) {
 					s.recvBuf = nil
 				}
 				return pkt, nil
 			}
 		}
 
-		// Pull next frame
-		frame, err := s.vc.Next()
+		frame, err := nextFrameForMAP(s.vc, s.mapid)
 		if err != nil {
 			return nil, err
 		}
 
-		if IsIdleFrame(frame) {
-			continue
-		}
-
-		// VC gap detection
+		// Frame loss detection via the VCF Count (§4.1.2.14).
 		vcGap := s.gapDetector.Track(frame)
-		if s.counter != nil && vcGap > 0 {
+		if vcGap > 0 {
 			s.recvBuf = nil
 			s.synced = false
 		}
 
-		fho := frame.DataFieldHeader.FirstHeaderOffset
+		if frame.DataFieldHeader.ConstructionRule != RulePacketsSpanning {
+			// Not a packet frame for this rule set; drop and resync.
+			s.recvBuf = nil
+			s.synced = false
+			continue
+		}
+
+		fhp := frame.DataFieldHeader.Pointer
 		data := frame.DataField
 
-		switch fho {
-		case FHOAllIdle:
-			continue // idle
-
-		case FHONoPacketStart:
+		switch {
+		case fhp == FHPNoPacketStart:
 			// Continuation only
 			if s.synced {
 				s.recvBuf = append(s.recvBuf, data...)
 			}
 
 		default:
-			if int(fho) >= len(data) {
-				// Corrupted FHO — discard and resync
+			if int(fhp) >= len(data) {
+				// Corrupted FHP — discard and resync
 				s.recvBuf = nil
 				s.synced = false
 				continue
 			}
-			// New packet starts at offset fho
-			if s.synced && int(fho) > 0 && len(s.recvBuf) > 0 {
-				// Append tail of previous packet
-				s.recvBuf = append(s.recvBuf, data[:fho]...)
-
-				// Try to extract completed previous packet
+			var completed []byte
+			if s.synced && int(fhp) > 0 && len(s.recvBuf) > 0 {
+				s.recvBuf = append(s.recvBuf, data[:fhp]...)
 				pktLen := sizer(s.recvBuf)
 				if pktLen > 0 && pktLen <= len(s.recvBuf) {
-					pkt := make([]byte, pktLen)
-					copy(pkt, s.recvBuf[:pktLen])
-					s.recvBuf = make([]byte, len(data)-int(fho))
-					copy(s.recvBuf, data[fho:])
-					if isIdleFill(s.recvBuf) {
-						s.recvBuf = nil
-					}
-					return pkt, nil
+					completed = make([]byte, pktLen)
+					copy(completed, s.recvBuf[:pktLen])
 				}
 			}
-			// Sync/resync from FHO
-			s.recvBuf = make([]byte, len(data)-int(fho))
-			copy(s.recvBuf, data[fho:])
+			// Sync/resync from FHP
+			s.recvBuf = make([]byte, len(data)-int(fhp))
+			copy(s.recvBuf, data[fhp:])
 			s.synced = true
-			if isIdleFill(s.recvBuf) {
+			if isIdleFill(s.recvBuf, pattern) {
 				s.recvBuf = nil
+			}
+			if completed != nil && !isIdleEncap(completed) {
+				return completed, nil
 			}
 		}
 	}
 }
 
-// MAPAccessService implements the MAPA service for USLP.
-// Provides fixed-length SDU transfer.
+// MAPAccessService implements the MAP Access service (MAPA) for USLP:
+// transfer of fixed-length MAPA_SDUs.
+//
+// On fixed-length channels an SDU is carried under construction rule
+// '001' (start) and, when it spans frames, rule '010' (continuation),
+// delimited by the Last Valid Octet Pointer. On variable-length channels
+// each SDU rides alone in a rule '111' frame.
 type MAPAccessService struct {
 	scid    uint16
 	vcid    uint8
@@ -337,6 +426,10 @@ type MAPAccessService struct {
 	config  ChannelConfig
 	counter *FrameCounter
 	vc      *VirtualChannel
+
+	// Receive-side reassembly state
+	recvBuf    []byte
+	inProgress bool
 }
 
 // NewMAPAccessService creates a new MAPA service instance.
@@ -352,65 +445,130 @@ func NewMAPAccessService(scid uint16, vcid, mapid uint8, sduSize int, vc *Virtua
 	}
 }
 
-// Send wraps a fixed-length SDU into a USLP Transfer Frame.
+// Send transfers one MAPA_SDU of the configured constant length.
 func (s *MAPAccessService) Send(data []byte) error {
+	if len(data) == 0 {
+		return ErrEmptyData
+	}
+	if len(data) != s.sduSize {
+		return ErrSizeMismatch
+	}
+
 	if s.config.FrameLength == 0 {
-		if len(data) != s.sduSize {
-			return ErrSizeMismatch
+		opts := []FrameOption{
+			WithConstructionRule(RuleNoSegmentation),
+			WithUPID(UPIDMissionSpecific1),
 		}
-	} else {
-		capacity := s.config.DataFieldCapacity(0)
-		if len(data) == 0 {
-			return ErrEmptyData
+		opts = append(opts, channelOpts(s.config)...)
+		opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
+		frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
+		if err != nil {
+			return err
 		}
-		if len(data) > capacity {
-			return ErrDataTooLarge
-		}
-		data = padDataField(data, capacity)
+		return s.vc.Add(frame)
 	}
 
+	capacity := s.config.DataFieldCapacity(dfhSizeWithPointer)
+	if capacity <= 0 {
+		return ErrDataFieldTooSmall
+	}
+
+	// The SDU always begins in the first octet of a rule '001' TFDZ
+	// (§4.1.4.2.2.1.4) and continues in rule '010' TFDZs.
+	rule := RuleStartOfSDU
+	for len(data) > 0 {
+		n := len(data)
+		lvop := LVOPIncomplete
+		if n <= capacity {
+			lvop = uint16(n - 1)
+		} else {
+			n = capacity
+		}
+		chunk := padDataField(data[:n], capacity, s.config.IdlePattern)
+		data = data[n:]
+
+		if err := s.emitFrame(chunk, rule, lvop); err != nil {
+			return err
+		}
+		rule = RuleContinuingSDU
+	}
+	return nil
+}
+
+func (s *MAPAccessService) emitFrame(dataField []byte, rule uint8, lvop uint16) error {
 	opts := []FrameOption{
-		WithConstructionRule(RuleVCASDU),
-		WithFirstHeaderOffset(FHOAllIdle),
+		WithConstructionRule(rule),
+		WithUPID(UPIDMissionSpecific1),
+		WithPointer(lvop),
 	}
-	if s.config.FrameLength > 0 {
-		opts = append(opts, WithEndOfFPH())
-	}
-	if s.config.HasOCF {
-		opts = append(opts, WithOCF(make([]byte, 4)))
-	}
-	if s.config.UseCRC32 {
-		opts = append(opts, WithCRC32())
-	}
-
-	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
+	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
+	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, dataField, opts...)
 	if err != nil {
-		return err
-	}
-
-	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
 	return s.vc.Add(frame)
 }
 
-// Receive retrieves the next frame and returns its data field.
+// Receive returns the next complete MAPA_SDU, reassembling SDUs that span
+// frames via the construction rules and Last Valid Octet Pointer.
 func (s *MAPAccessService) Receive() ([]byte, error) {
-	frame, err := s.vc.Next()
-	if err != nil {
-		return nil, err
+	if s.config.FrameLength == 0 {
+		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		if err != nil {
+			return nil, err
+		}
+		return frame.DataField, nil
 	}
-	if s.config.FrameLength > 0 && len(frame.DataField) >= s.sduSize {
-		return frame.DataField[:s.sduSize], nil
+
+	for {
+		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		if err != nil {
+			return nil, err
+		}
+
+		zone := frame.DataField
+		dfh := frame.DataFieldHeader
+
+		switch dfh.ConstructionRule {
+		case RuleStartOfSDU:
+			s.recvBuf = nil
+			s.inProgress = true
+		case RuleContinuingSDU:
+			if !s.inProgress {
+				// Continuation without a start (lost frame): skip.
+				continue
+			}
+		default:
+			s.recvBuf = nil
+			s.inProgress = false
+			continue
+		}
+
+		if dfh.Pointer == LVOPIncomplete {
+			s.recvBuf = append(s.recvBuf, zone...)
+			continue
+		}
+		if int(dfh.Pointer) >= len(zone) {
+			// Corrupted pointer: drop the SDU in progress.
+			s.recvBuf = nil
+			s.inProgress = false
+			continue
+		}
+		sdu := append(s.recvBuf, zone[:dfh.Pointer+1]...)
+		s.recvBuf = nil
+		s.inProgress = false
+		return sdu, nil
 	}
-	return frame.DataField, nil
 }
 
 // Flush is a no-op for MAPA service.
 func (s *MAPAccessService) Flush() error { return nil }
 
-// MAPOctetStreamService implements the MAPO service for USLP.
-// Provides unreliable octet stream transfer without packet boundaries.
+// MAPOctetStreamService implements the MAP Octet Stream service (MAPO)
+// for USLP: a continuous octet-aligned stream under construction rule
+// '011'. Per CCSDS 732.1-B-2 §4.2.4.1 an octet stream is carried only in
+// variable-length Transfer Frames.
 type MAPOctetStreamService struct {
 	scid    uint16
 	vcid    uint8
@@ -418,8 +576,6 @@ type MAPOctetStreamService struct {
 	config  ChannelConfig
 	counter *FrameCounter
 	vc      *VirtualChannel
-
-	sendBuf []byte
 }
 
 // NewMAPOctetStreamService creates a new MAPO service instance.
@@ -434,73 +590,25 @@ func NewMAPOctetStreamService(scid uint16, vcid, mapid uint8, vc *VirtualChannel
 	}
 }
 
-// Send buffers octet data and emits full frames.
+// Send emits the supplied octets in one rule '011' frame.
 func (s *MAPOctetStreamService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-
-	if s.config.FrameLength == 0 {
-		opts := []FrameOption{
-			WithConstructionRule(RuleOctetStream),
-			WithFirstHeaderOffset(FHONoPacketStart),
-		}
-		if s.config.UseCRC32 {
-			opts = append(opts, WithCRC32())
-		}
-		frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
-		if err != nil {
-			return err
-		}
-		if err := stampFrame(frame, s.counter, s.vcid); err != nil {
-			return err
-		}
-		return s.vc.Add(frame)
+	if s.config.FrameLength != 0 {
+		// §4.2.4.1 note 1: one cannot transfer a MAP Octet Stream over
+		// fixed-length Transfer Frames.
+		return ErrOctetStreamFixedLength
 	}
 
-	s.sendBuf = append(s.sendBuf, data...)
-	return s.emitFullFrames()
-}
-
-func (s *MAPOctetStreamService) emitFullFrames() error {
-	capacity := s.config.DataFieldCapacity(0)
-	if capacity <= 0 {
-		return ErrDataFieldTooSmall
-	}
-
-	for len(s.sendBuf) >= capacity {
-		chunk := make([]byte, capacity)
-		copy(chunk, s.sendBuf[:capacity])
-		s.sendBuf = s.sendBuf[capacity:]
-
-		if err := s.emitFrame(chunk); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *MAPOctetStreamService) emitFrame(dataField []byte) error {
 	opts := []FrameOption{
 		WithConstructionRule(RuleOctetStream),
-		WithFirstHeaderOffset(FHONoPacketStart),
+		WithUPID(UPIDUserOctetStream),
 	}
-	if s.config.FrameLength > 0 {
-		opts = append(opts, WithEndOfFPH())
-	}
-	if s.config.HasOCF {
-		opts = append(opts, WithOCF(make([]byte, 4)))
-	}
-	if s.config.UseCRC32 {
-		opts = append(opts, WithCRC32())
-	}
-
-	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, dataField, opts...)
+	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
+	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
 	if err != nil {
-		return err
-	}
-
-	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
 	}
 	return s.vc.Add(frame)
@@ -508,23 +616,12 @@ func (s *MAPOctetStreamService) emitFrame(dataField []byte) error {
 
 // Receive retrieves the next frame's data field.
 func (s *MAPOctetStreamService) Receive() ([]byte, error) {
-	frame, err := s.vc.Next()
+	frame, err := nextFrameForMAP(s.vc, s.mapid)
 	if err != nil {
 		return nil, err
 	}
 	return frame.DataField, nil
 }
 
-// Flush pads and emits any remaining buffered data.
-func (s *MAPOctetStreamService) Flush() error {
-	if s.config.FrameLength == 0 || len(s.sendBuf) == 0 {
-		return nil
-	}
-	capacity := s.config.DataFieldCapacity(0)
-	if capacity <= 0 {
-		return ErrDataFieldTooSmall
-	}
-	chunk := padDataField(s.sendBuf, capacity)
-	s.sendBuf = nil
-	return s.emitFrame(chunk)
-}
+// Flush is a no-op for MAPO service.
+func (s *MAPOctetStreamService) Flush() error { return nil }
