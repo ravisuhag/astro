@@ -150,6 +150,53 @@ func TestGMACRemainsTheDefault(t *testing.T) {
 	}
 }
 
+// TestCMACTruncatedMAC checks that a CMAC SA may truncate below the GCM
+// floor: SP 800-38B §6.4 permits any width, so 1 to 16 octets validate and
+// round-trip, while GCM keeps its 12-octet floor (Go's crypto/cipher limit).
+func TestCMACTruncatedMAC(t *testing.T) {
+	for _, width := range []int{sdls.MinCMACSize, 4, 8, sdls.MaxMACSize} {
+		sender := newCMACSA(t)
+		sender.FieldLengths.MAC = width
+		receiver := newCMACSA(t)
+		receiver.FieldLengths.MAC = width
+
+		if err := sender.Validate(); err != nil {
+			t.Fatalf("MAC width %d: Validate() = %v", width, err)
+		}
+
+		frameHeader := []byte{0x20, 0x00, 0x00, 0x0A}
+		protected, err := sender.ApplySecurity(frameHeader, []byte("cmd"))
+		if err != nil {
+			t.Fatalf("MAC width %d: ApplySecurity() = %v", width, err)
+		}
+		wantLen := receiver.FieldLengths.HeaderSize() + len("cmd") + width
+		if len(protected) != wantLen {
+			t.Errorf("MAC width %d: frame is %d octets, want %d", width, len(protected), wantLen)
+		}
+		if _, _, err := sdls.ProcessSecurity(protected, frameHeader, sdls.StaticLookup(receiver)); err != nil {
+			t.Errorf("MAC width %d: ProcessSecurity() = %v", width, err)
+		}
+	}
+
+	// Out-of-range CMAC widths are still refused.
+	for _, width := range []int{0, 17} {
+		sa := newCMACSA(t)
+		sa.FieldLengths.MAC = width
+		if err := sa.Validate(); !errors.Is(err, sdls.ErrInvalidFieldLengths) {
+			t.Errorf("MAC width %d: Validate() = %v, want ErrInvalidFieldLengths", width, err)
+		}
+	}
+
+	// The 12-octet floor still holds for GCM and GMAC.
+	for _, mode := range []sdls.Mode{sdls.Authentication, sdls.AuthenticatedEncryption} {
+		sa := newTestSA(t, mode)
+		sa.FieldLengths.MAC = 8
+		if err := sa.Validate(); !errors.Is(err, sdls.ErrInvalidFieldLengths) {
+			t.Errorf("GCM mode %v with an 8-octet MAC: Validate() = %v, want ErrInvalidFieldLengths", mode, err)
+		}
+	}
+}
+
 // TestCMACAntiReplay checks the sequence window still applies: replaying a
 // frame that already verified must be refused.
 func TestCMACAntiReplay(t *testing.T) {

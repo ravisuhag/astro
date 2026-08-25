@@ -38,9 +38,30 @@ func StaticLookup(sas ...*SecurityAssociation) SALookup {
 // Field. On any verification failure it returns a nil data field: no partial
 // plaintext ever escapes, per §4.2.4.2.3.
 //
-// Tag comparison is left to crypto/cipher's GCM Open, which is constant time.
-// This package never compares MACs itself.
+// GCM tag comparison is left to crypto/cipher's Open, which is constant time;
+// the CMAC path compares in constant time with crypto/subtle.
+//
+// ProcessSecurity verifies the SPI only. It has no way to know which channel
+// the frame arrived on, so the §4.2.4.3 check that the SA is the one agreed
+// for that channel is left to the caller. Use ProcessSecurityForChannel to
+// have this package enforce it.
 func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityHeader, []byte, error) {
+	return processSecurity(dataField, frameHeader, nil, lookup)
+}
+
+// ProcessSecurityForChannel is ProcessSecurity with the receiving channel in
+// hand: ch identifies the Global Virtual Channel (or Global MAP) the frame
+// arrived on. When the SA that the SPI names declares a channel binding in
+// its Channels list, the frame is rejected with ErrSAChannelMismatch unless
+// ch is in that list — the SA verification of §4.2.4.3 — before any
+// cryptographic work. An SA with an empty Channels list accepts any channel.
+func ProcessSecurityForChannel(dataField, frameHeader []byte, ch ChannelID, lookup SALookup) (*SecurityHeader, []byte, error) {
+	return processSecurity(dataField, frameHeader, &ch, lookup)
+}
+
+// processSecurity is the shared body of the two entry points; ch is nil when
+// the caller supplied no channel context.
+func processSecurity(dataField, frameHeader []byte, ch *ChannelID, lookup SALookup) (*SecurityHeader, []byte, error) {
 	if lookup == nil {
 		return nil, nil, ErrUnknownSPI
 	}
@@ -59,6 +80,11 @@ func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityH
 	}
 	if err := sa.Validate(); err != nil {
 		return nil, nil, err
+	}
+	// §4.2.4.3: the SA must be the one agreed for the channel the frame
+	// arrived on. Checked before any cryptographic work, like the SPI.
+	if ch != nil && !sa.servesChannel(*ch) {
+		return nil, nil, ErrSAChannelMismatch
 	}
 	if sa.Mode == Encryption {
 		return nil, nil, ErrUnsupportedMode

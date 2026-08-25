@@ -14,8 +14,9 @@ type Mode uint8
 
 const (
 	// Authentication proves integrity and origin without hiding the data.
-	// The algorithm is chosen by AuthAlgorithm: GMAC for the §E1 TM and AOS
-	// baselines, AES-CMAC for the §E2 telecommand baseline.
+	// The algorithm is chosen by AuthAlgorithm: AES-CMAC for the §E2
+	// telecommand baseline, or GMAC as the authentication-only companion to
+	// the AES-GCM baselines of §E1/§E3/§E4.
 	Authentication Mode = iota + 1
 
 	// Encryption hides the data without authenticating it. §2.3.3 warns that
@@ -39,9 +40,11 @@ type AuthAlgorithm uint8
 
 const (
 	// AuthGMAC is AES-GCM over an empty plaintext with the whole
-	// Authentication Payload as associated data — the §E1, §E3 and §E4
-	// baseline. It is the zero value, so an SA that does not choose keeps the
-	// behaviour it had before CMAC existed.
+	// Authentication Payload as associated data. It is not itself an annex
+	// baseline — §E1/§E3/§E4 specify AES-GCM authenticated encryption — but
+	// the natural authentication-only companion to them: the same cipher,
+	// key and IV layout, with nothing encrypted. It is the zero value, so an
+	// SA that does not choose keeps the behaviour it had before CMAC existed.
 	AuthGMAC AuthAlgorithm = iota
 
 	// AuthCMAC is AES-CMAC, the §E2 telecommand baseline: a 256-bit key and a
@@ -76,13 +79,18 @@ func (m Mode) String() string {
 	}
 }
 
-// GCM tag widths this package accepts, in octets. The §E1 baseline is 16.
-// §4.2.3.4 f) allows truncating a MAC by dropping its least significant bits,
-// which is the same most-significant-bits-first truncation that
-// crypto/cipher.NewGCMWithTagSize performs. Go refuses tags below 12 octets.
+// MAC widths this package accepts, in octets. The §E1 and §E2 baselines both
+// use 16. §4.2.3.4 f) allows truncating a MAC by dropping its least
+// significant bits, which is the same most-significant-bits-first truncation
+// that crypto/cipher.NewGCMWithTagSize performs.
+//
+// MinMACSize is the floor for GCM and GMAC only: Go's crypto/cipher refuses
+// GCM tags below 12 octets. CMAC has no such constraint — SP 800-38B §6.4
+// permits any truncation, so a CMAC SA may declare MinCMACSize to MaxMACSize.
 const (
-	MinMACSize = 12
-	MaxMACSize = 16
+	MinMACSize  = 12
+	MinCMACSize = 1
+	MaxMACSize  = 16
 )
 
 // GCMIVSize is the initialization vector width GCM requires, in octets
@@ -125,17 +133,28 @@ type SecurityAssociation struct {
 	// computed. It must be at least as long as the frame header plus the
 	// security header.
 	//
-	// Building it correctly is the caller's job and depends on the frame type;
-	// §4.2.2.6.2 sets the rules. Broadly: ones over the Virtual Channel ID,
-	// the Security Header, and the frame data field; zeros over the TM Master
-	// Channel Frame Count, the AOS Frame Header Error Control, the Insert
-	// Zone, and every other header field a mission does not choose to cover.
+	// The mask depends on the frame type; §4.2.2.6.2 sets the rules. Use the
+	// per-frame-type constructors — BaselineAuthMaskTM, BaselineAuthMaskTC,
+	// BaselineAuthMaskAOS, BaselineAuthMaskUSLP — which apply the mandatory
+	// exclusions: the TM Master Channel Frame Count, the AOS Frame Header
+	// Error Control, the Insert Zone, and the Initialization Vector.
 	//
-	// A nil mask means "authenticate every octet of the frame header",
-	// which is stricter than the §E1 baseline. The Initialization Vector is
-	// excluded from the MAC either way: §4.2.2.6.2 h) makes that mandatory,
-	// so this package enforces it regardless of the mask supplied.
+	// A nil mask means "authenticate every octet of the frame header". That
+	// is stricter than §4.2.2.6.2 requires, and for TM and AOS it violates
+	// the mandatory exclusions: a field rewritten downstream (the TM MCFC,
+	// the AOS FHEC) would break the MAC at the receiver. Leave the mask nil
+	// only when the frame header you pass contains no such field. The
+	// Initialization Vector is excluded from the MAC either way:
+	// §4.2.2.6.2 h) makes that mandatory, so this package enforces it
+	// regardless of the mask supplied.
 	AuthMask []byte
+
+	// Channels lists the channels this SA is bound to, as §4.2.2.2 requires
+	// an SA to serve an agreed set of Global Virtual Channels or Global MAP
+	// IDs. ProcessSecurityForChannel refuses a frame whose channel is not in
+	// the list (§4.2.4.3). An empty list declares no binding: the check is
+	// skipped, and plain ProcessSecurity never performs it.
+	Channels []ChannelID
 
 	// SeqWindow is the sequence number window of §2.3.2.3.3: a positive delta
 	// beyond which a received counter is discarded. Zero disables the
@@ -199,12 +218,20 @@ func (sa *SecurityAssociation) Validate() error {
 			if sa.FieldLengths.IV != 0 {
 				return ErrInvalidFieldLengths
 			}
-		} else if sa.FieldLengths.IV != GCMIVSize {
-			// GCM and GMAC both need a 96-bit nonce.
-			return ErrInvalidFieldLengths
-		}
-		if sa.FieldLengths.MAC < MinMACSize || sa.FieldLengths.MAC > MaxMACSize {
-			return ErrInvalidFieldLengths
+			// The 12-octet floor below is Go's GCM constraint and does not
+			// apply to CMAC: SP 800-38B §6.4 permits any truncation, so
+			// internal/cmac accepts 1 to 16 octets.
+			if sa.FieldLengths.MAC < MinCMACSize || sa.FieldLengths.MAC > MaxMACSize {
+				return ErrInvalidFieldLengths
+			}
+		} else {
+			if sa.FieldLengths.IV != GCMIVSize {
+				// GCM and GMAC both need a 96-bit nonce.
+				return ErrInvalidFieldLengths
+			}
+			if sa.FieldLengths.MAC < MinMACSize || sa.FieldLengths.MAC > MaxMACSize {
+				return ErrInvalidFieldLengths
+			}
 		}
 	}
 
@@ -291,6 +318,18 @@ func incrementBE(b []byte) error {
 // so far, and no further ahead than SeqWindow. It is the caller's job to run
 // this only after the MAC has verified, so a forged frame cannot advance the
 // window (§4.2.4.4).
+//
+// On the reading of §2.3.2.3.2 and §2.3.2.3.3 taken here: the standard says a
+// frame is discarded when its sequence number is under the expected value, or
+// beyond it by more than a preset window. This implementation counts the
+// window from the last accepted value: it accepts last+1 through
+// last+SeqWindow, and a repeat of the last accepted value is a replay. That
+// is the common interpretation. Under the alternative reading — "expected
+// value" meaning last+1, with the window counted from there — the far edge
+// would sit one frame further, at last+1+SeqWindow. The two ends of a link
+// built on this package agree with each other either way; to interoperate
+// with a peer that takes the other reading, set SeqWindow one higher than
+// the peer's window.
 func (sa *SecurityAssociation) checkAndAdvanceSequence(received []byte) error {
 	if sa.SeqWindow == 0 || len(received) == 0 {
 		return nil

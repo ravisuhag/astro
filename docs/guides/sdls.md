@@ -53,16 +53,24 @@ The protected bytes become the frame's data field. Nothing in `pkg/tmdl`,
 
 ## What this package implements
 
-The **baseline of Annex E**: AES-256 in Galois/Counter Mode, with a 96-bit
-initialization vector and a 128-bit MAC. That is the interoperability profile
-for TM (§E1), AOS (§E3), and USLP (§E4).
+All four **baselines of Annex E**:
 
-It also offers **GMAC** for authentication without encryption.
+- **AES-256-GCM** authenticated encryption, with a 96-bit initialization
+  vector and a 128-bit MAC. That is the interoperability profile for TM
+  (§E1), AOS (§E3), and USLP (§E4).
+- **AES-CMAC** authentication for telecommand (§E2): a 256-bit key, a 32-bit
+  sequence number, and a 128-bit MAC. The Go standard library has no CMAC and
+  this package takes no outside dependencies, so it is implemented in
+  `internal/cmac` and verified against the RFC 4493 and NIST SP 800-38B
+  vectors. Select it with `AuthAlgorithm: sdls.AuthCMAC` — see
+  [Telecommand: the §E2 CMAC baseline](#telecommand-the-e2-cmac-baseline).
 
-Two things are deliberately absent. **AES-CMAC**, the TC baseline of §E2, is
-not in the Go standard library and this package takes no outside dependencies.
-**Encryption without authentication** is not offered at all; §2.3.3 warns
-against it, and so do we.
+It also offers **GMAC** for authentication without encryption. GMAC is not an
+annex baseline itself; it is the natural authentication-only companion of the
+GCM baselines — same cipher, same key and IV layout, nothing encrypted.
+
+One thing is deliberately absent: **encryption without authentication** is
+not offered at all. §2.3.3 warns against it, and so do we.
 
 ## The Security Header
 
@@ -103,8 +111,8 @@ if err := sa.Validate(); err != nil {
 ```
 
 `Validate` catches the mistakes that matter: a reserved SPI, a key that is not
-32 bytes, an IV that is not 12, a MAC outside 12–16 octets, a header over 64
-octets.
+32 bytes, an IV that is not 12, a MAC outside 12–16 octets (1–16 for CMAC,
+which Go's GCM floor does not constrain), a header over 64 octets.
 
 **An SA is not safe for concurrent use.** It holds the sender's IV counter and
 the receiver's replay state, and both change on every frame. Give each
@@ -152,6 +160,48 @@ that did not verify.
 The replay window only advances after the MAC checks out. A forged frame
 cannot push the counter forward and lock out the real sender.
 
+If the SA lists the channels it serves in `Channels`, use
+`ProcessSecurityForChannel` and pass the channel the frame arrived on. The
+frame is refused with `ErrSAChannelMismatch` when the SA is not bound to that
+channel (§4.2.4.3). Plain `ProcessSecurity` cannot know the channel, so it
+checks the SPI only.
+
+```go
+rx.Channels = []sdls.ChannelID{{TFVN: 0, SCID: 0x2A, VCID: 3, MAPID: sdls.NoMAP}}
+
+ch := sdls.ChannelID{TFVN: 0, SCID: scid, VCID: vcid, MAPID: sdls.NoMAP}
+header, payload, err := sdls.ProcessSecurityForChannel(frame.DataField, frameHeader, ch, lookup)
+```
+
+## Telecommand: the §E2 CMAC baseline
+
+The TC baseline authenticates with **AES-CMAC** instead of GMAC. There is no
+initialization vector at all: the Security Header is six octets — the 16-bit
+SPI and a 32-bit sequence number that carries the anti-replay counter.
+
+```go
+sa := &sdls.SecurityAssociation{
+    SPI:           7,
+    Mode:          sdls.Authentication, // §E2 authenticates, never encrypts
+    AuthAlgorithm: sdls.AuthCMAC,       // AES-CMAC instead of GMAC
+    Key:           key,                 // exactly 32 bytes
+    FieldLengths: sdls.FieldLengths{
+        IV:     0, // CMAC needs no IV; Validate rejects anything else
+        SeqNum: 4, // 32-bit sequence number, per §E2.1 b
+        PadLen: 0,
+        MAC:    16, // 128 bits, per §E2.1 c
+    },
+    SeqWindow: 100,
+}
+
+protected, err := sa.ApplySecurity(frameHeader, command)
+```
+
+Sending and receiving work exactly as above; `ProcessSecurity` picks the
+right algorithm from the SA the SPI names. The MAC covers the same
+Authentication Payload as GMAC does — masked frame header, security header,
+then the data field.
+
 ## The authentication bit mask
 
 This is the part most likely to trip you up, and it is where the two ends must
@@ -175,20 +225,31 @@ as zero". §4.2.2.6.2 sets the rules:
 | Everything else | all zeros by default | Missions may override — see §4.2.2.6.2 j |
 
 Set the mask with `sa.AuthMask`. It must be at least as long as the frame
-header plus the security header.
+header plus the security header. Don't build it by hand: one constructor per
+frame type returns the strictest mask that honors the mandatory exclusions.
 
 ```go
-// Cover the security header, leave the frame header out entirely.
-mask := make([]byte, len(frameHeader)+sa.FieldLengths.HeaderSize())
-for i := len(frameHeader); i < len(mask); i++ {
-    mask[i] = 0xFF
-}
-sa.AuthMask = mask
+// TM: everything covered except the Master Channel Frame Count and the IV.
+sa.AuthMask = sdls.BaselineAuthMaskTM(secondaryHeaderLen, sa.FieldLengths)
+
+// TC: the whole header covered, segment header included.
+sa.AuthMask = sdls.BaselineAuthMaskTC(hasSegmentHeader, sa.FieldLengths)
+
+// AOS: everything covered except the FHEC, the insert zone, and the IV.
+sa.AuthMask = sdls.BaselineAuthMaskAOS(hasFHEC, insertZoneLen, sa.FieldLengths)
+
+// USLP: everything covered except the insert zone and the IV.
+sa.AuthMask = sdls.BaselineAuthMaskUSLP(primaryHeaderLen, insertZoneLen, sa.FieldLengths)
 ```
 
-A `nil` mask means every octet of the frame header is authenticated. That is
-stricter than the baseline and will fail if any covered field changes in
-flight — a reasonable default, but check it against your frame type.
+To exclude more fields (§4.2.2.6.2 j allows it), clear further octets in the
+returned slice. Both ends must use the same mask.
+
+A `nil` mask means every octet of the frame header is authenticated. For TM
+and AOS that violates the mandatory exclusions: the moment a multiplexer
+rewrites the MCFC or a coder fills in the FHEC, the MAC breaks at the
+receiver. Leave the mask `nil` only when the header you pass contains no
+field that changes in flight — otherwise use the constructors.
 
 **The IV is always excluded, whatever the mask says.** §4.2.2.6.2 h) makes that
 mandatory, so this package enforces it rather than trusting the mask.
@@ -210,8 +271,7 @@ Setting `SeqWindow` to 0 turns the check off. Only do that in tests.
 
 ## What is not here yet
 
-- **AES-CMAC**, so the TC baseline of §E2 is unsupported. Grep for
-  `TODO(sdls): AES-CMAC`.
+- **Encryption without authentication** — deliberately, as noted above.
 - **CLI subcommands** — `astro sdls apply` and friends are a follow-up, once
   this API has seen some use.
 - **SDLS Extended Procedures** (CCSDS 355.1): key management and over-the-air

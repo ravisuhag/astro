@@ -44,6 +44,10 @@ var (
 	// the SA refuses rather than wrapping.
 	ErrIVExhausted = errors.New("initialization vector space exhausted for this key")
 
+	// ErrSAChannelMismatch indicates the SA named by the SPI is not bound to
+	// the channel the frame arrived on, per CCSDS 355.0-B-2 §4.2.4.3.
+	ErrSAChannelMismatch = errors.New("security association is not bound to this channel")
+
 	// ErrMaskTooShort indicates the authentication bit mask does not cover the
 	// frame header and security header, per CCSDS 355.0-B-2 §4.2.2.6.2 a).
 	ErrMaskTooShort = errors.New("authentication bit mask is shorter than the data it must cover")

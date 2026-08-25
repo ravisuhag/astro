@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/sdls |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing the CCSDS Space Data Link Security Protocol. Ships the §E1 baseline: AES-256-GCM authenticated encryption with a 96-bit IV and a 128-bit MAC, plus GMAC for authentication without confidentiality. Composes with `pkg/tmdl`, `pkg/tcdl`, `pkg/aos`, and `pkg/usdl` from the outside — the protected data field is built here and handed to the frame constructor. |
+| Other Information | Go library implementing the CCSDS Space Data Link Security Protocol. Ships the annex baselines: AES-256-GCM authenticated encryption with a 96-bit IV and a 128-bit MAC (§E1/§E3/§E4), and AES-CMAC authentication for telecommand (§E2). Also offers GMAC — the authentication-only companion of the GCM baselines, not an annex baseline itself. Composes with `pkg/tmdl`, `pkg/tcdl`, `pkg/aos`, and `pkg/usdl` from the outside — the protected data field is built here and handed to the frame constructor. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -62,8 +62,9 @@
 |---|---|---|---|
 | One service type per SA | §4.2.2.4 | M | Y — `Mode` is exactly one of authentication, encryption, authenticated encryption |
 | Common SA parameters | §4.2.2.5 | M | Y — SPI plus IV, Sequence Number, Pad Length, and MAC widths |
-| Authentication algorithm and mode | §4.2.2.6.1 a | M | Y — AES-256-GCM / GMAC |
-| Authentication bit mask | §4.2.2.6.1 b, §4.2.2.6.2 | M | Y — `AuthMask`, applied bitwise-AND before MAC computation |
+| Authentication algorithm and mode | §4.2.2.6.1 a | M | Y — AES-256-GCM, GMAC, or AES-CMAC per `AuthAlgorithm` |
+| Authentication bit mask | §4.2.2.6.1 b, §4.2.2.6.2 | M | Y — `AuthMask`, applied bitwise-AND before MAC computation. Per-frame-type constructors (`BaselineAuthMaskTM/TC/AOS/USLP`) build masks with the mandatory exclusions: TM Master Channel Frame Count, AOS Frame Header Error Control, Insert Zone, and the IV. A nil mask authenticates every header octet, which for TM and AOS is stricter than the mandatory exclusions permit — use the constructors. |
+| SA bound to GVCID / GMAP_ID | §4.2.2.2 | M | Y — `Channels` lists the agreed channel set; enforced by `ProcessSecurityForChannel` |
 | IV excluded from authenticated data | §4.2.2.6.2 h | M | Y — enforced in code regardless of the mask supplied |
 | Managed anti-replay sequence number | §4.2.2.6.1 c | M | Y — sender counter; receiver stored value |
 | Managed sequence number window | §4.2.2.6.1 d | M | Y — `SeqWindow` |
@@ -80,8 +81,8 @@
 | ApplySecurity — authenticated encryption | §4.2.3.2.2.3 | O | Y — AEAD split: data field is plaintext, masked prefix is the AAD |
 | Sequence number incremented per frame | §4.2.3.4 a | M | Y |
 | Authentication bit mask applied | §4.2.3.4 d | M | Y |
-| MAC truncation to trailer width | §4.2.3.4 f | O | Y — 12 to 16 octets, most significant bits kept |
-| ProcessSecurity — SA verification | §4.2.4.3 | M | Y — unknown SPI rejected before any cryptographic work |
+| MAC truncation to trailer width | §4.2.3.4 f | O | Y — most significant bits kept. GCM/GMAC: 12 to 16 octets (Go's `crypto/cipher` refuses shorter GCM tags). CMAC: 1 to 16 octets, since SP 800-38B §6.4 permits any truncation. Both baselines specify 16. |
+| ProcessSecurity — SA verification | §4.2.4.3 | M | Partial — the SPI is always verified before any cryptographic work. Verifying that the SA is the one agreed for the receiving channel needs channel context: `ProcessSecurityForChannel` enforces it against the SA's `Channels` list. Plain `ProcessSecurity` has no channel context, so that part of the check falls to the caller. |
 | ProcessSecurity — authentication | §4.2.4.2.3.1 | O | Y |
 | ProcessSecurity — authenticated encryption | §4.2.4.2.3.2 | O | Y |
 | No data returned on verification failure | §4.2.4.2.3 | M | Y — every failure path returns a nil data field |
