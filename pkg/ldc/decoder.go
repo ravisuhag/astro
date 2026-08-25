@@ -26,9 +26,16 @@ import "fmt"
 // always zeros and every coded data set needs a one bit to terminate its
 // first codeword, so fill can never be mistaken for another set.
 //
-// It cannot recover a partial final block, because nothing in the stream says
-// the block was short. Use DecompressCount or DecompressFile when the sample
-// count is not a whole number of blocks.
+// The eight-bit bound is deliberate, and it is a limitation: a file written
+// with an output word size B above one octet (§7.2.1.2) may carry up to 8B-1
+// bits of zero fill, and Decompress cannot tell such a tail from a truncated
+// coded data set — it returns an error rather than guessing. That is the safe
+// failure: only a decode that knows the sample count can skip longer fill,
+// which is what DecompressCount and DecompressFile do.
+//
+// It also cannot recover a partial final block, because nothing in the stream
+// says the block was short. Use DecompressCount or DecompressFile when the
+// sample count is not a whole number of blocks.
 func Decompress(data []byte, p Params) ([]uint32, error) {
 	return decompress(data, p, -1)
 }

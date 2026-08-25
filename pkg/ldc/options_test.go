@@ -303,6 +303,59 @@ func TestTriangularRootIsExact(t *testing.T) {
 	}
 }
 
+// TestTriangularRootAtBoundary is the regression for the n=31/32 overflow: the
+// probes and the binary search used to compute s(s+1)/2 in bare uint64
+// arithmetic, which wraps once s passes about 2^32, and the resolutions 31 and
+// 32 are exactly where the second-extension decoder needs such values.
+func TestTriangularRootAtBoundary(t *testing.T) {
+	// s = 2^32: T(s) = 2^31 * (2^32 + 1) = 2^63 + 2^31, near the top of the
+	// range where the old arithmetic still fit; s(s+1) itself is past 2^64.
+	const s32 = uint64(1) << 32
+	const t32 = uint64(1)<<63 + uint64(1)<<31
+
+	tests := []struct {
+		v    uint64
+		want uint64
+	}{
+		{t32 - 1, s32 - 1},
+		{t32, s32},
+		{t32 + s32 - 1, s32}, // largest v still under T(s32+1)
+		{t32 + s32 + 1, s32 + 1},
+		// The very top of uint64. floor((sqrt(8v+1)-1)/2) for v = 2^64-1 is
+		// 6074000999: T(6074000999) = 18446744070963499500 <= 2^64-1 and
+		// T(6074001000) = 18446744077037500500 > 2^64-1.
+		{^uint64(0), 6074000999},
+		{18446744070963499500, 6074000999},
+		{18446744070963499499, 6074000998},
+	}
+	for _, test := range tests {
+		if got := ldc.TriangularRootForTest(test.v); got != test.want {
+			t.Errorf("triangularRoot(%d) = %d, want %d", test.v, got, test.want)
+		}
+	}
+}
+
+// TestSecondExtensionAtMaxResolution decodes second-extension blocks at n=31
+// and n=32, where the limit arithmetic used to wrap. The samples are small —
+// large ones make the option unusable by design — but the decode path computes
+// the limit from the resolution before reading a single bit, so a wrapped
+// limit would corrupt even these.
+func TestSecondExtensionAtMaxResolution(t *testing.T) {
+	block := []uint32{0, 3, 1, 0, 2, 2, 5, 1}
+	for _, resolution := range []uint{31, 32} {
+		coded, _ := ldc.EncodeSecondExtensionForTest(block)
+		back, err := ldc.DecodeSecondExtensionForTest(coded, len(block), resolution)
+		if err != nil {
+			t.Fatalf("n=%d: decode: %v", resolution, err)
+		}
+		for i := range block {
+			if back[i] != block[i] {
+				t.Errorf("n=%d: sample %d: %d -> %d", resolution, i, block[i], back[i])
+			}
+		}
+	}
+}
+
 // TestNoCompressionOption pins §3.6: the block goes out unaltered.
 func TestNoCompressionOption(t *testing.T) {
 	block := []uint32{0, 1, 254, 255}

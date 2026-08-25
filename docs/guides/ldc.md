@@ -180,6 +180,14 @@ resolution or predictor is probably wrong.
 
 ## Test vectors
 
+The official CCSDS 121.0-B-2 vector set, as mirrored in libaec's
+`data/121B2TestData`, is vendored in `pkg/ldc/testdata/` and run in full: all
+72 AllOptions and LowEntropyOptions vectors, covering resolutions 1 through
+32, each required to encode byte-identically and decode back to the exact
+samples. The ExtendedParameters set is excluded — its streams use
+per-reference-interval byte alignment, an application framing choice this
+package does not implement (see the [PICS](../pics/ldc-pics.md)).
+
 The Green Book, CCSDS 120.0-G-4, publishes a worked preprocessor table in
 §3.3.3 that this package transcribes as a test — including the two rows that
 fall past θ, where the mapping stops interleaving. An implementation that got

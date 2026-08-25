@@ -44,6 +44,15 @@ NOTE — Non-supported capabilities are identified in section A2.3. All of them
 are options the standard leaves to the application or defines for transport
 layers this package does not touch.
 
+NOTE — This implementation is validated against the official CCSDS 121.0-B-2
+test vectors published by the SLS Data Compression working group (as mirrored
+in libaec's `data/121B2TestData`). All 72 AllOptions and LowEntropyOptions
+vectors — 36 in each set, covering resolutions 1 through 32 — encode
+byte-identically and decode back to the exact samples; they are vendored in
+`pkg/ldc/testdata/` and every one runs as `TestVectors_*` in
+`vectors_test.go`. The ExtendedParameters set is excluded for the reason given
+in section A2.3.
+
 ---
 
 ## A2.2 REQUIREMENTS LIST
@@ -55,7 +64,7 @@ layers this package does not touch.
 | LDC-1 | Block size J | 3.1.6 | M | 8, 16, 32, 64 | Yes | `Params.BlockSize`. Any other value is `ErrInvalidBlockSize`. |
 | LDC-2 | Sample resolution n | 3.1.6 | M | 1 to 32 bits | Yes | `Params.Resolution`. |
 | LDC-3 | Unsigned sample range | 3.1.6, 4.4 | M | 0 to 2^n−1 | Yes | |
-| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | −2^(n−1) to 2^(n−1)−1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. |
+| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | −2^(n−1) to 2^(n−1)−1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. Requires the unit-delay predictor — see the interpretation note in A2.3. |
 | LDC-5 | Option identifier attached to every coded data set | 3.1.1, 5.2.1.3 | M | — | Yes | Always written, even when a subset of options is in use. |
 
 ### Table A-2: Code options
@@ -140,16 +149,30 @@ layers this package does not touch.
 | LDC-41 | Application-specific mapper | Same reasoning, from table 7-1. |
 | LDC-44 | Insertion into space packets | The caller composes coded data sets into packets. Keeping the two apart is what lets this package be used with the file format, with packets, or with neither. |
 | LDC-45 | Compression identification packet | Section 6 is optional and duplicates what the file header carries. |
+| — | Reference-interval byte alignment | Some encoders pad the coded stream to a byte boundary at the end of each reference sample interval, an application framing choice the standard leaves open rather than a numbered requirement (libaec exposes it as its `-p` option). This decoder reads the coded data set as one continuous bit stream and cannot consume such streams. Seen in the official 121.0-B-2 `ExtendedParameters/sar32bit.j16.r256.rz` vector, which is why that set is not in `testdata/`. |
+
+### Interpretations
+
+Two places where the standard's text admits more than one reading, and the
+reading taken here:
+
+| Where | Reading taken |
+|---|---|
+| Signed samples and the predictor (table 7-1, Data Sense) | Table 7-1 makes the positive Data Sense "mandatory if preprocessor is bypassed or preprocessor absent". Read narrowly, that constrains only a section-7 file header field; read broadly, it says signed samples are meaningful only under the unit-delay predictor. This implementation takes the broad, conservative reading and enforces it in `Params.Validate` everywhere, not just in the file path: `Signed` with any predictor other than unit delay is refused with `ErrUnsupportedPredictor`. The narrow reading would let signed samples through with the bypass predictor outside the file format — and would then produce parameter sets a section-7 header cannot describe. Refusing keeps every compressible stream expressible as a file. |
+| Second-extension CDS symbol count (§5.2.6) | The prose says "2J transformed pairs", which contradicts §3.4.1 and figure 5-4 (J/2 symbols). Read as a typo; J/2 is implemented. Also recorded at LDC-35. |
 
 ### Implementation-Defined Limits
 
-Neither limit is in the standard. Both exist because a decoder must not be
-able to be told to exhaust memory.
+None of these limits are in the standard. The first two exist because a
+decoder must not be able to be told to exhaust memory; the third is a
+documented limitation of the one entry point that decodes without a sample
+count.
 
 | Limit | Value | Why |
 |---|---|---|
 | Decodable sample count | 2^28 samples | The header's Number of Samples field is 48 bits, so a twelve-octet file can claim 2^48 samples — a terabyte of output — and the decoder would size a slice from it before reading a coded bit. |
 | FS codeword length | Bounded by the resolution | A run of zero octets in a corrupt stream would otherwise be read as an enormous sample value. `ReadFS` takes a limit and refuses past it. |
+| Fill skipped by the unbounded `Decompress` | 7 bits | `Decompress` (no sample count) treats a trailing all-zero run of fewer than eight bits as §7.2.3.2 fill, which covers a B=1 file body exactly. A file written with an output word size B > 1 octet can carry up to 8B−1 fill bits, and without the count that tail cannot be told from a truncated coded data set — so `Decompress` fails with an error rather than guessing. `DecompressCount` and `DecompressFile` know the count and skip any fill. Pinned by `TestDecompressRefusesLongWordFill`. |
 
 ### Fully Supported Mandatory Items
 

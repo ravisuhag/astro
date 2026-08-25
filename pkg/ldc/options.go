@@ -1,6 +1,9 @@
 package ldc
 
-import "fmt"
+import (
+	"fmt"
+	"math/bits"
+)
 
 // The code options of CCSDS 121.0-B-3 section 3.
 //
@@ -270,12 +273,20 @@ func readSecondExtension(r *BitReader, count int, resolution uint) ([]uint32, er
 	}
 
 	// The largest legal gamma comes from two samples at the top of the range.
+	// At n = 32 that is T(2^33-2) + 2^32-1, which does not fit a uint64, so
+	// the limit saturates. That still bounds ReadFS — a codeword near the
+	// saturated limit would need exabytes of input to exist — and the range
+	// check on first and second below rejects anything a wrapped bound would
+	// have let through.
 	maxSample := uint64(1)<<resolution - 1
 	if resolution >= 32 {
 		maxSample = uint64(1)<<32 - 1
 	}
 	maxSum := 2 * maxSample
-	limit := maxSum*(maxSum+1)/2 + maxSample
+	limit := ^uint64(0)
+	if t, ok := triangular(maxSum); ok && t <= limit-maxSample {
+		limit = t + maxSample
+	}
 
 	block := make([]uint32, 0, count)
 	for range count / 2 {
@@ -285,7 +296,10 @@ func readSecondExtension(r *BitReader, count int, resolution uint) ([]uint32, er
 		}
 
 		sum := triangularRoot(gamma)
-		second := gamma - sum*(sum+1)/2
+		// triangularRoot guarantees T(sum) <= gamma, so the triangular number
+		// fits and the subtraction cannot wrap.
+		t, _ := triangular(sum)
+		second := gamma - t
 		if second > sum {
 			return nil, ErrDataTooShort
 		}
@@ -299,19 +313,33 @@ func readSecondExtension(r *BitReader, count int, resolution uint) ([]uint32, er
 	return block, nil
 }
 
+// triangular returns s(s+1)/2 and whether it fits a uint64.
+//
+// The product s(s+1) is taken at 128 bits so that s near 2^33 — reachable at
+// 32-bit resolution, where a pair sum can be up to 2^33-2 — cannot wrap.
+func triangular(s uint64) (uint64, bool) {
+	hi, lo := bits.Mul64(s, s+1)
+	return lo>>1 | hi<<63, hi>>1 == 0
+}
+
 // triangularRoot returns the largest s for which s(s+1)/2 <= v.
 //
 // Done by binary search rather than by the closed form, which would need a
 // square root and therefore floating point — and this standard is integer
-// only.
+// only. The comparisons go through triangular, so v all the way up to the
+// maximum uint64 is handled without the arithmetic wrapping.
 func triangularRoot(v uint64) uint64 {
+	triangularLE := func(s uint64) bool {
+		t, ok := triangular(s)
+		return ok && t <= v
+	}
 	low, high := uint64(0), uint64(1)
-	for high*(high+1)/2 <= v && high < 1<<33 {
+	for triangularLE(high) && high < 1<<33 {
 		high *= 2
 	}
 	for low < high {
 		mid := (low + high + 1) / 2
-		if mid*(mid+1)/2 <= v {
+		if triangularLE(mid) {
 			low = mid
 		} else {
 			high = mid - 1

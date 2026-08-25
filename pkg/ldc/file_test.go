@@ -295,6 +295,39 @@ func TestFileRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDecompressRefusesLongWordFill pins the documented limitation of the
+// unbounded Decompress: it treats only a trailing run of fewer than eight zero
+// bits as the fill of §7.2.3.2, so the up-to-8B-1 bits of fill a B>1 file can
+// carry make it fail — with an error, never with wrong samples. A decode that
+// knows the count skips the same tail fine.
+func TestDecompressRefusesLongWordFill(t *testing.T) {
+	p := ldc.DefaultParams()
+	samples := lowEntropy(256, 25)
+
+	coded, err := ldc.Compress(samples, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Two octets of zeros: the word fill of a B=3 file whose body ended one
+	// octet into a word.
+	padded := append(append([]byte{}, coded...), 0, 0)
+
+	if _, err := ldc.Decompress(padded, p); err == nil {
+		t.Error("Decompress read 16 bits of word fill as a coded data set and did not error")
+	}
+
+	back, err := ldc.DecompressCount(padded, p, len(samples))
+	if err != nil {
+		t.Fatalf("DecompressCount over the same fill: %v", err)
+	}
+	for i := range samples {
+		if back[i] != samples[i] {
+			t.Fatalf("sample %d: %d became %d", i, samples[i], back[i])
+		}
+	}
+}
+
 // TestDecompressFileRefusesAnAbsurdSampleCount guards the 48-bit Number of
 // Samples field: a twelve-octet header must not be able to make the decoder
 // allocate a terabyte.
