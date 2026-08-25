@@ -22,8 +22,11 @@ the documentation triad stays uniform.
 | **Ignored** | Decoded past without error. The element does not appear in the model. A file using it still loads. |
 | **Unsupported** | Same as ignored on the wire, but named here because something depends on it — a parameter whose type is an unsupported kind will fail Validate with an unresolved reference. |
 
-Nothing in this matrix causes Load to fail. The loader rejects only malformed
-XML, a non-SpaceSystem root, and documents past the size or depth limits.
+The loader rejects malformed XML, a non-SpaceSystem root, documents past the
+size or depth limits — and a document whose values cannot be read as their
+schema types, such as a `FixedValue` that is not a number (`ErrInvalidValue`).
+Element *coverage* never fails Load: every status in the tables below loads.
+Values inside a covered element still have to parse.
 
 ---
 
@@ -43,7 +46,7 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 | `TelemetryMetaData` | Supported | ParameterTypeSet, ParameterSet, ContainerSet. |
 | `CommandMetaData` | Supported | ParameterTypeSet, ParameterSet, MetaCommandSet. |
 | `ServiceSet` | Ignored | |
-| Namespace `http://www.omg.org/spec/XTCE/20180204` | Supported | Both as a default namespace and with a prefix; tested both ways. |
+| Namespace `http://www.omg.org/spec/XTCE/20180204` | Supported | Both as a default namespace and with a prefix; tested both ways. Child elements are matched by namespace too, so a `TelemetryMetaData` from another vocabulary is ignored rather than decoded as XTCE's. |
 
 ## Table A-2: Parameters
 
@@ -65,10 +68,10 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 | `BinaryParameterType` | Supported | |
 | `BooleanParameterType` | Supported | Including the one and zero string values. |
 | `AbsoluteTimeParameterType` | Supported | Encoding, units, scale, offset, reference epoch. Its encoding nests one level deeper than the others'. |
-| `RelativeTimeParameterType` | Unsupported | A duration rather than an instant. |
-| `ArrayParameterType` | Unsupported | Needs dimension handling the model does not have. |
-| `AggregateParameterType` | Unsupported | A struct of members; needs member resolution. |
-| `UnitSet`, `Unit` | Supported | Carried, not converted. |
+| `RelativeTimeParameterType` | Opaque | The name is decoded so references resolve; the contents stay raw. `TypeKind()` reports "relative time (not modeled)", and `Layout` refuses a parameter of this type. |
+| `ArrayParameterType` | Opaque | Same treatment; the name and `arrayTypeRef` are decoded, the dimension list stays raw. |
+| `AggregateParameterType` | Opaque | Same treatment; the member list stays raw. |
+| `UnitSet`, `Unit` | Supported | Carried, not converted. `power` defaults to 1 through `PowerOrDefault()`. |
 | `ValidRange` | Ignored | |
 | `ToString` | Ignored | |
 | `@baseType` | Opaque | The attribute is decoded; type inheritance is not followed. |
@@ -81,7 +84,8 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 | `FloatDataEncoding` | Supported | Same. |
 | `StringDataEncoding` | Supported | Fixed size supported; `Variable` is opaque. |
 | `BinaryDataEncoding` | Supported | Fixed size supported; dynamic size is opaque. |
-| `@bitOrder`, `@byteOrder` | Supported | Defaults applied through accessors. |
+| `@changeThreshold` | Supported | Carried on both numeric encodings, as a pointer so absent — meaning any change is significant — stays distinguishable from zero. |
+| `@bitOrder`, `@byteOrder` | Supported | Defaults applied through accessors. `Validate` checks that `encoding`, `bitOrder` and `byteOrder` are legal enumeration members (`ErrInvalidEncoding`). |
 | `ErrorDetectCorrect` | Ignored | Checksums and CRCs described in the database. This repository's own CRCs are in `pkg/crc`. |
 | `FromBinaryTransformAlgorithm` | Ignored | An algorithm, and algorithms are out of scope. |
 | `ToBinaryTransformAlgorithm` | Ignored | Same. |
@@ -94,7 +98,7 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 | `PolynomialCalibrator` | Supported | All terms, with coefficient and exponent. |
 | `SplineCalibrator` | Supported | All points, plus order and the extrapolate flag. |
 | `MathOperationCalibrator` | Opaque | Kept as raw XML, and `Calibrator.Kind()` reports it, so a caller is not told the type has no calibrator when it has one this package cannot evaluate. |
-| `ContextCalibratorList` | Ignored | Calibration that depends on another parameter's value. |
+| `ContextCalibratorList` | Opaque | Calibration that depends on another parameter's value, kept as raw XML. `DataEncoding.HasContextCalibrators()` marks its presence, so a consumer knows the default curve alone may be wrong for a given packet. |
 
 ## Table A-6: Containers
 
@@ -110,12 +114,17 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 | `StreamSegmentEntry` | Opaque | Same. |
 | `IndirectParameterRefEntry` | Opaque | Same. |
 | `ArrayParameterRefEntry` | Opaque | Same. |
-| `LocationInContainerInBits` | Supported | Fixed values; the reference location is carried. Dynamic and lookup forms are opaque. |
-| `RepeatEntry` | Supported | Count and offset, fixed forms. |
-| `IncludeCondition` | Opaque | Raw XML. Evaluating match criteria belongs to an extraction engine. |
+| `LocationInContainerInBits` | Supported | Fixed values in every `FixedIntegerValueType` spelling — decimal, `0x`, `0o`, `0b`. The reference location is carried, defaulting through `ReferenceLocationOrDefault()`. Dynamic and lookup forms are opaque. |
+| `RepeatEntry` | Supported | Count and offset, fixed forms, in every `FixedIntegerValueType` spelling. |
+| `IncludeCondition` | Opaque | Raw XML. `Layout` places the entry regardless; a caller that needs the condition can parse it. |
 | `TimeAssociation` | Ignored | |
 | `BaseContainer` | Supported | The reference is resolved and checked for cycles. |
-| `BaseContainer/RestrictionCriteria` | Opaque | Raw XML. Which container a packet matches is an extraction decision. |
+| `BaseContainer/RestrictionCriteria` | Yes | `Comparison` and `ComparisonList` are modeled and evaluated by `Match`. |
+| `RestrictionCriteria/BooleanExpression` | Opaque | Raw XML. A tree of ANDs and ORs needs its own evaluator; `Match` reports it rather than reading it as false. |
+| `RestrictionCriteria/CustomAlgorithm` | Opaque | Raw XML. By definition outside the file. |
+| `RestrictionCriteria/NextContainer` | Parsed | Deciding it needs the stream rather than one packet, so `Match` does not evaluate it. |
+| `Comparison/@useCalibratedValue` | Yes | Defaults to true, so a comparison is against the engineering value. |
+| `Comparison/@instance` | Parsed | A value from another packet; `Match` reports a non-zero instance rather than guessing. |
 | `DefaultRateInStream`, `RateInStreamSet` | Ignored | |
 | `BinaryEncoding` on a container | Ignored | |
 
@@ -123,9 +132,11 @@ XML, a non-SpaceSystem root, and documents past the size or depth limits.
 
 | Element | Status | Notes |
 |---|---|---|
-| `MetaCommandSet` | Supported | |
+| `MetaCommandSet` | Supported | All three member kinds are kept: `MetaCommand`, `MetaCommandRef`, `BlockMetaCommand`. |
 | `MetaCommand` | Supported | Skeleton only: name, abstract flag, descriptions. |
-| `BaseMetaCommand` | Supported | The reference is decoded but not resolved or cycle-checked. |
+| `MetaCommandRef` | Supported | A command included by reference. The reference is kept but not resolved. |
+| `BlockMetaCommand` | Opaque | The name and descriptions are decoded; the `MetaCommandStepList` stays raw. |
+| `BaseMetaCommand` | Supported | The reference and the `ArgumentAssignmentList` — the name/value pairs that narrow the base command — are decoded. The reference is not resolved or cycle-checked. |
 | `ArgumentList`, `Argument` | Supported | Names and `argumentTypeRef`. |
 | `ArgumentTypeSet` and its types | Unsupported | The argument-side mirror of the parameter types. |
 | `CommandContainer` | Unsupported | The uplink bit layout. |
@@ -184,6 +195,7 @@ of them were.
 | `BaseContainer` resolves | Supported | |
 | Container inheritance is acyclic | Supported | Linear graph colouring. Identity is by pointer, so two systems may each have a `Common`. |
 | Duplicate names within a SpaceSystem | Supported | Parameters, types, containers, commands, and sibling systems. |
+| Encoding enumerations are legal | Supported | `encoding`, `bitOrder` and `byteOrder` on every parameter type's data encoding are checked against the schema's members, including the arbitrary byte-list order. |
 | `argumentTypeRef` resolves | Unsupported | Argument types are not modeled. |
 | `metaCommandRef` resolves | Unsupported | |
 

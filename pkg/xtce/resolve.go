@@ -78,7 +78,11 @@ func splitRef(ref string) (segments []string, absolute bool, err error) {
 		if segment == "" {
 			return nil, false, fmt.Errorf("%w: %q has an empty segment", ErrInvalidReference, ref)
 		}
-		if segment != "." && segment != ".." && strings.ContainsAny(segment, ":[]") {
+		// The NameReferenceType pattern allows a segment to be "." or ".."
+		// exactly, or a name containing none of '.', ':', '[' and ']'. A dot
+		// inside a name — "A.B" — matches neither arm, so it is rejected here
+		// the way the schema's pattern rejects it.
+		if segment != "." && segment != ".." && strings.ContainsAny(segment, ".:[]") {
 			return nil, false, fmt.Errorf("%w: %q has an illegal character", ErrInvalidReference, ref)
 		}
 		segments = append(segments, segment)
@@ -120,8 +124,15 @@ func resolveRef(from *SpaceSystem, ref string) (holder *SpaceSystem, name string
 	current := from
 	if absolute {
 		current = from.Root()
-		// An absolute reference starts with the root system's own name, the
-		// way /Spacecraft/Power does. Skip it when it matches.
+		// Absolute references are read two ways in the wild, and this
+		// accepts both. The schema's own example spells the root system's
+		// name out — /SimpleSat/Bus/Voltage — but some tools treat "/" as
+		// already being the root, so the first segment names a child of it —
+		// /Bus/Voltage for the same parameter. When the first segment matches
+		// the root's name it is taken as the spelled-out form and skipped;
+		// otherwise it is looked up among the root's children. The ambiguous
+		// case is a child of the root sharing the root's name, which the
+		// spelled-out reading wins. See docs/guides/xtce.md.
 		if len(path) > 0 && path[0] == current.Name {
 			path = path[1:]
 		}
@@ -284,7 +295,8 @@ func (s *SpaceSystem) localContainer(name string) *SequenceContainer {
 }
 
 // All returns every parameter type in the set, whatever its kind, in a stable
-// order: integers, floats, enumerations, strings, binaries, booleans, times.
+// order: integers, floats, enumerations, strings, binaries, booleans, times,
+// then the opaque kinds — arrays, aggregates, relative times.
 //
 // The order is this package's, not the document's. The schema makes
 // ParameterTypeSet a Set, so document order carries no meaning, and a stable
@@ -313,6 +325,15 @@ func (p *ParameterTypeSet) All() []ParameterType {
 		all = append(all, t)
 	}
 	for _, t := range p.AbsoluteTimeTypes {
+		all = append(all, t)
+	}
+	for _, t := range p.ArrayTypes {
+		all = append(all, t)
+	}
+	for _, t := range p.AggregateTypes {
+		all = append(all, t)
+	}
+	for _, t := range p.RelativeTimeTypes {
 		all = append(all, t)
 	}
 	return all

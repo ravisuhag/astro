@@ -56,20 +56,30 @@ func LoadWithLimit(r io.Reader, maxSize int64) (*SpaceSystem, error) {
 	if err := checkDepth(data, MaxDepth); err != nil {
 		return nil, err
 	}
+	if err := checkRoot(data); err != nil {
+		return nil, err
+	}
 
 	var system SpaceSystem
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&system); err != nil {
-		if errors.Is(err, io.EOF) {
+		switch {
+		case errors.Is(err, io.EOF):
 			return nil, fmt.Errorf("%w: document is empty", ErrNotSpaceSystem)
+		case errors.Is(err, ErrInvalidValue):
+			return nil, err
+		default:
+			var syntaxErr *xml.SyntaxError
+			if errors.As(err, &syntaxErr) {
+				return nil, fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
+			}
+			// checkRoot already proved the root element is a SpaceSystem in
+			// the right namespace, so what remains is a value somewhere in
+			// the document that its schema type cannot hold — an attribute
+			// that should be a number and is not, say. Before the root check
+			// this case was misreported as ErrNotSpaceSystem.
+			return nil, fmt.Errorf("%w: %s", ErrInvalidValue, err)
 		}
-		var syntaxErr *xml.SyntaxError
-		if errors.As(err, &syntaxErr) {
-			return nil, fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
-		}
-		// A root element that is not SpaceSystem fails the XMLName tag, which
-		// the decoder reports as a plain error rather than a typed one.
-		return nil, fmt.Errorf("%w: %s", ErrNotSpaceSystem, err)
 	}
 
 	if system.Name == "" {
@@ -129,13 +139,61 @@ func checkDepth(data []byte, maxDepth int) error {
 	}
 }
 
+// checkRoot scans to the first element and confirms it is a SpaceSystem in
+// the XTCE 1.2 namespace.
+//
+// Decode would reject a wrong root too, but as an untyped error that cannot
+// be told apart from a bad value further into the document. Settling the root
+// question here is what lets the Decode error handling say ErrInvalidValue
+// for everything that is not a syntax error.
+func checkRoot(data []byte) error {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return fmt.Errorf("%w: document is empty", ErrNotSpaceSystem)
+		}
+		if err != nil {
+			var syntaxErr *xml.SyntaxError
+			if errors.As(err, &syntaxErr) {
+				return fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
+			}
+			return err
+		}
+
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			// Prolog: declarations, comments, processing instructions.
+			continue
+		}
+		if start.Name.Space != Namespace || start.Name.Local != "SpaceSystem" {
+			return fmt.Errorf("%w: the root is %s in namespace %q",
+				ErrNotSpaceSystem, start.Name.Local, start.Name.Space)
+		}
+		return nil
+	}
+}
+
 // linkParents fills in the parent pointers the XML cannot carry.
 //
 // Name references resolve by searching towards the root, so every SpaceSystem
 // has to know its parent. Nothing in the document says so — the nesting is the
 // only evidence — which is why this runs once after decoding.
+//
+// Containers get the same treatment, for the same reason. A reference written
+// inside a container resolves relative to the SpaceSystem that defines the
+// container, not the one doing the lookup — which matters the moment a
+// container inherits from one in another system.
 func linkParents(system *SpaceSystem, parent *SpaceSystem) {
 	system.parent = parent
+
+	if system.TelemetryMetaData != nil && system.TelemetryMetaData.ContainerSet != nil {
+		for _, container := range system.TelemetryMetaData.ContainerSet.SequenceContainers {
+			container.owner = system
+		}
+	}
+
 	for _, child := range system.SubSystems {
 		linkParents(child, system)
 	}

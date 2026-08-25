@@ -3,19 +3,22 @@ package xtce
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 // Semantic validation.
 //
 // There is no XSD validator in the Go standard library and this package takes
 // no dependencies, so these checks are written by hand. They are not a
-// substitute for schema validation and do not try to be: they cover the four
+// substitute for schema validation and do not try to be: they cover the five
 // mistakes that make a database unusable rather than merely non-conforming.
 //
 //	a reference that names nothing        the parameter cannot be decoded
 //	a container inheriting in a circle    walking the chain never ends
 //	two things sharing a name             a reference to it is ambiguous
 //	a malformed reference                 nothing can be done with it
+//	an illegal encoding enumeration       every packet would fail to decode
 //
 // A file that breaks the XSD some other way will load and pass. If you need
 // schema conformance, run xmllint against the OMG schema before loading.
@@ -81,6 +84,7 @@ func (s *SpaceSystem) Validate() error {
 		problems = append(problems, system.checkDuplicateNames()...)
 		problems = append(problems, system.checkParameterTypeRefs()...)
 		problems = append(problems, system.checkEntryRefs()...)
+		problems = append(problems, system.checkEncodings()...)
 		return true
 	})
 
@@ -232,6 +236,97 @@ func (s *SpaceSystem) checkEntryRefs() []*ValidationError {
 		}
 	}
 	return problems
+}
+
+// The legal members of the schema's encoding enumerations, from the XTCE 1.2
+// XSD: IntegerEncodingType, FloatEncodingType, StringEncodingType and
+// BitOrderType. An empty attribute is always legal — it means the default.
+var (
+	integerEncodings = map[string]bool{
+		"unsigned": true, "signMagnitude": true, "twosComplement": true,
+		"onesComplement": true, "BCD": true, "packedBCD": true,
+	}
+	floatEncodings = map[string]bool{
+		"IEEE754_1985": true, "IEEE754": true, "MILSTD_1750A": true,
+		"DEC": true, "IBM": true, "TI": true,
+	}
+	stringEncodings = map[string]bool{
+		"US-ASCII": true, "ISO-8859-1": true, "Windows-1252": true,
+		"UTF-8": true, "UTF-16": true, "UTF-16LE": true, "UTF-16BE": true,
+		"UTF-32": true, "UTF-32LE": true, "UTF-32BE": true,
+	}
+	bitOrders = map[string]bool{
+		"mostSignificantBitFirst": true, "leastSignificantBitFirst": true,
+	}
+)
+
+// checkEncodings makes sure every data encoding's enumerated attributes —
+// encoding, bitOrder, byteOrder — hold legal values.
+//
+// A misspelled member is otherwise invisible until decode time, where it
+// surfaces as ErrUnsupportedEncoding on every packet — indistinguishable from
+// an encoding this package genuinely does not support. Catching it here names
+// the type and the attribute instead.
+func (s *SpaceSystem) checkEncodings() []*ValidationError {
+	var problems []*ValidationError
+
+	for _, t := range s.ParameterTypes() {
+		encoding := t.Encoding()
+		if encoding == nil {
+			continue
+		}
+
+		var element, kind string
+		var common commonEncoding
+		var member bool
+		switch {
+		case encoding.Integer != nil:
+			element, common = "IntegerDataEncoding", encoding.Integer.commonEncoding
+			kind, member = encoding.Integer.Encoding, integerEncodings[encoding.Integer.EncodingOrDefault()]
+		case encoding.Float != nil:
+			element, common = "FloatDataEncoding", encoding.Float.commonEncoding
+			kind, member = encoding.Float.Encoding, floatEncodings[encoding.Float.EncodingOrDefault()]
+		case encoding.String != nil:
+			element, common = "StringDataEncoding", encoding.String.commonEncoding
+			kind, member = encoding.String.Encoding, stringEncodings[encoding.String.EncodingOrDefault()]
+		case encoding.Binary != nil:
+			// BinaryDataEncoding has no encoding attribute of its own.
+			element, common, member = "BinaryDataEncoding", encoding.Binary.commonEncoding, true
+		}
+
+		if !member {
+			problems = append(problems, s.problem(element,
+				fmt.Sprintf("type %q has encoding %q, which is not a member of the schema's enumeration",
+					t.TypeName(), kind), ErrInvalidEncoding))
+		}
+		if common.BitOrder != "" && !bitOrders[common.BitOrder] {
+			problems = append(problems, s.problem(element,
+				fmt.Sprintf("type %q has bitOrder %q; the schema allows mostSignificantBitFirst and leastSignificantBitFirst",
+					t.TypeName(), common.BitOrder), ErrInvalidEncoding))
+		}
+		if common.ByteOrder != "" && !legalByteOrder(common.ByteOrder) {
+			problems = append(problems, s.problem(element,
+				fmt.Sprintf("type %q has byteOrder %q; the schema allows mostSignificantByteFirst, leastSignificantByteFirst, or a comma-separated byte list",
+					t.TypeName(), common.ByteOrder), ErrInvalidEncoding))
+		}
+	}
+	return problems
+}
+
+// legalByteOrder reports whether a byteOrder attribute is legal. The schema's
+// ByteOrderType is a union: the two common orders, or the arbitrary form — a
+// comma-separated list of byte positions 0 through 15.
+func legalByteOrder(order string) bool {
+	if order == "mostSignificantByteFirst" || order == "leastSignificantByteFirst" {
+		return true
+	}
+	for _, position := range strings.Split(order, ",") {
+		n, err := strconv.Atoi(position)
+		if err != nil || n < 0 || n > 15 {
+			return false
+		}
+	}
+	return true
 }
 
 // checkInheritance resolves every BaseContainer once and looks for cycles.

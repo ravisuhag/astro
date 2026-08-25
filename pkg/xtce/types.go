@@ -23,18 +23,23 @@ import (
 // ParameterTypeSet holds the parameter types a SpaceSystem defines.
 //
 // The schema makes this an unordered choice of ten element kinds. Seven are
-// modeled; ArrayParameterType, AggregateParameterType and
-// RelativeTimeParameterType are not, and a file using them still loads —
-// their types simply do not appear here, so a parameter pointing at one fails
-// Validate with an unresolved reference. The coverage matrix records this.
+// modeled in full. ArrayParameterType, AggregateParameterType and
+// RelativeTimeParameterType are kept opaque: their names are decoded so a
+// parameter pointing at one still resolves and TypeKind says what it found,
+// but their contents stay raw and Layout refuses a parameter of such a type.
+// The coverage matrix records this.
 type ParameterTypeSet struct {
-	IntegerTypes      []*IntegerParameterType      `xml:"IntegerParameterType"`
-	FloatTypes        []*FloatParameterType        `xml:"FloatParameterType"`
-	EnumeratedTypes   []*EnumeratedParameterType   `xml:"EnumeratedParameterType"`
-	StringTypes       []*StringParameterType       `xml:"StringParameterType"`
-	BinaryTypes       []*BinaryParameterType       `xml:"BinaryParameterType"`
-	BooleanTypes      []*BooleanParameterType      `xml:"BooleanParameterType"`
-	AbsoluteTimeTypes []*AbsoluteTimeParameterType `xml:"AbsoluteTimeParameterType"`
+	IntegerTypes      []*IntegerParameterType      `xml:"http://www.omg.org/spec/XTCE/20180204 IntegerParameterType"`
+	FloatTypes        []*FloatParameterType        `xml:"http://www.omg.org/spec/XTCE/20180204 FloatParameterType"`
+	EnumeratedTypes   []*EnumeratedParameterType   `xml:"http://www.omg.org/spec/XTCE/20180204 EnumeratedParameterType"`
+	StringTypes       []*StringParameterType       `xml:"http://www.omg.org/spec/XTCE/20180204 StringParameterType"`
+	BinaryTypes       []*BinaryParameterType       `xml:"http://www.omg.org/spec/XTCE/20180204 BinaryParameterType"`
+	BooleanTypes      []*BooleanParameterType      `xml:"http://www.omg.org/spec/XTCE/20180204 BooleanParameterType"`
+	AbsoluteTimeTypes []*AbsoluteTimeParameterType `xml:"http://www.omg.org/spec/XTCE/20180204 AbsoluteTimeParameterType"`
+
+	ArrayTypes        []*ArrayParameterType        `xml:"http://www.omg.org/spec/XTCE/20180204 ArrayParameterType"`
+	AggregateTypes    []*AggregateParameterType    `xml:"http://www.omg.org/spec/XTCE/20180204 AggregateParameterType"`
+	RelativeTimeTypes []*RelativeTimeParameterType `xml:"http://www.omg.org/spec/XTCE/20180204 RelativeTimeParameterType"`
 }
 
 // ParameterType is what every modeled parameter type has in common.
@@ -56,13 +61,13 @@ type baseDataType struct {
 	// BaseType lets one type extend another.
 	BaseType string `xml:"baseType,attr"`
 
-	LongDescription string   `xml:"LongDescription"`
-	UnitSet         *UnitSet `xml:"UnitSet"`
+	LongDescription string   `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
+	UnitSet         *UnitSet `xml:"http://www.omg.org/spec/XTCE/20180204 UnitSet"`
 
-	IntegerDataEncoding *IntegerDataEncoding `xml:"IntegerDataEncoding"`
-	FloatDataEncoding   *FloatDataEncoding   `xml:"FloatDataEncoding"`
-	StringDataEncoding  *StringDataEncoding  `xml:"StringDataEncoding"`
-	BinaryDataEncoding  *BinaryDataEncoding  `xml:"BinaryDataEncoding"`
+	IntegerDataEncoding *IntegerDataEncoding `xml:"http://www.omg.org/spec/XTCE/20180204 IntegerDataEncoding"`
+	FloatDataEncoding   *FloatDataEncoding   `xml:"http://www.omg.org/spec/XTCE/20180204 FloatDataEncoding"`
+	StringDataEncoding  *StringDataEncoding  `xml:"http://www.omg.org/spec/XTCE/20180204 StringDataEncoding"`
+	BinaryDataEncoding  *BinaryDataEncoding  `xml:"http://www.omg.org/spec/XTCE/20180204 BinaryDataEncoding"`
 }
 
 // TypeName returns the type's name.
@@ -86,15 +91,27 @@ func (b *baseDataType) Encoding() *DataEncoding {
 
 // UnitSet lists the units a value is in.
 type UnitSet struct {
-	Units []Unit `xml:"Unit"`
+	Units []Unit `xml:"http://www.omg.org/spec/XTCE/20180204 Unit"`
 }
 
 // Unit is one unit, with an optional power and factor.
 type Unit struct {
-	Power       float64 `xml:"power,attr"`
-	Factor      string  `xml:"factor,attr"`
-	Description string  `xml:"description,attr"`
-	Value       string  `xml:",chardata"`
+	// Power defaults to 1. It is a pointer so an absent power is not read as
+	// zero, which would say the unit does not appear at all; read it through
+	// PowerOrDefault.
+	Power       *float64 `xml:"power,attr"`
+	Factor      string   `xml:"factor,attr"`
+	Description string   `xml:"description,attr"`
+	Value       string   `xml:",chardata"`
+}
+
+// PowerOrDefault returns the unit's exponent, applying the schema's default
+// of 1.
+func (u *Unit) PowerOrDefault() float64 {
+	if u.Power == nil {
+		return 1
+	}
+	return *u.Power
 }
 
 // IntegerParameterType is a whole-number parameter.
@@ -116,6 +133,16 @@ func (t *IntegerParameterType) TypeKind() string { return "integer" }
 // IsSigned reports the signedness, applying the schema's default of true.
 func (t *IntegerParameterType) IsSigned() bool { return t.Signed == nil || *t.Signed }
 
+// Size returns the value's width in bits, applying the schema's default of
+// 32. This is the width of the value, not the width on the wire — the
+// encoding has its own Size.
+func (t *IntegerParameterType) Size() uint {
+	if t.SizeInBits == 0 {
+		return 32
+	}
+	return t.SizeInBits
+}
+
 // FloatParameterType is a real-number parameter.
 type FloatParameterType struct {
 	baseDataType
@@ -127,12 +154,21 @@ type FloatParameterType struct {
 // TypeKind names the kind.
 func (t *FloatParameterType) TypeKind() string { return "float" }
 
+// Size returns the value's width in bits, applying the schema's default of
+// 32. The encoding's width on the wire is the encoding's own Size.
+func (t *FloatParameterType) Size() uint {
+	if t.SizeInBits == 0 {
+		return 32
+	}
+	return t.SizeInBits
+}
+
 // EnumeratedParameterType maps raw values to labels.
 type EnumeratedParameterType struct {
 	baseDataType
 	InitialValue string `xml:"initialValue,attr"`
 	// EnumerationList is required by the schema.
-	EnumerationList EnumerationList `xml:"EnumerationList"`
+	EnumerationList EnumerationList `xml:"http://www.omg.org/spec/XTCE/20180204 EnumerationList"`
 }
 
 // TypeKind names the kind.
@@ -140,7 +176,7 @@ func (t *EnumeratedParameterType) TypeKind() string { return "enumerated" }
 
 // EnumerationList holds the value-to-label mapping.
 type EnumerationList struct {
-	Enumerations []Enumeration `xml:"Enumeration"`
+	Enumerations []Enumeration `xml:"http://www.omg.org/spec/XTCE/20180204 Enumeration"`
 }
 
 // Enumeration is one label. MaxValue, when present, makes it a range rather
@@ -177,13 +213,32 @@ func (t *BinaryParameterType) TypeKind() string { return "binary" }
 type BooleanParameterType struct {
 	baseDataType
 	InitialValue string `xml:"initialValue,attr"`
-	// OneStringValue defaults to "True" and ZeroStringValue to "False".
+	// OneStringValue defaults to "True" and ZeroStringValue to "False"; read
+	// them through the OrDefault accessors.
 	OneStringValue  string `xml:"oneStringValue,attr"`
 	ZeroStringValue string `xml:"zeroStringValue,attr"`
 }
 
 // TypeKind names the kind.
 func (t *BooleanParameterType) TypeKind() string { return "boolean" }
+
+// OneStringValueOrDefault returns the word for the true state, applying the
+// schema's default of "True".
+func (t *BooleanParameterType) OneStringValueOrDefault() string {
+	if t.OneStringValue == "" {
+		return "True"
+	}
+	return t.OneStringValue
+}
+
+// ZeroStringValueOrDefault returns the word for the false state, applying the
+// schema's default of "False".
+func (t *BooleanParameterType) ZeroStringValueOrDefault() string {
+	if t.ZeroStringValue == "" {
+		return "False"
+	}
+	return t.ZeroStringValue
+}
 
 // AbsoluteTimeParameterType is a point in time.
 //
@@ -198,13 +253,13 @@ type AbsoluteTimeParameterType struct {
 	BaseType         string `xml:"baseType,attr"`
 	InitialValue     string `xml:"initialValue,attr"`
 
-	LongDescription string `xml:"LongDescription"`
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
 
 	// Encoding wraps the data encoding with the scaling that turns a raw count
 	// into a time.
-	Encoding_ *TimeEncoding `xml:"Encoding"`
+	Encoding_ *TimeEncoding `xml:"http://www.omg.org/spec/XTCE/20180204 Encoding"`
 	// ReferenceTime says what the count is measured from.
-	ReferenceTime *ReferenceTime `xml:"ReferenceTime"`
+	ReferenceTime *ReferenceTime `xml:"http://www.omg.org/spec/XTCE/20180204 ReferenceTime"`
 }
 
 // TypeName returns the type's name.
@@ -222,20 +277,81 @@ func (t *AbsoluteTimeParameterType) Encoding() *DataEncoding {
 	return t.Encoding_.DataEncoding()
 }
 
+// ArrayParameterType is an array of another type. It is kept opaque: the
+// name is decoded so references to it resolve, the contents stay raw, and it
+// has no encoding — so Layout refuses a parameter of this type rather than
+// guessing at its width.
+type ArrayParameterType struct {
+	Name             string `xml:"name,attr"`
+	ShortDescription string `xml:"shortDescription,attr"`
+	// ArrayTypeRef names the element type.
+	ArrayTypeRef string `xml:"arrayTypeRef,attr"`
+
+	// Raw holds the type's contents — the dimension list — undecoded.
+	Raw []byte `xml:",innerxml"`
+}
+
+// TypeName returns the type's name.
+func (t *ArrayParameterType) TypeName() string { return t.Name }
+
+// TypeKind names the kind, marking that only the identity is modeled.
+func (t *ArrayParameterType) TypeKind() string { return "array (not modeled)" }
+
+// Encoding returns nil: an opaque type does not say how it is written.
+func (t *ArrayParameterType) Encoding() *DataEncoding { return nil }
+
+// AggregateParameterType is a struct of members. Kept opaque the same way as
+// ArrayParameterType.
+type AggregateParameterType struct {
+	Name             string `xml:"name,attr"`
+	ShortDescription string `xml:"shortDescription,attr"`
+
+	// Raw holds the member list, undecoded.
+	Raw []byte `xml:",innerxml"`
+}
+
+// TypeName returns the type's name.
+func (t *AggregateParameterType) TypeName() string { return t.Name }
+
+// TypeKind names the kind, marking that only the identity is modeled.
+func (t *AggregateParameterType) TypeKind() string { return "aggregate (not modeled)" }
+
+// Encoding returns nil: an opaque type does not say how it is written.
+func (t *AggregateParameterType) Encoding() *DataEncoding { return nil }
+
+// RelativeTimeParameterType is a duration rather than an instant. Kept opaque
+// the same way as ArrayParameterType.
+type RelativeTimeParameterType struct {
+	Name             string `xml:"name,attr"`
+	ShortDescription string `xml:"shortDescription,attr"`
+
+	// Raw holds the type's contents, undecoded.
+	Raw []byte `xml:",innerxml"`
+}
+
+// TypeName returns the type's name.
+func (t *RelativeTimeParameterType) TypeName() string { return t.Name }
+
+// TypeKind names the kind, marking that only the identity is modeled.
+func (t *RelativeTimeParameterType) TypeKind() string { return "relative time (not modeled)" }
+
+// Encoding returns nil: an opaque type does not say how it is written.
+func (t *RelativeTimeParameterType) Encoding() *DataEncoding { return nil }
+
 // TimeEncoding is the schema's EncodingType: a data encoding plus the units,
 // scale and offset that turn the raw count into a time.
 type TimeEncoding struct {
-	// Units defaults to "seconds".
+	// Units defaults to "seconds"; read it through UnitsOrDefault.
 	Units string `xml:"units,attr"`
 	// Scale defaults to 1 and Offset to 0. Both are pointers so that an
 	// explicit zero is distinguishable from absent.
 	Scale  *float64 `xml:"scale,attr"`
 	Offset *float64 `xml:"offset,attr"`
 
-	IntegerDataEncoding *IntegerDataEncoding `xml:"IntegerDataEncoding"`
-	FloatDataEncoding   *FloatDataEncoding   `xml:"FloatDataEncoding"`
-	StringDataEncoding  *StringDataEncoding  `xml:"StringDataEncoding"`
-	BinaryDataEncoding  *BinaryDataEncoding  `xml:"BinaryDataEncoding"`
+	IntegerDataEncoding *IntegerDataEncoding `xml:"http://www.omg.org/spec/XTCE/20180204 IntegerDataEncoding"`
+	FloatDataEncoding   *FloatDataEncoding   `xml:"http://www.omg.org/spec/XTCE/20180204 FloatDataEncoding"`
+	StringDataEncoding  *StringDataEncoding  `xml:"http://www.omg.org/spec/XTCE/20180204 StringDataEncoding"`
+	BinaryDataEncoding  *BinaryDataEncoding  `xml:"http://www.omg.org/spec/XTCE/20180204 BinaryDataEncoding"`
 }
 
 // DataEncoding returns whichever encoding the element carries.
@@ -252,6 +368,15 @@ func (e *TimeEncoding) DataEncoding() *DataEncoding {
 	default:
 		return nil
 	}
+}
+
+// UnitsOrDefault returns what one count of the encoding means, applying the
+// schema's default of "seconds".
+func (e *TimeEncoding) UnitsOrDefault() string {
+	if e.Units == "" {
+		return "seconds"
+	}
+	return e.Units
 }
 
 // ScaleOrDefault returns the scale, applying the schema's default of 1.
@@ -275,9 +400,9 @@ func (e *TimeEncoding) OffsetOrDefault() float64 {
 type ReferenceTime struct {
 	// Epoch is a date, a dateTime, or one of the schema's named epochs —
 	// TAI, J2000, UNIX, GPS.
-	Epoch string `xml:"Epoch"`
+	Epoch string `xml:"http://www.omg.org/spec/XTCE/20180204 Epoch"`
 	// OffsetFrom names another time parameter to count from. Kept raw.
-	OffsetFrom *RawXML `xml:"OffsetFrom"`
+	OffsetFrom *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 OffsetFrom"`
 }
 
 // DataEncoding is whichever of the four encodings a type carries. Exactly one
@@ -327,6 +452,24 @@ func (d *DataEncoding) Kind() string {
 	}
 }
 
+// HasContextCalibrators reports whether the encoding carries a
+// ContextCalibratorList — calibration that depends on another parameter's
+// value, which this package keeps raw. When it is true, the default
+// calibrator alone may be the wrong curve for a given packet, so a consumer
+// computing engineering values should not trust the default blindly.
+func (d *DataEncoding) HasContextCalibrators() bool {
+	switch {
+	case d == nil:
+		return false
+	case d.Integer != nil:
+		return d.Integer.ContextCalibratorList != nil
+	case d.Float != nil:
+		return d.Float.ContextCalibratorList != nil
+	default:
+		return false
+	}
+}
+
 // commonEncoding is the schema's DataEncodingType: the bit and byte order
 // every encoding shares.
 type commonEncoding struct {
@@ -360,8 +503,17 @@ type IntegerDataEncoding struct {
 	Encoding string `xml:"encoding,attr"`
 	// SizeInBits defaults to 8.
 	SizeInBits uint `xml:"sizeInBits,attr"`
+	// ChangeThreshold is the smallest change in value that is significant.
+	// Absent or zero means any change is. It is a pointer so an explicit zero
+	// is distinguishable from absent.
+	ChangeThreshold *uint64 `xml:"changeThreshold,attr"`
 
-	DefaultCalibrator *Calibrator `xml:"DefaultCalibrator"`
+	DefaultCalibrator *Calibrator `xml:"http://www.omg.org/spec/XTCE/20180204 DefaultCalibrator"`
+	// ContextCalibratorList is calibration that depends on another
+	// parameter's value. It is kept raw, and its presence matters: when it is
+	// set, the default calibrator alone may be the wrong curve for a given
+	// packet. HasContextCalibrators on DataEncoding reports it.
+	ContextCalibratorList *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 ContextCalibratorList"`
 }
 
 // Size applies the schema's default of 8 bits.
@@ -389,8 +541,14 @@ type FloatDataEncoding struct {
 	// SizeInBits defaults to 32. The schema allows 16, 32, 40, 48, 64, 80 and
 	// 128.
 	SizeInBits uint `xml:"sizeInBits,attr"`
+	// ChangeThreshold is the smallest change in value that is significant.
+	// Absent or zero means any change is.
+	ChangeThreshold *float64 `xml:"changeThreshold,attr"`
 
-	DefaultCalibrator *Calibrator `xml:"DefaultCalibrator"`
+	DefaultCalibrator *Calibrator `xml:"http://www.omg.org/spec/XTCE/20180204 DefaultCalibrator"`
+	// ContextCalibratorList is kept raw, the same way as on
+	// IntegerDataEncoding.
+	ContextCalibratorList *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 ContextCalibratorList"`
 }
 
 // Size applies the schema's default of 32 bits.
@@ -415,9 +573,9 @@ type StringDataEncoding struct {
 	// Encoding defaults to UTF-8.
 	Encoding string `xml:"encoding,attr"`
 
-	SizeInBits *StringSize `xml:"SizeInBits"`
+	SizeInBits *StringSize `xml:"http://www.omg.org/spec/XTCE/20180204 SizeInBits"`
 	// Variable is the delimited form, kept raw.
-	Variable *RawXML `xml:"Variable"`
+	Variable *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 Variable"`
 }
 
 // EncodingOrDefault applies the schema's default of UTF-8.
@@ -430,29 +588,29 @@ func (e *StringDataEncoding) EncodingOrDefault() string {
 
 // StringSize is a string's fixed width.
 type StringSize struct {
-	Fixed *int64 `xml:"Fixed>FixedValue"`
+	Fixed *FixedInteger `xml:"http://www.omg.org/spec/XTCE/20180204 Fixed>FixedValue"`
 	// TerminationChar and LeadingSize are the other forms the schema allows.
-	TerminationChar string  `xml:"TerminationChar"`
-	LeadingSize     *RawXML `xml:"LeadingSize"`
+	TerminationChar string  `xml:"http://www.omg.org/spec/XTCE/20180204 TerminationChar"`
+	LeadingSize     *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 LeadingSize"`
 }
 
 // BinaryDataEncoding writes raw octets.
 type BinaryDataEncoding struct {
 	commonEncoding
 	// SizeInBits is required by the schema and may be dynamic.
-	SizeInBits *IntegerValue `xml:"SizeInBits"`
+	SizeInBits *IntegerValue `xml:"http://www.omg.org/spec/XTCE/20180204 SizeInBits"`
 }
 
 // Calibrator turns a raw value into an engineering one.
 type Calibrator struct {
 	Name string `xml:"name,attr"`
 
-	Polynomial *PolynomialCalibrator `xml:"PolynomialCalibrator"`
-	Spline     *SplineCalibrator     `xml:"SplineCalibrator"`
+	Polynomial *PolynomialCalibrator `xml:"http://www.omg.org/spec/XTCE/20180204 PolynomialCalibrator"`
+	Spline     *SplineCalibrator     `xml:"http://www.omg.org/spec/XTCE/20180204 SplineCalibrator"`
 	// MathOperation is the third form. It is out of scope — evaluating an
 	// expression tree is a different job — so it is kept raw and Kind reports
 	// it so a caller is not misled into thinking the type has no calibrator.
-	MathOperation *RawXML `xml:"MathOperationCalibrator"`
+	MathOperation *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 MathOperationCalibrator"`
 }
 
 // Kind names which calibrator this is.
@@ -474,7 +632,7 @@ func (c *Calibrator) Kind() string {
 // PolynomialCalibrator is a sum of terms: coefficient times raw to the power
 // of exponent.
 type PolynomialCalibrator struct {
-	Terms []Term `xml:"Term"`
+	Terms []Term `xml:"http://www.omg.org/spec/XTCE/20180204 Term"`
 }
 
 // Term is one term of a polynomial.
@@ -491,7 +649,7 @@ type SplineCalibrator struct {
 	// extending the end segments.
 	Extrapolate bool `xml:"extrapolate,attr"`
 	// Points must number at least two, per the schema.
-	Points []SplinePoint `xml:"SplinePoint"`
+	Points []SplinePoint `xml:"http://www.omg.org/spec/XTCE/20180204 SplinePoint"`
 }
 
 // SplinePoint is one measured pair.
@@ -514,9 +672,9 @@ type entryPayload struct {
 	ContainerRef     string `xml:"containerRef,attr"`
 	ShortDescription string `xml:"shortDescription,attr"`
 
-	LocationInContainerInBits *LocationInContainer `xml:"LocationInContainerInBits"`
-	RepeatEntry               *Repeat              `xml:"RepeatEntry"`
-	IncludeCondition          *RawXML              `xml:"IncludeCondition"`
+	LocationInContainerInBits *LocationInContainer `xml:"http://www.omg.org/spec/XTCE/20180204 LocationInContainerInBits"`
+	RepeatEntry               *Repeat              `xml:"http://www.omg.org/spec/XTCE/20180204 RepeatEntry"`
+	IncludeCondition          *RawXML              `xml:"http://www.omg.org/spec/XTCE/20180204 IncludeCondition"`
 }
 
 // UnmarshalXML decodes an EntryList, keeping the entries in document order.
@@ -538,6 +696,16 @@ func (l *EntryList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 
 		switch t := token.(type) {
 		case xml.StartElement:
+			// An element from another namespace is not an XTCE entry at all,
+			// so it is skipped rather than kept as EntryOther: the order
+			// argument below is about XTCE's own entry kinds.
+			if t.Name.Space != Namespace {
+				if err := d.Skip(); err != nil {
+					return err
+				}
+				continue
+			}
+
 			var payload entryPayload
 			if err := d.DecodeElement(&payload, &t); err != nil {
 				return err

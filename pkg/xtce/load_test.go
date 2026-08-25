@@ -486,3 +486,519 @@ func TestLoadFileMissing(t *testing.T) {
 		t.Fatalf("LoadFile() = %v, want a not-exist error", err)
 	}
 }
+
+// TestFixedIntegerValueForms covers the FixedIntegerValueType union: the
+// schema allows decimal, hex, octal and binary spellings anywhere a fixed
+// integer is written, and a loader that reads them with a base-ten parser
+// rejects the whole document.
+func TestFixedIntegerValueForms(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Radix">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="U8_t" signed="false">
+	        <IntegerDataEncoding sizeInBits="8"/>
+	      </IntegerParameterType>
+	      <StringParameterType name="Tag_t">
+	        <StringDataEncoding>
+	          <SizeInBits><Fixed><FixedValue>0o40</FixedValue></Fixed></SizeInBits>
+	        </StringDataEncoding>
+	      </StringParameterType>
+	      <BinaryParameterType name="Blob_t">
+	        <BinaryDataEncoding>
+	          <SizeInBits><FixedValue>0x20</FixedValue></SizeInBits>
+	        </BinaryDataEncoding>
+	      </BinaryParameterType>
+	    </ParameterTypeSet>
+	    <ParameterSet>
+	      <Parameter name="Sample" parameterTypeRef="U8_t"/>
+	      <Parameter name="Tag" parameterTypeRef="Tag_t"/>
+	      <Parameter name="Blob" parameterTypeRef="Blob_t"/>
+	    </ParameterSet>
+	    <ContainerSet>
+	      <SequenceContainer name="Packet">
+	        <EntryList>
+	          <ParameterRefEntry parameterRef="Sample">
+	            <LocationInContainerInBits referenceLocation="containerStart">
+	              <FixedValue>0x10</FixedValue>
+	            </LocationInContainerInBits>
+	          </ParameterRefEntry>
+	          <ParameterRefEntry parameterRef="Sample">
+	            <RepeatEntry>
+	              <Count><FixedValue>0b11</FixedValue></Count>
+	            </RepeatEntry>
+	          </ParameterRefEntry>
+	        </EntryList>
+	      </SequenceContainer>
+	    </ContainerSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v; hex, octal and binary FixedValues are legal FixedIntegerValueType forms", err)
+	}
+
+	// 0o40 = 32 bits of fixed string size.
+	tagType, err := db.ResolveParameterType("Tag_t")
+	if err != nil {
+		t.Fatalf("ResolveParameterType(Tag_t) = %v", err)
+	}
+	if bits, ok := tagType.Encoding().SizeInBits(); !ok || bits != 32 {
+		t.Errorf("Tag_t is %d bits (known %v), want 32 from 0o40", bits, ok)
+	}
+
+	// 0x20 = 32 bits of binary encoding size.
+	blobType, err := db.ResolveParameterType("Blob_t")
+	if err != nil {
+		t.Fatalf("ResolveParameterType(Blob_t) = %v", err)
+	}
+	if bits, ok := blobType.Encoding().SizeInBits(); !ok || bits != 32 {
+		t.Errorf("Blob_t is %d bits (known %v), want 32 from 0x20", bits, ok)
+	}
+
+	container, err := db.FindContainer("/Radix/Packet")
+	if err != nil {
+		t.Fatalf("FindContainer() = %v", err)
+	}
+	entries := container.EntryList.Entries
+
+	// 0x10 = bit 16 from the container start.
+	location := entries[0].LocationInContainerInBits
+	if location == nil || location.FixedValue == nil || location.FixedValue.Int64() != 16 {
+		t.Errorf("location = %+v, want a FixedValue of 16 from 0x10", location)
+	}
+
+	// 0b11 = a repeat count of 3.
+	repeat := entries[1].RepeatEntry
+	if repeat == nil || repeat.Count == nil || repeat.Count.FixedValue == nil ||
+		repeat.Count.FixedValue.Int64() != 3 {
+		t.Errorf("repeat = %+v, want a Count of 3 from 0b11", repeat)
+	}
+
+	// The layout must see the same numbers: Sample at bit 16, then three
+	// repeats of eight bits each.
+	layout, err := container.Layout()
+	if err != nil {
+		t.Fatalf("Layout() = %v", err)
+	}
+	if len(layout.Fields) != 4 {
+		t.Fatalf("%d fields, want 4 (one placed, three repeated)", len(layout.Fields))
+	}
+	if layout.Fields[0].BitOffset != 16 {
+		t.Errorf("first field at bit %d, want 16", layout.Fields[0].BitOffset)
+	}
+}
+
+// TestBadValueIsNotMisreportedAsWrongRoot pins the error split: a document
+// with a real SpaceSystem root and one unreadable value fails with
+// ErrInvalidValue, not ErrNotSpaceSystem.
+func TestBadValueIsNotMisreportedAsWrongRoot(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Bad">
+	  <TelemetryMetaData>
+	    <ContainerSet>
+	      <SequenceContainer name="Packet">
+	        <EntryList>
+	          <ParameterRefEntry parameterRef="X">
+	            <LocationInContainerInBits>
+	              <FixedValue>banana</FixedValue>
+	            </LocationInContainerInBits>
+	          </ParameterRefEntry>
+	        </EntryList>
+	      </SequenceContainer>
+	    </ContainerSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	_, err := xtce.Load(strings.NewReader(doc))
+	if !errors.Is(err, xtce.ErrInvalidValue) {
+		t.Fatalf("Load() = %v, want ErrInvalidValue", err)
+	}
+	if errors.Is(err, xtce.ErrNotSpaceSystem) {
+		t.Fatalf("Load() = %v; a bad value must not be reported as a wrong root", err)
+	}
+}
+
+// TestMetaCommandSetKeepsRefsAndBlocks covers the two MetaCommandSet members
+// that are not plain MetaCommands. Both used to vanish silently.
+func TestMetaCommandSetKeepsRefsAndBlocks(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Cmd">
+	  <CommandMetaData>
+	    <MetaCommandSet>
+	      <MetaCommand name="Reset"/>
+	      <MetaCommandRef>/Cmd/Sub/Reboot</MetaCommandRef>
+	      <BlockMetaCommand name="SafeMode">
+	        <MetaCommandStepList>
+	          <MetaCommandStep metaCommandRef="Reset"/>
+	        </MetaCommandStepList>
+	      </BlockMetaCommand>
+	    </MetaCommandSet>
+	  </CommandMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	set := db.CommandMetaData.MetaCommandSet
+
+	if len(set.MetaCommands) != 1 || set.MetaCommands[0].Name != "Reset" {
+		t.Errorf("MetaCommands = %+v, want one called Reset", set.MetaCommands)
+	}
+	if len(set.MetaCommandRefs) != 1 || set.MetaCommandRefs[0].Ref != "/Cmd/Sub/Reboot" {
+		t.Errorf("MetaCommandRefs = %+v, want one referencing /Cmd/Sub/Reboot", set.MetaCommandRefs)
+	}
+	if len(set.BlockMetaCommands) != 1 || set.BlockMetaCommands[0].Name != "SafeMode" {
+		t.Fatalf("BlockMetaCommands = %+v, want one called SafeMode", set.BlockMetaCommands)
+	}
+	block := set.BlockMetaCommands[0]
+	if block.MetaCommandStepList == nil || !strings.Contains(string(block.MetaCommandStepList.Inner), "Reset") {
+		t.Errorf("step list = %+v, want the raw steps kept", block.MetaCommandStepList)
+	}
+}
+
+// TestBaseMetaCommandKeepsArgumentAssignments covers the assignments that
+// narrow a base command. Dropping them made a derived command look identical
+// to its base.
+func TestBaseMetaCommandKeepsArgumentAssignments(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Cmd">
+	  <CommandMetaData>
+	    <MetaCommandSet>
+	      <MetaCommand name="SetMode" abstract="true"/>
+	      <MetaCommand name="SetSafeMode">
+	        <BaseMetaCommand metaCommandRef="SetMode">
+	          <ArgumentAssignmentList>
+	            <ArgumentAssignment argumentName="Mode" argumentValue="SAFE"/>
+	            <ArgumentAssignment argumentName="Delay" argumentValue="0"/>
+	          </ArgumentAssignmentList>
+	        </BaseMetaCommand>
+	      </MetaCommand>
+	    </MetaCommandSet>
+	  </CommandMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+
+	derived := db.MetaCommands()[1]
+	base := derived.BaseMetaCommand
+	if base == nil || base.MetaCommandRef != "SetMode" {
+		t.Fatalf("BaseMetaCommand = %+v, want a reference to SetMode", base)
+	}
+	if base.ArgumentAssignmentList == nil {
+		t.Fatal("the ArgumentAssignmentList was dropped")
+	}
+	assignments := base.ArgumentAssignmentList.Assignments
+	if len(assignments) != 2 {
+		t.Fatalf("%d assignments, want 2", len(assignments))
+	}
+	if assignments[0].Name != "Mode" || assignments[0].Value != "SAFE" {
+		t.Errorf("assignment 0 = %+v, want Mode=SAFE", assignments[0])
+	}
+	if assignments[1].Name != "Delay" || assignments[1].Value != "0" {
+		t.Errorf("assignment 1 = %+v, want Delay=0", assignments[1])
+	}
+}
+
+// TestOpaqueParameterTypesResolve covers the three type kinds kept as opaque
+// entries: array, aggregate and relative time. Their names must resolve so a
+// parameter using one passes Validate, and TypeKind must say what was found.
+func TestOpaqueParameterTypesResolve(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Opaque">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="U8_t"><IntegerDataEncoding/></IntegerParameterType>
+	      <ArrayParameterType name="Samples_t" arrayTypeRef="U8_t">
+	        <DimensionList><Dimension><StartingIndex><FixedValue>0</FixedValue></StartingIndex>
+	          <EndingIndex><FixedValue>7</FixedValue></EndingIndex></Dimension></DimensionList>
+	      </ArrayParameterType>
+	      <AggregateParameterType name="Position_t">
+	        <MemberList><Member name="X" typeRef="U8_t"/></MemberList>
+	      </AggregateParameterType>
+	      <RelativeTimeParameterType name="Elapsed_t">
+	        <Encoding units="seconds"><IntegerDataEncoding sizeInBits="32"/></Encoding>
+	      </RelativeTimeParameterType>
+	    </ParameterTypeSet>
+	    <ParameterSet>
+	      <Parameter name="Samples" parameterTypeRef="Samples_t"/>
+	      <Parameter name="Position" parameterTypeRef="Position_t"/>
+	      <Parameter name="Elapsed" parameterTypeRef="Elapsed_t"/>
+	    </ParameterSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+
+	// The definitions leave a trace: references to them resolve and Validate
+	// passes, rather than reporting a phantom unresolved reference.
+	if err := db.Validate(); err != nil {
+		t.Fatalf("Validate() = %v; parameters of opaque types must resolve", err)
+	}
+
+	want := map[string]string{
+		"Samples_t":  "array (not modeled)",
+		"Position_t": "aggregate (not modeled)",
+		"Elapsed_t":  "relative time (not modeled)",
+	}
+	for name, kind := range want {
+		resolved, err := db.ResolveParameterType(name)
+		if err != nil {
+			t.Errorf("ResolveParameterType(%s) = %v", name, err)
+			continue
+		}
+		if resolved.TypeKind() != kind {
+			t.Errorf("%s TypeKind() = %q, want %q", name, resolved.TypeKind(), kind)
+		}
+		if resolved.Encoding() != nil {
+			t.Errorf("%s has an encoding; opaque types must not claim one", name)
+		}
+	}
+
+	array, _ := db.ResolveParameterType("Samples_t")
+	if ref := array.(*xtce.ArrayParameterType).ArrayTypeRef; ref != "U8_t" {
+		t.Errorf("arrayTypeRef = %q, want U8_t", ref)
+	}
+	if raw := array.(*xtce.ArrayParameterType).Raw; !strings.Contains(string(raw), "DimensionList") {
+		t.Error("the array type's contents were not kept raw")
+	}
+}
+
+// TestContextCalibratorListIsKept makes sure a context calibrator leaves a
+// marker. A consumer who cannot see it would apply the default curve to every
+// packet and compute wrong engineering values.
+func TestContextCalibratorListIsKept(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Ctx">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <FloatParameterType name="Volts_t">
+	        <IntegerDataEncoding sizeInBits="12">
+	          <DefaultCalibrator>
+	            <PolynomialCalibrator><Term coefficient="0.5" exponent="1"/></PolynomialCalibrator>
+	          </DefaultCalibrator>
+	          <ContextCalibratorList>
+	            <ContextCalibrator>
+	              <ContextMatch><Comparison parameterRef="Mode" value="1"/></ContextMatch>
+	              <Calibrator><PolynomialCalibrator><Term coefficient="0.25" exponent="1"/></PolynomialCalibrator></Calibrator>
+	            </ContextCalibrator>
+	          </ContextCalibratorList>
+	        </IntegerDataEncoding>
+	      </FloatParameterType>
+	      <FloatParameterType name="Plain_t">
+	        <IntegerDataEncoding sizeInBits="12"/>
+	      </FloatParameterType>
+	    </ParameterTypeSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+
+	withContext, _ := db.ResolveParameterType("Volts_t")
+	if !withContext.Encoding().HasContextCalibrators() {
+		t.Error("HasContextCalibrators() = false for an encoding that has one")
+	}
+	raw := withContext.Encoding().Integer.ContextCalibratorList
+	if raw == nil || !strings.Contains(string(raw.Inner), "ContextCalibrator") {
+		t.Errorf("ContextCalibratorList = %+v, want the raw XML kept", raw)
+	}
+
+	plain, _ := db.ResolveParameterType("Plain_t")
+	if plain.Encoding().HasContextCalibrators() {
+		t.Error("HasContextCalibrators() = true for an encoding without one")
+	}
+}
+
+// TestChangeThresholdIsCarried covers the attribute on both numeric
+// encodings. Absent means any change is significant, so it is a pointer.
+func TestChangeThresholdIsCarried(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Delta">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="Counts_t">
+	        <IntegerDataEncoding sizeInBits="16" changeThreshold="5"/>
+	      </IntegerParameterType>
+	      <FloatParameterType name="Volts_t">
+	        <FloatDataEncoding sizeInBits="32" changeThreshold="0.25"/>
+	      </FloatParameterType>
+	      <IntegerParameterType name="Any_t">
+	        <IntegerDataEncoding sizeInBits="16"/>
+	      </IntegerParameterType>
+	    </ParameterTypeSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+
+	counts, _ := db.ResolveParameterType("Counts_t")
+	if got := counts.Encoding().Integer.ChangeThreshold; got == nil || *got != 5 {
+		t.Errorf("integer changeThreshold = %v, want 5", got)
+	}
+	volts, _ := db.ResolveParameterType("Volts_t")
+	if got := volts.Encoding().Float.ChangeThreshold; got == nil || *got != 0.25 {
+		t.Errorf("float changeThreshold = %v, want 0.25", got)
+	}
+	any, _ := db.ResolveParameterType("Any_t")
+	if got := any.Encoding().Integer.ChangeThreshold; got != nil {
+		t.Errorf("absent changeThreshold = %v, want nil (any change is significant)", got)
+	}
+}
+
+// TestMoreSchemaDefaultsApply covers the defaults added by the audit: the
+// parameter types' own sizeInBits, the boolean words, the time encoding's
+// units, the unit's power, and the entry location's anchor.
+func TestMoreSchemaDefaultsApply(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="D">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="Bare_t">
+	        <UnitSet>
+	          <Unit>V</Unit>
+	          <Unit power="2">m</Unit>
+	        </UnitSet>
+	        <IntegerDataEncoding/>
+	      </IntegerParameterType>
+	      <FloatParameterType name="BareFloat_t"><FloatDataEncoding/></FloatParameterType>
+	      <IntegerParameterType name="Wide_t" sizeInBits="64"><IntegerDataEncoding/></IntegerParameterType>
+	      <BooleanParameterType name="Flag_t"><IntegerDataEncoding sizeInBits="1"/></BooleanParameterType>
+	      <BooleanParameterType name="Valve_t" oneStringValue="OPEN" zeroStringValue="SHUT">
+	        <IntegerDataEncoding sizeInBits="1"/>
+	      </BooleanParameterType>
+	      <AbsoluteTimeParameterType name="Time_t">
+	        <Encoding><IntegerDataEncoding sizeInBits="32"/></Encoding>
+	      </AbsoluteTimeParameterType>
+	    </ParameterTypeSet>
+	    <ParameterSet>
+	      <Parameter name="Bare" parameterTypeRef="Bare_t"/>
+	    </ParameterSet>
+	    <ContainerSet>
+	      <SequenceContainer name="Packet">
+	        <EntryList>
+	          <ParameterRefEntry parameterRef="Bare">
+	            <LocationInContainerInBits><FixedValue>8</FixedValue></LocationInContainerInBits>
+	          </ParameterRefEntry>
+	        </EntryList>
+	      </SequenceContainer>
+	    </ContainerSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+
+	// The parameter type's own sizeInBits defaults to 32 — distinct from the
+	// encoding's, which defaults to 8 for integers.
+	bare, _ := db.ResolveParameterType("Bare_t")
+	if got := bare.(*xtce.IntegerParameterType).Size(); got != 32 {
+		t.Errorf("integer type Size() = %d, want the default 32", got)
+	}
+	bareFloat, _ := db.ResolveParameterType("BareFloat_t")
+	if got := bareFloat.(*xtce.FloatParameterType).Size(); got != 32 {
+		t.Errorf("float type Size() = %d, want the default 32", got)
+	}
+	wide, _ := db.ResolveParameterType("Wide_t")
+	if got := wide.(*xtce.IntegerParameterType).Size(); got != 64 {
+		t.Errorf("explicit sizeInBits Size() = %d, want 64", got)
+	}
+
+	// Boolean words default to True and False.
+	flag, _ := db.ResolveParameterType("Flag_t")
+	boolean := flag.(*xtce.BooleanParameterType)
+	if boolean.OneStringValueOrDefault() != "True" || boolean.ZeroStringValueOrDefault() != "False" {
+		t.Errorf("boolean words = %q/%q, want True/False",
+			boolean.OneStringValueOrDefault(), boolean.ZeroStringValueOrDefault())
+	}
+	valve, _ := db.ResolveParameterType("Valve_t")
+	spelled := valve.(*xtce.BooleanParameterType)
+	if spelled.OneStringValueOrDefault() != "OPEN" || spelled.ZeroStringValueOrDefault() != "SHUT" {
+		t.Errorf("boolean words = %q/%q, want OPEN/SHUT",
+			spelled.OneStringValueOrDefault(), spelled.ZeroStringValueOrDefault())
+	}
+
+	// A time encoding's units default to seconds.
+	clock, _ := db.ResolveParameterType("Time_t")
+	if got := clock.(*xtce.AbsoluteTimeParameterType).Encoding_.UnitsOrDefault(); got != "seconds" {
+		t.Errorf("time units = %q, want the default seconds", got)
+	}
+
+	// A unit's power defaults to 1; an explicit power is kept.
+	units := bare.(*xtce.IntegerParameterType).UnitSet.Units
+	if got := units[0].PowerOrDefault(); got != 1 {
+		t.Errorf("absent power = %v, want the default 1", got)
+	}
+	if got := units[1].PowerOrDefault(); got != 2 {
+		t.Errorf("explicit power = %v, want 2", got)
+	}
+
+	// An entry location's anchor defaults to previousEntry.
+	container, _ := db.FindContainer("/D/Packet")
+	location := container.EntryList.Entries[0].LocationInContainerInBits
+	if got := location.ReferenceLocationOrDefault(); got != "previousEntry" {
+		t.Errorf("referenceLocation = %q, want the default previousEntry", got)
+	}
+}
+
+// TestForeignNamespaceChildrenAreIgnored is the other half of namespace
+// handling: matching child elements by local name alone would let another
+// vocabulary's TelemetryMetaData masquerade as XTCE's.
+func TestForeignNamespaceChildrenAreIgnored(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="NS">
+	  <TelemetryMetaData xmlns="http://example.com/not-xtce">
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="Fake_t"><IntegerDataEncoding/></IntegerParameterType>
+	    </ParameterTypeSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v; a foreign element is ignored, not fatal", err)
+	}
+	if db.TelemetryMetaData != nil {
+		t.Errorf("TelemetryMetaData = %+v, want nil: it is in a foreign namespace", db.TelemetryMetaData)
+	}
+	if types := db.ParameterTypes(); len(types) != 0 {
+		t.Errorf("ParameterTypes() = %+v, want none", types)
+	}
+}
+
+// TestForeignNamespaceEntriesAreSkipped covers the hand-written EntryList
+// decoder, which sees raw tokens and has to check the namespace itself.
+func TestForeignNamespaceEntriesAreSkipped(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204"
+	                          xmlns:alien="http://example.com/not-xtce" name="NS">
+	  <TelemetryMetaData>
+	    <ContainerSet>
+	      <SequenceContainer name="Packet">
+	        <EntryList>
+	          <ParameterRefEntry parameterRef="A"/>
+	          <alien:ParameterRefEntry parameterRef="Ghost"/>
+	          <ParameterRefEntry parameterRef="B"/>
+	        </EntryList>
+	      </SequenceContainer>
+	    </ContainerSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	entries := db.Containers()[0].EntryList.Entries
+	if len(entries) != 2 {
+		t.Fatalf("%d entries, want 2: the foreign one is not an XTCE entry", len(entries))
+	}
+	if entries[0].Ref != "A" || entries[1].Ref != "B" {
+		t.Errorf("entries reference %q and %q, want A and B", entries[0].Ref, entries[1].Ref)
+	}
+}

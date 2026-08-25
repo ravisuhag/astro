@@ -40,15 +40,31 @@
 // both, and the depth check runs as a token scan before any decoding, so deep
 // input is refused rather than recursed into.
 //
-// # This is the layer under an extraction engine
+// # Extracting packets
 //
-// The point of a mission database is decoding real packets with it. That
-// engine is not here, but the model keeps what it will need: entry order
-// within a container, bit sizes and locations, encoding parameters, and
-// calibrators. See docs/guides/xtce.md.
+// The point of a mission database is decoding real packets with it, which is
+// what Layout and Extract do:
+//
+//	layout, err := db.LayoutOf("/Sat/Housekeeping")
+//	packet, err := layout.Extract(octets)
+//	temp, ok := packet.Get("Temp")
+//
+// A Layout is a container flattened into the fields a packet of that shape
+// carries, with inheritance worked through and a bit offset and width settled
+// for each. It depends only on the database, so it is built once per packet
+// type and reused.
+//
+// When you do not know what a packet is, Match searches: it follows each
+// container whose RestrictionCriteria the packet satisfies and takes the
+// deepest one that fits. See docs/guides/xtce.md.
 package xtce
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // Namespace is the XTCE 1.2 target namespace, from the schema's
 // targetNamespace attribute.
@@ -74,18 +90,18 @@ type SpaceSystem struct {
 	OperationalStatus string `xml:"operationalStatus,attr"`
 
 	// LongDescription is free text.
-	LongDescription string `xml:"LongDescription"`
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
 
 	// Header carries versioning and authorship.
-	Header *Header `xml:"Header"`
+	Header *Header `xml:"http://www.omg.org/spec/XTCE/20180204 Header"`
 
 	// TelemetryMetaData describes what comes down.
-	TelemetryMetaData *TelemetryMetaData `xml:"TelemetryMetaData"`
+	TelemetryMetaData *TelemetryMetaData `xml:"http://www.omg.org/spec/XTCE/20180204 TelemetryMetaData"`
 	// CommandMetaData describes what goes up.
-	CommandMetaData *CommandMetaData `xml:"CommandMetaData"`
+	CommandMetaData *CommandMetaData `xml:"http://www.omg.org/spec/XTCE/20180204 CommandMetaData"`
 
 	// SubSystems are the nested SpaceSystems.
-	SubSystems []*SpaceSystem `xml:"SpaceSystem"`
+	SubSystems []*SpaceSystem `xml:"http://www.omg.org/spec/XTCE/20180204 SpaceSystem"`
 
 	// parent links back up the tree. It is set during Load rather than decoded,
 	// because a name reference resolves by walking towards the root and the XML
@@ -109,9 +125,9 @@ type Header struct {
 // The schema also allows MessageSet, StreamSet and AlgorithmSet here. This
 // package does not model them; see docs/pics/xtce-coverage.md.
 type TelemetryMetaData struct {
-	ParameterTypeSet *ParameterTypeSet `xml:"ParameterTypeSet"`
-	ParameterSet     *ParameterSet     `xml:"ParameterSet"`
-	ContainerSet     *ContainerSet     `xml:"ContainerSet"`
+	ParameterTypeSet *ParameterTypeSet `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterTypeSet"`
+	ParameterSet     *ParameterSet     `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterSet"`
+	ContainerSet     *ContainerSet     `xml:"http://www.omg.org/spec/XTCE/20180204 ContainerSet"`
 }
 
 // CommandMetaData holds everything about the uplink.
@@ -119,14 +135,14 @@ type TelemetryMetaData struct {
 // Only the skeleton is modeled: commands and their argument names. Command
 // containers, verifiers, constraints and significance are not.
 type CommandMetaData struct {
-	ParameterTypeSet *ParameterTypeSet `xml:"ParameterTypeSet"`
-	ParameterSet     *ParameterSet     `xml:"ParameterSet"`
-	MetaCommandSet   *MetaCommandSet   `xml:"MetaCommandSet"`
+	ParameterTypeSet *ParameterTypeSet `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterTypeSet"`
+	ParameterSet     *ParameterSet     `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterSet"`
+	MetaCommandSet   *MetaCommandSet   `xml:"http://www.omg.org/spec/XTCE/20180204 MetaCommandSet"`
 }
 
 // ParameterSet is the list of parameters a SpaceSystem defines.
 type ParameterSet struct {
-	Parameters []*Parameter `xml:"Parameter"`
+	Parameters []*Parameter `xml:"http://www.omg.org/spec/XTCE/20180204 Parameter"`
 }
 
 // Parameter is one named piece of telemetry or command data.
@@ -141,12 +157,12 @@ type Parameter struct {
 	ParameterTypeRef string `xml:"parameterTypeRef,attr"`
 	InitialValue     string `xml:"initialValue,attr"`
 
-	LongDescription string `xml:"LongDescription"`
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
 }
 
 // ContainerSet is the list of containers a SpaceSystem defines.
 type ContainerSet struct {
-	SequenceContainers []*SequenceContainer `xml:"SequenceContainer"`
+	SequenceContainers []*SequenceContainer `xml:"http://www.omg.org/spec/XTCE/20180204 SequenceContainer"`
 }
 
 // SequenceContainer describes a packet layout: an ordered list of entries,
@@ -164,22 +180,102 @@ type SequenceContainer struct {
 	// IdlePattern fills unused space, written as a FixedIntegerValue.
 	IdlePattern string `xml:"idlePattern,attr"`
 
-	LongDescription string `xml:"LongDescription"`
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
 
 	// EntryList is ordered, and the order is the wire order.
-	EntryList EntryList `xml:"EntryList"`
+	EntryList EntryList `xml:"http://www.omg.org/spec/XTCE/20180204 EntryList"`
 	// BaseContainer names the container this one extends.
-	BaseContainer *BaseContainer `xml:"BaseContainer"`
+	BaseContainer *BaseContainer `xml:"http://www.omg.org/spec/XTCE/20180204 BaseContainer"`
+
+	// owner is the SpaceSystem that defines this container, set during Load.
+	// References written inside the container resolve from there, which is not
+	// necessarily the system doing the lookup.
+	owner *SpaceSystem
 }
+
+// Owner returns the SpaceSystem that defines this container, or nil for one
+// that did not come from Load.
+func (c *SequenceContainer) Owner() *SpaceSystem { return c.owner }
 
 // BaseContainer points at the container being extended.
 type BaseContainer struct {
 	ContainerRef string `xml:"containerRef,attr"`
 	// RestrictionCriteria says which values of the base's parameters select
-	// this container. It is kept as raw XML: evaluating it is the extraction
-	// engine's job, and modeling MatchCriteria in full is a large job for no
-	// benefit here.
-	RestrictionCriteria *RawXML `xml:"RestrictionCriteria"`
+	// this container. It is what makes container inheritance more than a way
+	// of sharing a header: it is the test a packet has to pass for this
+	// container to be the right reading of it.
+	RestrictionCriteria *RestrictionCriteria `xml:"http://www.omg.org/spec/XTCE/20180204 RestrictionCriteria"`
+}
+
+// RestrictionCriteria is the schema's RestrictionCriteriaType: a
+// MatchCriteria, plus the option of naming the container that must follow
+// this one in the stream.
+type RestrictionCriteria struct {
+	MatchCriteria
+
+	// NextContainer names a container that must follow this one. Deciding it
+	// needs the stream rather than the packet, so Match does not evaluate it.
+	NextContainer *ContainerRef `xml:"http://www.omg.org/spec/XTCE/20180204 NextContainer"`
+}
+
+// ContainerRef names a container.
+type ContainerRef struct {
+	ContainerRef string `xml:"containerRef,attr"`
+}
+
+// MatchCriteria is a condition over parameter values: one comparison, a list
+// of them that must all hold, an arbitrary boolean expression, or an escape to
+// an external algorithm.
+//
+// The schema makes these a choice, so exactly one is set. The last two are
+// kept raw. A BooleanExpression is a tree of ANDs and ORs that would need its
+// own evaluator, and a CustomAlgorithm is by definition outside the file.
+type MatchCriteria struct {
+	Comparison        *Comparison     `xml:"http://www.omg.org/spec/XTCE/20180204 Comparison"`
+	ComparisonList    *ComparisonList `xml:"http://www.omg.org/spec/XTCE/20180204 ComparisonList"`
+	BooleanExpression *RawXML         `xml:"http://www.omg.org/spec/XTCE/20180204 BooleanExpression"`
+	CustomAlgorithm   *RawXML         `xml:"http://www.omg.org/spec/XTCE/20180204 CustomAlgorithm"`
+}
+
+// ComparisonList is a set of comparisons that must all hold. The schema calls
+// the "and" between them implicit.
+type ComparisonList struct {
+	Comparisons []Comparison `xml:"http://www.omg.org/spec/XTCE/20180204 Comparison"`
+}
+
+// Comparison tests one parameter against a value.
+//
+// The value is written as text whatever the parameter's type, and the schema
+// says how to read it: a number is base ten unless it starts with 0x, 0o or
+// 0b, an enumeration is compared by its label, and a binary value is hex.
+type Comparison struct {
+	// ParameterRef names the parameter to test.
+	ParameterRef string `xml:"parameterRef,attr"`
+	// Value is what to test it against, as text.
+	Value string `xml:"value,attr"`
+	// ComparisonOperator is one of ==, !=, <, <=, > and >=. It defaults to ==.
+	ComparisonOperator string `xml:"comparisonOperator,attr"`
+	// UseCalibratedValue compares against the engineering value rather than
+	// the raw one. The schema's default is true, so it is a pointer: false has
+	// to be distinguishable from absent.
+	UseCalibratedValue *bool `xml:"useCalibratedValue,attr"`
+	// Instance selects an earlier or later occurrence of the parameter in the
+	// stream. It defaults to 0, meaning this packet's value.
+	Instance int64 `xml:"instance,attr"`
+}
+
+// Operator returns the comparison operator, applying the schema's default.
+func (c *Comparison) Operator() string {
+	if c.ComparisonOperator == "" {
+		return "=="
+	}
+	return c.ComparisonOperator
+}
+
+// Calibrated reports whether the comparison is against the engineering value,
+// applying the schema's default of true.
+func (c *Comparison) Calibrated() bool {
+	return c.UseCalibratedValue == nil || *c.UseCalibratedValue
 }
 
 // RawXML holds an element this package parses but does not model.
@@ -242,40 +338,152 @@ type Entry struct {
 	// RepeatEntry repeats it.
 	RepeatEntry *Repeat
 	// IncludeCondition makes it conditional. Kept raw, like
-	// RestrictionCriteria.
+	// RestrictionCriteria. Evaluating it is the caller's job.
 	IncludeCondition *RawXML
 }
 
 // LocationInContainer positions an entry within its container.
 type LocationInContainer struct {
 	// ReferenceLocation is one of containerStart, containerEnd, previousEntry
-	// or nextEntry. It defaults to previousEntry.
+	// or nextEntry. It defaults to previousEntry; read it through
+	// ReferenceLocationOrDefault.
 	ReferenceLocation string `xml:"referenceLocation,attr"`
 	// FixedValue is the offset in bits when it is a constant, which is the
 	// usual case.
-	FixedValue *int64 `xml:"FixedValue"`
+	FixedValue *FixedInteger `xml:"http://www.omg.org/spec/XTCE/20180204 FixedValue"`
 	// DynamicValue and DiscreteLookupList are the non-constant forms, kept raw.
-	DynamicValue       *RawXML `xml:"DynamicValue"`
-	DiscreteLookupList *RawXML `xml:"DiscreteLookupList"`
+	DynamicValue       *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
+	DiscreteLookupList *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 DiscreteLookupList"`
+}
+
+// ReferenceLocationOrDefault returns the anchor the offset is measured from,
+// applying the schema's default of previousEntry.
+func (l *LocationInContainer) ReferenceLocationOrDefault() string {
+	if l.ReferenceLocation == "" {
+		return "previousEntry"
+	}
+	return l.ReferenceLocation
 }
 
 // Repeat repeats an entry a number of times.
 type Repeat struct {
-	Count  *IntegerValue `xml:"Count"`
-	Offset *IntegerValue `xml:"Offset"`
+	Count  *IntegerValue `xml:"http://www.omg.org/spec/XTCE/20180204 Count"`
+	Offset *IntegerValue `xml:"http://www.omg.org/spec/XTCE/20180204 Offset"`
 }
 
 // IntegerValue is the schema's IntegerValueType: a number that may be fixed,
 // read from another parameter, or looked up.
 type IntegerValue struct {
-	FixedValue         *int64  `xml:"FixedValue"`
-	DynamicValue       *RawXML `xml:"DynamicValue"`
-	DiscreteLookupList *RawXML `xml:"DiscreteLookupList"`
+	FixedValue         *FixedInteger `xml:"http://www.omg.org/spec/XTCE/20180204 FixedValue"`
+	DynamicValue       *RawXML       `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
+	DiscreteLookupList *RawXML       `xml:"http://www.omg.org/spec/XTCE/20180204 DiscreteLookupList"`
+}
+
+// FixedInteger is the schema's FixedIntegerValueType: a union of a decimal
+// integer with the hex, octal and binary spellings, so 18, 0x12, 0o22 and
+// 0b10010 all mean the same number.
+//
+// It exists because encoding/xml reads an int64 field with strconv in base
+// ten, which makes a legal 0x2A reject the entire document. Every field fed
+// by the union uses this type instead.
+type FixedInteger int64
+
+// Int64 returns the value as a plain integer.
+func (f FixedInteger) Int64() int64 { return int64(f) }
+
+// UnmarshalXML reads the union's element form, <FixedValue>0x2A</FixedValue>.
+func (f *FixedInteger) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var text string
+	if err := d.DecodeElement(&text, &start); err != nil {
+		return err
+	}
+	value, err := parseFixedInteger(text)
+	if err != nil {
+		return err
+	}
+	*f = FixedInteger(value)
+	return nil
+}
+
+// UnmarshalXMLAttr reads the union's attribute form.
+func (f *FixedInteger) UnmarshalXMLAttr(attr xml.Attr) error {
+	value, err := parseFixedInteger(attr.Value)
+	if err != nil {
+		return err
+	}
+	*f = FixedInteger(value)
+	return nil
+}
+
+// parseFixedInteger reads one FixedIntegerValueType spelling.
+//
+// The base comes from the prefix — 0x, 0o or 0b — and is ten otherwise. A
+// leading zero alone does not mean octal: the schema's octal member requires
+// the 0o prefix, so 010 is ten, which is why this is not strconv's base 0.
+func parseFixedInteger(text string) (int64, error) {
+	trimmed := strings.TrimSpace(text)
+
+	digits := trimmed
+	sign := ""
+	if strings.HasPrefix(digits, "+") || strings.HasPrefix(digits, "-") {
+		sign, digits = digits[:1], digits[1:]
+	}
+
+	base := 10
+	if len(digits) > 2 {
+		switch digits[:2] {
+		case "0x", "0X":
+			base, digits = 16, digits[2:]
+		case "0o", "0O":
+			base, digits = 8, digits[2:]
+		case "0b", "0B":
+			base, digits = 2, digits[2:]
+		}
+	}
+
+	value, err := strconv.ParseInt(sign+digits, base, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %q is not a FixedIntegerValue", ErrInvalidValue, text)
+	}
+	return value, nil
 }
 
 // MetaCommandSet is the list of commands a SpaceSystem defines.
+//
+// The schema makes it a choice of three element kinds. MetaCommand is the
+// definition; MetaCommandRef includes a command defined elsewhere; and
+// BlockMetaCommand groups several commands into one. All three are kept, so
+// none of a mission's commands vanishes from the model silently.
 type MetaCommandSet struct {
-	MetaCommands []*MetaCommand `xml:"MetaCommand"`
+	MetaCommands []*MetaCommand `xml:"http://www.omg.org/spec/XTCE/20180204 MetaCommand"`
+	// MetaCommandRefs are commands included by reference from another
+	// SpaceSystem. The reference is kept but not resolved.
+	MetaCommandRefs []*MetaCommandRef `xml:"http://www.omg.org/spec/XTCE/20180204 MetaCommandRef"`
+	// BlockMetaCommands are ordered groupings of commands. The name is
+	// modeled; the steps are kept raw.
+	BlockMetaCommands []*BlockMetaCommand `xml:"http://www.omg.org/spec/XTCE/20180204 BlockMetaCommand"`
+}
+
+// MetaCommandRef includes a command defined in another SpaceSystem. The
+// schema types the element as a NameReferenceType, so the reference is the
+// element's text.
+type MetaCommandRef struct {
+	Ref string `xml:",chardata"`
+}
+
+// BlockMetaCommand is an ordered grouping of commands sent as one.
+//
+// Only the identity is modeled. The step list — which commands, with which
+// argument values — is kept raw, so a caller who needs it can parse it and a
+// later version can model it without changing what Load accepts.
+type BlockMetaCommand struct {
+	Name             string `xml:"name,attr"`
+	ShortDescription string `xml:"shortDescription,attr"`
+
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
+
+	// MetaCommandStepList holds the block's steps, raw.
+	MetaCommandStepList *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 MetaCommandStepList"`
 }
 
 // MetaCommand is one command, modeled as a skeleton: its name, what it
@@ -289,20 +497,37 @@ type MetaCommand struct {
 	ShortDescription string `xml:"shortDescription,attr"`
 	Abstract         bool   `xml:"abstract,attr"`
 
-	LongDescription string `xml:"LongDescription"`
+	LongDescription string `xml:"http://www.omg.org/spec/XTCE/20180204 LongDescription"`
 
-	BaseMetaCommand *BaseMetaCommand `xml:"BaseMetaCommand"`
-	ArgumentList    *ArgumentList    `xml:"ArgumentList"`
+	BaseMetaCommand *BaseMetaCommand `xml:"http://www.omg.org/spec/XTCE/20180204 BaseMetaCommand"`
+	ArgumentList    *ArgumentList    `xml:"http://www.omg.org/spec/XTCE/20180204 ArgumentList"`
 }
 
 // BaseMetaCommand points at the command being extended.
 type BaseMetaCommand struct {
 	MetaCommandRef string `xml:"metaCommandRef,attr"`
+	// ArgumentAssignmentList fixes some of the base command's arguments to
+	// specific values, which is how a general command is narrowed into a
+	// specific one. Dropping it would make the derived command look identical
+	// to its base.
+	ArgumentAssignmentList *ArgumentAssignmentList `xml:"http://www.omg.org/spec/XTCE/20180204 ArgumentAssignmentList"`
+}
+
+// ArgumentAssignmentList is the set of argument values a derived command
+// fixes.
+type ArgumentAssignmentList struct {
+	Assignments []ArgumentAssignment `xml:"http://www.omg.org/spec/XTCE/20180204 ArgumentAssignment"`
+}
+
+// ArgumentAssignment fixes one argument of the base command to a value.
+type ArgumentAssignment struct {
+	Name  string `xml:"argumentName,attr"`
+	Value string `xml:"argumentValue,attr"`
 }
 
 // ArgumentList is a command's arguments, in order.
 type ArgumentList struct {
-	Arguments []*Argument `xml:"Argument"`
+	Arguments []*Argument `xml:"http://www.omg.org/spec/XTCE/20180204 Argument"`
 }
 
 // Argument is one command argument.

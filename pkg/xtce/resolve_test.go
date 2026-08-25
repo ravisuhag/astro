@@ -194,6 +194,8 @@ func TestResolveRejectsMalformedReferences(t *testing.T) {
 		"Power//Volts", // an empty segment
 		"Power/..",     // ending in a path segment
 		"Bad:Name",     // a character the pattern forbids
+		"Bad.Name",     // a dot inside a segment, which only "." and ".." may have
+		"Power/A.B/X",  // same, mid-path
 		"../../TooFar", // above the root
 	}
 

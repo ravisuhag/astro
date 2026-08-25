@@ -60,9 +60,17 @@ fmt.Println(db.Humanize())
 
 Load and Validate are separate, and that matters. Load says the file is
 well-formed XTCE. Validate says it is coherent — every reference resolves,
-nothing inherits in a circle, no two things share a name. A database being
-edited usually has references that do not resolve yet, and a loader that
-refused to read those would be useless during authoring.
+nothing inherits in a circle, no two things share a name, every encoding
+attribute is a legal enumeration member. A database being edited usually has
+references that do not resolve yet, and a loader that refused to read those
+would be useless during authoring.
+
+Load's errors say which of three things went wrong: `ErrMalformedXML` for
+broken XML, `ErrNotSpaceSystem` for a document whose root is not an XTCE 1.2
+SpaceSystem, and `ErrInvalidValue` for a real database with one unreadable
+value in it — a `FixedValue` that is not a number, say. Fixed integers accept
+every spelling the schema's `FixedIntegerValueType` allows: decimal, `0x` hex,
+`0o` octal and `0b` binary.
 
 Validate returns a `ValidationErrors` list rather than the first fault, because
 someone repairing a database wants the whole list. `errors.Is` finds any
@@ -167,6 +175,16 @@ search continues up the tree, which is what lets a mission define a type once
 near the root and use it everywhere below. A path never searches upwards: it
 says exactly where to look, so a miss is a miss.
 
+Absolute references have a wrinkle of their own: files in the wild spell them
+two ways. The schema's example writes the root system's name out —
+`/Spacecraft/Power/BusVoltage` — but some tools treat `/` as already being the
+root, so the first segment names one of its children:
+`/Power/BusVoltage` for the same parameter. This package accepts both. When
+the first segment matches the root's name it is read as the spelled-out form
+and skipped; otherwise it is looked up among the root's children. The one
+ambiguous case is a child of the root that shares the root's name, which the
+spelled-out reading wins.
+
 Two entry points, and the difference is worth knowing:
 
 - `ResolveParameter(ref)` follows a **reference**, from the SpaceSystem you call
@@ -213,24 +231,29 @@ a packet layout and read it. The full list is in
 - **Streams**, **messages**, **services**.
 - **Command semantics** — verifiers, transmission constraints, significance.
   Commands are a skeleton: names and argument types.
-- **Array and aggregate parameter types.**
+- **Array, aggregate and relative-time parameter types** — kept as named
+  opaque entries, so references to them resolve and `TypeKind()` says what was
+  found, but their contents stay raw and `Layout` refuses parameters of these
+  types.
 
 Elements this package does not model are not silently dropped where dropping
 them would mislead. An unmodeled entry kind still occupies its place in an
 EntryList, because removing it would make the surrounding entries look adjacent
-when they are not. `RestrictionCriteria` and `IncludeCondition` are kept as raw
-XML so a caller can parse them.
+when they are not. `IncludeCondition`, `BooleanExpression` and `CustomAlgorithm`
+are kept as raw XML so a caller can parse them.
 
 ## No XSD validation
 
 The Go standard library has no XSD validator and this package takes no
 dependencies, so `Validate` means semantic checks written in Go, not schema
-conformance. It covers the four faults that make a database unusable:
+conformance. It covers the five faults that make a database unusable:
 
 1. a reference that names nothing
 2. a container inheriting in a circle
 3. two things sharing a name in one SpaceSystem
 4. a malformed reference
+5. an encoding attribute — `encoding`, `bitOrder`, `byteOrder` — that is not
+   one of the schema's enumeration members
 
 A file that breaks the schema some other way will load and pass. If you need
 real conformance, run `xmllint --schema SpaceSystem.xsd` over the file first.
@@ -259,27 +282,106 @@ container's home, which made it cubic, and an 80 KB file took 200 ms. Since the
 size cap allows files hundreds of times larger, that was a way to hang a
 process with a document. `TestValidateScalesLinearly` guards the fix.
 
-## This is the layer under an extraction engine
+## Extracting packets
 
-The point of a mission database is decoding real packets with it: take a
-`pkg/spp` packet, walk a container's EntryList, and pull each parameter out bit
-by bit. That engine is not in this package and needs its own design.
+The point of a mission database is decoding real packets with it, and that is
+what `Layout` and `Extract` do.
 
-What this package owes it, and keeps:
+A `Layout` is a container flattened into the fields a packet of that shape
+carries: inheritance worked through, referenced containers spliced in, and a
+bit offset and width worked out for each field. It depends only on the
+database, so build one per packet type at startup and reuse it.
 
-| The engine needs | Where it is |
+```go
+layout, err := db.LayoutOf("/Sat/Housekeeping")
+
+packet, err := layout.Extract(octets)
+for _, value := range packet.Values {
+    fmt.Println(value)     // /Sat/Temp = 23.4
+}
+
+temp, ok := packet.Get("Temp")
+degrees, ok := temp.Float()
+```
+
+Every value comes with both readings:
+
+- `Raw` is what the packet carried — a `uint64`, `int64`, `float64`, `string`
+  or `[]byte`, depending on the encoding.
+- `Engineering` is what an operator should see: the calibrated number, the
+  enumeration's label, the boolean's word.
+
+Keeping both matters. An operator wants "23.4 °C" and an engineer chasing a
+fault wants the count that produced it, and a system that stores one of them
+cannot answer the other question later.
+
+A field that cannot be decoded sets that value's `Err` and the rest of the
+packet is still read, so one unsupported encoding in the middle does not hide
+everything after it. `packet.Err()` returns the first failure for a caller who
+wants all-or-nothing.
+
+### Working out what a packet is
+
+A ground station receives octets, not labelled packets. `Match` does the
+search: start at the abstract container every packet extends, and follow each
+derived container whose `RestrictionCriteria` the packet satisfies.
+
+```go
+base, err := db.FindContainer("/Sat/Packet")
+
+packet, err := db.Match(base, octets)
+fmt.Println(packet.Layout.Container.Name)   // DetailedHousekeeping
+```
+
+The deepest match wins, so a packet that is both "a telemetry packet" and "a
+housekeeping telemetry packet" is read as the latter. `MatchFrom` returns just
+the container when the answer you want is "what is this".
+
+Three things to know.
+
+**A container with no criteria never matches.** Inheriting without saying what
+distinguishes you means nothing selects you, and treating that as "always true"
+would make the first such container swallow every packet.
+
+**A packet too short for the container is not a match.** A truncated packet can
+satisfy a comparison on a field near the front while lacking most of the
+container, and calling that a match would hand you a layout that cannot be
+extracted.
+
+**Comparisons run against the engineering value by default.** The schema's
+`useCalibratedValue` defaults to `true`, so a comparison on an enumerated
+parameter is against its label — `value="SCIENCE"`, not `value="1"`. Set the
+attribute to `false` for the raw number.
+
+Comparison values follow the schema's spelling: base ten unless the text starts
+with `0x`, `0o` or `0b`, and truncated to the parameter's width only when they
+do not already fit it.
+
+### What extraction does not do
+
+`Layout` refuses rather than guessing when the database makes a packet's shape
+depend on the packet:
+
+| Refused | Why |
 |---|---|
-| entry order | `EntryList.Entries`, in document order |
-| bit widths | `ParameterType.Encoding().SizeInBits()` |
-| explicit positions | `Entry.LocationInContainerInBits` |
-| repeats | `Entry.RepeatEntry` |
-| bit and byte order | `BitOrderOrDefault()`, `ByteOrderOrDefault()` |
-| signedness and encoding | `IsSigned()`, `EncodingOrDefault()` |
-| calibrators | `DefaultCalibrator`, polynomial and spline |
-| time epochs | `AbsoluteTimeParameterType.ReferenceTime`, for `pkg/tcf` |
-| inheritance | `BaseContainer`, with `RestrictionCriteria` kept raw |
+| delimited or dynamically sized fields | the width is not in the database, so `ErrDynamicSize` |
+| `RepeatEntry` with a dynamic count or an `Offset` | same, and the offset form wants a real database to check against |
+| `referenceLocation="containerEnd"` or `"nextEntry"` | a forward reference that one pass cannot resolve |
+| entry kinds the model folds into `EntryOther` | their width is not modeled, so everything after them would be misplaced |
 
-`testdata/ccsds-header.xml` is its first test vector.
+`Match` refuses a `BooleanExpression` or a `CustomAlgorithm` in the criteria,
+and a `Comparison` with a non-zero `instance`, rather than quietly reading them
+as false — a criterion silently treated as false misroutes packets.
+
+Unsupported encodings are reported the same way: `MILSTD_1750A` and the decimal
+float forms, IEEE 754 widths other than 16, 32 and 64, and
+`MathOperationCalibrator`.
+
+Splines are limited the same way. Order 1 is a straight line between points,
+which is what a measured calibration curve is. Higher orders are refused
+because the schema does not say which spline it means, and guessing at a curve
+would put a wrong number in front of an operator. Outside the measured range
+the value is clamped, unless `extrapolate` says to extend the end segment.
 
 ## Schema defaults
 
@@ -289,6 +391,8 @@ apply the default:
 
 | Attribute | Default | Accessor |
 |---|---|---|
+| `IntegerParameterType/@sizeInBits` | 32 | `Size()` |
+| `FloatParameterType/@sizeInBits` | 32 | `Size()` |
 | `IntegerDataEncoding/@sizeInBits` | 8 | `Size()` |
 | `IntegerDataEncoding/@encoding` | `unsigned` | `EncodingOrDefault()` |
 | `FloatDataEncoding/@sizeInBits` | 32 | `Size()` |
@@ -297,10 +401,19 @@ apply the default:
 | `@bitOrder` | `mostSignificantBitFirst` | `BitOrderOrDefault()` |
 | `@byteOrder` | `mostSignificantByteFirst` | `ByteOrderOrDefault()` |
 | `IntegerDataType/@signed` | `true` | `IsSigned()` |
+| `@oneStringValue`, `@zeroStringValue` | `True`, `False` | `OneStringValueOrDefault()`, `ZeroStringValueOrDefault()` |
+| `Encoding/@units` | `seconds` | `UnitsOrDefault()` |
 | `Encoding/@scale`, `@offset` | 1, 0 | `ScaleOrDefault()`, `OffsetOrDefault()` |
+| `Unit/@power` | 1 | `PowerOrDefault()` |
+| `@referenceLocation` | `previousEntry` | `ReferenceLocationOrDefault()` |
+
+Note the two sizeInBits defaults differ: a bare integer *type* is 32 bits wide
+in software while its bare integer *encoding* is 8 bits on the wire.
 
 `signed` is the one that needs care: `false` and absent are different, so the
-field is a `*bool` and reading it directly is a mistake.
+field is a `*bool` and reading it directly is a mistake. `power` and
+`changeThreshold` are pointers for the same reason: an absent power is not a
+power of zero, and an absent threshold means any change is significant.
 
 ## Reference
 

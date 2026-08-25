@@ -346,3 +346,81 @@ func TestSharedBaseIsWalkedOnce(t *testing.T) {
 		t.Fatalf("Validate() = %v", err)
 	}
 }
+
+// TestValidateRejectsIllegalEncodingEnums covers the enumerated encoding
+// attributes. A misspelled member used to be invisible until decode time,
+// where it surfaced on every packet as an unsupported encoding.
+func TestValidateRejectsIllegalEncodingEnums(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Enums">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="BadKind_t">
+	        <IntegerDataEncoding encoding="unsgined" sizeInBits="8"/>
+	      </IntegerParameterType>
+	      <FloatParameterType name="BadFloat_t">
+	        <FloatDataEncoding encoding="IEEE754_2008" sizeInBits="32"/>
+	      </FloatParameterType>
+	      <StringParameterType name="BadText_t">
+	        <StringDataEncoding encoding="EBCDIC"/>
+	      </StringParameterType>
+	      <IntegerParameterType name="BadBitOrder_t">
+	        <IntegerDataEncoding sizeInBits="8" bitOrder="littleEndian"/>
+	      </IntegerParameterType>
+	      <IntegerParameterType name="BadByteOrder_t">
+	        <IntegerDataEncoding sizeInBits="8" byteOrder="sideways"/>
+	      </IntegerParameterType>
+	    </ParameterTypeSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v; enum membership is Validate's job, not Load's", err)
+	}
+
+	err = db.Validate()
+	if !errors.Is(err, xtce.ErrInvalidEncoding) {
+		t.Fatalf("Validate() = %v, want ErrInvalidEncoding", err)
+	}
+
+	var problems xtce.ValidationErrors
+	if !errors.As(err, &problems) {
+		t.Fatalf("Validate() returned %T, want ValidationErrors", err)
+	}
+	if len(problems) != 5 {
+		t.Errorf("%d problems, want 5 (one per illegal attribute):\n%v", len(problems), err)
+	}
+	// The message must name the type, so the fault is findable in the file.
+	if !strings.Contains(err.Error(), "BadKind_t") || !strings.Contains(err.Error(), "unsgined") {
+		t.Errorf("the error does not name the type and the bad value:\n%v", err)
+	}
+}
+
+// TestValidateAcceptsLegalEncodingEnums makes sure the check accepts every
+// spelling the schema allows, including the arbitrary byte-list order.
+func TestValidateAcceptsLegalEncodingEnums(t *testing.T) {
+	const doc = `<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Enums">
+	  <TelemetryMetaData>
+	    <ParameterTypeSet>
+	      <IntegerParameterType name="BCD_t">
+	        <IntegerDataEncoding encoding="packedBCD" sizeInBits="16"
+	                             bitOrder="leastSignificantBitFirst" byteOrder="leastSignificantByteFirst"/>
+	      </IntegerParameterType>
+	      <FloatParameterType name="Mil_t">
+	        <FloatDataEncoding encoding="MILSTD_1750A" sizeInBits="32" byteOrder="3,2,1,0"/>
+	      </FloatParameterType>
+	      <StringParameterType name="Ascii_t">
+	        <StringDataEncoding encoding="US-ASCII"/>
+	      </StringParameterType>
+	    </ParameterTypeSet>
+	  </TelemetryMetaData>
+	</SpaceSystem>`
+
+	db, err := xtce.Load(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	if err := db.Validate(); err != nil {
+		t.Fatalf("Validate() = %v; every attribute here is a legal member", err)
+	}
+}
