@@ -82,4 +82,8 @@ var (
 
 	// ErrInvalidOCFLength indicates the Operational Control Field is not exactly 4 bytes.
 	ErrInvalidOCFLength = errors.New("operational control field must be exactly 4 bytes when OCF flag is set")
+
+	// ErrFrameLengthMismatch indicates a frame whose encoded length differs
+	// from the fixed ChannelConfig.FrameLength of its physical channel.
+	ErrFrameLengthMismatch = errors.New("frame length does not match the fixed channel frame length")
 )

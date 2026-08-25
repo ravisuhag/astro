@@ -106,7 +106,7 @@ The TM Transfer Frame is the fundamental data unit of the protocol. It has a fix
 ┌──────────┬─────────────┬───────────┬─────┬─────┐
 │ Primary  │  Secondary  │   Data    │ OCF │ FEC │
 │ Header   │  Header     │   Field   │     │     │
-│ (6B)     │ (opt,1-64B) │ (variable)│(4B) │(2B) │
+│ (6B)     │ (opt,2-64B) │ (variable)│(4B) │(2B) │
 └──────────┴─────────────┴───────────┴─────┴─────┘
 │←─────────────── Fixed Frame Length ────────────→│
 ```
@@ -135,7 +135,7 @@ Byte 4-5: Data Field Status
 
 #### Transfer Frame Version Number (2 bits)
 
-Always `00` for TM Transfer Frames. This distinguishes TM frames from TC frames (`01`) and AOS frames (`01`) on shared links.
+Always `00` for TM Transfer Frames. AOS frames use `01`. TC frames also use `00`, but they travel on the uplink, so the two never share a physical channel.
 
 #### Spacecraft Identifier (10 bits)
 
@@ -191,8 +191,8 @@ When `SyncFlag=0` (packet or frame data):
 | Value | Meaning |
 |-------|---------|
 | 0–2045 | Byte offset to the first packet header that starts in this frame's Data Field |
-| `0x07FE` (2046) | No packet starts in this frame — it is entirely a continuation of a packet from a previous frame |
-| `0x07FF` (2047) | The Data Field contains only idle data (no valid packets) |
+| `0x07FF` (2047) | No packet starts in this frame — it is entirely a continuation of a packet from a previous frame |
+| `0x07FE` (2046) | The Data Field contains only idle data (no packet starts or continues here) |
 
 **Why this matters:** Packets can be any size, but frames are fixed-length. A packet might start in one frame and end in the next (or span several frames). The First Header Pointer tells the receiver where to find the beginning of a new packet so it can resynchronize after a frame loss.
 
@@ -206,7 +206,7 @@ Frame N:                    Frame N+1:
 └─────┴──────────────────┘ └─────┴──────────────────────┘
 ```
 
-When `SyncFlag=1` (VCA access data): the FHP must be `0x07FF`.
+When `SyncFlag=1` (VCA access data): the FHP is undefined. A sender sets it to `0x07FF`; a receiver must not reject a frame over its value.
 
 ### Secondary Header (optional)
 
@@ -215,9 +215,9 @@ The secondary header is mission-defined and provides a place for data that appli
 | Field | Bits | Description |
 |-------|------|-------------|
 | Version | 2 | Always `00` |
-| Header Length | 6 | Length of data field minus 1 (0–63) |
+| Header Length | 6 | Total secondary header length in octets minus 1 — the total counts this prefix byte, so the field equals the data field length (1–63) |
 
-Followed by 1–64 bytes of mission-defined data. The Header Length field makes the secondary header self-describing, so a decoder can skip it without knowing its internal format.
+Followed by 1–63 bytes of mission-defined data (the whole secondary header is 2–64 octets). The Header Length field makes the secondary header self-describing, so a decoder can skip it without knowing its internal format.
 
 ### Transfer Frame Data Field
 
@@ -256,24 +256,24 @@ The most common service. VCP packs **Space Packets** (or similar variable-length
 - Multiple packets can fit in a single frame
 - A single packet can span multiple frames
 - The FHP tells the receiver where the first new packet starts in each frame
-- Idle fill (`0xFF`) pads unused space at the end of the Data Field
+- Unused space at the end of the Data Field is filled with an **idle packet** — a real Space Packet with APID `0x7FF` — that the receiver parses and discards. Raw fill bytes would be misread as a packet header by a conformant receiver. When the spare space is under 7 octets (the minimum Space Packet size), the idle packet spans into the next frame.
 
 ```
-Frame with two complete packets and start of a third:
-┌─────┬───────────┬──────────┬──────────┬───────┐
-│ HDR │  Packet A │ Packet B │ Packet C │  pad  │
-│     │ (complete)│(complete)│ (start)  │ 0xFF  │
-│     │↑ FHP=0    │          │          │       │
-└─────┴───────────┴──────────┴──────────┴───────┘
+Frame with two complete packets and an idle fill packet:
+┌─────┬───────────┬──────────┬─────────────────┐
+│ HDR │  Packet A │ Packet B │ Idle packet     │
+│     │ (complete)│(complete)│ (APID 0x7FF)    │
+│     │↑ FHP=0    │          │                 │
+└─────┴───────────┴──────────┴─────────────────┘
 
 Frame that is entirely continuation data:
 ┌─────┬──────────────────────────────────────────┐
 │ HDR │  Packet C (continuation)                 │
-│     │  FHP = 0x07FE (no new packet starts)     │
+│     │  FHP = 0x07FF (no new packet starts)     │
 └─────┴──────────────────────────────────────────┘
 ```
 
-**Receiving with FHP-based resync:** If a frame is lost, the receiver discards its partial packet buffer and waits for the next frame with a valid FHP (not `0x07FE`). It then starts reading from the FHP offset, skipping any continuation data from the lost packet. This is how the protocol recovers from frame loss without retransmission.
+**Receiving with FHP-based resync:** If a frame is lost, the receiver discards its partial packet buffer and waits for the next frame with a valid FHP (not `0x07FF`). It then starts reading from the FHP offset, skipping any continuation data from the lost packet. This is how the protocol recovers from frame loss without retransmission. Extracted idle packets (APID `0x7FF`) are discarded and never delivered to the user.
 
 ### Virtual Channel Frame Service (VCF)
 
@@ -326,14 +326,14 @@ The LFSR is initialized to all 1s (`0xFF`) and generates one bit per clock. The 
 
 ## Idle Frames
 
-When no Virtual Channel has data to send but the link must keep transmitting (continuous-mode links), the protocol generates **idle frames**:
+When no Virtual Channel has data to send but the link must keep transmitting (continuous-mode links), the protocol generates **idle frames** (Only-Idle-Data frames):
 
-- Data Field filled entirely with `0xFF` (idle fill)
-- `FirstHeaderPtr = 0x07FF` (indicating no valid data)
+- Data Field filled entirely with idle data
+- `FirstHeaderPtr = 0x07FE` (the OID sentinel: only idle data)
 - `SyncFlag = 0`
 - Typically sent on VCID 7 (convention, not required)
 
-Idle frames still carry valid headers with incrementing MC/VC frame counts, maintaining synchronization.
+Idle frames still carry valid headers with incrementing MC/VC frame counts, maintaining synchronization. In astro, pass the shared `FrameCounter` via `MasterChannel.SetFrameCounter` (or use `NewIdleFrameWithCounter`) so inserted idle frames continue the Master Channel count.
 
 ## Frame Gap Detection
 

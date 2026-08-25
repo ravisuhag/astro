@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/ravisuhag/astro/pkg/sdl"
+	"github.com/ravisuhag/astro/pkg/spp"
 )
 
 // Service is the interface for all TM Data Link services.
@@ -58,7 +59,31 @@ func stampFrame(frame *TMTransferFrame, counter *FrameCounter, vcid uint8) error
 	return recomputeCRC(frame)
 }
 
-// isIdleFill checks if all bytes are 0xFF (idle fill pattern).
+// makeOCF builds the Operational Control Field for a frame on the given
+// channel: nil when the channel has no OCF, the supplier's 4 octets when one
+// is installed, and all zeros otherwise.
+func makeOCF(config ChannelConfig, supplier func() []byte) ([]byte, error) {
+	if !config.HasOCF {
+		return nil, nil
+	}
+	if supplier != nil {
+		ocf := supplier()
+		if len(ocf) != 4 {
+			return nil, ErrInvalidOCFLength
+		}
+		out := make([]byte, 4)
+		copy(out, ocf)
+		return out, nil
+	}
+	return make([]byte, 4), nil
+}
+
+// isIdleFill checks if all bytes are 0xFF (raw idle fill pattern).
+//
+// Conformant streams built by this package no longer produce raw 0xFF fill —
+// spare data field space carries real SPP idle packets (see idleFillPacket).
+// The check is kept as decode-side leniency for frames produced by older
+// versions of this package, which padded with bare 0xFF.
 func isIdleFill(data []byte) bool {
 	for _, b := range data {
 		if b != 0xFF {
@@ -66,6 +91,41 @@ func isIdleFill(data []byte) bool {
 		}
 	}
 	return true
+}
+
+// minPacketSize is the shortest possible Space Packet: six octets of primary
+// header plus at least one octet of data (CCSDS 133.0-B-2 §4.1.1.2).
+const minPacketSize = spp.PrimaryHeaderSize + 1
+
+// idleFillPacket returns an encoded SPP idle packet (APID 0x7FF) of exactly
+// n octets. While n is below the seven-octet minimum packet size, it is grown
+// by whole data fields so the packet ends exactly on a later frame boundary,
+// per CCSDS 132.0-B-3 §4.2.2.4: fill that cannot hold a packet header spans
+// into the next frame.
+func idleFillPacket(n, capacity int) ([]byte, error) {
+	for n < minPacketSize {
+		n += capacity
+	}
+	fill := make([]byte, n-spp.PrimaryHeaderSize)
+	for i := range fill {
+		fill[i] = 0xFF
+	}
+	pkt, err := spp.NewTMPacket(spp.APIDIdle, fill)
+	if err != nil {
+		return nil, err
+	}
+	return pkt.Encode()
+}
+
+// isIdlePacket reports whether an encoded packet carries the SPP idle APID
+// (all ones). ECSS-E-ST-50-03C 5.4.3.5d and CCSDS 132.0-B-3 §4.3.2 require
+// the packet extraction function to discard such packets.
+func isIdlePacket(pkt []byte) bool {
+	if len(pkt) < 2 {
+		return false
+	}
+	apid := uint16(pkt[0]&0x07)<<8 | uint16(pkt[1])
+	return apid == spp.APIDIdle
 }
 
 // VirtualChannelPacketService implements the VCP service.
@@ -90,6 +150,10 @@ type VirtualChannelPacketService struct {
 	sizer       PacketSizer
 	gapDetector *FrameGapDetector
 	gapResync   bool // when true, discard partial packets on frame gaps
+
+	// ocfSupplier, when set, provides the 4-octet Operational Control Field
+	// for each emitted frame on a channel with HasOCF.
+	ocfSupplier func() []byte
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
@@ -122,11 +186,24 @@ func (s *VirtualChannelPacketService) SetPacketSizer(sizer PacketSizer) {
 	s.sizer = sizer
 }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for every frame emitted on a channel
+// configured with HasOCF. Without a supplier the field is all zeros, which a
+// receiver reads as an empty Type-1-Report; per CCSDS 132.0-B-3 §4.1.5 the
+// field content should come from the OCF service user.
+func (s *VirtualChannelPacketService) SetOCFSupplier(supplier func() []byte) {
+	s.ocfSupplier = supplier
+}
+
 // Send appends packet data to the send buffer and generates full frames.
-// When ChannelConfig is not set, creates one frame per packet (legacy).
 // When ChannelConfig is set, packs packets into fixed-length frames with
 // proper FirstHeaderPtr. Call Flush() after the last Send() to emit any
-// remaining partial frame.
+// remaining partial frame, padded with SPP idle packets.
+//
+// When ChannelConfig is not set, Send creates one variable-length frame per
+// packet. That legacy path violates the fixed-frame-length rule of CCSDS
+// 132.0-B-3 §2.1.3 and exists only for in-process loopback and tests; set
+// ChannelConfig.FrameLength for anything that leaves the process.
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
@@ -150,8 +227,15 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 	return s.emitFullFrames()
 }
 
-// Flush pads and emits any remaining buffered data as a final frame.
-// Only meaningful when ChannelConfig is set.
+// Flush fills any remaining buffered data up to a frame boundary with an SPP
+// idle packet (APID 0x7FF) and emits the resulting frame(s). Only meaningful
+// when ChannelConfig is set.
+//
+// CCSDS 132.0-B-3 §4.2.2 and ECSS-E-ST-50-03C 5.4.3.4g require spare data
+// field space to carry idle packets a conformant receiver can parse and
+// discard, not raw fill it would misread as a packet header. When the spare
+// space is under the seven-octet minimum packet size, the idle packet spans
+// into one or more following frames, so Flush may emit more than one frame.
 func (s *VirtualChannelPacketService) Flush() error {
 	if s.config.FrameLength == 0 || len(s.sendBuf) == 0 {
 		return nil
@@ -161,20 +245,19 @@ func (s *VirtualChannelPacketService) Flush() error {
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
-	chunk := padDataField(s.sendBuf, capacity)
 
-	fhp := FHPNoPacketStart
-	for _, off := range s.packetOffsets {
-		if off < len(s.sendBuf) {
-			fhp = uint16(off)
-			break
+	if remainder := capacity - len(s.sendBuf); remainder > 0 {
+		fill, err := idleFillPacket(remainder, capacity)
+		if err != nil {
+			return err
 		}
+		// The idle packet is a real packet: record its start so the
+		// First Header Pointer points at its header.
+		s.packetOffsets = append(s.packetOffsets, len(s.sendBuf))
+		s.sendBuf = append(s.sendBuf, fill...)
 	}
 
-	s.sendBuf = nil
-	s.packetOffsets = nil
-
-	return s.emitFrame(chunk, fhp)
+	return s.emitFullFrames()
 }
 
 // emitFullFrames generates frames from sendBuf while it has >= capacity bytes.
@@ -212,9 +295,9 @@ func (s *VirtualChannelPacketService) emitFullFrames() error {
 }
 
 func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) error {
-	var ocf []byte
-	if s.config.HasOCF {
-		ocf = make([]byte, 4)
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
 	}
 
 	frame, err := NewTMTransferFrame(s.scid, s.vcid, dataField, nil, ocf)
@@ -260,6 +343,11 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 				s.recvBuf = s.recvBuf[pktLen:]
 				if isIdleFill(s.recvBuf) {
 					s.recvBuf = nil
+				}
+				// ECSS-E-ST-50-03C 5.4.3.5d: extracted idle packets
+				// are fill and never reach the service user.
+				if isIdlePacket(pkt) {
+					continue
 				}
 				return pkt, nil
 			}
@@ -320,6 +408,10 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 					copy(s.recvBuf, data[fhp:])
 					if isIdleFill(s.recvBuf) {
 						s.recvBuf = nil
+					}
+					// Idle fill packets are discarded, not delivered.
+					if isIdlePacket(pkt) {
+						continue
 					}
 					return pkt, nil
 				}
@@ -399,6 +491,10 @@ type VirtualChannelAccessService struct {
 	counter    *FrameCounter
 	vc         *VirtualChannel
 	lastStatus VCAStatus
+
+	// ocfSupplier, when set, provides the 4-octet Operational Control Field
+	// for each emitted frame on a channel with HasOCF.
+	ocfSupplier func() []byte
 }
 
 // NewVirtualChannelAccessService creates a new VCA service instance.
@@ -413,26 +509,38 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 	}
 }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for every frame emitted on a channel
+// configured with HasOCF. Without a supplier the field is all zeros.
+func (s *VirtualChannelAccessService) SetOCFSupplier(supplier func() []byte) {
+	s.ocfSupplier = supplier
+}
+
 // Send wraps a fixed-length SDU into a TM Transfer Frame.
+//
+// CCSDS 132.0-B-3 §3.4.2.2 fixes the VCA_SDU length per virtual channel, so
+// data must be exactly vcaSize octets. On a fixed-length channel the SDU must
+// also fit the data field: a vcaSize past DataFieldCapacity returns
+// ErrDataTooLarge, since the padding a larger SDU would force could not be
+// told apart from SDU content by any receiver.
 func (s *VirtualChannelAccessService) Send(data []byte) error {
-	if s.config.FrameLength == 0 {
-		if len(data) != s.vcaSize {
-			return ErrSizeMismatch
-		}
-	} else {
+	if len(data) == 0 {
+		return ErrEmptyData
+	}
+	if len(data) != s.vcaSize {
+		return ErrSizeMismatch
+	}
+	if s.config.FrameLength > 0 {
 		capacity := s.config.DataFieldCapacity(0)
-		if len(data) == 0 {
-			return ErrEmptyData
-		}
-		if len(data) > capacity {
+		if s.vcaSize > capacity {
 			return ErrDataTooLarge
 		}
 		data = padDataField(data, capacity)
 	}
 
-	var ocf []byte
-	if s.config.HasOCF {
-		ocf = make([]byte, 4)
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
 	}
 
 	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, nil, ocf)

@@ -94,6 +94,11 @@ func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
 
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
 // or an idle frame if no Master Channel has pending data.
+//
+// The idle frame's SCID is chosen deterministically: the lowest registered
+// Master Channel SCID (0 when none are registered). Its MC and VC counts are
+// stamped from that Master Channel's FrameCounter when one was installed via
+// SetFrameCounter, so idle frames continue the channel's count sequence.
 func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	frame, err := pc.GetNextFrame()
 	if err == nil {
@@ -105,12 +110,19 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	if pc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	var scid uint16
-	for s := range pc.masterChannels {
-		scid = s
-		break
+	var chosen *MasterChannel
+	for _, mc := range pc.masterChannels {
+		if chosen == nil || mc.scid < chosen.scid {
+			chosen = mc
+		}
 	}
-	return NewIdleFrame(scid, 7, pc.config)
+	var scid uint16
+	var counter *FrameCounter
+	if chosen != nil {
+		scid = chosen.scid
+		counter = chosen.counter
+	}
+	return NewIdleFrameWithCounter(scid, IdleFrameVCID, pc.config, counter)
 }
 
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel

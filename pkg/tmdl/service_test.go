@@ -138,9 +138,10 @@ func TestVCPService_Packing_LargePacket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 16 bytes → ceil(16/10) = 2 frames
-	if vc.Len() != 2 {
-		t.Fatalf("Expected 2 frames, got %d", vc.Len())
+	// 16 packet bytes leave 4 spare octets in frame 2 — too few for the
+	// 7-octet minimum idle packet, so the fill spans one extra frame: 3 total.
+	if vc.Len() != 3 {
+		t.Fatalf("Expected 3 frames, got %d", vc.Len())
 	}
 
 	received, err := svc.Receive()
@@ -172,9 +173,11 @@ func TestVCPService_Packing_TwoSmallPackets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Both packets packed into 1 frame (16 bytes < 20 capacity)
-	if vc.Len() != 1 {
-		t.Fatalf("Expected 1 frame (two packets packed), got %d", vc.Len())
+	// Both packets pack into frame 1 (16 bytes < 20 capacity). The 4 spare
+	// octets are under the 7-octet minimum idle packet, so the idle fill
+	// spans into a second, fill-only frame.
+	if vc.Len() != 2 {
+		t.Fatalf("Expected 2 frames (two packets packed + spanning fill), got %d", vc.Len())
 	}
 
 	// Verify FHP = 0 (first packet starts at byte 0)
@@ -211,7 +214,7 @@ func TestVCPService_Packing_TwoSmallPackets(t *testing.T) {
 func TestVCPService_Packing_SpanningPackets(t *testing.T) {
 	// capacity = 12, pkt1=8 bytes, pkt2=8 bytes → total 16 bytes
 	// Frame 1: [pkt1(8) + pkt2_start(4)] FHP=0
-	// Frame 2: [pkt2_end(4) + idle(8)] FHP=0x07FE
+	// Frame 2: [pkt2_end(4) + idle packet(8)] FHP=4 (idle packet header)
 	config := tmdl.ChannelConfig{FrameLength: 20, HasFEC: true}
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -244,7 +247,8 @@ func TestVCPService_Packing_SpanningPackets(t *testing.T) {
 func TestVCPService_Packing_FHPValues(t *testing.T) {
 	// capacity = 12, pkt1=8 bytes, pkt2=8 bytes
 	// Frame 1: [pkt1(8)|pkt2_start(4)] FHP=0 (pkt1 starts at 0)
-	// Frame 2: [pkt2_end(4)|idle(8)] FHP=0x07FE
+	// Frame 2: [pkt2_end(4)|idle packet(8)] FHP=4 (the idle fill packet is a
+	// real packet, so the pointer marks its header)
 	config := tmdl.ChannelConfig{FrameLength: 20, HasFEC: true}
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -263,8 +267,8 @@ func TestVCPService_Packing_FHPValues(t *testing.T) {
 	}
 
 	f2, _ := vc.Next()
-	if f2.Header.FirstHeaderPtr != 0x07FF {
-		t.Errorf("Frame 2: FHP = 0x%04X, want 0x07FF", f2.Header.FirstHeaderPtr)
+	if f2.Header.FirstHeaderPtr != 4 {
+		t.Errorf("Frame 2: FHP = 0x%04X, want 4 (idle fill packet header)", f2.Header.FirstHeaderPtr)
 	}
 }
 
@@ -273,6 +277,8 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 	// pkt2=7 bytes → pkt2 starts at offset 7 in frame 1
 	// But actually: frame 1 has capacity 10. After pkt1 (7 bytes), pkt2 starts at offset 7.
 	// If total < capacity (14 bytes > 10), frame 1 = first 10 bytes, with pkt2 at offset 7.
+	// Flush leaves 4 octets of pkt2 and 6 spare — under the 7-octet minimum,
+	// so the idle fill packet starting at offset 4 spans into a third frame.
 	config := tmdl.ChannelConfig{FrameLength: 18, HasFEC: true} // capacity = 10
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -291,10 +297,18 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 		t.Errorf("Frame 1 FHP = %d, want 0", f1.Header.FirstHeaderPtr)
 	}
 
-	// Frame 2 should have FHP=0x07FE (continuation of pkt2)
+	// Frame 2 carries pkt2's tail then the idle fill packet's header at offset 4
 	f2, _ := vc.Next()
-	if f2.Header.FirstHeaderPtr != 0x07FF {
-		t.Errorf("Frame 2 FHP = 0x%04X, want 0x07FF", f2.Header.FirstHeaderPtr)
+	if f2.Header.FirstHeaderPtr != 4 {
+		t.Errorf("Frame 2 FHP = 0x%04X, want 4 (idle fill packet header)", f2.Header.FirstHeaderPtr)
+	}
+
+	// Frame 3 is pure idle packet continuation: no packet starts in it,
+	// so FHP is the 0x07FF "no packet starts" sentinel (§4.1.2.7.6).
+	f3, _ := vc.Next()
+	if f3.Header.FirstHeaderPtr != tmdl.FHPNoPacketStart {
+		t.Errorf("Frame 3 FHP = 0x%04X, want 0x%04X (no packet starts)",
+			f3.Header.FirstHeaderPtr, tmdl.FHPNoPacketStart)
 	}
 }
 
@@ -346,7 +360,7 @@ func TestVCPService_Packing_LossResync(t *testing.T) {
 	// Remove the first frame (simulate loss)
 	_, _ = vc.Next() // discard pkt1's frame
 
-	// pkt2's frame remains — it has FHP=0x07FE (continuation) or FHP with offset
+	// pkt2's frame remains — it has FHP=0x07FF (no packet starts) or FHP with offset
 	// After gap detection, receiver should resync and eventually extract pkt2
 	// if pkt2 starts in the remaining frame
 
@@ -620,8 +634,10 @@ func TestVCPService_Packing_ThreeFramePacket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if vc.Len() != 3 {
-		t.Fatalf("Expected 3 frames, got %d", vc.Len())
+	// 26 packet bytes fill 2 frames and leave 6 in the third; the 4 spare
+	// octets can't hold a 7-octet idle packet, so the fill spans a 4th frame.
+	if vc.Len() != 4 {
+		t.Fatalf("Expected 4 frames, got %d", vc.Len())
 	}
 
 	received, err := svc.Receive()
@@ -647,8 +663,10 @@ func TestVCPService_Packing_FiveFramePacket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if vc.Len() != 5 {
-		t.Fatalf("Expected 5 frames, got %d", vc.Len())
+	// 46 packet bytes fill 4 frames and leave 6 in the fifth; the spanning
+	// idle fill packet adds a sixth frame.
+	if vc.Len() != 6 {
+		t.Fatalf("Expected 6 frames, got %d", vc.Len())
 	}
 
 	received, err := svc.Receive()
@@ -865,5 +883,342 @@ func TestIdleFrameDoesNotAffectPacketState(t *testing.T) {
 	}
 	if !bytes.Equal(pkt, received) {
 		t.Errorf("Packet corrupted by interleaved idle frame")
+	}
+}
+
+// --- Idle-packet fill tests (CCSDS 132.0-B-3 §4.2.2, ECSS 5.4.3.3b/5.4.3.4g) ---
+
+// drainDataFields concatenates the data fields of all frames in the channel.
+func drainDataFields(t *testing.T, vc *tmdl.VirtualChannel) []byte {
+	t.Helper()
+	var stream []byte
+	for vc.HasFrames() {
+		f, err := vc.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		stream = append(stream, f.DataField...)
+	}
+	return stream
+}
+
+// parsePacketStream walks a byte stream with spp.PacketSizer and returns the
+// packets it holds, failing if the stream does not consist of whole packets.
+func parsePacketStream(t *testing.T, stream []byte) []*spp.SpacePacket {
+	t.Helper()
+	var pkts []*spp.SpacePacket
+	for off := 0; off < len(stream); {
+		n := spp.PacketSizer(stream[off:])
+		if n <= 0 || off+n > len(stream) {
+			t.Fatalf("stream not parseable as packets at offset %d (sizer=%d, %d bytes left)",
+				off, n, len(stream)-off)
+		}
+		pkt, err := spp.Decode(stream[off : off+n])
+		if err != nil {
+			t.Fatalf("packet at offset %d does not decode: %v", off, err)
+		}
+		pkts = append(pkts, pkt)
+		off += n
+	}
+	return pkts
+}
+
+// TestVCPService_IdleFillParsesAsPackets is the conformant-receiver check for
+// the fill discipline: every octet of every emitted data field must belong to
+// a real Space Packet, with spare space carried by idle packets (APID 0x7FF)
+// rather than raw 0xFF a foreign receiver would misread as a packet header.
+func TestVCPService_IdleFillParsesAsPackets(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true} // capacity 20
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	pkt := makeTestPacket([]byte{0x01, 0x02}) // 8 bytes, leaves 12 spare
+	if err := svc.Send(pkt); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	pkts := parsePacketStream(t, drainDataFields(t, vc))
+	if len(pkts) != 2 {
+		t.Fatalf("Expected 2 packets (data + idle fill), got %d", len(pkts))
+	}
+	if pkts[0].IsIdle() {
+		t.Error("First packet should be the data packet")
+	}
+	if !pkts[1].IsIdle() {
+		t.Errorf("Fill packet APID = 0x%03X, want 0x7FF (idle)", pkts[1].PrimaryHeader.APID)
+	}
+}
+
+// TestVCPService_IdleFillSpansFrames covers the remainder-under-7-octets case:
+// the idle fill packet cannot fit its header in the spare space, so it spans
+// into an additional frame and still parses cleanly across the boundary.
+func TestVCPService_IdleFillSpansFrames(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true} // capacity 20
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	pkt := makeTestPacket(bytes.Repeat([]byte{0xAB}, 10)) // 16 bytes, leaves 4 spare
+	if err := svc.Send(pkt); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	if vc.Len() != 2 {
+		t.Fatalf("Expected 2 frames (fill spans into second), got %d", vc.Len())
+	}
+
+	pkts := parsePacketStream(t, drainDataFields(t, vc))
+	if len(pkts) != 2 {
+		t.Fatalf("Expected 2 packets (data + spanning idle fill), got %d", len(pkts))
+	}
+	if !pkts[1].IsIdle() {
+		t.Errorf("Fill packet APID = 0x%03X, want 0x7FF (idle)", pkts[1].PrimaryHeader.APID)
+	}
+	// 4 spare octets + one whole 20-octet data field
+	if got := 6 + int(pkts[1].PrimaryHeader.PacketLength) + 1; got != 24 {
+		t.Errorf("Idle fill packet length = %d, want 24", got)
+	}
+}
+
+// TestVCPService_ReceiveDiscardsIdlePackets checks ECSS 5.4.3.5d on the
+// extraction side: idle fill packets never reach the service user.
+func TestVCPService_ReceiveDiscardsIdlePackets(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	pkt := makeTestPacket([]byte{0x01, 0x02})
+	_ = svc.Send(pkt)
+	_ = svc.Flush()
+
+	received, err := svc.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pkt, received) {
+		t.Errorf("Expected %x, got %x", pkt, received)
+	}
+
+	// The only remaining content is the idle fill packet: it must be
+	// discarded, not delivered.
+	if extra, err := svc.Receive(); err == nil {
+		t.Errorf("Idle fill packet delivered to user: %x", extra)
+	} else if !errors.Is(err, tmdl.ErrNoFramesAvailable) {
+		t.Errorf("Expected ErrNoFramesAvailable after idle discard, got %v", err)
+	}
+}
+
+// --- Idle-frame counter continuity (CCSDS 132.0-B-3 §4.1.2.5) ---
+
+func TestMasterChannel_IdleFrameCounterContinuity(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+	counter := tmdl.NewFrameCounter()
+
+	mc := tmdl.NewMasterChannel(933, config)
+	mc.SetFrameCounter(counter)
+	vc := tmdl.NewVirtualChannel(1, 10)
+	mc.AddVirtualChannel(vc, 1)
+
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, counter)
+	svc.SetPacketSizer(spp.PacketSizer)
+	_ = svc.Send(makeTestPacket([]byte{0x01, 0x02}))
+	_ = svc.Flush()
+
+	// Data frame first: MC count 0.
+	f0, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tmdl.IsIdleFrame(f0) || f0.Header.MCFrameCount != 0 {
+		t.Fatalf("Frame 0: idle=%v MC=%d, want data frame with MC=0",
+			tmdl.IsIdleFrame(f0), f0.Header.MCFrameCount)
+	}
+
+	// Channel now empty: idle frames must continue the MC sequence.
+	idle1, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tmdl.IsIdleFrame(idle1) {
+		t.Fatal("Expected idle frame")
+	}
+	if idle1.Header.MCFrameCount != 1 {
+		t.Errorf("Idle 1: MC count = %d, want 1", idle1.Header.MCFrameCount)
+	}
+	if idle1.Header.VCFrameCount != 0 {
+		t.Errorf("Idle 1: VC count = %d, want 0 (first on idle VC)", idle1.Header.VCFrameCount)
+	}
+	if idle1.Header.VirtualChannelID != tmdl.IdleFrameVCID {
+		t.Errorf("Idle VCID = %d, want %d", idle1.Header.VirtualChannelID, tmdl.IdleFrameVCID)
+	}
+
+	idle2, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idle2.Header.MCFrameCount != 2 || idle2.Header.VCFrameCount != 1 {
+		t.Errorf("Idle 2: MC=%d VC=%d, want MC=2 VC=1",
+			idle2.Header.MCFrameCount, idle2.Header.VCFrameCount)
+	}
+
+	// The stamped counts must be covered by the CRC.
+	encoded, err := idle2.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+		t.Errorf("Stamped idle frame does not round-trip: %v", err)
+	}
+}
+
+func TestPhysicalChannel_IdleFrame_DeterministicSCIDAndCounter(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+	pc := tmdl.NewPhysicalChannel("test", config)
+
+	counter100 := tmdl.NewFrameCounter()
+	mc100 := tmdl.NewMasterChannel(100, config)
+	mc100.SetFrameCounter(counter100)
+	mc100.AddVirtualChannel(tmdl.NewVirtualChannel(1, 10), 1)
+	mc200 := tmdl.NewMasterChannel(200, config)
+	mc200.AddVirtualChannel(tmdl.NewVirtualChannel(1, 10), 1)
+
+	pc.AddMasterChannel(mc200, 1)
+	pc.AddMasterChannel(mc100, 1)
+
+	// The idle SCID must be the lowest registered SCID every time,
+	// not whichever the map iterator happens to yield.
+	for i := range 5 {
+		idle, err := pc.GetNextFrameOrIdle()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if idle.Header.SpacecraftID != 100 {
+			t.Fatalf("Idle %d: SCID = %d, want 100 (lowest registered)",
+				i, idle.Header.SpacecraftID)
+		}
+		if int(idle.Header.MCFrameCount) != i {
+			t.Errorf("Idle %d: MC count = %d, want %d (from MC 100's counter)",
+				i, idle.Header.MCFrameCount, i)
+		}
+	}
+}
+
+// --- Frame length enforcement (CCSDS 132.0-B-3 §2.1.3) ---
+
+func TestFrameLengthEnforcedOnEncodeAndDecode(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
+
+	// A frame built to capacity encodes to exactly FrameLength.
+	good, err := tmdl.NewIdleFrame(933, 7, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := good.EncodeWithConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) != config.FrameLength {
+		t.Fatalf("Encoded length = %d, want %d", len(encoded), config.FrameLength)
+	}
+
+	// A short frame must be rejected on encode.
+	short, err := tmdl.NewTMTransferFrame(933, 1, []byte("tiny"), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := short.EncodeWithConfig(config); !errors.Is(err, tmdl.ErrFrameLengthMismatch) {
+		t.Errorf("Encode of short frame: got %v, want ErrFrameLengthMismatch", err)
+	}
+
+	// A wrong-length input must be rejected on decode.
+	if _, err := tmdl.DecodeTMTransferFrameWithConfig(encoded[:20], config); !errors.Is(err, tmdl.ErrFrameLengthMismatch) {
+		t.Errorf("Decode of short input: got %v, want ErrFrameLengthMismatch", err)
+	}
+	if _, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config); err != nil {
+		t.Errorf("Decode of exact-length input: %v", err)
+	}
+}
+
+// --- VCA SDU size validation (CCSDS 132.0-B-3 §3.4.2.2) ---
+
+func TestVCAService_FixedLength_SizeValidated(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true} // capacity 20
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 1, 8, vc, config, nil)
+
+	// The VCA_SDU length is fixed per channel: anything but vcaSize octets
+	// is a size mismatch even when it would fit the data field.
+	if err := svc.Send([]byte("12345")); !errors.Is(err, tmdl.ErrSizeMismatch) {
+		t.Errorf("Short SDU: got %v, want ErrSizeMismatch", err)
+	}
+	if err := svc.Send(bytes.Repeat([]byte{0xAA}, 12)); !errors.Is(err, tmdl.ErrSizeMismatch) {
+		t.Errorf("Long SDU: got %v, want ErrSizeMismatch", err)
+	}
+	if err := svc.Send([]byte("12345678")); err != nil {
+		t.Errorf("Exact SDU: %v", err)
+	}
+}
+
+// --- OCF supplier hook (CCSDS 132.0-B-3 §4.1.5) ---
+
+func TestVCPService_OCFSupplier(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasOCF: true, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	clcw := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	svc.SetOCFSupplier(func() []byte { return clcw })
+
+	_ = svc.Send(makeTestPacket([]byte{0x01, 0x02}))
+	if err := svc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frame.OperationalControl, clcw) {
+		t.Errorf("OCF = %x, want %x", frame.OperationalControl, clcw)
+	}
+}
+
+func TestVCAService_OCFSupplier(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasOCF: true, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 1, 8, vc, config, nil)
+
+	clcw := []byte{0x01, 0x02, 0x03, 0x04}
+	svc.SetOCFSupplier(func() []byte { return clcw })
+
+	if err := svc.Send([]byte("12345678")); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frame.OperationalControl, clcw) {
+		t.Errorf("OCF = %x, want %x", frame.OperationalControl, clcw)
+	}
+}
+
+func TestOCFSupplier_BadLengthRejected(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 28, HasOCF: true, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 100)
+	svc := tmdl.NewVirtualChannelAccessService(933, 1, 8, vc, config, nil)
+	svc.SetOCFSupplier(func() []byte { return []byte{0x01, 0x02} })
+
+	if err := svc.Send([]byte("12345678")); !errors.Is(err, tmdl.ErrInvalidOCFLength) {
+		t.Errorf("Got %v, want ErrInvalidOCFLength", err)
 	}
 }

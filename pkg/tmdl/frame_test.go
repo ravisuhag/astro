@@ -859,8 +859,10 @@ func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 // always demanded it, so a Reed-Solomon mission that omitted it could not use
 // the package at all.
 func TestFECFOptionalUnderReedSolomon(t *testing.T) {
-	withFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
-	noFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: false}
+	// FrameLength is left unset here: these frames are shorter than any
+	// realistic fixed length, and the codec now rejects a mismatch.
+	withFEC := tmdl.ChannelConfig{HasFEC: true}
+	noFEC := tmdl.ChannelConfig{HasFEC: false}
 
 	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
 	if err != nil {
@@ -911,7 +913,7 @@ func TestFECFOptionalUnderReedSolomon(t *testing.T) {
 // TestFECFMismatchIsDetected checks the configuration is not merely ignored:
 // reading a no-FECF frame as though it had one must not silently succeed.
 func TestFECFMismatchIsDetected(t *testing.T) {
-	noFEC := tmdl.ChannelConfig{FrameLength: 32, HasFEC: false}
+	noFEC := tmdl.ChannelConfig{HasFEC: false}
 
 	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
 	if err != nil {
@@ -942,5 +944,51 @@ func TestChannelConfigValidate(t *testing.T) {
 	}
 	if err := (tmdl.ChannelConfig{FrameLength: 4}).Validate(); err == nil {
 		t.Error("a 4-octet frame was accepted; it cannot hold a primary header")
+	}
+}
+
+// --- SyncFlag=1 First Header Pointer leniency (CCSDS 132.0-B-3 §4.1.2.7.4) ---
+
+// TestDecodeLenientFHPWithSyncFlag checks the asymmetry the spec requires:
+// when the Synchronization Flag is set the FHP is undefined, so a receiver
+// must accept any value there, while this package's own construction path
+// still pins it to 0x7FF.
+func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
+	// Build a valid VCA-style frame (SyncFlag=1, FHP=0x7FF) and encode it.
+	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("vca-sdu"), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame.Header.SyncFlag = true
+	frame.Header.FirstHeaderPtr = 0x07FF
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Patch the FHP to an arbitrary value (0x123) a foreign conformant
+	// sender might emit, and refresh the FECF over the patched content.
+	patched := make([]byte, len(encoded))
+	copy(patched, encoded)
+	patched[4] = (patched[4] &^ 0x07) | 0x01
+	patched[5] = 0x23
+	binary.BigEndian.PutUint16(patched[len(patched)-2:],
+		ccsdscrc.ComputeCRC16(patched[:len(patched)-2]))
+
+	back, err := tmdl.DecodeTMTransferFrame(patched)
+	if err != nil {
+		t.Fatalf("Decode rejected SyncFlag=1 frame with FHP=0x123: %v", err)
+	}
+	if !back.Header.SyncFlag || back.Header.FirstHeaderPtr != 0x123 {
+		t.Errorf("Decoded SyncFlag=%v FHP=0x%03X, want true/0x123",
+			back.Header.SyncFlag, back.Header.FirstHeaderPtr)
+	}
+
+	// The construction side stays strict: Validate and Encode reject it.
+	if err := back.Header.Validate(); !errors.Is(err, tmdl.ErrInvalidFirstHeaderPtr) {
+		t.Errorf("Validate: got %v, want ErrInvalidFirstHeaderPtr", err)
+	}
+	if _, err := back.Encode(); !errors.Is(err, tmdl.ErrInvalidFirstHeaderPtr) {
+		t.Errorf("Encode: got %v, want ErrInvalidFirstHeaderPtr", err)
 	}
 }

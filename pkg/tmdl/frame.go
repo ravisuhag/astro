@@ -78,6 +78,11 @@ func (h *PrimaryHeader) Encode() ([]byte, error) {
 }
 
 // Decode parses a byte slice into the PrimaryHeader.
+//
+// Decoding is deliberately lenient about the First Header Pointer when the
+// Synchronization Flag is set: CCSDS 132.0-B-3 §4.1.2.7.4 leaves the pointer
+// undefined in that case, so a conformant sender may put anything there. Only
+// frame construction (Encode/Validate) pins it to 0x7FF.
 func (h *PrimaryHeader) Decode(data []byte) error {
 	if len(data) < 6 {
 		return ErrDataTooShort
@@ -95,11 +100,20 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 	h.SegmentLengthID = (data[4] >> 3) & 0x03
 	h.FirstHeaderPtr = (uint16(data[4]&0x07) << 8) | uint16(data[5])
 
-	return h.Validate()
+	return h.validate(false)
 }
 
-// Validate checks if the header values are within valid ranges.
+// Validate checks if the header values are within valid ranges. It applies
+// the construction-side rules, including FHP=0x7FF when the Synchronization
+// Flag is set (§4.1.2.7.4 recommends the sender set all ones there).
 func (h *PrimaryHeader) Validate() error {
+	return h.validate(true)
+}
+
+// validate checks the header fields. strictFHP applies the encode-side rule
+// that a set Synchronization Flag carries FHP=0x7FF; the decode side accepts
+// any value there because the spec leaves the field undefined for receivers.
+func (h *PrimaryHeader) validate(strictFHP bool) error {
 	if h.VersionNumber != 0 {
 		return ErrInvalidVersion
 	}
@@ -118,7 +132,7 @@ func (h *PrimaryHeader) Validate() error {
 	if h.FirstHeaderPtr > 0x07FF {
 		return ErrInvalidFirstHeaderPtr
 	}
-	if h.SyncFlag && h.FirstHeaderPtr != 0x07FF {
+	if strictFHP && h.SyncFlag && h.FirstHeaderPtr != 0x07FF {
 		return ErrInvalidFirstHeaderPtr
 	}
 	return nil
@@ -315,23 +329,30 @@ func (tf *TMTransferFrame) Encode() ([]byte, error) {
 // inside a code block — the code block already protects it. §5.6.1c then
 // requires the choice to hold for the whole physical channel, which is why it
 // belongs to ChannelConfig rather than to a single frame.
+//
+// When config.FrameLength is set, the encoded frame must come out exactly
+// that long — CCSDS 132.0-B-3 §2.1.3 fixes the frame length per physical
+// channel — and any other size returns ErrFrameLengthMismatch.
 func (tf *TMTransferFrame) EncodeWithConfig(config ChannelConfig) ([]byte, error) {
-	if !config.HasFEC {
-		return tf.EncodeWithoutFEC()
-	}
-
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
 		return nil, err
 	}
 
-	// Compute the CRC from the frame's current contents, so header fields
-	// changed after construction are covered, and refresh the exported field.
-	tf.FrameErrorControl = crc.ComputeCRC16(frameData)
+	if config.HasFEC {
+		// Compute the CRC from the frame's current contents, so header fields
+		// changed after construction are covered, and refresh the exported field.
+		tf.FrameErrorControl = crc.ComputeCRC16(frameData)
 
-	crcBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(crcBytes, tf.FrameErrorControl)
-	return append(frameData, crcBytes...), nil
+		crcBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(crcBytes, tf.FrameErrorControl)
+		frameData = append(frameData, crcBytes...)
+	}
+
+	if config.FrameLength > 0 && len(frameData) != config.FrameLength {
+		return nil, ErrFrameLengthMismatch
+	}
+	return frameData, nil
 }
 
 // EncodeWithoutFEC converts the frame to bytes excluding the CRC field.
@@ -390,10 +411,28 @@ const (
 	FHPOnlyIdleData uint16 = 0x07FE
 )
 
+// IdleFrameVCID is the virtual channel idle frames are emitted on. VCID 7 is
+// the conventional idle channel (CCSDS 132.0-B-3 recommends the highest VCID
+// for idle frames).
+const IdleFrameVCID uint8 = 7
+
 // NewIdleFrame creates an idle (OID) TM Transfer Frame: an all-idle data field
 // with the First Header Pointer set to FHPOnlyIdleData, per
 // ECSS-E-ST-50-03C 5.2.7.6g.
+//
+// The frame's MC and VC counts are zero. Use NewIdleFrameWithCounter so idle
+// frames continue the master channel sequence.
 func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFrame, error) {
+	return NewIdleFrameWithCounter(scid, vcid, config, nil)
+}
+
+// NewIdleFrameWithCounter creates an idle (OID) TM Transfer Frame and stamps
+// its MC and VC frame counts from the given counter. Pass the same
+// FrameCounter the channel's services use: CCSDS 132.0-B-3 §4.1.2.5 counts
+// every frame of the master channel, idle frames included, so an unstamped
+// idle frame breaks the MC sequence at any conformant receiver. A nil counter
+// leaves both counts zero.
+func NewIdleFrameWithCounter(scid uint16, vcid uint8, config ChannelConfig, counter *FrameCounter) (*TMTransferFrame, error) {
 	capacity := config.DataFieldCapacity(0)
 	if capacity <= 0 {
 		return nil, ErrDataFieldTooSmall
@@ -411,7 +450,7 @@ func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFra
 		return nil, err
 	}
 	frame.Header.FirstHeaderPtr = FHPOnlyIdleData
-	return frame, recomputeCRC(frame)
+	return frame, stampFrame(frame, counter, vcid)
 }
 
 // recomputeCRC re-encodes the frame (without FEC) and updates FrameErrorControl.
@@ -445,6 +484,10 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 
 // DecodeTMTransferFrameWithConfig parses a frame, verifying the Frame Error
 // Control Field only when the channel carries one.
+//
+// When config.FrameLength is set, the input must be exactly that long —
+// frames on a physical channel are fixed-length per CCSDS 132.0-B-3 §2.1.3 —
+// and any other size returns ErrFrameLengthMismatch.
 func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
 	// A frame needs its six-octet primary header, and two more for the error
 	// control field when the channel carries one.
@@ -454,6 +497,9 @@ func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTran
 	}
 	if len(data) < minimum {
 		return nil, ErrDataTooShort
+	}
+	if config.FrameLength > 0 && len(data) != config.FrameLength {
+		return nil, ErrFrameLengthMismatch
 	}
 
 	// Decode Primary Header

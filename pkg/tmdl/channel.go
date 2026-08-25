@@ -89,6 +89,7 @@ type MasterChannel struct {
 	mux      *VirtualChannelMultiplexer
 	channels map[uint8]*VirtualChannel
 	detector *FrameGapDetector
+	counter  *FrameCounter
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
@@ -104,6 +105,14 @@ func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 
 // SCID returns the Spacecraft Identifier for this Master Channel.
 func (mc *MasterChannel) SCID() uint16 { return mc.scid }
+
+// SetFrameCounter installs the shared FrameCounter used to stamp the MC and
+// VC frame counts of idle frames created by GetNextFrameOrIdle. Pass the same
+// counter the channel's services use, so idle frames continue the master
+// channel count per CCSDS 132.0-B-3 §4.1.2.5 instead of carrying zeros.
+func (mc *MasterChannel) SetFrameCounter(counter *FrameCounter) {
+	mc.counter = counter
+}
 
 // AddVirtualChannel registers a Virtual Channel with this Master Channel.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
@@ -136,6 +145,10 @@ func (mc *MasterChannel) GetNextFrame() (*TMTransferFrame, error) {
 }
 
 // GetNextFrameOrIdle returns the next frame or an idle frame if none available.
+//
+// Idle frames are stamped from the FrameCounter installed with
+// SetFrameCounter, so their MC and VC frame counts continue the channel's
+// sequence; without a counter they carry zeros.
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	frame, err := mc.mux.Next()
 	if err == nil {
@@ -147,7 +160,7 @@ func (mc *MasterChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	if mc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	return NewIdleFrame(mc.scid, 7, mc.config)
+	return NewIdleFrameWithCounter(mc.scid, IdleFrameVCID, mc.config, mc.counter)
 }
 
 // HasPendingFrames checks if any Virtual Channel has pending frames.
