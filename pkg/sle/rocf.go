@@ -101,6 +101,10 @@ func DecodeControlWordType(e *Element) (ControlWordType, error) {
 			if err != nil {
 				return c, err
 			}
+			// VcId ::= INTEGER (0 .. 63).
+			if vc > 63 {
+				return c, ErrInvalidIdentifier
+			}
 			c.TCVirtualChannel = uint8(vc)
 			c.HasTCVirtualChannel = true
 		default:
@@ -654,6 +658,10 @@ func (u *ROCFUser) Start(
 	if err := channel.Validate(); err != nil {
 		return 0, err
 	}
+	// VcId ::= INTEGER (0 .. 63), for the TC virtual channel too.
+	if control.HasTCVirtualChannel && control.TCVirtualChannel > 63 {
+		return 0, ErrInvalidIdentifier
+	}
 	return u.invoke(OpStartInvocation, ServiceReady, now, randomNumber,
 		func(id InvokeId, creds *Credentials) ([]byte, error) {
 			return (&ROCFStartInvocation{
@@ -692,6 +700,7 @@ type ROCFUserEvent struct {
 	StartReturn                *ROCFStartReturn
 	StopReturn                 *Acknowledgement
 	ScheduleStatusReportReturn *ScheduleStatusReportReturn
+	GetParameterReturn         *GetParameterReturn
 	TransferBuffer             ROCFTransferBuffer
 	StatusReport               *ROCFStatusReportInvocation
 	PeerAbort                  *PeerAbort
@@ -721,12 +730,18 @@ func (u *ROCFUser) HandlePDU(data []byte, now time.Time) (*ROCFUserEvent, error)
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.UnbindReturn = r
 		return event, u.HandleUnbindReturn(r, now)
 
 	case OpStartReturn:
 		r, err := DecodeROCFStartReturn(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StartReturn = r
@@ -737,6 +752,9 @@ func (u *ROCFUser) HandlePDU(data []byte, now time.Time) (*ROCFUserEvent, error)
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.StopReturn = r
 		return event, u.HandleStopReturn(r)
 
@@ -745,8 +763,22 @@ func (u *ROCFUser) HandlePDU(data []byte, now time.Time) (*ROCFUserEvent, error)
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.ScheduleStatusReportReturn = r
 		return event, u.HandleScheduleStatusReportReturn(r)
+
+	case OpGetParameterReturn:
+		r, err := DecodeGetParameterReturn(pdu.Content)
+		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
+		event.GetParameterReturn = r
+		return event, u.HandleGetParameterReturn(r)
 
 	case OpTransferBuffer:
 		if u.State() != ServiceActive {
@@ -757,12 +789,32 @@ func (u *ROCFUser) HandlePDU(data []byte, now time.Time) (*ROCFUserEvent, error)
 		if err != nil {
 			return nil, err
 		}
+		for _, entry := range buffer {
+			creds := (*Credentials)(nil)
+			switch {
+			case entry.OCF != nil:
+				creds = entry.OCF.Credentials
+			case entry.Notification != nil:
+				creds = entry.Notification.Credentials
+			}
+			if err := u.authenticate(creds, now); err != nil {
+				return nil, err
+			}
+		}
 		event.TransferBuffer = buffer
 		return event, nil
 
 	case OpStatusReportInvocation:
+		// Table 4-1: a STATUS-REPORT is legal only on a bound association.
+		if u.State() == ServiceUnbound {
+			u.PeerAbort(AbortProtocolError, now)
+			return event, ErrUnexpectedPDU
+		}
 		report, err := DecodeROCFStatusReportInvocation(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(report.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StatusReport = report

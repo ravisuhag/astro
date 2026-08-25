@@ -968,6 +968,10 @@ type CltuLastProcessed struct {
 }
 
 // AppendCltuLastProcessed writes a CltuLastProcessed CHOICE.
+//
+// The cltuProcessed alternative is [1] IMPLICIT SEQUENCE, and the module is
+// IMPLICIT TAGS: the tag replaces the SEQUENCE's, so the fields sit directly
+// under [1] with no inner SEQUENCE.
 func AppendCltuLastProcessed(dst []byte, c CltuLastProcessed) []byte {
 	if !c.Processed {
 		return AppendElement(dst, ClassContext, false, 0, nil)
@@ -976,7 +980,7 @@ func AppendCltuLastProcessed(dst []byte, c CltuLastProcessed) []byte {
 	inner = AppendInteger(inner, int64(c.CltuIdentification))
 	inner = AppendConditionalTime(inner, c.RadiationStartTime)
 	inner = AppendInteger(inner, int64(c.Status))
-	return AppendElement(dst, ClassContext, true, 1, AppendSequence(nil, inner))
+	return AppendElement(dst, ClassContext, true, 1, inner)
 }
 
 // DecodeCltuLastProcessed reads a CltuLastProcessed CHOICE.
@@ -986,11 +990,9 @@ func DecodeCltuLastProcessed(e *Element) (CltuLastProcessed, error) {
 	case e.IsContext(0):
 		return c, nil
 	case e.IsContext(1):
-		seq, err := NewDecoder(e.Bytes).Next()
-		if err != nil {
-			return c, err
-		}
-		d := NewDecoder(seq.Bytes)
+		// [1] replaces the SEQUENCE tag (implicit tagging), so the fields
+		// are directly under it.
+		d := NewDecoder(e.Bytes)
 
 		id, err := decodeUint32(d)
 		if err != nil {
@@ -1042,7 +1044,9 @@ type CltuLastOk struct {
 	RadiationStopTime  Time
 }
 
-// AppendCltuLastOk writes a CltuLastOk CHOICE.
+// AppendCltuLastOk writes a CltuLastOk CHOICE. As with CltuLastProcessed,
+// the cltuOk alternative's [1] replaces its SEQUENCE tag (implicit tagging),
+// so the fields sit directly under it.
 func AppendCltuLastOk(dst []byte, c CltuLastOk) []byte {
 	if !c.Ok {
 		return AppendElement(dst, ClassContext, false, 0, nil)
@@ -1050,7 +1054,7 @@ func AppendCltuLastOk(dst []byte, c CltuLastOk) []byte {
 	var inner []byte
 	inner = AppendInteger(inner, int64(c.CltuIdentification))
 	inner = AppendTimeChoice(inner, c.RadiationStopTime)
-	return AppendElement(dst, ClassContext, true, 1, AppendSequence(nil, inner))
+	return AppendElement(dst, ClassContext, true, 1, inner)
 }
 
 // DecodeCltuLastOk reads a CltuLastOk CHOICE.
@@ -1060,11 +1064,7 @@ func DecodeCltuLastOk(e *Element) (CltuLastOk, error) {
 	case e.IsContext(0):
 		return c, nil
 	case e.IsContext(1):
-		seq, err := NewDecoder(e.Bytes).Next()
-		if err != nil {
-			return c, err
-		}
-		d := NewDecoder(seq.Bytes)
+		d := NewDecoder(e.Bytes)
 
 		id, err := decodeUint32(d)
 		if err != nil {
@@ -1389,10 +1389,15 @@ func (s *FCLTUStatusReportInvocation) Humanize() string {
 // discards the CLTU, so the machine keeps the count rather than trusting the
 // caller to.
 //
-// Note the number advances on acceptance, not on sending. A refused CLTU does
-// not consume its number, and §3.6.2.5.2b makes the provider quote the number
-// it expected, so a user that fell out of step can resynchronise from the
-// refusal.
+// The number advances as each CLTU is sent, not as each return arrives —
+// §3.1.6 expects the user to pipeline CLTUs without waiting for returns, and
+// each one it sends must carry the next number. A refusal is where the count
+// corrects itself: §3.6.2.5.2b makes the provider quote the number it
+// expected, so a user that fell out of step resynchronises from the refusal.
+//
+// THROW-EVENT identifications work the same way (§3.9): the machine numbers
+// each invocation, and a refusal quotes the identification the provider
+// expected, which resynchronises the count.
 type FCLTUUser struct {
 	*ServiceUser
 
@@ -1403,6 +1408,8 @@ type FCLTUUser struct {
 	// inFlight maps an invoke identifier to the CLTU number it carried, so a
 	// return can be matched to its CLTU.
 	inFlight map[InvokeId]CltuIdentification
+	// nextEventID numbers the next THROW-EVENT invocation (§3.9.2.4).
+	nextEventID EventInvocationId
 }
 
 // NewFCLTUUser prepares the user half of an FCLTU instance.
@@ -1502,15 +1509,19 @@ func (u *FCLTUUser) TransferData(
 
 	u.mu.Lock()
 	u.inFlight[invokeID] = cltuID
+	// §3.1.6: the count advances as the CLTU is sent, so the next one can go
+	// out before this one's return arrives (pipelining).
+	u.nextCltuID = cltuID + 1
 	u.mu.Unlock()
 	return invokeID, cltuID, nil
 }
 
 // HandleTransferDataReturn takes the answer to one CLTU.
 //
-// On acceptance the counter advances. On refusal it is set to the number the
-// provider says it expects, which §3.6.2.5.2b guarantees is in the return —
-// so a user that lost its place recovers without another START.
+// On acceptance the counter has already moved — it advanced when the CLTU
+// was sent — so the return changes nothing. On refusal the counter is set to
+// the number the provider says it expects, which §3.6.2.5.2b guarantees is
+// in the return: a user that lost its place recovers without another START.
 func (u *FCLTUUser) HandleTransferDataReturn(r *FCLTUTransferDataReturn) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -1520,10 +1531,8 @@ func (u *FCLTUUser) HandleTransferDataReturn(r *FCLTUTransferDataReturn) error {
 	}
 	delete(u.inFlight, r.InvokeId)
 
-	// Both branches take the provider's number: on acceptance it is one more
-	// than the CLTU just sent, on refusal it is what the provider wanted.
-	u.nextCltuID = r.CltuIdentification
 	if !r.Positive {
+		u.nextCltuID = r.CltuIdentification
 		return ErrCltuOutOfSequence
 	}
 	return nil
@@ -1531,27 +1540,47 @@ func (u *FCLTUUser) HandleTransferDataReturn(r *FCLTUTransferDataReturn) error {
 
 // ThrowEvent asks the provider's equipment to do something the service
 // agreement defines. Valid in states 2 and 3, per §3.9.1.
+//
+// The event invocation identification comes from the machine's counter, not
+// from the caller: §3.9.2.4 makes it a sequence the user must keep, exactly
+// like the CLTU numbers. The identification used is returned, and it
+// advances as the invocation is sent.
 func (u *FCLTUUser) ThrowEvent(
-	now time.Time, randomNumber int32,
-	invocationID EventInvocationId, event uint16, qualifier []byte,
-) (InvokeId, error) {
+	now time.Time, randomNumber int32, event uint16, qualifier []byte,
+) (InvokeId, EventInvocationId, error) {
 	u.mu.Lock()
 	state := u.state
+	eventID := u.nextEventID
 	u.mu.Unlock()
 
 	if state == ServiceUnbound {
-		return 0, ErrNotBound
+		return 0, 0, ErrNotBound
 	}
-	return u.invoke(OpThrowEventInvocation, state, now, randomNumber,
+	invokeID, err := u.invoke(OpThrowEventInvocation, state, now, randomNumber,
 		func(id InvokeId, creds *Credentials) ([]byte, error) {
 			return (&FCLTUThrowEventInvocation{
 				Credentials:                   creds,
 				InvokeId:                      id,
-				EventInvocationIdentification: invocationID,
+				EventInvocationIdentification: eventID,
 				EventIdentifier:               event,
 				EventQualifier:                qualifier,
 			}).Encode()
 		})
+	if err != nil {
+		return 0, 0, err
+	}
+	u.mu.Lock()
+	u.nextEventID = eventID + 1
+	u.mu.Unlock()
+	return invokeID, eventID, nil
+}
+
+// NextEventInvocationId reports the identification the next THROW-EVENT will
+// carry.
+func (u *FCLTUUser) NextEventInvocationId() EventInvocationId {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.nextEventID
 }
 
 // HandleThrowEventReturn takes the answer to a THROW-EVENT.
@@ -1559,10 +1588,21 @@ func (u *FCLTUUser) ThrowEvent(
 // A positive answer means the provider accepted the request, not that the
 // event happened: whether the actions ran arrives later, in an ASYNC-NOTIFY
 // carrying actionListCompleted or actionListNotCompleted.
+//
+// A refusal echoes the event invocation identification the provider
+// expected (§3.9.2.5), so the machine resynchronises its counter from it,
+// the same recovery the CLTU numbers get.
 func (u *FCLTUUser) HandleThrowEventReturn(r *FCLTUThrowEventReturn) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return u.settle(r.InvokeId, OpThrowEventInvocation)
+
+	if err := u.settle(r.InvokeId, OpThrowEventInvocation); err != nil {
+		return err
+	}
+	if !r.Positive {
+		u.nextEventID = r.EventInvocationIdentification
+	}
+	return nil
 }
 
 // FCLTUUserEvent is one decoded PDU arriving at the user.
@@ -1574,6 +1614,7 @@ type FCLTUUserEvent struct {
 	StartReturn                *FCLTUStartReturn
 	StopReturn                 *Acknowledgement
 	ScheduleStatusReportReturn *ScheduleStatusReportReturn
+	GetParameterReturn         *GetParameterReturn
 	TransferDataReturn         *FCLTUTransferDataReturn
 	ThrowEventReturn           *FCLTUThrowEventReturn
 	AsyncNotify                *FCLTUAsyncNotifyInvocation
@@ -1609,12 +1650,18 @@ func (u *FCLTUUser) HandlePDU(data []byte, now time.Time) (*FCLTUUserEvent, erro
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.UnbindReturn = r
 		return event, u.HandleUnbindReturn(r, now)
 
 	case OpStartReturn:
 		r, err := DecodeFCLTUStartReturn(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StartReturn = r
@@ -1625,6 +1672,9 @@ func (u *FCLTUUser) HandlePDU(data []byte, now time.Time) (*FCLTUUserEvent, erro
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.StopReturn = r
 		return event, u.HandleStopReturn(r)
 
@@ -1633,12 +1683,29 @@ func (u *FCLTUUser) HandlePDU(data []byte, now time.Time) (*FCLTUUserEvent, erro
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.ScheduleStatusReportReturn = r
 		return event, u.HandleScheduleStatusReportReturn(r)
+
+	case OpGetParameterReturn:
+		r, err := DecodeGetParameterReturn(pdu.Content)
+		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
+		event.GetParameterReturn = r
+		return event, u.HandleGetParameterReturn(r)
 
 	case OpTransferDataReturn:
 		r, err := DecodeFCLTUTransferDataReturn(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.TransferDataReturn = r
@@ -1649,20 +1716,38 @@ func (u *FCLTUUser) HandlePDU(data []byte, now time.Time) (*FCLTUUserEvent, erro
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.ThrowEventReturn = r
 		return event, u.HandleThrowEventReturn(r)
 
 	case OpAsyncNotifyInvocation:
+		if u.State() == ServiceUnbound {
+			u.PeerAbort(AbortProtocolError, now)
+			return event, ErrUnexpectedPDU
+		}
 		n, err := DecodeFCLTUAsyncNotifyInvocation(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(n.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.AsyncNotify = n
 		return event, nil
 
 	case OpStatusReportInvocation:
+		// Table 4-1: a STATUS-REPORT is legal only on a bound association.
+		if u.State() == ServiceUnbound {
+			u.PeerAbort(AbortProtocolError, now)
+			return event, ErrUnexpectedPDU
+		}
 		report, err := DecodeFCLTUStatusReportInvocation(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(report.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StatusReport = report
@@ -1832,6 +1917,7 @@ type FCLTUProviderEvent struct {
 	StartInvocation                *FCLTUStartInvocation
 	StopInvocation                 *StopInvocation
 	ScheduleStatusReportInvocation *ScheduleStatusReportInvocation
+	GetParameterInvocation         *GetParameterInvocation
 	TransferDataInvocation         *FCLTUTransferDataInvocation
 	ThrowEventInvocation           *FCLTUThrowEventInvocation
 	PeerAbort                      *PeerAbort
@@ -1847,21 +1933,40 @@ func (p *FCLTUProvider) HandlePDU(data []byte, now time.Time) (*FCLTUProviderEve
 
 	event := &FCLTUProviderEvent{Operation: pdu.Operation}
 
+	var creds *Credentials
 	switch pdu.Operation {
 	case OpBindInvocation:
+		// BIND credentials are verified by Association.HandleBindInvocation,
+		// which owns the bind-level policy.
 		event.BindInvocation, err = DecodeBindInvocation(pdu.Content)
 	case OpUnbindInvocation:
-		event.UnbindInvocation, err = DecodeUnbindInvocation(pdu.Content)
+		if event.UnbindInvocation, err = DecodeUnbindInvocation(pdu.Content); err == nil {
+			creds = event.UnbindInvocation.Credentials
+		}
 	case OpStartInvocation:
-		event.StartInvocation, err = DecodeFCLTUStartInvocation(pdu.Content)
+		if event.StartInvocation, err = DecodeFCLTUStartInvocation(pdu.Content); err == nil {
+			creds = event.StartInvocation.Credentials
+		}
 	case OpStopInvocation:
-		event.StopInvocation, err = DecodeStopInvocation(pdu.Content)
+		if event.StopInvocation, err = DecodeStopInvocation(pdu.Content); err == nil {
+			creds = event.StopInvocation.Credentials
+		}
 	case OpScheduleStatusReportInvocation:
-		event.ScheduleStatusReportInvocation, err = DecodeScheduleStatusReportInvocation(pdu.Content)
+		if event.ScheduleStatusReportInvocation, err = DecodeScheduleStatusReportInvocation(pdu.Content); err == nil {
+			creds = event.ScheduleStatusReportInvocation.Credentials
+		}
+	case OpGetParameterInvocation:
+		if event.GetParameterInvocation, err = DecodeGetParameterInvocation(pdu.Content); err == nil {
+			creds = event.GetParameterInvocation.Credentials
+		}
 	case OpTransferDataInvocation:
-		event.TransferDataInvocation, err = DecodeFCLTUTransferDataInvocation(pdu.Content)
+		if event.TransferDataInvocation, err = DecodeFCLTUTransferDataInvocation(pdu.Content); err == nil {
+			creds = event.TransferDataInvocation.Credentials
+		}
 	case OpThrowEventInvocation:
-		event.ThrowEventInvocation, err = DecodeFCLTUThrowEventInvocation(pdu.Content)
+		if event.ThrowEventInvocation, err = DecodeFCLTUThrowEventInvocation(pdu.Content); err == nil {
+			creds = event.ThrowEventInvocation.Credentials
+		}
 	case OpPeerAbort:
 		abort, abortErr := DecodePeerAbort(pdu.Content)
 		if abortErr != nil {
@@ -1877,5 +1982,78 @@ func (p *FCLTUProvider) HandlePDU(data []byte, now time.Time) (*FCLTUProviderEve
 	if err != nil {
 		return nil, err
 	}
+	if pdu.Operation != OpBindInvocation {
+		if err := p.authenticate(creds, now); err != nil {
+			return nil, err
+		}
+	}
+	if err := p.checkDuplicateInvokeId(event, now); err != nil {
+		return event, err
+	}
 	return event, nil
+}
+
+// checkDuplicateInvokeId refuses a confirmed invocation whose invoke
+// identifier has already been used on this association, queueing the
+// negative return the specs require for it.
+func (p *FCLTUProvider) checkDuplicateInvokeId(event *FCLTUProviderEvent, now time.Time) error {
+	switch event.Operation {
+	case OpStartInvocation:
+		if !p.registerInvokeId(event.StartInvocation.InvokeId) {
+			content, err := (&FCLTUStartReturn{
+				InvokeId:         event.StartInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpStartReturn, content, err, now)
+		}
+	case OpStopInvocation:
+		if !p.registerInvokeId(event.StopInvocation.InvokeId) {
+			content, err := (&Acknowledgement{
+				InvokeId:   event.StopInvocation.InvokeId,
+				Diagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpStopReturn, content, err, now)
+		}
+	case OpScheduleStatusReportInvocation:
+		if !p.registerInvokeId(event.ScheduleStatusReportInvocation.InvokeId) {
+			content, err := (&ScheduleStatusReportReturn{
+				InvokeId:         event.ScheduleStatusReportInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpScheduleStatusReportReturn, content, err, now)
+		}
+	case OpGetParameterInvocation:
+		if !p.registerInvokeId(event.GetParameterInvocation.InvokeId) {
+			content, err := (&GetParameterReturn{
+				InvokeId:         event.GetParameterInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpGetParameterReturn, content, err, now)
+		}
+	case OpTransferDataInvocation:
+		if !p.registerInvokeId(event.TransferDataInvocation.InvokeId) {
+			expected, _ := p.ExpectedCltuIdentification()
+			content, err := (&FCLTUTransferDataReturn{
+				InvokeId:           event.TransferDataInvocation.InvokeId,
+				CltuIdentification: expected,
+				UsedCommon:         true,
+				CommonDiagnostic:   DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpTransferDataReturn, content, err, now)
+		}
+	case OpThrowEventInvocation:
+		if !p.registerInvokeId(event.ThrowEventInvocation.InvokeId) {
+			content, err := (&FCLTUThrowEventReturn{
+				InvokeId:                      event.ThrowEventInvocation.InvokeId,
+				EventInvocationIdentification: event.ThrowEventInvocation.EventInvocationIdentification,
+				UsedCommon:                    true,
+				CommonDiagnostic:              DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpThrowEventReturn, content, err, now)
+		}
+	}
+	return nil
 }

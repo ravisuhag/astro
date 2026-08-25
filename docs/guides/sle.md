@@ -91,13 +91,15 @@ Go's `encoding/asn1` cannot do this job. It implements DER and rejects the
 context-specific CHOICE tagging every SLE module relies on. Rather than take a
 dependency, this package carries just enough BER for what SLE actually sends.
 
-What is supported: the universal types SLE uses, context-specific tags in both
-primitive and constructed form, multi-octet tag numbers (SLE uses `[100]` and
-up), and definite lengths in both forms.
+What is supported: the universal types SLE uses (OBJECT IDENTIFIER included,
+which the BIND's service instance identifier needs), context-specific tags in
+both primitive and constructed form, multi-octet tag numbers (SLE uses `[100]`
+and up), and definite lengths in both forms.
 
-What is not: the **indefinite-length form**. Real providers do emit it, and
-this decoder returns `ErrIndefiniteLength` rather than guessing where a value
-ends. If you meet one, that is a known gap, not a mystery.
+The **indefinite-length form** is accepted on decode — real providers emit
+it — by scanning for the end-of-contents octets. This package always emits
+the definite form itself. The one refusal left is an indefinite length on a
+primitive encoding, which X.690 forbids.
 
 The integer encoding is tested against `encoding/asn1` as an oracle — for
 plain universal INTEGERs, BER and DER agree, so the stdlib pins the minimal
@@ -106,9 +108,11 @@ two's complement encoding without hand-writing every vector.
 ### SHA-256, not SHA-1
 
 §3.1.2.3 requires SHA-256. SHA-1 belonged to the previous issue of the
-standard. §3.2.3's note keeps a 20-octet digest acceptable on receive only so a
-new implementation can talk to an old one; this package never generates one,
-and cannot verify one, because it does not implement the superseded scheme.
+standard. §3.2.3's note keeps a 20-octet digest recognizable only so a new
+implementation can talk to an old one: this package decodes a digest only at
+20 or 32 octets — no other length is a digest either issue defines — never
+generates the 20-octet form, and cannot verify one, because it does not
+implement the superseded scheme. Verification requires SHA-256.
 
 ## TML: the framing
 
@@ -209,8 +213,30 @@ identifier is a sequence of attribute pairs that operators write dotted:
 sagr=MISSION.spack=PASS1.rsl-fg=1.raf=onlc1
 ```
 
-Which reads as: the mission, the pass, the functional group, and the RAF
-instance within it.
+Which reads as: the service agreement, the service package, the functional
+group, and the RAF instance within it.
+
+On the wire, each attribute name is not the string you type but an **OBJECT
+IDENTIFIER** from the SLE-SERVICE-INSTANCE-ID module. This package maps the
+operator names for you:
+
+| Name | Object identifier |
+|---|---|
+| `sagr` | 1.3.112.4.3.1.2.52 |
+| `spack` | 1.3.112.4.3.1.2.53 |
+| `rsl-fg` | 1.3.112.4.3.1.2.38 |
+| `fsl-fg` | 1.3.112.4.3.1.2.14 |
+| `raf` | 1.3.112.4.3.1.2.22 |
+| `rcf` | 1.3.112.4.3.1.2.46 |
+| `rocf` | 1.3.112.4.3.1.2.49 |
+| `cltu` | 1.3.112.4.3.1.2.7 |
+| `antenna` | 1.3.112.4.3.1.2.3 |
+
+So `{Identifier: "sagr", Value: "MISSION"}` encodes the sagr OID and the
+string value. A dotted numeric identifier is passed through as an OID for
+anything not in the table. On decode, a peer that sent the legacy
+VisibleString form (as old versions of this package did) is still read, and
+the attribute's `Legacy` flag says so.
 
 ## The four services
 
@@ -322,13 +348,15 @@ mode. `UpdateChangeBased` delivers a control field only when it differs from
 the last one sent, which matters because a CLCW usually repeats unchanged for
 many frames. The four octets it delivers go to `pkg/cop`'s CLCW decoder.
 
-**FCLTU** runs the other way and is the only one with a counter. Every CLTU
+**FCLTU** runs the other way and is the only one with counters. Every CLTU
 carries an identification number that must climb without gaps: the first is
-the number the START asked for, and each accepted CLTU advances it by one.
-`FCLTUUser` keeps the count for you and `TransferData` returns the number it
-used. When the provider refuses a CLTU it says which number it wanted, so a
-user that lost its place recovers from the refusal rather than from a new
-START.
+the number the START asked for, and the count advances as each CLTU is sent —
+so CLTUs pipeline without waiting for returns, which is how the spec expects
+an uplink to run. `FCLTUUser` keeps the count for you and `TransferData`
+returns the number it used. When the provider refuses a CLTU it says which
+number it wanted, and the machine resynchronises from the refusal rather than
+needing a new START. THROW-EVENT invocations are numbered the same way, by
+the machine.
 
 FCLTU is also asynchronous in a way the return services are not. A
 TRANSFER-DATA return only says the CLTU was queued. Whether it reached the
@@ -354,14 +382,30 @@ your code. What the library does is refuse what the mode forbids and tell you
 what the mode asks of you, through `AllowsDiscard`, `RequiresBackpressure`,
 `AllowsPastStartTime` and `AllowsPeriodicStatusReport`.
 
+## Aborts and authentication levels
+
+A PEER-ABORT goes out twice under ISP1 (§3.4): as the `[104]` PDU — a
+primitive element holding the bare diagnostic octet, `9F 68 01 xx` on the
+wire — and as one octet of TCP **urgent data** before the connection closes.
+The library encodes the PDU and gives you the octet (`PeerAbort.UrgentData`);
+writing it out of band (`MSG_OOB`) and closing the socket are yours, because
+the socket is. An urgent octet you read lands in
+`Association.HandleUrgentData`.
+
+Authentication has three levels, picked by the service agreement and set on
+`AssociationConfig.AuthLevel`: `AuthLevelNone` checks nothing,
+`AuthLevelBind` (the default) checks the BIND exchange, and `AuthLevelAll`
+checks every PDU — each `HandlePDU` path verifies the credentials, transfer
+buffer entries included, before the machine acts on the PDU.
+
 ## What is not here yet
 
 - **A production provider.** The provider halves answer a user and no more:
   no multi-association management, no transfer-buffer sizing or release
   timers, no production. They are a test double and a starting point.
-- **GET-PARAMETER.** The operation is in the tag tables and decodes as an
-  envelope, but the per-service parameter CHOICEs are not built.
-- **The indefinite-length BER form**, as above.
+- **Typed GET-PARAMETER values.** The operation itself works — invocation,
+  both return alternatives, and a clean 'unknown parameter' refusal — but the
+  per-service parameter CHOICEs travel as raw BER for you to interpret.
 - **TLS or any transport security** beyond ISP1's own credentials.
 - **CLI subcommands.**
 

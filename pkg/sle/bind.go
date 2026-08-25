@@ -193,14 +193,87 @@ func validateIdentifier(s string) error {
 	return nil
 }
 
+// Service instance attribute object identifiers, from the
+// SLE-SERVICE-INSTANCE-ID module of CCSDS 911.1-B-5 annex A. Every attribute
+// name lives under {iso(1) identified-organization(3)
+// standards-producing-organization(112) ccsds(4) sle-transfer-services(3)
+// service-instance-id(1) attributes(2)}.
+var serviceInstanceAttributeOIDs = map[string][]uint32{
+	"sagr":    {1, 3, 112, 4, 3, 1, 2, 52},
+	"spack":   {1, 3, 112, 4, 3, 1, 2, 53},
+	"rsl-fg":  {1, 3, 112, 4, 3, 1, 2, 38},
+	"fsl-fg":  {1, 3, 112, 4, 3, 1, 2, 14},
+	"raf":     {1, 3, 112, 4, 3, 1, 2, 22},
+	"rcf":     {1, 3, 112, 4, 3, 1, 2, 46},
+	"rocf":    {1, 3, 112, 4, 3, 1, 2, 49},
+	"cltu":    {1, 3, 112, 4, 3, 1, 2, 7},
+	"antenna": {1, 3, 112, 4, 3, 1, 2, 3},
+}
+
+// serviceInstanceAttributeNames maps the dotted form back to the operator
+// name, built once from the table above.
+var serviceInstanceAttributeNames = func() map[string]string {
+	out := make(map[string]string, len(serviceInstanceAttributeOIDs))
+	for name, oid := range serviceInstanceAttributeOIDs {
+		out[dottedOID(oid)] = name
+	}
+	return out
+}()
+
+// dottedOID renders arcs as the dotted string operators write.
+func dottedOID(oid []uint32) string {
+	var b strings.Builder
+	for i, arc := range oid {
+		if i > 0 {
+			b.WriteByte('.')
+		}
+		fmt.Fprintf(&b, "%d", arc)
+	}
+	return b.String()
+}
+
+// parseDottedOID turns a dotted string back into arcs, reporting false when
+// the string is not one.
+func parseDottedOID(s string) ([]uint32, bool) {
+	if s == "" {
+		return nil, false
+	}
+	var out []uint32
+	for _, part := range strings.Split(s, ".") {
+		if part == "" {
+			return nil, false
+		}
+		var arc uint64
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return nil, false
+			}
+			arc = arc*10 + uint64(r-'0')
+			if arc > 1<<32-1 {
+				return nil, false
+			}
+		}
+		out = append(out, uint32(arc))
+	}
+	return out, len(out) >= 2
+}
+
 // ServiceInstanceAttribute is one name-value pair of a service instance
 // identifier.
 type ServiceInstanceAttribute struct {
-	// Identifier is the attribute's object identifier, as a dotted string,
-	// for example the one naming an RAF service instance.
+	// Identifier names the attribute. On the wire it is an OBJECT IDENTIFIER
+	// from the SLE-SERVICE-INSTANCE-ID module; here it is the operator name —
+	// "sagr", "spack", "rsl-fg", "fsl-fg", "raf", "rcf", "rocf", "cltu" or
+	// "antenna" — or a dotted OID string for an identifier this package does
+	// not know by name.
 	Identifier string
 	// Value is the attribute value.
 	Value string
+	// Legacy reports that the identifier arrived as a VisibleString rather
+	// than the OBJECT IDENTIFIER the module requires. Some older peers, and
+	// earlier versions of this package, encoded it that way; the decoder
+	// accepts the form and flags it here. This package always encodes OIDs.
+	Legacy bool
 }
 
 // ServiceInstanceIdentifier names a service instance: a sequence of attributes
@@ -268,19 +341,73 @@ func (b *BindInvocation) Encode() ([]byte, error) {
 	content = AppendInteger(content, int64(b.ServiceType))
 	content = AppendInteger(content, int64(b.VersionNumber))
 
-	var attrs []byte
-	for _, a := range b.ServiceInstanceIdentifier {
-		var pair []byte
-		pair = AppendVisibleString(pair, a.Identifier)
-		pair = AppendVisibleString(pair, a.Value)
-		// Each attribute is a SET OF one SEQUENCE, per the service instance
-		// identifier module.
-		inner := AppendSequence(nil, pair)
-		attrs = AppendElement(attrs, ClassUniversal, true, uint32(TagSet), inner)
+	attrs, err := appendServiceInstanceIdentifier(nil, b.ServiceInstanceIdentifier)
+	if err != nil {
+		return nil, err
 	}
 	content = AppendSequence(content, attrs)
 
 	return content, nil
+}
+
+// appendServiceInstanceIdentifier writes the attributes of a service instance
+// identifier: each one a SET OF one SEQUENCE holding an OBJECT IDENTIFIER and
+// a VisibleString, per the SLE-SERVICE-INSTANCE-ID module.
+func appendServiceInstanceIdentifier(dst []byte, s ServiceInstanceIdentifier) ([]byte, error) {
+	for _, a := range s {
+		oid, ok := serviceInstanceAttributeOIDs[a.Identifier]
+		if !ok {
+			// Not a name this package knows; a dotted OID is still fine.
+			if oid, ok = parseDottedOID(a.Identifier); !ok {
+				return nil, ErrInvalidIdentifier
+			}
+		}
+		pair, err := AppendObjectIdentifier(nil, oid)
+		if err != nil {
+			return nil, err
+		}
+		pair = AppendVisibleString(pair, a.Value)
+		inner := AppendSequence(nil, pair)
+		dst = AppendElement(dst, ClassUniversal, true, uint32(TagSet), inner)
+	}
+	return dst, nil
+}
+
+// decodeServiceInstanceAttribute reads one attribute pair. The identifier
+// should be an OBJECT IDENTIFIER; the legacy VisibleString form is accepted
+// and flagged.
+func decodeServiceInstanceAttribute(pair *Decoder) (ServiceInstanceAttribute, error) {
+	var a ServiceInstanceAttribute
+
+	id, err := pair.Next()
+	if err != nil {
+		return a, err
+	}
+	switch {
+	case id.IsUniversal(TagObjectIdentifier):
+		oid, err := id.ObjectIdentifier()
+		if err != nil {
+			return a, err
+		}
+		dotted := dottedOID(oid)
+		if name, ok := serviceInstanceAttributeNames[dotted]; ok {
+			a.Identifier = name
+		} else {
+			a.Identifier = dotted
+		}
+	case id.IsUniversal(TagVisibleString):
+		a.Identifier = id.String()
+		a.Legacy = true
+	default:
+		return a, ErrInvalidTag
+	}
+
+	value, err := pair.Next()
+	if err != nil {
+		return a, err
+	}
+	a.Value = value.String()
+	return a, nil
 }
 
 // DecodeBindInvocation parses a BIND invocation's content.
@@ -346,18 +473,11 @@ func DecodeBindInvocation(data []byte) (*BindInvocation, error) {
 		if err != nil {
 			return nil, err
 		}
-		pair := inner.Nested(seq)
-
-		id, err := pair.Next()
+		attribute, err := decodeServiceInstanceAttribute(inner.Nested(seq))
 		if err != nil {
 			return nil, err
 		}
-		value, err := pair.Next()
-		if err != nil {
-			return nil, err
-		}
-		b.ServiceInstanceIdentifier = append(b.ServiceInstanceIdentifier,
-			ServiceInstanceAttribute{Identifier: id.String(), Value: value.String()})
+		b.ServiceInstanceIdentifier = append(b.ServiceInstanceIdentifier, attribute)
 	}
 
 	if err := b.Validate(); err != nil {
@@ -562,18 +682,45 @@ type PeerAbort struct {
 	Diagnostic PeerAbortDiagnostic
 }
 
-// Encode serializes the PEER-ABORT.
+// Encode serializes the PEER-ABORT's content: the bare two's complement
+// octets of the diagnostic.
+//
+// The SLE modules are DEFINITIONS IMPLICIT TAGS, and the PDU CHOICE makes the
+// operation [104] IMPLICIT SlePeerAbort — so [104] replaces the INTEGER tag
+// rather than wrapping it. On the wire the whole PDU is a primitive
+// context-specific element, 9F 68 01 xx, with no nested INTEGER TLV.
 func (p *PeerAbort) Encode() []byte {
-	return AppendInteger(nil, int64(p.Diagnostic))
+	return encodeIntegerContent(int64(p.Diagnostic))
 }
 
-// DecodePeerAbort parses a PEER-ABORT.
+// UrgentData returns the diagnostic as the single octet CCSDS 913.1-B-2 §3.4
+// maps onto TCP urgent data. The aborting end sends this octet out of band
+// (MSG_OOB) before closing the connection, so the peer can tell an abort from
+// a failure; this package owns no socket, so sending it is the caller's job.
+func (p *PeerAbort) UrgentData() byte {
+	return byte(p.Diagnostic)
+}
+
+// DecodePeerAbort parses a PEER-ABORT's content: the bare diagnostic octets
+// found under the primitive [104] tag.
+//
+// The legacy shape this package once emitted — a complete INTEGER TLV nested
+// under a constructed [104] — is still recognized, so an old peer's abort is
+// read rather than mistaken for a huge diagnostic.
 func DecodePeerAbort(data []byte) (*PeerAbort, error) {
-	e, err := NewDecoder(data).Next()
-	if err != nil {
-		return nil, err
+	if len(data) >= 3 && data[0] == TagInteger && int(data[1]) == len(data)-2 {
+		e, err := NewDecoder(data).Next()
+		if err == nil {
+			if v, err := e.Int64(); err == nil {
+				return &PeerAbort{Diagnostic: PeerAbortDiagnostic(v)}, nil
+			}
+		}
 	}
-	v, err := e.Int64()
+
+	if len(data) == 0 {
+		return nil, ErrDataTooShort
+	}
+	v, err := (&Element{Bytes: data}).Int64()
 	if err != nil {
 		return nil, err
 	}

@@ -195,10 +195,22 @@ func (c *serviceCore) abort(diagnostic PeerAbortDiagnostic, now time.Time) {
 	if pdu != nil {
 		tag, ok := operationTag(c.config.Kind, OpPeerAbort)
 		if ok {
-			c.outbound = append(c.outbound, AppendPDU(nil, tag, pdu.Encode()))
+			// PEER-ABORT is [104] IMPLICIT PeerAbortDiagnostic: the tag
+			// replaces the INTEGER's, so the PDU is a primitive element
+			// holding the bare diagnostic octets — 9F 68 01 xx on the wire.
+			c.outbound = append(c.outbound,
+				AppendElement(nil, ClassContext, false, tag, pdu.Encode()))
 		}
 	}
 	c.state = ServiceUnbound
+}
+
+// authenticate verifies the credentials on an inbound service PDU against
+// the association's authentication level. At any level below 'all' it is a
+// no-op; at 'all' a PDU with missing or wrong credentials is refused before
+// the machine acts on it.
+func (c *serviceCore) authenticate(creds *Credentials, now time.Time) error {
+	return c.config.Association.CheckPeerCredentials(creds, now)
 }
 
 // PeerAbort ends the association from this end.
@@ -456,6 +468,34 @@ func (u *ServiceUser) HandleScheduleStatusReportReturn(r *ScheduleStatusReportRe
 	return u.settle(r.InvokeId, OpScheduleStatusReportInvocation)
 }
 
+// GetParameter asks the provider for one configuration parameter, named by
+// the service's ParameterName value. Valid in states 2 and 3, per §3.10 of
+// each service specification.
+func (u *ServiceUser) GetParameter(parameter int, now time.Time, randomNumber int32) (InvokeId, error) {
+	u.mu.Lock()
+	state := u.state
+	u.mu.Unlock()
+
+	if state == ServiceUnbound {
+		return 0, ErrNotBound
+	}
+	return u.invoke(OpGetParameterInvocation, state, now, randomNumber,
+		func(id InvokeId, creds *Credentials) ([]byte, error) {
+			return (&GetParameterInvocation{
+				Credentials: creds,
+				InvokeId:    id,
+				Parameter:   parameter,
+			}).Encode()
+		})
+}
+
+// HandleGetParameterReturn takes the answer to GET-PARAMETER.
+func (u *ServiceUser) HandleGetParameterReturn(r *GetParameterReturn) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.settle(r.InvokeId, OpGetParameterInvocation)
+}
+
 // startAccepted moves to state 3 after a positive START return.
 // The lock must already be held.
 func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
@@ -470,6 +510,11 @@ func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
 // as a test double, and see docs/pics/sle-pics.md for the row-by-row picture.
 type ServiceProvider struct {
 	*serviceCore
+
+	// seenInvokeIds records every invoke identifier used since the BIND, so
+	// a reused one draws the 'duplicate invoke ID' diagnostic rather than a
+	// second execution. An InvokeId is 16 bits, so the map stays small.
+	seenInvokeIds map[InvokeId]bool
 }
 
 // NewServiceProvider prepares the provider half of a service instance.
@@ -479,6 +524,38 @@ func NewServiceProvider(config ServiceConfig) (*ServiceProvider, error) {
 		return nil, err
 	}
 	return &ServiceProvider{serviceCore: core}, nil
+}
+
+// registerInvokeId records an inbound invocation's identifier, reporting
+// false when it has already been used on this association.
+func (p *ServiceProvider) registerInvokeId(id InvokeId) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.seenInvokeIds == nil {
+		p.seenInvokeIds = make(map[InvokeId]bool)
+	}
+	if p.seenInvokeIds[id] {
+		return false
+	}
+	p.seenInvokeIds[id] = true
+	return true
+}
+
+// queueDuplicateAnswer queues an already-encoded negative return carrying
+// the 'duplicate invoke ID' diagnostic and reports the error the caller
+// should see. Credentials are omitted: the machine has no random number to
+// build them with here, and a duplicate is a peer defect being refused.
+func (p *ServiceProvider) queueDuplicateAnswer(op OperationType, content []byte, err error, now time.Time) error {
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.queue(op, content); err != nil {
+		return err
+	}
+	p.config.Association.RecordSent(now)
+	return ErrDuplicateInvokeId
 }
 
 // respond builds and queues one provider PDU, holding the lock across the
@@ -535,6 +612,8 @@ func (p *ServiceProvider) HandleBindInvocation(b *BindInvocation, now time.Time,
 	}
 	if answer.Positive {
 		p.state = ServiceReady
+		// A fresh association starts a fresh invoke identifier space.
+		p.seenInvokeIds = nil
 	}
 	return err
 }
@@ -559,6 +638,7 @@ func (p *ServiceProvider) HandleUnbindInvocation(u *UnbindInvocation, now time.T
 		return err
 	}
 	p.state = ServiceUnbound
+	p.seenInvokeIds = nil
 	return nil
 }
 
@@ -605,6 +685,37 @@ func (p *ServiceProvider) HandleScheduleStatusReportInvocation(
 				Positive:           accept,
 				SpecificDiagnostic: diagnostic,
 			}).Encode()
+		})
+}
+
+// HandleGetParameterInvocation answers a GET-PARAMETER. Valid in states 2
+// and 3, per §3.10.
+//
+// parameter is the still-encoded alternative of the service's parameter
+// CHOICE — one complete BER element — or nil, which answers negatively with
+// 'unknown parameter'. This package does not model the per-service parameter
+// CHOICEs; the caller that has a value to report encodes it.
+func (p *ServiceProvider) HandleGetParameterInvocation(
+	g *GetParameterInvocation, parameter []byte, now time.Time, randomNumber int32,
+) error {
+	p.mu.Lock()
+	state := p.state
+	p.mu.Unlock()
+	if state == ServiceUnbound {
+		return ErrNotBound
+	}
+	return p.respond(OpGetParameterReturn, state, now, randomNumber,
+		func(creds *Credentials) ([]byte, error) {
+			answer := &GetParameterReturn{
+				Credentials:        creds,
+				InvokeId:           g.InvokeId,
+				SpecificDiagnostic: GetParameterUnknown,
+			}
+			if parameter != nil {
+				answer.Positive = true
+				answer.Parameter = parameter
+			}
+			return answer.Encode()
 		})
 }
 

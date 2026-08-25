@@ -36,15 +36,24 @@
 // CHOICE tagging the SLE modules rely on. Rather than take a dependency, this
 // package carries just enough BER to encode and decode what SLE actually
 // sends, developed against the ASN.1 modules in the service specifications.
+// It emits definite lengths only, and accepts the indefinite form on decode,
+// because real providers emit it.
 //
 // Third, ISP1 credentials hash with SHA-256, per CCSDS 913.1-B-2 §3.1.2.3.
-// SHA-1 belonged to the previous issue of the standard; a 20-octet digest is
-// still accepted on receive for backward compatibility, but never generated.
+// SHA-1 belonged to the previous issue of the standard. A 20-octet legacy
+// digest still decodes — no other length but 20 or 32 does — but it cannot be
+// verified, because this package does not implement the superseded scheme:
+// verification requires SHA-256, and only SHA-256 is ever generated.
 //
 // # What is here
 //
 // The transport and the handshake: TML message framing, the context and
-// heartbeat messages, BER, credentials, and BIND, UNBIND and PEER-ABORT. The
-// four transfer services themselves — RAF, RCF, ROCF and FCLTU — build on this
-// and are not in this package yet.
+// heartbeat messages, BER, credentials, and BIND, UNBIND and PEER-ABORT —
+// including the OBJECT IDENTIFIER form of the service instance identifier
+// and the primitive [104] PEER-ABORT encoding. On top of that, the four
+// transfer services themselves: RAF, RCF, ROCF and FCLTU, each as a
+// caller-pumped user machine and a partial provider. GET-PARAMETER decodes
+// and answers cleanly, though the per-service parameter CHOICEs travel as
+// raw BER rather than typed values. See docs/pics/sle-pics.md for the
+// row-by-row conformance picture.
 package sle

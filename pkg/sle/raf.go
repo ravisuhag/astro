@@ -732,6 +732,7 @@ type RAFUserEvent struct {
 	StartReturn                *RAFStartReturn
 	StopReturn                 *Acknowledgement
 	ScheduleStatusReportReturn *ScheduleStatusReportReturn
+	GetParameterReturn         *GetParameterReturn
 	TransferBuffer             RAFTransferBuffer
 	StatusReport               *RAFStatusReportInvocation
 	PeerAbort                  *PeerAbort
@@ -766,12 +767,18 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.UnbindReturn = r
 		return event, u.HandleUnbindReturn(r, now)
 
 	case OpStartReturn:
 		r, err := DecodeRAFStartReturn(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StartReturn = r
@@ -782,6 +789,9 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.StopReturn = r
 		return event, u.HandleStopReturn(r)
 
@@ -790,8 +800,22 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.ScheduleStatusReportReturn = r
 		return event, u.HandleScheduleStatusReportReturn(r)
+
+	case OpGetParameterReturn:
+		r, err := DecodeGetParameterReturn(pdu.Content)
+		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
+		event.GetParameterReturn = r
+		return event, u.HandleGetParameterReturn(r)
 
 	case OpTransferBuffer:
 		if u.State() != ServiceActive {
@@ -802,12 +826,33 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		for _, entry := range buffer {
+			creds := (*Credentials)(nil)
+			switch {
+			case entry.Frame != nil:
+				creds = entry.Frame.Credentials
+			case entry.Notification != nil:
+				creds = entry.Notification.Credentials
+			}
+			if err := u.authenticate(creds, now); err != nil {
+				return nil, err
+			}
+		}
 		event.TransferBuffer = buffer
 		return event, nil
 
 	case OpStatusReportInvocation:
+		// Table 4-1: a STATUS-REPORT is legal only on a bound association;
+		// in state 1 it draws the protocol-error abort.
+		if u.State() == ServiceUnbound {
+			u.PeerAbort(AbortProtocolError, now)
+			return event, ErrUnexpectedPDU
+		}
 		report, err := DecodeRAFStatusReportInvocation(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(report.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StatusReport = report
@@ -885,6 +930,7 @@ type RAFProviderEvent struct {
 	StartInvocation                *RAFStartInvocation
 	StopInvocation                 *StopInvocation
 	ScheduleStatusReportInvocation *ScheduleStatusReportInvocation
+	GetParameterInvocation         *GetParameterInvocation
 	PeerAbort                      *PeerAbort
 }
 
@@ -900,17 +946,32 @@ func (p *RAFProvider) HandlePDU(data []byte, now time.Time) (*RAFProviderEvent, 
 
 	event := &RAFProviderEvent{Operation: pdu.Operation}
 
+	var creds *Credentials
 	switch pdu.Operation {
 	case OpBindInvocation:
+		// BIND credentials are verified by Association.HandleBindInvocation,
+		// which owns the bind-level policy.
 		event.BindInvocation, err = DecodeBindInvocation(pdu.Content)
 	case OpUnbindInvocation:
-		event.UnbindInvocation, err = DecodeUnbindInvocation(pdu.Content)
+		if event.UnbindInvocation, err = DecodeUnbindInvocation(pdu.Content); err == nil {
+			creds = event.UnbindInvocation.Credentials
+		}
 	case OpStartInvocation:
-		event.StartInvocation, err = DecodeRAFStartInvocation(pdu.Content)
+		if event.StartInvocation, err = DecodeRAFStartInvocation(pdu.Content); err == nil {
+			creds = event.StartInvocation.Credentials
+		}
 	case OpStopInvocation:
-		event.StopInvocation, err = DecodeStopInvocation(pdu.Content)
+		if event.StopInvocation, err = DecodeStopInvocation(pdu.Content); err == nil {
+			creds = event.StopInvocation.Credentials
+		}
 	case OpScheduleStatusReportInvocation:
-		event.ScheduleStatusReportInvocation, err = DecodeScheduleStatusReportInvocation(pdu.Content)
+		if event.ScheduleStatusReportInvocation, err = DecodeScheduleStatusReportInvocation(pdu.Content); err == nil {
+			creds = event.ScheduleStatusReportInvocation.Credentials
+		}
+	case OpGetParameterInvocation:
+		if event.GetParameterInvocation, err = DecodeGetParameterInvocation(pdu.Content); err == nil {
+			creds = event.GetParameterInvocation.Credentials
+		}
 	case OpPeerAbort:
 		abort, abortErr := DecodePeerAbort(pdu.Content)
 		if abortErr != nil {
@@ -926,5 +987,57 @@ func (p *RAFProvider) HandlePDU(data []byte, now time.Time) (*RAFProviderEvent, 
 	if err != nil {
 		return nil, err
 	}
+	if pdu.Operation != OpBindInvocation {
+		if err := p.authenticate(creds, now); err != nil {
+			return nil, err
+		}
+	}
+	if err := p.checkDuplicateInvokeId(event, now); err != nil {
+		return event, err
+	}
 	return event, nil
+}
+
+// checkDuplicateInvokeId refuses a confirmed invocation whose invoke
+// identifier has already been used on this association, queueing the
+// negative return the specs require for it.
+func (p *RAFProvider) checkDuplicateInvokeId(event *RAFProviderEvent, now time.Time) error {
+	switch event.Operation {
+	case OpStartInvocation:
+		if !p.registerInvokeId(event.StartInvocation.InvokeId) {
+			content, err := (&RAFStartReturn{
+				InvokeId:         event.StartInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpStartReturn, content, err, now)
+		}
+	case OpStopInvocation:
+		if !p.registerInvokeId(event.StopInvocation.InvokeId) {
+			content, err := (&Acknowledgement{
+				InvokeId:   event.StopInvocation.InvokeId,
+				Diagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpStopReturn, content, err, now)
+		}
+	case OpScheduleStatusReportInvocation:
+		if !p.registerInvokeId(event.ScheduleStatusReportInvocation.InvokeId) {
+			content, err := (&ScheduleStatusReportReturn{
+				InvokeId:         event.ScheduleStatusReportInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpScheduleStatusReportReturn, content, err, now)
+		}
+	case OpGetParameterInvocation:
+		if !p.registerInvokeId(event.GetParameterInvocation.InvokeId) {
+			content, err := (&GetParameterReturn{
+				InvokeId:         event.GetParameterInvocation.InvokeId,
+				UsedCommon:       true,
+				CommonDiagnostic: DiagDuplicateInvokeId,
+			}).Encode()
+			return p.queueDuplicateAnswer(OpGetParameterReturn, content, err, now)
+		}
+	}
+	return nil
 }

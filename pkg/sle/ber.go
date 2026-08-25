@@ -12,12 +12,13 @@ import (
 // does not take.
 //
 // What is supported: the universal types SLE uses (BOOLEAN, INTEGER, NULL,
-// OCTET STRING, VisibleString, SEQUENCE, SEQUENCE OF), context-specific tags
-// in both primitive and constructed form, multi-octet tag numbers, and the
-// definite-length form in both short and long variants.
+// OCTET STRING, OBJECT IDENTIFIER, VisibleString, SEQUENCE, SEQUENCE OF),
+// context-specific tags in both primitive and constructed form, multi-octet
+// tag numbers, and the definite-length form in both short and long variants.
 //
-// What is not: the indefinite-length form. Real providers do emit it, and this
-// decoder returns ErrIndefiniteLength rather than guessing where a value ends.
+// The indefinite-length form is accepted on decode — real providers emit it —
+// by scanning for the end-of-contents octets. This encoder always emits the
+// definite form.
 
 // Tag classes, per X.690 §8.1.2.2.
 const (
@@ -38,15 +39,16 @@ const Constructed uint8 = 0x20
 
 // Universal tag numbers SLE uses.
 const (
-	TagBoolean       uint8 = 1
-	TagInteger       uint8 = 2
-	TagBitString     uint8 = 3
-	TagOctetString   uint8 = 4
-	TagNull          uint8 = 5
-	TagEnumerated    uint8 = 10
-	TagSequence      uint8 = 16
-	TagSet           uint8 = 17
-	TagVisibleString uint8 = 26
+	TagBoolean          uint8 = 1
+	TagInteger          uint8 = 2
+	TagBitString        uint8 = 3
+	TagOctetString      uint8 = 4
+	TagNull             uint8 = 5
+	TagObjectIdentifier uint8 = 6
+	TagEnumerated       uint8 = 10
+	TagSequence         uint8 = 16
+	TagSet              uint8 = 17
+	TagVisibleString    uint8 = 26
 )
 
 // DefaultMaxLength bounds a decoded BER value when no limit is given: 16 MiB.
@@ -95,10 +97,16 @@ func AppendTag(dst []byte, class uint8, constructed bool, tag uint32) []byte {
 	// High tag number form: the low five bits are all ones, then base-128
 	// digits with the continuation bit set on all but the last.
 	dst = append(dst, first|0x1F)
+	return appendBase128(dst, tag)
+}
 
+// appendBase128 writes v as base-128 digits with the continuation bit set on
+// all but the last, the form both high tag numbers (X.690 §8.1.2.4) and
+// OBJECT IDENTIFIER subidentifiers (§8.19.2) use.
+func appendBase128(dst []byte, v uint32) []byte {
 	var digits [5]byte
 	n := 0
-	for v := tag; ; v >>= 7 {
+	for ; ; v >>= 7 {
 		digits[n] = byte(v & 0x7F)
 		n++
 		if v < 128 {
@@ -194,6 +202,23 @@ func AppendNull(dst []byte) []byte {
 	return AppendElement(dst, ClassUniversal, false, uint32(TagNull), nil)
 }
 
+// AppendObjectIdentifier writes a universal OBJECT IDENTIFIER (X.690 §8.19).
+//
+// The first two arcs pack into one subidentifier (first*40 + second), then
+// every subidentifier is base-128 with continuation bits. The service
+// instance identifiers of the SLE BIND use this type for their attribute
+// names.
+func AppendObjectIdentifier(dst []byte, oid []uint32) ([]byte, error) {
+	if len(oid) < 2 || oid[0] > 2 || (oid[0] < 2 && oid[1] > 39) {
+		return nil, ErrInvalidObjectIdentifier
+	}
+	content := appendBase128(nil, oid[0]*40+oid[1])
+	for _, arc := range oid[2:] {
+		content = appendBase128(content, arc)
+	}
+	return AppendElement(dst, ClassUniversal, false, uint32(TagObjectIdentifier), content), nil
+}
+
 // AppendSequence writes a universal SEQUENCE around already-encoded content.
 func AppendSequence(dst []byte, content []byte) []byte {
 	return AppendElement(dst, ClassUniversal, true, uint32(TagSequence), content)
@@ -272,10 +297,25 @@ func (d *Decoder) Next() (*Element, error) {
 		e.Tag = uint32(first & 0x1F)
 	}
 
-	length, err := d.readLength()
+	length, indefinite, err := d.readLength()
 	if err != nil {
 		return nil, err
 	}
+
+	if indefinite {
+		// X.690 §8.1.3.6. Real providers emit it, so it is accepted on
+		// decode: the content runs to the end-of-contents octets, found by
+		// walking the nested elements. Only a constructed encoding may use
+		// it (§8.1.3.2).
+		if !e.Constructed {
+			return nil, ErrIndefiniteLength
+		}
+		if e.Bytes, err = d.indefiniteContent(0); err != nil {
+			return nil, err
+		}
+		return e, nil
+	}
+
 	if length > d.Remaining() {
 		return nil, ErrDataTooShort
 	}
@@ -285,47 +325,116 @@ func (d *Decoder) Next() (*Element, error) {
 	return e, nil
 }
 
-// readLength reads a definite-form length.
-func (d *Decoder) readLength() (int, error) {
+// maxIndefiniteDepth bounds the nesting of indefinite-length encodings, so a
+// hostile message cannot recurse the scanner off the stack.
+const maxIndefiniteDepth = 64
+
+// indefiniteContent scans from the current offset for the end-of-contents
+// octets closing the current level, returning the content between and
+// consuming the terminator.
+func (d *Decoder) indefiniteContent(depth int) ([]byte, error) {
+	if depth >= maxIndefiniteDepth {
+		return nil, ErrInvalidLength
+	}
+	start := d.offset
+	for {
+		if d.Remaining() < 2 {
+			return nil, ErrDataTooShort
+		}
+		if d.data[d.offset] == 0 && d.data[d.offset+1] == 0 {
+			content := d.data[start:d.offset]
+			d.offset += 2
+			return content, nil
+		}
+		if err := d.skipElement(depth); err != nil {
+			return nil, err
+		}
+	}
+}
+
+// skipElement advances past one complete element without materializing it,
+// following nested indefinite lengths as it goes.
+func (d *Decoder) skipElement(depth int) error {
 	if d.Empty() {
-		return 0, ErrDataTooShort
+		return ErrDataTooShort
+	}
+	first := d.data[d.offset]
+	d.offset++
+	constructed := first&Constructed != 0
+
+	if first&0x1F == 0x1F {
+		for i := 0; ; i++ {
+			if d.Empty() {
+				return ErrDataTooShort
+			}
+			if i >= 5 {
+				return ErrInvalidTag
+			}
+			b := d.data[d.offset]
+			d.offset++
+			if b&0x80 == 0 {
+				break
+			}
+		}
+	}
+
+	length, indefinite, err := d.readLength()
+	if err != nil {
+		return err
+	}
+	if indefinite {
+		if !constructed {
+			return ErrIndefiniteLength
+		}
+		_, err := d.indefiniteContent(depth + 1)
+		return err
+	}
+	if length > d.Remaining() {
+		return ErrDataTooShort
+	}
+	d.offset += length
+	return nil
+}
+
+// readLength reads a length field, reporting the indefinite form rather than
+// resolving it: that is Next's job, because only it knows the tag.
+func (d *Decoder) readLength() (length int, indefinite bool, err error) {
+	if d.Empty() {
+		return 0, false, ErrDataTooShort
 	}
 	first := d.data[d.offset]
 	d.offset++
 
 	if first < 0x80 {
-		return int(first), nil
+		return int(first), false, nil
 	}
 	if first == 0x80 {
-		// X.690 §8.1.3.6. Real providers emit it; this decoder will not guess
-		// where the value ends.
-		return 0, ErrIndefiniteLength
+		return 0, true, nil
 	}
 	if first == 0xFF {
 		// Reserved by §8.1.3.5 c).
-		return 0, ErrInvalidLength
+		return 0, false, ErrInvalidLength
 	}
 
 	count := int(first & 0x7F)
 	if count > 8 {
-		return 0, ErrLengthTooLarge
+		return 0, false, ErrLengthTooLarge
 	}
 	if count > d.Remaining() {
-		return 0, ErrDataTooShort
+		return 0, false, ErrDataTooShort
 	}
 
-	length := 0
 	for i := 0; i < count; i++ {
 		length = length<<8 | int(d.data[d.offset])
 		d.offset++
 		if length > d.maxLength {
-			return 0, ErrLengthTooLarge
+			return 0, false, ErrLengthTooLarge
 		}
 	}
 	if length < 0 {
-		return 0, ErrInvalidLength
+		return 0, false, ErrInvalidLength
 	}
-	return length, nil
+	return length, false, nil
 }
 
 // Nested returns a decoder over a constructed element's content, carrying the
@@ -376,6 +485,45 @@ func (e *Element) Uint64() (uint64, error) {
 
 // String reads an element's content as text.
 func (e *Element) String() string { return string(e.Bytes) }
+
+// ObjectIdentifier reads an element's content as the arcs of an OBJECT
+// IDENTIFIER (X.690 §8.19).
+func (e *Element) ObjectIdentifier() ([]uint32, error) {
+	if len(e.Bytes) == 0 {
+		return nil, ErrInvalidObjectIdentifier
+	}
+	if e.Bytes[len(e.Bytes)-1]&0x80 != 0 {
+		// The last octet of the last subidentifier must not continue.
+		return nil, ErrInvalidObjectIdentifier
+	}
+
+	var out []uint32
+	var v uint32
+	for _, b := range e.Bytes {
+		if v > (1<<32-1)>>7 {
+			return nil, ErrInvalidObjectIdentifier
+		}
+		v = v<<7 | uint32(b&0x7F)
+		if b&0x80 != 0 {
+			continue
+		}
+		if out == nil {
+			// The first subidentifier packs the first two arcs.
+			switch {
+			case v < 40:
+				out = append(out, 0, v)
+			case v < 80:
+				out = append(out, 1, v-40)
+			default:
+				out = append(out, 2, v-80)
+			}
+		} else {
+			out = append(out, v)
+		}
+		v = 0
+	}
+	return out, nil
+}
 
 // Bool reads an element's content as a BOOLEAN. X.690 §8.2.2: any non-zero
 // octet is true.

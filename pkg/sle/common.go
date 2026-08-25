@@ -342,6 +342,10 @@ const (
 
 // Validate checks a GVCID against the ranges of the GvcId SEQUENCE.
 func (g GVCID) Validate() error {
+	// VcId ::= INTEGER (0 .. 63), whatever the frame version.
+	if !g.MasterChannel && g.VirtualChannelID > 63 {
+		return ErrInvalidIdentifier
+	}
 	switch g.VersionNumber {
 	case FrameVersionTM:
 		// TM spacecraft identifiers are 10 bits.
@@ -496,12 +500,15 @@ func (n *SyncNotifyInvocation) Encode() ([]byte, error) {
 		if n.LockStatus == nil {
 			return nil, ErrDataTooShort
 		}
+		// lossFrameSync [0] IMPLICIT LockStatusReport: the module is
+		// DEFINITIONS IMPLICIT TAGS, so [0] replaces the report's SEQUENCE
+		// tag and the fields sit directly under it — no inner SEQUENCE.
 		var report []byte
 		report = AppendTimeChoice(report, n.LockStatus.Time)
 		report = AppendInteger(report, int64(n.LockStatus.CarrierLockStatus))
 		report = AppendInteger(report, int64(n.LockStatus.SubcarrierLockStatus))
 		report = AppendInteger(report, int64(n.LockStatus.SymbolSyncLockStatus))
-		content = AppendElement(content, ClassContext, true, 0, AppendSequence(nil, report))
+		content = AppendElement(content, ClassContext, true, 0, report)
 
 	case NotifyProductionStatusChange:
 		content = AppendTaggedInteger(content, 1, int64(n.ProductionStatus))
@@ -539,11 +546,9 @@ func DecodeSyncNotifyInvocation(data []byte) (*SyncNotifyInvocation, error) {
 
 	switch {
 	case notify.IsContext(0):
-		seq, err := NewDecoder(notify.Bytes).Next()
-		if err != nil {
-			return nil, err
-		}
-		inner := NewDecoder(seq.Bytes)
+		// The [0] tag replaces the LockStatusReport SEQUENCE (implicit
+		// tagging), so its fields are directly under it.
+		inner := NewDecoder(notify.Bytes)
 
 		report := &LockStatusReport{}
 		timeElem, err := inner.Next()

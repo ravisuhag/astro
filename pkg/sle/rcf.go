@@ -562,6 +562,7 @@ type RCFUserEvent struct {
 	StartReturn                *RCFStartReturn
 	StopReturn                 *Acknowledgement
 	ScheduleStatusReportReturn *ScheduleStatusReportReturn
+	GetParameterReturn         *GetParameterReturn
 	TransferBuffer             RCFTransferBuffer
 	StatusReport               *RCFStatusReportInvocation
 	PeerAbort                  *PeerAbort
@@ -591,12 +592,18 @@ func (u *RCFUser) HandlePDU(data []byte, now time.Time) (*RCFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.UnbindReturn = r
 		return event, u.HandleUnbindReturn(r, now)
 
 	case OpStartReturn:
 		r, err := DecodeRCFStartReturn(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StartReturn = r
@@ -607,6 +614,9 @@ func (u *RCFUser) HandlePDU(data []byte, now time.Time) (*RCFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.StopReturn = r
 		return event, u.HandleStopReturn(r)
 
@@ -615,8 +625,22 @@ func (u *RCFUser) HandlePDU(data []byte, now time.Time) (*RCFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
 		event.ScheduleStatusReportReturn = r
 		return event, u.HandleScheduleStatusReportReturn(r)
+
+	case OpGetParameterReturn:
+		r, err := DecodeGetParameterReturn(pdu.Content)
+		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(r.Credentials, now); err != nil {
+			return nil, err
+		}
+		event.GetParameterReturn = r
+		return event, u.HandleGetParameterReturn(r)
 
 	case OpTransferBuffer:
 		if u.State() != ServiceActive {
@@ -627,12 +651,32 @@ func (u *RCFUser) HandlePDU(data []byte, now time.Time) (*RCFUserEvent, error) {
 		if err != nil {
 			return nil, err
 		}
+		for _, entry := range buffer {
+			creds := (*Credentials)(nil)
+			switch {
+			case entry.Frame != nil:
+				creds = entry.Frame.Credentials
+			case entry.Notification != nil:
+				creds = entry.Notification.Credentials
+			}
+			if err := u.authenticate(creds, now); err != nil {
+				return nil, err
+			}
+		}
 		event.TransferBuffer = buffer
 		return event, nil
 
 	case OpStatusReportInvocation:
+		// Table 4-1: a STATUS-REPORT is legal only on a bound association.
+		if u.State() == ServiceUnbound {
+			u.PeerAbort(AbortProtocolError, now)
+			return event, ErrUnexpectedPDU
+		}
 		report, err := DecodeRCFStatusReportInvocation(pdu.Content)
 		if err != nil {
+			return nil, err
+		}
+		if err := u.authenticate(report.Credentials, now); err != nil {
 			return nil, err
 		}
 		event.StatusReport = report

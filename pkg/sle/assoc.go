@@ -70,6 +70,36 @@ func (r Role) String() string {
 	return "user"
 }
 
+// AuthenticationLevel says which inbound PDUs must carry verified
+// credentials. CCSDS 913.1-B-2 §3.1 names the three levels a service
+// agreement can pick.
+type AuthenticationLevel int
+
+const (
+	// AuthLevelBind verifies credentials on the BIND exchange only. This is
+	// the default, and the level most service agreements pick.
+	AuthLevelBind AuthenticationLevel = iota
+	// AuthLevelNone verifies nothing, even when a peer password is
+	// configured.
+	AuthLevelNone
+	// AuthLevelAll verifies the credentials on every inbound PDU. The
+	// service machines run the check in their HandlePDU paths through
+	// CheckPeerCredentials.
+	AuthLevelAll
+)
+
+// String names the level.
+func (l AuthenticationLevel) String() string {
+	switch l {
+	case AuthLevelNone:
+		return "none"
+	case AuthLevelAll:
+		return "all"
+	default:
+		return "bind"
+	}
+}
+
 // AssociationConfig describes one association.
 type AssociationConfig struct {
 	// Role is which end this is.
@@ -93,6 +123,11 @@ type AssociationConfig struct {
 
 	// PeerPassword verifies the far end's credentials.
 	PeerPassword []byte
+
+	// AuthLevel says which inbound PDUs are authenticated: the BIND exchange
+	// only (the default), nothing, or every PDU. It matters only when
+	// PeerPassword is set.
+	AuthLevel AuthenticationLevel
 
 	// AcceptableDelay is how far a peer's credential time may be from now
 	// before it is rejected (§3.1.2.2.1). Zero disables the check.
@@ -172,13 +207,25 @@ func (a *Association) ContextMessage(now time.Time) *Message {
 //
 // The peer's heartbeat interval and dead factor govern what this end must
 // send and how long it waits, so they replace the configured values.
+//
+// §3.3.2.2 makes the context message the initiator's — the SLE user sends
+// it, the provider receives it — so a user rejects an inbound one. The
+// parameters are range-checked: a nonzero heartbeat interval with a zero
+// dead factor could never declare the peer dead.
 func (a *Association) HandleContextMessage(body []byte, now time.Time) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	if a.config.Role != RoleProvider {
+		return ErrUnexpectedPDU
+	}
+
 	c, err := DecodeContextMessage(body)
 	if err != nil {
 		return err
+	}
+	if c.HeartbeatInterval != 0 && c.DeadFactor == 0 {
+		return ErrInvalidContextParameters
 	}
 	a.negotiated = *c
 	a.contextReceived = true
@@ -281,8 +328,9 @@ func (a *Association) HandleBindInvocation(b *BindInvocation, now time.Time, ran
 		return reply, nil
 	}
 
-	// Authenticate when this association is configured for it.
-	if len(a.config.PeerPassword) > 0 {
+	// Authenticate when this association is configured for it. The 'none'
+	// level turns the check off even with a peer password on file.
+	if len(a.config.PeerPassword) > 0 && a.config.AuthLevel != AuthLevelNone {
 		if b.Credentials == nil {
 			reply.Diagnostic = BindAccessDenied
 			if err := addCredentials(); err != nil {
@@ -336,7 +384,7 @@ func (a *Association) HandleBindReturn(b *BindReturn, now time.Time) error {
 		return ErrBindRejected
 	}
 
-	if len(a.config.PeerPassword) > 0 {
+	if len(a.config.PeerPassword) > 0 && a.config.AuthLevel != AuthLevelNone {
 		if b.Credentials == nil {
 			a.state = StateClosed
 			return ErrAuthenticationFailed
@@ -418,6 +466,12 @@ func (a *Association) HandleUnbindReturn(u *UnbindReturn, now time.Time) error {
 }
 
 // Abort ends the association abruptly, returning the PEER-ABORT to send.
+//
+// ISP1 maps PEER-ABORT onto the transport twice over (CCSDS 913.1-B-2 §3.4):
+// the diagnostic goes out as one octet of TCP urgent data — take it from
+// PeerAbort.UrgentData and write it with MSG_OOB — and then the connection
+// closes. This package owns no socket, so both are the caller's to do after
+// sending the PDU this returns.
 func (a *Association) Abort(diagnostic PeerAbortDiagnostic, now time.Time) *PeerAbort {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -437,6 +491,16 @@ func (a *Association) HandlePeerAbort(p *PeerAbort, now time.Time) {
 	a.state = StateClosed
 	d := p.Diagnostic
 	a.abortDiagnostic = &d
+}
+
+// HandleUrgentData processes a peer abort that arrived as TCP urgent data:
+// the single diagnostic octet of CCSDS 913.1-B-2 §3.4. A caller reading its
+// socket out of band hands the octet here and gets the decoded abort back;
+// the association closes just as it does for the in-band PDU.
+func (a *Association) HandleUrgentData(octet byte, now time.Time) *PeerAbort {
+	p := &PeerAbort{Diagnostic: PeerAbortDiagnostic(octet)}
+	a.HandlePeerAbort(p, now)
+	return p
 }
 
 // AbortDiagnostic returns why the association aborted, or nil if it did not.
@@ -558,15 +622,17 @@ func (a *Association) MakeCredentials(now time.Time, randomNumber int32) (*Crede
 
 // CheckPeerCredentials verifies credentials on an incoming service PDU.
 //
-// It returns nil when the association is not checking the peer, which is the
-// unauthenticated case. When it is, missing credentials are as bad as wrong
-// ones: an association configured for authentication must not accept a PDU
-// that simply left the field out.
+// The service machines call it from every HandlePDU path. It returns nil
+// unless the association's authentication level is 'all' and a peer password
+// is on file — the two lower levels leave service PDUs unchecked, per the
+// levels of CCSDS 913.1-B-2 §3.1. When it does check, missing credentials
+// are as bad as wrong ones: an association configured for authentication
+// must not accept a PDU that simply left the field out.
 func (a *Association) CheckPeerCredentials(c *Credentials, now time.Time) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if len(a.config.PeerPassword) == 0 {
+	if a.config.AuthLevel != AuthLevelAll || len(a.config.PeerPassword) == 0 {
 		return nil
 	}
 	if c == nil {

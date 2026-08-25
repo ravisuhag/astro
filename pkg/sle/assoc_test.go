@@ -600,18 +600,38 @@ func TestHeartbeatDisabledByZeroInterval(t *testing.T) {
 }
 
 func TestPeerContextOverridesLocalTiming(t *testing.T) {
-	// The peer's context message says how often it expects to hear from us.
-	user, _ := association(t, false)
+	// The initiator's context message says how often it expects to hear from
+	// the provider, so the provider adopts its timing.
+	_, provider := association(t, false)
 	now := testEpoch
 
 	peerContext := (&sle.ContextMessage{HeartbeatInterval: 5, DeadFactor: 2}).Encode()
-	if err := user.HandleContextMessage(peerContext, now); err != nil {
+	if err := provider.HandleContextMessage(peerContext, now); err != nil {
 		t.Fatal(err)
 	}
-	user.RecordSent(now)
+	provider.RecordSent(now)
 
 	// The configured interval was 30 seconds; the peer asked for 5.
-	if !user.HeartbeatDue(now.Add(6 * time.Second)) {
+	if !provider.HeartbeatDue(now.Add(6 * time.Second)) {
 		t.Error("the peer's shorter heartbeat interval was not adopted")
+	}
+}
+
+func TestContextMessageRoleAndRanges(t *testing.T) {
+	// §3.3.2.2: the context message is the initiator's — the user sends it,
+	// so a user refuses an inbound one.
+	user, provider := association(t, false)
+	now := testEpoch
+
+	body := (&sle.ContextMessage{HeartbeatInterval: 5, DeadFactor: 2}).Encode()
+	if err := user.HandleContextMessage(body, now); !errors.Is(err, sle.ErrUnexpectedPDU) {
+		t.Errorf("user accepted a context message: %v", err)
+	}
+
+	// A live heartbeat with a zero dead factor could never declare the peer
+	// dead, so the parameters are refused.
+	bad := (&sle.ContextMessage{HeartbeatInterval: 5, DeadFactor: 0}).Encode()
+	if err := provider.HandleContextMessage(bad, now); !errors.Is(err, sle.ErrInvalidContextParameters) {
+		t.Errorf("error = %v, want ErrInvalidContextParameters", err)
 	}
 }

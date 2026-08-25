@@ -21,9 +21,11 @@ import (
 // # SHA-256, not SHA-1
 //
 // §3.1.2.3 requires SHA-256. SHA-1 was the previous issue of the standard, and
-// §3.2.3's note keeps a 20-octet digest acceptable only so a new implementation
-// can talk to an old one. This package generates SHA-256 and accepts either
-// length on receive.
+// §3.2.3's note keeps a 20-octet digest recognizable only so a new
+// implementation can talk to an old one. This package generates SHA-256 only.
+// A digest must be exactly 20 or 32 octets to decode at all — no other length
+// is a digest either issue defines — and a 20-octet one then fails
+// verification, because the superseded SHA-1 scheme is not implemented.
 
 // Digest sizes, per §3.2.3 note 2.
 const (
@@ -135,7 +137,9 @@ func (c *Credentials) Encode() ([]byte, error) {
 	if c == nil {
 		return nil, ErrInvalidCredentials
 	}
-	if len(c.Protected) < DigestSizeSHA1 || len(c.Protected) > DigestSizeSHA256 {
+	// §3.2.3 note 2: a digest is 32 octets (SHA-256) or the legacy 20
+	// (SHA-1). Nothing in between is a digest at all.
+	if len(c.Protected) != DigestSizeSHA1 && len(c.Protected) != DigestSizeSHA256 {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -183,6 +187,9 @@ func DecodeCredentials(data []byte) (*Credentials, error) {
 	protectedElem, err := inner.Next()
 	if err != nil {
 		return nil, err
+	}
+	if len(protectedElem.Bytes) != DigestSizeSHA1 && len(protectedElem.Bytes) != DigestSizeSHA256 {
+		return nil, ErrInvalidCredentials
 	}
 
 	return &Credentials{

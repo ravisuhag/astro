@@ -14,9 +14,14 @@ var (
 	// bytes available.
 	ErrInvalidLength = errors.New("invalid BER length")
 
-	// ErrIndefiniteLength indicates the indefinite-length form where this
-	// decoder requires a definite one.
-	ErrIndefiniteLength = errors.New("indefinite BER length is not supported here")
+	// ErrIndefiniteLength indicates the indefinite-length form on a primitive
+	// encoding, which X.690 §8.1.3.2 forbids. Constructed indefinite-length
+	// encodings are accepted.
+	ErrIndefiniteLength = errors.New("indefinite BER length on a primitive encoding")
+
+	// ErrInvalidObjectIdentifier indicates an OBJECT IDENTIFIER that cannot
+	// be encoded or decoded.
+	ErrInvalidObjectIdentifier = errors.New("invalid object identifier")
 
 	// ErrLengthTooLarge indicates a BER length beyond the configured maximum.
 	// A length field can name far more than any real PDU contains, so a cap
@@ -42,6 +47,11 @@ var (
 	// ErrInvalidContextLength indicates a TML context message body that is not
 	// the 12 octets §3.3.2.2.4 requires.
 	ErrInvalidContextLength = errors.New("TML context message body must be 12 octets")
+
+	// ErrInvalidContextParameters indicates a TML context message whose
+	// parameters are out of range: a nonzero heartbeat interval needs a
+	// nonzero dead factor.
+	ErrInvalidContextParameters = errors.New("invalid TML context parameters")
 
 	// ErrNonEmptyHeartbeat indicates a heartbeat message carrying a body,
 	// contrary to §3.3.2.2.5.
@@ -97,6 +107,11 @@ var (
 	// ErrUnknownInvokeId indicates a return whose invoke identifier matches no
 	// outstanding invocation.
 	ErrUnknownInvokeId = errors.New("return does not match any outstanding invocation")
+
+	// ErrDuplicateInvokeId indicates an invocation reusing an invoke
+	// identifier already seen on this association. The provider machines
+	// answer it with the 'duplicate invoke ID' diagnostic.
+	ErrDuplicateInvokeId = errors.New("invoke identifier already used on this association")
 
 	// ErrCltuOutOfSequence indicates a CLTU identification that is not the one
 	// the provider expects next, per CCSDS 912.1-B-5 §3.6.2.5.

@@ -189,10 +189,39 @@ func TestNullEncoding(t *testing.T) {
 	}
 }
 
-func TestDecoderRejectsIndefiniteLength(t *testing.T) {
-	// X.690 §8.1.3.6. Real providers emit it; guessing where the value ends
-	// is worse than refusing.
+func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
+	// X.690 §8.1.3.6. Real providers emit it, so the decoder scans for the
+	// end-of-contents octets rather than refusing.
 	data := []byte{0x30, 0x80, 0x02, 0x01, 0x2A, 0x00, 0x00}
+	seq, err := sle.NewDecoder(data).Next()
+	if err != nil {
+		t.Fatalf("Next() = %v", err)
+	}
+	if !seq.IsUniversal(16) || !seq.Constructed {
+		t.Fatal("outer element is not a constructed SEQUENCE")
+	}
+	inner, err := sle.NewDecoder(seq.Bytes).Next()
+	if err != nil {
+		t.Fatalf("nested Next() = %v", err)
+	}
+	if v, err := inner.Int64(); err != nil || v != 42 {
+		t.Errorf("nested integer = %d, %v, want 42", v, err)
+	}
+
+	// Nested indefinite lengths resolve too.
+	nested := []byte{0x30, 0x80, 0x30, 0x80, 0x02, 0x01, 0x07, 0x00, 0x00, 0x00, 0x00}
+	outer, err := sle.NewDecoder(nested).Next()
+	if err != nil {
+		t.Fatalf("nested indefinite Next() = %v", err)
+	}
+	if len(outer.Bytes) != 7 {
+		t.Errorf("outer content = %d octets, want 7", len(outer.Bytes))
+	}
+}
+
+func TestDecoderRejectsPrimitiveIndefiniteLength(t *testing.T) {
+	// §8.1.3.2: only a constructed encoding may use the indefinite form.
+	data := []byte{0x04, 0x80, 0x00, 0x00}
 	if _, err := sle.NewDecoder(data).Next(); !errors.Is(err, sle.ErrIndefiniteLength) {
 		t.Errorf("error = %v, want ErrIndefiniteLength", err)
 	}
