@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/ravisuhag/astro/pkg/sdl"
+	"github.com/ravisuhag/astro/pkg/spp"
 )
 
 // Service is the interface for all AOS Data Link services.
@@ -53,14 +54,42 @@ func stampFrame(frame *TransferFrame, counter *FrameCounter, vcid uint8) error {
 	return recomputeFECF(frame)
 }
 
-// isIdleFill reports whether all bytes match the idle fill pattern.
-func isIdleFill(data []byte) bool {
-	for _, b := range data {
-		if b != idleFill {
+// isIdleFill reports whether all bytes match the repeating idle fill pattern.
+func isIdleFill(data []byte, pattern []byte) bool {
+	if len(pattern) == 0 {
+		pattern = []byte{DefaultIdleFill}
+	}
+	for i, b := range data {
+		if b != pattern[i%len(pattern)] {
 			return false
 		}
 	}
 	return true
+}
+
+// minIdlePacketLen is the smallest encodable SPP idle packet: a 6-byte
+// primary header plus at least one data byte.
+const minIdlePacketLen = spp.PrimaryHeaderSize + 1
+
+// newIdlePacket returns an encoded SPP idle packet with the given total
+// length (>= minIdlePacketLen), its data field filled with the channel's
+// idle pattern.
+func newIdlePacket(total int, pattern []byte) ([]byte, error) {
+	payload := make([]byte, total-spp.PrimaryHeaderSize)
+	fillIdle(payload, pattern)
+	pkt, err := spp.NewIdlePacket(payload)
+	if err != nil {
+		return nil, err
+	}
+	return pkt.Encode()
+}
+
+// isIdlePacket reports whether the packet's APID marks it as an idle packet.
+func isIdlePacket(pkt []byte) bool {
+	if len(pkt) < 2 {
+		return false
+	}
+	return uint16(pkt[0]&0x07)<<8|uint16(pkt[1]) == spp.APIDIdle
 }
 
 // MultiplexingService implements the M_PDU service for AOS.
@@ -121,7 +150,11 @@ func (s *MultiplexingService) Send(data []byte) error {
 	return s.emitFullFrames()
 }
 
-// Flush pads and emits any remaining buffered packet data as a final frame.
+// Flush completes any remaining buffered packet data with an SPP idle
+// packet (APID 0x7FF) and emits the final frame(s), per CCSDS 732.0-B-4
+// §4.1.4.2.2: a partially filled packet zone is completed with an idle
+// packet, not raw fill. When the leftover space is too small to hold a
+// whole idle packet, the idle packet spans into one extra frame.
 func (s *MultiplexingService) Flush() error {
 	if len(s.sendBuf) == 0 {
 		return nil
@@ -132,8 +165,6 @@ func (s *MultiplexingService) Flush() error {
 		return ErrDataFieldTooSmall
 	}
 
-	chunk := padDataField(s.sendBuf, capacity)
-
 	fhp := FHPNoPacketStart
 	for _, off := range s.packetOffsets {
 		if off < len(s.sendBuf) {
@@ -142,10 +173,34 @@ func (s *MultiplexingService) Flush() error {
 		}
 	}
 
+	remaining := capacity - len(s.sendBuf)
+	idleLen := remaining
+	if idleLen < minIdlePacketLen {
+		// The idle packet cannot fit in this frame alone; let it span
+		// into one extra frame that it fills completely.
+		idleLen = remaining + capacity
+	}
+	idlePkt, err := newIdlePacket(idleLen, s.config.IdlePattern)
+	if err != nil {
+		return err
+	}
+
+	chunk := make([]byte, 0, capacity)
+	chunk = append(chunk, s.sendBuf...)
+	chunk = append(chunk, idlePkt[:remaining]...)
+
 	s.sendBuf = nil
 	s.packetOffsets = nil
 
-	return s.emitFrame(chunk, fhp)
+	if err := s.emitFrame(chunk, fhp); err != nil {
+		return err
+	}
+	if idleLen > remaining {
+		// Tail of the spanning idle packet: fills the next frame exactly;
+		// no packet starts within it.
+		return s.emitFrame(idlePkt[remaining:], FHPNoPacketStart)
+	}
+	return nil
 }
 
 func (s *MultiplexingService) emitFullFrames() error {
@@ -209,15 +264,20 @@ func (s *MultiplexingService) Receive() ([]byte, error) {
 		s.gapDetector = NewFrameGapDetector()
 	}
 
+	pattern := s.config.IdlePattern
 	for {
-		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf) {
+		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf, pattern) {
 			pktLen := sizer(s.recvBuf)
 			if pktLen > 0 && pktLen <= len(s.recvBuf) {
 				pkt := make([]byte, pktLen)
 				copy(pkt, s.recvBuf[:pktLen])
 				s.recvBuf = s.recvBuf[pktLen:]
-				if isIdleFill(s.recvBuf) {
+				if isIdleFill(s.recvBuf, pattern) {
 					s.recvBuf = nil
+				}
+				if isIdlePacket(pkt) {
+					// Idle fill packets are discarded, not delivered.
+					continue
 				}
 				return pkt, nil
 			}
@@ -262,25 +322,23 @@ func (s *MultiplexingService) Receive() ([]byte, error) {
 				s.synced = false
 				continue
 			}
+			var completed []byte
 			if s.synced && int(fhp) > 0 && len(s.recvBuf) > 0 {
 				s.recvBuf = append(s.recvBuf, packetZone[:fhp]...)
 				pktLen := sizer(s.recvBuf)
 				if pktLen > 0 && pktLen <= len(s.recvBuf) {
-					pkt := make([]byte, pktLen)
-					copy(pkt, s.recvBuf[:pktLen])
-					s.recvBuf = make([]byte, len(packetZone)-int(fhp))
-					copy(s.recvBuf, packetZone[fhp:])
-					if isIdleFill(s.recvBuf) {
-						s.recvBuf = nil
-					}
-					return pkt, nil
+					completed = make([]byte, pktLen)
+					copy(completed, s.recvBuf[:pktLen])
 				}
 			}
 			s.recvBuf = make([]byte, len(packetZone)-int(fhp))
 			copy(s.recvBuf, packetZone[fhp:])
 			s.synced = true
-			if isIdleFill(s.recvBuf) {
+			if isIdleFill(s.recvBuf, pattern) {
 				s.recvBuf = nil
+			}
+			if completed != nil && !isIdlePacket(completed) {
+				return completed, nil
 			}
 		}
 	}
@@ -345,8 +403,17 @@ func (s *BitstreamService) emitFullFrames() error {
 	return nil
 }
 
+// maxBPDUPartialBytes is the largest number of valid octets a partial
+// B_PDU frame can signal. The 14-bit Bitstream Data Pointer carries the
+// bit index of the last valid bit, and the two top values (0x3FFE all
+// idle, 0x3FFF all valid) are reserved, so n*8-1 <= 0x3FFD gives n <= 2047.
+const maxBPDUPartialBytes = 2047
+
 // Flush pads and emits any remaining buffered bitstream data with a
-// Bitstream Data Pointer marking the last valid byte.
+// Bitstream Data Pointer marking the last valid byte. When the partial
+// payload holds more valid octets than the 14-bit pointer can express
+// (possible only on zones larger than 2047 bytes), it is split across
+// additional partial frames instead of being mislabeled.
 func (s *BitstreamService) Flush() error {
 	if len(s.sendBuf) == 0 {
 		return nil
@@ -355,18 +422,23 @@ func (s *BitstreamService) Flush() error {
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
-	// BDP is bit position of last valid bit; for octet-aligned data with
-	// n valid bytes, the last valid bit index is n*8 - 1.
-	// Clamp in int before narrowing: a zone over 8192 bytes exceeds uint16
-	// and would wrap to a small value before the clamp could catch it.
-	bits := len(s.sendBuf)*8 - 1
-	if bits > BPDUMaxBitstreamDataPointer {
-		bits = BPDUMaxBitstreamDataPointer
+	for len(s.sendBuf) > 0 {
+		n := len(s.sendBuf)
+		if n > maxBPDUPartialBytes {
+			n = maxBPDUPartialBytes
+		}
+		// BDP is the bit index of the last valid bit; for octet-aligned
+		// data with n valid bytes that is n*8 - 1, which fits the pointer
+		// by construction of maxBPDUPartialBytes.
+		bdp := uint16(n*8 - 1)
+		chunk := padDataField(s.sendBuf[:n], capacity, s.config.IdlePattern)
+		s.sendBuf = s.sendBuf[n:]
+		if err := s.emitFrame(chunk, bdp); err != nil {
+			return err
+		}
 	}
-	bdp := uint16(bits)
-	chunk := padDataField(s.sendBuf, capacity)
 	s.sendBuf = nil
-	return s.emitFrame(chunk, bdp)
+	return nil
 }
 
 func (s *BitstreamService) emitFrame(zone []byte, bdp uint16) error {
@@ -441,23 +513,27 @@ func NewVirtualChannelAccessService(scid, vcid uint8, sduSize int, vc *VirtualCh
 	}
 }
 
-// Send wraps a fixed-length SDU into an AOS Transfer Frame. If the SDU
-// is shorter than the configured data field capacity, it is padded
-// with the idle pattern.
+// Send wraps a fixed-length SDU into an AOS Transfer Frame. On a
+// fixed-length physical channel the VCA_SDU must exactly fill the data
+// field (CCSDS 732.0-B-4 §3.3.4: VCA_SDUs are of constant, managed
+// length); short or long SDUs are rejected rather than padded, since a
+// receiver has no in-band way to recover the SDU boundary.
 func (s *VirtualChannelAccessService) Send(data []byte) error {
+	if len(data) == 0 {
+		return ErrEmptyData
+	}
 	if s.config.FrameLength == 0 {
 		if len(data) != s.sduSize {
 			return ErrSizeMismatch
 		}
 	} else {
 		capacity := s.config.DataFieldCapacity()
-		if len(data) == 0 {
-			return ErrEmptyData
-		}
 		if len(data) > capacity {
 			return ErrDataTooLarge
 		}
-		data = padDataField(data, capacity)
+		if len(data) != capacity {
+			return ErrSizeMismatch
+		}
 	}
 
 	opts := frameOpts(s.config)
@@ -471,15 +547,13 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	return s.vc.Add(frame)
 }
 
-// Receive retrieves the next frame and returns its data field, trimmed
-// to sduSize when running on a fixed-length physical channel.
+// Receive retrieves the next frame and returns its data field, which is
+// the whole VCA_SDU: on a fixed-length physical channel the SDU exactly
+// fills the data field, so no out-of-band trimming is needed.
 func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 	frame, err := s.vc.Next()
 	if err != nil {
 		return nil, err
-	}
-	if s.config.FrameLength > 0 && len(frame.DataField) >= s.sduSize {
-		return frame.DataField[:s.sduSize], nil
 	}
 	return frame.DataField, nil
 }
@@ -489,21 +563,17 @@ func (s *VirtualChannelAccessService) Flush() error { return nil }
 
 // VirtualChannelFrameService implements the VCF service for AOS.
 type VirtualChannelFrameService struct {
-	vcid          uint8
-	vc            *VirtualChannel
-	insertZoneLen int
-	hasOCF        bool
-	hasFECF       bool
+	vcid   uint8
+	vc     *VirtualChannel
+	config ChannelConfig
 }
 
 // NewVirtualChannelFrameService creates a new VCF service instance.
 func NewVirtualChannelFrameService(vcid uint8, vc *VirtualChannel, config ChannelConfig) *VirtualChannelFrameService {
 	return &VirtualChannelFrameService{
-		vcid:          vcid,
-		vc:            vc,
-		insertZoneLen: config.InsertZoneLen,
-		hasOCF:        config.HasOCF,
-		hasFECF:       config.HasFECF,
+		vcid:   vcid,
+		vc:     vc,
+		config: config,
 	}
 }
 
@@ -512,7 +582,7 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-	frame, err := DecodeTransferFrame(data, s.insertZoneLen, s.hasOCF, s.hasFECF)
+	frame, err := DecodeFrame(data, s.config)
 	if err != nil {
 		return err
 	}
@@ -535,6 +605,9 @@ func (s *VirtualChannelFrameService) Flush() error { return nil }
 // configuration: insert zone reservation, OCF presence, and FECF.
 func frameOpts(config ChannelConfig) []FrameOption {
 	var opts []FrameOption
+	if config.HasFHEC {
+		opts = append(opts, WithFHEC())
+	}
 	if config.InsertZoneLen > 0 {
 		opts = append(opts, WithInsertZone(make([]byte, config.InsertZoneLen)))
 	}

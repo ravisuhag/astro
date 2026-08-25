@@ -33,6 +33,7 @@ AOS introduced three innovations over TM: a 24-bit Virtual Channel frame counter
 - **Insert Zone**: an optional, mission-defined fixed-length field at every frame for periodic data (typically time codes).
 - **Three data services**: M_PDU (packets), B_PDU (bitstream), VCA (opaque SDU).
 - **Optional OCF and FECF**: 4-byte Operational Control Field, 2-byte CRC-16-CCITT.
+- **Optional FHEC**: 2-byte Frame Header Error Control, a Reed-Solomon (10,6) code over the protected header octets (TFVN, SCID, VCID, signaling field). When enabled it extends the primary header to 8 bytes.
 
 ## Channel Hierarchy
 
@@ -75,17 +76,18 @@ VCID 63 is reserved for **Only Idle Data (OID)** frames — used as fill when no
 └────────────────┘        └────────────┘   └────┘
 ```
 
-### Primary Header (6 bytes)
+### Primary Header (6 bytes, 8 with FHEC)
 
 - **TFVN** (2 bits): Transfer Frame Version Number, always `01` for AOS.
 - **SCID** (8 bits): Spacecraft Identifier (0-255).
 - **VCID** (6 bits): Virtual Channel Identifier (0-63).
-- **VC Frame Count** (24 bits): Per-VC frame counter, wraps at 2^24.
+- **VC Frame Count** (24 bits): Per-VC frame counter, wraps at 2^24. OID frames on VC 63 keep their own counter.
 - **Signaling Field** (8 bits):
   - Replay Flag (1 bit)
   - VC Frame Count Usage Flag (1 bit)
-  - Reserved Spare (2 bits, always `00`)
+  - Reserved Spare (2 bits, always `00` — the decoder rejects frames with these bits set)
   - VC Frame Count Cycle (4 bits)
+- **Frame Header Error Control** (16 bits, optional): RS(10,6) check symbols over the first two header octets and the signaling field (`ChannelConfig.HasFHEC`, `WithFHEC()`). This library generates the check symbols and rejects frames whose header fails the check; it does not correct errors.
 
 ### Insert Zone
 
@@ -107,7 +109,9 @@ For variable-length packets such as Space Packets. The data field begins with a 
 └─────────────┴────────────────────────────┘
 ```
 
-Special FHP values: `0x7FE` = no packet starts in this frame, `0x7FF` = idle data only.
+Special FHP values (CCSDS 732.0-B-4 §4.1.4.2.3): `0x7FF` ("all ones") = no packet starts in this frame, `0x7FE` ("all ones minus one") = idle data only.
+
+When a partially filled frame must be released (`Flush`), the rest of the packet zone is completed with a real SPP idle packet (APID `0x7FF`), not raw fill bytes. The receive side discards idle packets by APID. If the leftover space is smaller than the 7-byte minimum idle packet, the idle packet spans into one extra frame.
 
 #### B_PDU (Bitstream PDU)
 
@@ -123,9 +127,15 @@ For octet-aligned bitstream data. The data field begins with a 16-bit B_PDU head
 
 Special BDP values: `0x3FFF` = all valid (no end within frame), `0x3FFE` = all idle.
 
+A partial frame can mark at most 2047 valid octets (the BDP carries the last valid *bit* index, and the two top values are reserved). On channels with larger bitstream zones, `Flush` splits an oversized partial payload across extra frames instead of mislabeling it.
+
 #### VCA (Virtual Channel Access)
 
-Carries an opaque, fixed-length SDU. The entire data field is the SDU — no protocol header.
+Carries an opaque, fixed-length SDU. The entire data field is the SDU — no protocol header. On a fixed-length channel the SDU must exactly fill the data field: a receiver has no in-band way to find a padded SDU's end, so short SDUs are rejected rather than padded.
+
+### Idle fill
+
+The idle fill pattern is mission-managed. Set `ChannelConfig.IdlePattern` to a repeating byte pattern; when empty, `0xFE` is used.
 
 ### OCF and FECF
 

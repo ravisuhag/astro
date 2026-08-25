@@ -200,12 +200,13 @@ func TestBitstreamService_PartialFlush(t *testing.T) {
 
 func TestVirtualChannelAccessService_FixedLength(t *testing.T) {
 	config := aos.ChannelConfig{FrameLength: 64, HasFECF: true}
+	sduSize := config.DataFieldCapacity()
 	vc := aos.NewVirtualChannel(1, 10)
 	counter := aos.NewFrameCounter()
-	tx := aos.NewVirtualChannelAccessService(50, 1, 16, vc, config, counter)
-	rx := aos.NewVirtualChannelAccessService(50, 1, 16, vc, config, nil)
+	tx := aos.NewVirtualChannelAccessService(50, 1, sduSize, vc, config, counter)
+	rx := aos.NewVirtualChannelAccessService(50, 1, sduSize, vc, config, nil)
 
-	data := make([]byte, 16)
+	data := make([]byte, sduSize)
 	for i := range data {
 		data[i] = byte(i + 1)
 	}
@@ -216,13 +217,24 @@ func TestVirtualChannelAccessService_FixedLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Receive() error = %v", err)
 	}
-	if len(got) != 16 {
-		t.Fatalf("len = %d, want 16", len(got))
+	if len(got) != sduSize {
+		t.Fatalf("len = %d, want %d", len(got), sduSize)
 	}
 	for i, b := range got {
 		if b != data[i] {
 			t.Errorf("byte[%d] = 0x%02X, want 0x%02X", i, b, data[i])
 		}
+	}
+}
+
+func TestVirtualChannelAccessService_FixedLength_RejectsShortSDU(t *testing.T) {
+	// On a fixed-length channel the VCA_SDU must exactly fill the data
+	// field: a receiver has no in-band way to find a padded SDU's end.
+	config := aos.ChannelConfig{FrameLength: 64, HasFECF: true}
+	vc := aos.NewVirtualChannel(1, 10)
+	tx := aos.NewVirtualChannelAccessService(50, 1, 16, vc, config, nil)
+	if err := tx.Send(make([]byte, 16)); err != aos.ErrSizeMismatch {
+		t.Errorf("expected ErrSizeMismatch for short SDU, got %v", err)
 	}
 }
 
@@ -345,10 +357,11 @@ func bytesEqual(a, b []byte) bool {
 	return true
 }
 
-func TestBitstreamService_FlushLargeZoneClampsBDP(t *testing.T) {
-	// A zone over 8192 bytes makes the last-valid-bit index exceed uint16.
-	// Converting before clamping wrapped it to a small value and truncated
-	// the frame on receive.
+func TestBitstreamService_FlushLargePartialSplits(t *testing.T) {
+	// A partial payload of 2048+ valid octets cannot be expressed by the
+	// 14-bit Bitstream Data Pointer (values 0x3FFE/0x3FFF are reserved).
+	// Flush must split it across frames instead of clamping the pointer,
+	// which would deliver idle fill as user data.
 	config := aos.ChannelConfig{FrameLength: 8300}
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewBitstreamService(50, 1, vc, config, nil)
@@ -370,16 +383,40 @@ func TestBitstreamService_FlushLargeZoneClampsBDP(t *testing.T) {
 		t.Fatalf("Flush() error = %v", err)
 	}
 
-	frame, err := vc.Next()
-	if err != nil {
-		t.Fatalf("no frame emitted: %v", err)
+	// Every emitted frame must carry an expressible pointer, and the
+	// trimmed zones must reassemble to the original bitstream.
+	rxVC := aos.NewVirtualChannel(1, 10)
+	var frames int
+	for {
+		f, err := vc.Next()
+		if err != nil {
+			break
+		}
+		frames++
+		var hdr aos.BPDUHeader
+		if err := hdr.Decode(f.DataField); err != nil {
+			t.Fatalf("decoding BPDU header: %v", err)
+		}
+		if hdr.BitstreamDataPointer >= aos.BDPAllIdle {
+			t.Errorf("BDP = 0x%04X, want an expressible last-valid-bit pointer",
+				hdr.BitstreamDataPointer)
+		}
+		_ = rxVC.Add(f)
 	}
-	var hdr aos.BPDUHeader
-	if err := hdr.Decode(frame.DataField); err != nil {
-		t.Fatalf("decoding BPDU header: %v", err)
+	if frames < 2 {
+		t.Fatalf("expected the partial payload to split across frames, got %d frame(s)", frames)
 	}
-	if hdr.BitstreamDataPointer != aos.BDPAllValid {
-		t.Errorf("BDP = 0x%04X, want BDPAllValid (0x%04X)",
-			hdr.BitstreamDataPointer, aos.BDPAllValid)
+
+	rx := aos.NewBitstreamService(50, 1, rxVC, config, nil)
+	var got []byte
+	for {
+		chunk, err := rx.Receive()
+		if err != nil {
+			break
+		}
+		got = append(got, chunk...)
+	}
+	if !bytesEqual(got, data) {
+		t.Fatalf("reassembled bitstream mismatch: len %d, want %d", len(got), len(data))
 	}
 }

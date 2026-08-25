@@ -42,10 +42,12 @@ const (
 	MPDUHeaderSize = 2
 	// MPDUMaxFirstHeaderPointer is the maximum value of the 11-bit FHP.
 	MPDUMaxFirstHeaderPointer = 0x07FF
-	// FHPNoPacketStart marks a frame in which no packet starts.
-	FHPNoPacketStart uint16 = 0x07FE
-	// FHPAllIdle marks an OID (only idle data) frame.
-	FHPAllIdle uint16 = 0x07FF
+	// FHPNoPacketStart marks a frame in which no packet starts
+	// (CCSDS 732.0-B-4 §4.1.4.2.3.4: FHP set to 'all ones').
+	FHPNoPacketStart uint16 = 0x07FF
+	// FHPAllIdle marks an M_PDU that contains only idle data
+	// (CCSDS 732.0-B-4 §4.1.4.2.3.5: FHP set to 'all ones minus one').
+	FHPAllIdle uint16 = 0x07FE
 )
 
 // B_PDU header constants (CCSDS 732.0-B-4 §4.1.4.3).
@@ -131,6 +133,11 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 	h.VCFrameCount = uint32(data[2])<<16 | uint32(data[3])<<8 | uint32(data[4])
 	h.ReplayFlag = data[5]&(1<<7) != 0
 	h.VCFCUsageFlag = data[5]&(1<<6) != 0
+	// CCSDS 732.0-B-4 §4.1.2.6.5 (signaling field): bits 42-43 are reserved
+	// spares and shall be set to '00'.
+	if data[5]&0x30 != 0 {
+		return ErrInvalidSignalingSpare
+	}
 	h.VCFrameCountCycle = data[5] & 0x0F
 
 	return h.Validate()
@@ -238,10 +245,12 @@ func (h *BPDUHeader) Decode(data []byte) error {
 // which PDU type is in use — that is determined per-VC by mission config.
 type TransferFrame struct {
 	Header     PrimaryHeader
+	FHEC       []byte // 2 bytes when present (Frame Header Error Control)
 	InsertZone []byte // optional, mission-defined fixed length
 	DataField  []byte // includes M_PDU/B_PDU header when applicable
 	OCF        []byte // 4 bytes when present
 	FECF       []byte // 2 bytes when present
+	HasFHEC    bool
 	HasFECF    bool
 }
 
@@ -261,6 +270,12 @@ func WithOCF(ocf []byte) FrameOption {
 // WithFECF enables the Frame Error Control Field (CRC-16-CCITT).
 func WithFECF() FrameOption {
 	return func(f *TransferFrame) { f.HasFECF = true }
+}
+
+// WithFHEC enables the Frame Header Error Control (RS(10,6) check symbols
+// over the protected header octets, CCSDS 732.0-B-4 §4.1.2.6).
+func WithFHEC() FrameOption {
+	return func(f *TransferFrame) { f.HasFHEC = true }
 }
 
 // WithVCFrameCount sets the VC frame count.
@@ -368,6 +383,14 @@ func (f *TransferFrame) encodeWithoutFECF() ([]byte, error) {
 
 	var buf []byte
 	buf = append(buf, header...)
+	if f.HasFHEC {
+		fhec, err := ComputeFHEC(header)
+		if err != nil {
+			return nil, err
+		}
+		f.FHEC = fhec
+		buf = append(buf, fhec...)
+	}
 	buf = append(buf, f.InsertZone...)
 	buf = append(buf, f.DataField...)
 
@@ -411,7 +434,21 @@ func (f *TransferFrame) Encode() ([]byte, error) {
 // fields. Frames are fixed-length per physical channel; the caller is
 // responsible for delivering exactly one frame.
 func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (*TransferFrame, error) {
+	return decodeFrame(data, insertZoneLen, hasOCF, hasFECF, false)
+}
+
+// DecodeFrame parses a byte slice into an AOS Transfer Frame using the
+// physical channel configuration for the optional fields, including the
+// Frame Header Error Control.
+func DecodeFrame(data []byte, config ChannelConfig) (*TransferFrame, error) {
+	return decodeFrame(data, config.InsertZoneLen, config.HasOCF, config.HasFECF, config.HasFHEC)
+}
+
+func decodeFrame(data []byte, insertZoneLen int, hasOCF, hasFECF, hasFHEC bool) (*TransferFrame, error) {
 	minLen := PrimaryHeaderSize + insertZoneLen
+	if hasFHEC {
+		minLen += FHECSize
+	}
 	if hasOCF {
 		minLen += OCFSize
 	}
@@ -422,11 +459,8 @@ func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (
 		return nil, ErrDataTooShort
 	}
 
-	var header PrimaryHeader
-	if err := header.Decode(data[:PrimaryHeaderSize]); err != nil {
-		return nil, err
-	}
-
+	// Verify whole-frame integrity first: a frame that fails the FECF is
+	// rejected before any header field is interpreted.
 	end := len(data)
 	var fecf []byte
 	if hasFECF {
@@ -441,6 +475,20 @@ func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (
 		end = fecStart
 	}
 
+	var header PrimaryHeader
+	if err := header.Decode(data[:PrimaryHeaderSize]); err != nil {
+		return nil, err
+	}
+
+	var fhec []byte
+	if hasFHEC {
+		fhec = make([]byte, FHECSize)
+		copy(fhec, data[PrimaryHeaderSize:PrimaryHeaderSize+FHECSize])
+		if !VerifyFHEC(data[:PrimaryHeaderSize], fhec) {
+			return nil, ErrFHECMismatch
+		}
+	}
+
 	var ocf []byte
 	if hasOCF {
 		ocfStart := end - OCFSize
@@ -450,6 +498,9 @@ func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (
 	}
 
 	pos := PrimaryHeaderSize
+	if hasFHEC {
+		pos += FHECSize
+	}
 	var insertZone []byte
 	if insertZoneLen > 0 {
 		insertZone = make([]byte, insertZoneLen)
@@ -462,10 +513,12 @@ func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (
 
 	return &TransferFrame{
 		Header:     header,
+		FHEC:       fhec,
 		InsertZone: insertZone,
 		DataField:  dataField,
 		OCF:        ocf,
 		FECF:       fecf,
+		HasFHEC:    hasFHEC,
 		HasFECF:    hasFECF,
 	}, nil
 }
@@ -476,43 +529,42 @@ func IsIdleFrame(frame *TransferFrame) bool {
 	return frame.Header.VCID == OIDVCID
 }
 
-// idleFill is the byte used to fill the data field of idle frames.
-const idleFill byte = 0xFE
+// DefaultIdleFill is the idle fill byte used when ChannelConfig.IdlePattern
+// is empty. The idle pattern is a mission-managed parameter; override it
+// via ChannelConfig.IdlePattern.
+const DefaultIdleFill byte = 0xFE
+
+// fillIdle writes the repeating idle pattern into buf.
+func fillIdle(buf []byte, pattern []byte) {
+	if len(pattern) == 0 {
+		pattern = []byte{DefaultIdleFill}
+	}
+	for i := range buf {
+		buf[i] = pattern[i%len(pattern)]
+	}
+}
 
 // padDataField copies data into a new slice of the given capacity,
-// filling remaining bytes with the idle fill pattern.
-func padDataField(data []byte, capacity int) []byte {
+// filling remaining bytes with the channel's idle fill pattern.
+func padDataField(data []byte, capacity int, pattern []byte) []byte {
 	padded := make([]byte, capacity)
 	copy(padded, data)
-	for i := len(data); i < capacity; i++ {
-		padded[i] = idleFill
-	}
+	fillIdle(padded[len(data):], pattern)
 	return padded
 }
 
 // NewIdleFrame creates an OID (Only Idle Data) Transfer Frame on VCID 63
-// with a data field of the given capacity filled with idle pattern.
+// with a data field of the given capacity filled with the channel's idle
+// pattern.
 func NewIdleFrame(scid uint8, config ChannelConfig) (*TransferFrame, error) {
 	capacity := config.DataFieldCapacity()
 	if capacity <= 0 {
 		return nil, ErrDataFieldTooSmall
 	}
 	idleData := make([]byte, capacity)
-	for i := range idleData {
-		idleData[i] = idleFill
-	}
+	fillIdle(idleData, config.IdlePattern)
 
-	opts := []FrameOption{}
-	if config.HasOCF {
-		opts = append(opts, WithOCF(make([]byte, OCFSize)))
-	}
-	if config.HasFECF {
-		opts = append(opts, WithFECF())
-	}
-	if config.InsertZoneLen > 0 {
-		opts = append(opts, WithInsertZone(make([]byte, config.InsertZoneLen)))
-	}
-
+	opts := frameOpts(config)
 	return NewTransferFrame(scid, OIDVCID, idleData, opts...)
 }
 
@@ -530,6 +582,9 @@ func (f *TransferFrame) Humanize() string {
 		"AOS Transfer Frame:",
 		"Primary Header:",
 		f.Header.Humanize(),
+	}
+	if len(f.FHEC) > 0 {
+		lines = append(lines, "FHEC: "+hex.EncodeToString(f.FHEC))
 	}
 	if len(f.InsertZone) > 0 {
 		lines = append(lines, "Insert Zone: "+hex.EncodeToString(f.InsertZone))

@@ -34,6 +34,18 @@ var (
 	// ErrCRCMismatch indicates the received CRC does not match the computed CRC.
 	ErrCRCMismatch = errors.New("CRC mismatch: received CRC does not match computed CRC")
 
+	// ErrInvalidSignalingSpare indicates the reserved spare bits of the
+	// signaling field are not zero.
+	ErrInvalidSignalingSpare = errors.New("invalid signaling field: reserved spare bits must be 00")
+
+	// ErrFHECMismatch indicates the Frame Header Error Control check symbols
+	// do not match the protected header octets.
+	ErrFHECMismatch = errors.New("FHEC mismatch: header error control check failed")
+
+	// ErrBitstreamTooLongForPointer indicates a partial bitstream cannot be
+	// expressed by the 14-bit Bitstream Data Pointer.
+	ErrBitstreamTooLongForPointer = errors.New("partial bitstream exceeds what the bitstream data pointer can express")
+
 	// ErrDataTooLarge indicates the data field exceeds the maximum frame length.
 	ErrDataTooLarge = errors.New("data field exceeds maximum frame length")
 

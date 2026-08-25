@@ -10,10 +10,12 @@ import (
 // per CCSDS 732.0-B-4. All frames on a physical channel share the same
 // fixed length and optional field configuration.
 type ChannelConfig struct {
-	FrameLength   int  // Total frame length in octets (fixed per physical channel)
-	InsertZoneLen int  // Insert zone length in bytes (0 if none)
-	HasOCF        bool // Whether Operational Control Field (4 bytes) is present
-	HasFECF       bool // Whether Frame Error Control Field (CRC-16) is present
+	FrameLength   int    // Total frame length in octets (fixed per physical channel)
+	InsertZoneLen int    // Insert zone length in bytes (0 if none)
+	HasOCF        bool   // Whether Operational Control Field (4 bytes) is present
+	HasFHEC       bool   // Whether Frame Header Error Control (RS(10,6), 2 bytes) is present
+	HasFECF       bool   // Whether Frame Error Control Field (CRC-16) is present
+	IdlePattern   []byte // Idle fill pattern (repeating); empty means DefaultIdleFill
 }
 
 // DataFieldCapacity returns the maximum Transfer Frame Data Field size,
@@ -22,6 +24,9 @@ type ChannelConfig struct {
 // sizing payloads for M_PDU/B_PDU services.
 func (c ChannelConfig) DataFieldCapacity() int {
 	capacity := c.FrameLength - PrimaryHeaderSize - c.InsertZoneLen
+	if c.HasFHEC {
+		capacity -= FHECSize
+	}
 	if c.HasOCF {
 		capacity -= OCFSize
 	}
@@ -86,21 +91,23 @@ func (d *FrameGapDetector) VCFrameGap() int {
 // MasterChannel manages AOS Transfer Frames for a Master Channel
 // identified by SCID.
 type MasterChannel struct {
-	scid     uint8
-	config   ChannelConfig
-	mux      *VirtualChannelMultiplexer
-	channels map[uint8]*VirtualChannel
-	detector *FrameGapDetector
+	scid        uint8
+	config      ChannelConfig
+	mux         *VirtualChannelMultiplexer
+	channels    map[uint8]*VirtualChannel
+	detector    *FrameGapDetector
+	idleCounter *FrameCounter
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
 func NewMasterChannel(scid uint8, config ChannelConfig) *MasterChannel {
 	return &MasterChannel{
-		scid:     scid,
-		config:   config,
-		mux:      NewMultiplexer(),
-		channels: make(map[uint8]*VirtualChannel),
-		detector: NewFrameGapDetector(),
+		scid:        scid,
+		config:      config,
+		mux:         NewMultiplexer(),
+		channels:    make(map[uint8]*VirtualChannel),
+		detector:    NewFrameGapDetector(),
+		idleCounter: NewFrameCounter(),
 	}
 }
 
@@ -149,7 +156,16 @@ func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	if mc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	return NewIdleFrame(mc.scid, mc.config)
+	idle, err := NewIdleFrame(mc.scid, mc.config)
+	if err != nil {
+		return nil, err
+	}
+	// OID frames run their own VC frame count on VC 63 (CCSDS 732.0-B-4
+	// §4.1.2.5.2: the count is maintained per Virtual Channel).
+	if err := stampFrame(idle, mc.idleCounter, OIDVCID); err != nil {
+		return nil, err
+	}
+	return idle, nil
 }
 
 // scidByte returns the 8-bit AOS Spacecraft Identifier.
@@ -167,6 +183,7 @@ type PhysicalChannel struct {
 	config         ChannelConfig
 	mux            *sdl.MCMultiplexer[*TransferFrame]
 	masterChannels map[uint16]*MasterChannel
+	idleCounter    *FrameCounter
 }
 
 // NewPhysicalChannel creates a physical channel with the given configuration.
@@ -176,6 +193,7 @@ func NewPhysicalChannel(name string, config ChannelConfig) *PhysicalChannel {
 		config:         config,
 		mux:            sdl.NewMCMultiplexer[*TransferFrame](),
 		masterChannels: make(map[uint16]*MasterChannel),
+		idleCounter:    NewFrameCounter(),
 	}
 }
 
@@ -208,7 +226,14 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 		scid = mc.scidByte()
 		break
 	}
-	return NewIdleFrame(scid, pc.config)
+	idle, err := NewIdleFrame(scid, pc.config)
+	if err != nil {
+		return nil, err
+	}
+	if err := stampFrame(idle, pc.idleCounter, OIDVCID); err != nil {
+		return nil, err
+	}
+	return idle, nil
 }
 
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel.
