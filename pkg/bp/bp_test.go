@@ -137,22 +137,181 @@ func TestPrimaryBlockRoundTrip(t *testing.T) {
 }
 
 func TestDictionarySharesRepeatedStrings(t *testing.T) {
-	// §4.4: identical strings are stored once. Four endpoints all in the ipn
-	// scheme must not store "ipn" four times.
-	shared := testPrimary()
-	shared.Custodian = bp.IPNEndpoint(1, 0) // same as ReportTo
+	// §4.4: identical strings are stored once. Four endpoints all in the dtn
+	// scheme must not store "dtn" four times. (All-ipn bundles skip the
+	// dictionary entirely via CBHE, so dtn endpoints force the general
+	// form here.)
+	shared := &bp.PrimaryBlock{
+		Destination:       bp.EndpointID{Scheme: "dtn", SSP: "//dest"},
+		Source:            bp.EndpointID{Scheme: "dtn", SSP: "//src"},
+		ReportTo:          bp.EndpointID{Scheme: "dtn", SSP: "//ops"},
+		Custodian:         bp.EndpointID{Scheme: "dtn", SSP: "//ops"}, // same as ReportTo
+		CreationTimestamp: bp.CreationTimestamp{Time: 800000000, SequenceNumber: 42},
+		Lifetime:          3600,
+	}
 
 	encoded, err := shared.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Count(encoded, []byte("ipn\x00")) != 1 {
+	if bytes.Count(encoded, []byte("dtn\x00")) != 1 {
 		t.Errorf("the scheme string appears %d times; the dictionary should share it",
-			bytes.Count(encoded, []byte("ipn\x00")))
+			bytes.Count(encoded, []byte("dtn\x00")))
 	}
 	// ReportTo and Custodian are the same endpoint, so its SSP appears once.
-	if bytes.Count(encoded, []byte("1.0\x00")) != 1 {
+	if bytes.Count(encoded, []byte("//ops\x00")) != 1 {
 		t.Error("a repeated scheme-specific part was stored more than once")
+	}
+
+	// And the round trip preserves all four endpoints.
+	got, _, err := bp.DecodePrimaryBlock(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Custodian != shared.Custodian || got.Source != shared.Source {
+		t.Error("dictionary-form endpoints did not survive the round trip")
+	}
+}
+
+func TestCBHERoundTripAgainstHandBuiltBytes(t *testing.T) {
+	// RFC 6260 §2.1: with every endpoint ipn (dtn:none as node 0, service 0),
+	// the dictionary length is zero and the node and service numbers ride in
+	// the scheme and SSP offset fields. These bytes are built by hand from
+	// the RFC's layout, field by field.
+	wire := []byte{
+		0x06,       // version 6
+		0x10,       // flags: singleton destination
+		0x0E,       // block length: 14 octets follow
+		0x02, 0x01, // destination ipn:2.1
+		0x01, 0x01, // source ipn:1.1
+		0x01, 0x00, // report-to ipn:1.0
+		0x00, 0x00, // custodian dtn:none
+		0x87, 0x68, // creation time 1000 as SDNV
+		0x05,       // sequence number 5
+		0x9C, 0x10, // lifetime 3600 as SDNV
+		0x00, // dictionary length 0: this is CBHE
+	}
+
+	got, consumed, err := bp.DecodePrimaryBlock(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if consumed != len(wire) {
+		t.Errorf("consumed %d, want %d", consumed, len(wire))
+	}
+	if got.Destination != bp.IPNEndpoint(2, 1) {
+		t.Errorf("destination = %s, want ipn:2.1", got.Destination)
+	}
+	if got.Source != bp.IPNEndpoint(1, 1) {
+		t.Errorf("source = %s, want ipn:1.1", got.Source)
+	}
+	if got.ReportTo != bp.IPNEndpoint(1, 0) {
+		t.Errorf("report-to = %s, want ipn:1.0", got.ReportTo)
+	}
+	if !got.Custodian.IsNull() {
+		t.Errorf("custodian = %s, want dtn:none", got.Custodian)
+	}
+	if got.CreationTimestamp.Time != 1000 || got.CreationTimestamp.SequenceNumber != 5 {
+		t.Errorf("timestamp = %+v, want 1000.5", got.CreationTimestamp)
+	}
+	if got.Lifetime != 3600 {
+		t.Errorf("lifetime = %d, want 3600", got.Lifetime)
+	}
+
+	// Encoding the same block must reproduce the hand-built bytes exactly:
+	// all-ipn endpoints take the CBHE form, not a dictionary.
+	encoded, err := got.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(encoded, wire) {
+		t.Errorf("re-encoded CBHE block = % X, want % X", encoded, wire)
+	}
+}
+
+func TestCBHERejectsNodeZeroWithService(t *testing.T) {
+	// RFC 6260 §2.2: node 0 is only meaningful as (0, 0), the null endpoint.
+	wire := []byte{
+		0x06, 0x10, 0x0C, // version, flags, block length 12
+		0x00, 0x07, // node 0, service 7: names nothing
+		0x01, 0x01, // source ipn:1.1
+		0x01, 0x00, // report-to ipn:1.0
+		0x00, 0x00, // custodian dtn:none
+		0x01, 0x01, 0x01, // creation time 1, sequence 1, lifetime 1
+		0x00, // dictionary length 0: CBHE
+	}
+	if _, _, err := bp.DecodePrimaryBlock(wire); !errors.Is(err, bp.ErrInvalidEndpointID) {
+		t.Errorf("error = %v, want ErrInvalidEndpointID", err)
+	}
+}
+
+func TestPrimaryBlockValidationTightening(t *testing.T) {
+	// §4.2: reserved priority, contradictory fragment flags, and the
+	// anonymous-source constraints are all refused.
+	p := testPrimary()
+	p.Flags = p.Flags.WithPriority(3)
+	if err := p.Validate(); !errors.Is(err, bp.ErrInvalidPriority) {
+		t.Errorf("priority 3: error = %v, want ErrInvalidPriority", err)
+	}
+
+	p = testPrimary()
+	p.Flags |= bp.FlagFragment | bp.FlagNoFragment
+	if err := p.Validate(); !errors.Is(err, bp.ErrFragmentFlags) {
+		t.Errorf("fragment + no-fragment: error = %v, want ErrFragmentFlags", err)
+	}
+
+	// An anonymous bundle must not request custody...
+	p = testPrimary()
+	p.Source = bp.NullEndpoint
+	p.Flags |= bp.FlagNoFragment | bp.FlagCustodyRequested
+	if err := p.Validate(); !errors.Is(err, bp.ErrAnonymousSource) {
+		t.Errorf("anonymous custody: error = %v, want ErrAnonymousSource", err)
+	}
+
+	// ...and must set the no-fragment flag.
+	p = testPrimary()
+	p.Source = bp.NullEndpoint
+	if err := p.Validate(); !errors.Is(err, bp.ErrAnonymousSource) {
+		t.Errorf("anonymous without no-fragment: error = %v, want ErrAnonymousSource", err)
+	}
+
+	// With the flag set and no custody request, an anonymous bundle is fine.
+	p = testPrimary()
+	p.Source = bp.NullEndpoint
+	p.Flags |= bp.FlagNoFragment
+	if err := p.Validate(); err != nil {
+		t.Errorf("a conformant anonymous bundle was rejected: %v", err)
+	}
+}
+
+func TestDecodeBundleRejectsTrailingBytes(t *testing.T) {
+	// §4.1: a bundle ends at its last block. Octets past it are corruption,
+	// not padding, and DecodeBundle refuses them.
+	b, err := bp.NewBundle(testPrimary(), []byte("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := b.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	junk := append(append([]byte{}, encoded...), 0xDE, 0xAD)
+	if _, err := bp.DecodeBundle(junk); !errors.Is(err, bp.ErrTrailingBytes) {
+		t.Errorf("error = %v, want ErrTrailingBytes", err)
+	}
+
+	// DecodeBundleN reports how much it consumed instead, for streams of
+	// concatenated bundles.
+	got, n, err := bp.DecodeBundleN(junk, bp.DecodeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(encoded) {
+		t.Errorf("consumed %d, want %d", n, len(encoded))
+	}
+	if got == nil {
+		t.Error("DecodeBundleN returned no bundle")
 	}
 }
 

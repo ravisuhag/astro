@@ -133,6 +133,25 @@ func (p *PrimaryBlock) Validate() error {
 			return ErrAdminRecordFlags
 		}
 	}
+
+	// §4.2: class of service 3 is reserved.
+	if p.Flags.Priority() > PriorityExpedited {
+		return ErrInvalidPriority
+	}
+
+	// A bundle cannot both be a fragment and forbid fragmentation.
+	if p.Flags.Has(FlagFragment) && p.Flags.Has(FlagNoFragment) {
+		return ErrFragmentFlags
+	}
+
+	// §4.2: an anonymous bundle — source dtn:none — is not uniquely
+	// identifiable, so custody transfer must not be requested and the
+	// "must not be fragmented" flag must be set.
+	if p.Source.IsNull() {
+		if p.Flags.Has(FlagCustodyRequested) || !p.Flags.Has(FlagNoFragment) {
+			return ErrAnonymousSource
+		}
+	}
 	return nil
 }
 
@@ -142,24 +161,46 @@ func (p *PrimaryBlock) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	// Build the dictionary first: the offsets depend on it.
-	dict := newDictionary()
-	destScheme, destSSP := dict.add(p.Destination)
-	srcScheme, srcSSP := dict.add(p.Source)
-	reportScheme, reportSSP := dict.add(p.ReportTo)
-	custScheme, custSSP := dict.add(p.Custodian)
+	// RFC 6260 §2.1: when every endpoint is either ipn or dtn:none, the
+	// dictionary is omitted entirely — its length encodes as zero — and each
+	// endpoint's node and service numbers ride in the offset fields
+	// themselves. That is Compressed Bundle Header Encoding, and CCSDS
+	// 734.2-B-1 §3.2 mandates it. dtn:none travels as the pair (0, 0).
+	endpoints := [4]EndpointID{p.Destination, p.Source, p.ReportTo, p.Custodian}
+	var pairs [8]uint64
+	cbhe := true
+	for i, e := range endpoints {
+		node, service, ok := e.cbheParts()
+		if !ok {
+			cbhe = false
+			break
+		}
+		pairs[i*2], pairs[i*2+1] = node, service
+	}
+
+	var dictBuf []byte
+	if !cbhe {
+		// RFC 5050 §4.4: the general form, a dictionary of null-terminated
+		// strings with each endpoint as a pair of offsets into it. Build the
+		// dictionary first: the offsets depend on it.
+		dict := newDictionary()
+		for i, e := range endpoints {
+			pairs[i*2], pairs[i*2+1] = dict.add(e)
+		}
+		dictBuf = dict.buf
+	}
 
 	// Everything after the block-length field, which is what that field measures.
 	var body []byte
 	for _, v := range []uint64{
-		destScheme, destSSP, srcScheme, srcSSP,
-		reportScheme, reportSSP, custScheme, custSSP,
+		pairs[0], pairs[1], pairs[2], pairs[3],
+		pairs[4], pairs[5], pairs[6], pairs[7],
 		p.CreationTimestamp.Time, p.CreationTimestamp.SequenceNumber,
-		p.Lifetime, uint64(len(dict.buf)),
+		p.Lifetime, uint64(len(dictBuf)),
 	} {
 		body = sdnv.AppendEncode(body, v)
 	}
-	body = append(body, dict.buf...)
+	body = append(body, dictBuf...)
 
 	if p.IsFragment() {
 		body = sdnv.AppendEncode(body, p.FragmentOffset)
@@ -225,7 +266,15 @@ func DecodePrimaryBlock(data []byte) (*PrimaryBlock, int, error) {
 	}
 
 	for i, target := range []*EndpointID{&p.Destination, &p.Source, &p.ReportTo, &p.Custodian} {
-		eid, err := lookupEndpoint(dict, fields[i*2], fields[i*2+1])
+		var eid EndpointID
+		if dictLen == 0 {
+			// RFC 6260 §2.2: a zero-length dictionary marks CBHE — the
+			// offset fields hold ipn node and service numbers directly,
+			// with (0, 0) standing for dtn:none.
+			eid, err = cbheEndpoint(fields[i*2], fields[i*2+1])
+		} else {
+			eid, err = lookupEndpoint(dict, fields[i*2], fields[i*2+1])
+		}
 		if err != nil {
 			return nil, 0, err
 		}

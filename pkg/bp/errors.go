@@ -52,6 +52,21 @@ var (
 	// custody transfer or status reports, which §4.2 forbids.
 	ErrAdminRecordFlags = errors.New("an administrative record must not request custody transfer or status reports")
 
+	// ErrInvalidPriority indicates a class of service of 3, which RFC 5050
+	// §4.2 reserves.
+	ErrInvalidPriority = errors.New("class of service 3 is reserved")
+
+	// ErrAnonymousSource indicates a bundle with source dtn:none that
+	// requests custody transfer or omits the "must not be fragmented" flag.
+	// §4.2: an anonymous bundle is not uniquely identifiable, so it can
+	// neither take custody nor be fragmented.
+	ErrAnonymousSource = errors.New("an anonymous bundle must not request custody and must set the no-fragment flag")
+
+	// ErrTrailingBytes indicates data left over after a complete bundle.
+	// DecodeBundle refuses it rather than silently dropping octets; use
+	// DecodeBundleN when bundles arrive back to back in one buffer.
+	ErrTrailingBytes = errors.New("data continues past the end of the bundle")
+
 	// ErrNotAdminRecord indicates an administrative-record operation on a
 	// bundle that is not one.
 	ErrNotAdminRecord = errors.New("bundle payload is not an administrative record")

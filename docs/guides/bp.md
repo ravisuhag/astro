@@ -76,12 +76,18 @@ Node numbers run 1 to 2^64−1 and are assigned by SANA. Service numbers run
 Here is the part worth understanding. The primary block does not store four
 endpoint URIs. It stores a **dictionary** — a run of null-terminated strings —
 and each endpoint travels as a *pair of offsets* into it, one for the scheme
-and one for the scheme-specific part.
+and one for the scheme-specific part. Identical strings are stored once, so
+four endpoints all in one scheme pay for that scheme string once. That much
+is plain RFC 5050.
 
-Four endpoints all in the IPN scheme therefore store the string `ipn` once, not
-four times. That is Compressed Bundle Header Encoding, and on a link where
-every octet is paid for in watts, it is worth the indirection. This package
-builds the dictionary for you.
+**Compressed Bundle Header Encoding** (RFC 6260) goes further. When all four
+endpoints are in the IPN scheme — with `dtn:none` allowed, traveling as node
+0, service 0 — the dictionary is omitted entirely. Its length encodes as
+zero, and each endpoint's node and service numbers ride directly in the two
+offset fields. No strings at all, and on a link where every octet is paid
+for in watts, that is the point. CCSDS mandates it, and this package applies
+it automatically: all-ipn bundles encode in CBHE form, and a decoded
+dictionary length of zero is recognized as CBHE.
 
 The null endpoint `dtn:none` names nobody, and is what you use for a custodian
 when nobody has custody.
@@ -127,8 +133,12 @@ acknowledgement.
 **Status report requests**, bits 14 to 18: reception, custody acceptance,
 forwarding, delivery, deletion.
 
-One rule the library enforces: an administrative record must request neither
-custody transfer nor any status report. Setting both is rejected.
+Rules the library enforces (§4.2): an administrative record must request
+neither custody transfer nor any status report. Class of service 3 is
+reserved and rejected. A bundle cannot both be a fragment and forbid
+fragmentation. And an anonymous bundle — source `dtn:none` — must not
+request custody and must set the "must not be fragmented" flag, because
+without a source it is not uniquely identifiable.
 
 ## Extended Class of Service
 
@@ -173,8 +183,10 @@ application data unit, and the total ADU length so the far end knows when it
 has everything.
 
 Extension blocks flagged "replicate in every fragment" are copied into each
-piece. Everything else rides with the first fragment only (§5.8) — sending an
-extension block five times when once will do wastes the link.
+piece. Of the rest, §5.8 splits them around the payload: blocks that precede
+it ride with the first fragment, and blocks that follow it ride with the
+last — sending an extension block five times when once will do wastes the
+link.
 
 Reassembly takes them in any order:
 
@@ -231,6 +243,11 @@ bundle, err := bp.DecodeBundleWithOptions(raw, bp.DecodeOptions{
 `DecodeBundle` applies defaults of 16 MiB per block and 64 blocks. Neither cap
 is in RFC 5050 — the protocol states no ceiling — but no real implementation
 can go without one.
+
+A bundle ends at its last block. Octets past it are corruption, not padding,
+so `DecodeBundle` refuses them with `ErrTrailingBytes`. When bundles arrive
+back to back in one buffer, use `DecodeBundleN`, which returns the octets
+consumed and leaves the rest for the next call.
 
 ## What is not here yet
 

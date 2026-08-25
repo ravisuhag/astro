@@ -131,6 +131,23 @@ func (b *Bundle) Validate() error {
 		case BlockTypeECOS:
 			ecosBlocks++
 			ecosIndex = i
+
+			// CCSDS annex C, C2 b) and c): the ECOS block replicates into
+			// every fragment and carries no EID references. Enforced here,
+			// not just in the construction helper, so a decoded bundle is
+			// held to the same rules.
+			if !block.Flags.Has(BlockReplicate) || block.Flags.Has(BlockHasEIDRefs) {
+				return ErrInvalidECOS
+			}
+			e, err := DecodeECOS(block.Data)
+			if err != nil {
+				return err
+			}
+			// C3.1.4: ordinal 255 is reserved for custody signals, which
+			// travel as administrative records.
+			if e.Ordinal == ECOSCustodySignalOrdinal && !b.Primary.IsAdminRecord() {
+				return ErrInvalidECOS
+			}
 		}
 		// Only the final block may claim to be last.
 		if block.IsLast() && i != len(b.Blocks)-1 {
@@ -192,30 +209,47 @@ type DecodeOptions struct {
 // at zero.
 const DefaultMaxBlocks = 64
 
-// DecodeBundle parses a complete bundle.
+// DecodeBundle parses a complete bundle. Data continuing past the last block
+// is an error: a codec that silently drops octets hides corruption. Use
+// DecodeBundleN when bundles arrive back to back in one buffer.
 func DecodeBundle(data []byte) (*Bundle, error) {
 	return DecodeBundleWithOptions(data, DecodeOptions{})
 }
 
-// DecodeBundleWithOptions parses a complete bundle under explicit limits.
+// DecodeBundleWithOptions parses a complete bundle under explicit limits,
+// rejecting trailing data like DecodeBundle.
 func DecodeBundleWithOptions(data []byte, opts DecodeOptions) (*Bundle, error) {
+	b, n, err := DecodeBundleN(data, opts)
+	if err != nil {
+		return nil, err
+	}
+	if n < len(data) {
+		return nil, ErrTrailingBytes
+	}
+	return b, nil
+}
+
+// DecodeBundleN parses one bundle from the front of data, returning the
+// bundle and the octets consumed. Trailing data is left for the caller,
+// which is what a stream of concatenated bundles needs.
+func DecodeBundleN(data []byte, opts DecodeOptions) (*Bundle, int, error) {
 	if opts.MaxBlocks <= 0 {
 		opts.MaxBlocks = DefaultMaxBlocks
 	}
 
 	primary, offset, err := DecodePrimaryBlock(data)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	b := &Bundle{Primary: primary}
 	for offset < len(data) {
 		if len(b.Blocks) >= opts.MaxBlocks {
-			return nil, ErrBlockTooLarge
+			return nil, 0, ErrBlockTooLarge
 		}
 		block, n, err := DecodeCanonicalBlock(data[offset:], opts.MaxBlockLength)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		b.Blocks = append(b.Blocks, block)
 		offset += n
@@ -227,9 +261,9 @@ func DecodeBundleWithOptions(data []byte, opts DecodeOptions) (*Bundle, error) {
 	}
 
 	if err := b.Validate(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return b, nil
+	return b, offset, nil
 }
 
 // Humanize returns a human-readable summary of the whole bundle.

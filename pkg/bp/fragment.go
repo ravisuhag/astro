@@ -9,8 +9,9 @@ import "sort"
 // its own offset into the original application data unit, and the total ADU
 // length so a receiver knows when it has everything.
 //
-// Blocks flagged "replicate in every fragment" are copied into each piece;
-// the rest travel with the first fragment only, which is what §5.8 requires.
+// Blocks flagged "replicate in every fragment" are copied into each piece.
+// Of the rest, §5.8 sends blocks that precede the payload with the first
+// fragment and blocks that follow the payload with the last.
 func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
@@ -41,12 +42,35 @@ func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 		total = b.Primary.TotalADULength
 	}
 
+	// §5.8 splits the extension blocks around the payload: those preceding
+	// it go with the first fragment, those following it with the last, and
+	// replicate-flagged ones with every fragment.
+	payloadIndex := 0
+	for i, block := range b.Blocks {
+		if block.Type == BlockTypePayload {
+			payloadIndex = i
+			break
+		}
+	}
+
+	cloneBlock := func(block *CanonicalBlock) *CanonicalBlock {
+		copied := *block
+		copied.Flags &^= BlockLast
+		if len(block.Data) > 0 {
+			copied.Data = make([]byte, len(block.Data))
+			copy(copied.Data, block.Data)
+		}
+		return &copied
+	}
+
 	var out []*Bundle
 	for start := 0; start < len(payload); start += maxPayload {
 		end := start + maxPayload
 		if end > len(payload) {
 			end = len(payload)
 		}
+		first := start == 0
+		last := end == len(payload)
 
 		primary := *b.Primary // copy
 		primary.Flags |= FlagFragment
@@ -55,32 +79,28 @@ func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 
 		fragment := &Bundle{Primary: &primary}
 
-		// §5.8: only blocks flagged for replication appear in every fragment.
-		// Everything else rides with the first.
-		first := len(out) == 0
-		for _, block := range b.Blocks {
-			if block.Type == BlockTypePayload {
-				continue
+		// Blocks that precede the payload, in order.
+		for _, block := range b.Blocks[:payloadIndex] {
+			if first || block.Flags.Has(BlockReplicate) {
+				fragment.Blocks = append(fragment.Blocks, cloneBlock(block))
 			}
-			if !first && !block.Flags.Has(BlockReplicate) {
-				continue
-			}
-			copied := *block
-			copied.Flags &^= BlockLast
-			if len(block.Data) > 0 {
-				copied.Data = make([]byte, len(block.Data))
-				copy(copied.Data, block.Data)
-			}
-			fragment.Blocks = append(fragment.Blocks, &copied)
 		}
 
 		piece := make([]byte, end-start)
 		copy(piece, payload[start:end])
 		fragment.Blocks = append(fragment.Blocks, &CanonicalBlock{
-			Type:  BlockTypePayload,
-			Flags: BlockLast,
-			Data:  piece,
+			Type: BlockTypePayload,
+			Data: piece,
 		})
+
+		// Blocks that follow the payload, in order.
+		for _, block := range b.Blocks[payloadIndex+1:] {
+			if last || block.Flags.Has(BlockReplicate) {
+				fragment.Blocks = append(fragment.Blocks, cloneBlock(block))
+			}
+		}
+
+		fragment.Blocks[len(fragment.Blocks)-1].Flags |= BlockLast
 
 		if err := fragment.Validate(); err != nil {
 			return nil, err
@@ -167,22 +187,33 @@ func Reassemble(fragments []*Bundle) (*Bundle, error) {
 
 	rebuilt := &Bundle{Primary: &primary}
 
-	// Extension blocks come from the fragment that carried them, which for a
-	// non-replicated block is the one at offset zero.
-	for _, block := range ordered[0].Blocks {
-		if block.Type == BlockTypePayload {
-			continue
+	// Extension blocks come from the fragment that carried them, per §5.8:
+	// blocks preceding the payload from the first fragment, blocks following
+	// it from the last.
+	blocksAround := func(f *Bundle, before bool) []*CanonicalBlock {
+		var picked []*CanonicalBlock
+		pre := true
+		for _, block := range f.Blocks {
+			if block.Type == BlockTypePayload {
+				pre = false
+				continue
+			}
+			if pre == before {
+				copied := *block
+				copied.Flags &^= BlockLast
+				picked = append(picked, &copied)
+			}
 		}
-		copied := *block
-		copied.Flags &^= BlockLast
-		rebuilt.Blocks = append(rebuilt.Blocks, &copied)
+		return picked
 	}
 
+	rebuilt.Blocks = append(rebuilt.Blocks, blocksAround(ordered[0], true)...)
 	rebuilt.Blocks = append(rebuilt.Blocks, &CanonicalBlock{
-		Type:  BlockTypePayload,
-		Flags: BlockLast,
-		Data:  adu,
+		Type: BlockTypePayload,
+		Data: adu,
 	})
+	rebuilt.Blocks = append(rebuilt.Blocks, blocksAround(ordered[len(ordered)-1], false)...)
+	rebuilt.Blocks[len(rebuilt.Blocks)-1].Flags |= BlockLast
 
 	if err := rebuilt.Validate(); err != nil {
 		return nil, err

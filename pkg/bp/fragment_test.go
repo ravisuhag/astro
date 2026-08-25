@@ -191,6 +191,71 @@ func TestFragmentReplicatesFlaggedBlocks(t *testing.T) {
 	}
 }
 
+func TestFragmentPostPayloadBlocksRideTheLastFragment(t *testing.T) {
+	// §5.8: blocks preceding the payload go with the first fragment; blocks
+	// following it go with the last, in place — not all with the first.
+	payload := make([]byte, 300)
+	b := &bp.Bundle{
+		Primary: testPrimary(),
+		Blocks: []*bp.CanonicalBlock{
+			{Type: 200, Data: []byte("before")},
+			{Type: bp.BlockTypePayload, Data: payload},
+			{Type: 201, Flags: bp.BlockLast, Data: []byte("after")},
+		},
+	}
+	if err := b.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	fragments, err := b.Fragment(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fragments) != 3 {
+		t.Fatalf("got %d fragments, want 3", len(fragments))
+	}
+
+	find := func(f *bp.Bundle, bt bp.BlockType) int {
+		for i, block := range f.Blocks {
+			if block.Type == bt {
+				return i
+			}
+		}
+		return -1
+	}
+
+	for i, f := range fragments {
+		first, last := i == 0, i == len(fragments)-1
+		pre, pay, post := find(f, 200), find(f, bp.BlockTypePayload), find(f, 201)
+
+		if first && (pre < 0 || pre > pay) {
+			t.Error("the first fragment must carry the pre-payload block, before the payload")
+		}
+		if !first && pre >= 0 {
+			t.Errorf("fragment %d carries the pre-payload block; only the first should", i)
+		}
+		if last && (post < 0 || post < pay) {
+			t.Error("the last fragment must carry the post-payload block, after the payload")
+		}
+		if !last && post >= 0 {
+			t.Errorf("fragment %d carries the post-payload block; only the last should", i)
+		}
+		if !f.Blocks[len(f.Blocks)-1].IsLast() {
+			t.Errorf("fragment %d's final block lacks the last-block flag", i)
+		}
+	}
+
+	// Reassembly puts them back where they were.
+	rebuilt, err := bp.Reassemble(fragments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pre, pay, post := find(rebuilt, 200), find(rebuilt, bp.BlockTypePayload), find(rebuilt, 201)
+	if pre != 0 || pay != 1 || post != 2 {
+		t.Errorf("rebuilt block order = %d,%d,%d; want the original 0,1,2", pre, pay, post)
+	}
+}
+
 func TestFragmentSmallBundleIsUnchanged(t *testing.T) {
 	b, err := bp.NewBundle(testPrimary(), []byte("small"))
 	if err != nil {
@@ -317,6 +382,33 @@ func TestECOSMustPrecedePayload(t *testing.T) {
 
 	if err := b.Validate(); !errors.Is(err, bp.ErrInvalidECOS) {
 		t.Errorf("error = %v, want ErrInvalidECOS", err)
+	}
+}
+
+func TestECOSRulesEnforcedOnDecodedBundles(t *testing.T) {
+	// Annex C, C2 b)/c) and C3.1.4 apply to any bundle, not just ones built
+	// by the helper: a decoded ECOS block without the replicate flag, or
+	// with ordinal 255 outside a custody signal, is refused.
+	noReplicate := &bp.Bundle{
+		Primary: testPrimary(),
+		Blocks: []*bp.CanonicalBlock{
+			{Type: bp.BlockTypeECOS, Data: []byte{0x00, 0x01}}, // no BlockReplicate
+			{Type: bp.BlockTypePayload, Flags: bp.BlockLast, Data: []byte("p")},
+		},
+	}
+	if err := noReplicate.Validate(); !errors.Is(err, bp.ErrInvalidECOS) {
+		t.Errorf("missing replicate flag: error = %v, want ErrInvalidECOS", err)
+	}
+
+	ordinal255 := &bp.Bundle{
+		Primary: testPrimary(),
+		Blocks: []*bp.CanonicalBlock{
+			{Type: bp.BlockTypeECOS, Flags: bp.BlockReplicate, Data: []byte{0x00, 0xFF}},
+			{Type: bp.BlockTypePayload, Flags: bp.BlockLast, Data: []byte("p")},
+		},
+	}
+	if err := ordinal255.Validate(); !errors.Is(err, bp.ErrInvalidECOS) {
+		t.Errorf("ordinal 255 outside a custody signal: error = %v, want ErrInvalidECOS", err)
 	}
 }
 

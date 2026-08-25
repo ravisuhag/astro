@@ -115,6 +115,35 @@ func ParseEndpointID(uri string) (EndpointID, error) {
 	return EndpointID{Scheme: uri[:colon], SSP: uri[colon+1:]}, nil
 }
 
+// cbheParts returns the (node, service) pair RFC 6260 §2.1 assigns this
+// endpoint in a CBHE-encoded primary block: an ipn endpoint contributes its
+// node and service numbers, and the null endpoint dtn:none travels as (0, 0).
+// ok is false when the endpoint fits neither form, which makes the whole
+// bundle ineligible for CBHE.
+func (e EndpointID) cbheParts() (node, service uint64, ok bool) {
+	if e.IsNull() {
+		return 0, 0, true
+	}
+	node, service, err := e.IPNParts()
+	if err != nil {
+		return 0, 0, false
+	}
+	return node, service, true
+}
+
+// cbheEndpoint rebuilds an endpoint from a CBHE (node, service) pair, per
+// RFC 6260 §2.2: (0, 0) is the null endpoint, and node 0 with a nonzero
+// service number names nothing.
+func cbheEndpoint(node, service uint64) (EndpointID, error) {
+	if node == 0 {
+		if service != 0 {
+			return EndpointID{}, ErrInvalidEndpointID
+		}
+		return NullEndpoint, nil
+	}
+	return IPNEndpoint(node, service), nil
+}
+
 // dictionary builds the primary block's dictionary and the offsets into it.
 //
 // RFC 5050 §4.4: the dictionary is a byte array of null-terminated strings,

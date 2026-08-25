@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/bp, with astro/pkg/sdnv |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | `DecodeOptions` bounds block length and block count |
-| Other Information | Go library implementing Bundle Protocol version 6 block formats: primary block with CBHE dictionary, canonical blocks, the CCSDS Extended Class of Service block, fragmentation and reassembly, and both administrative record types. Bundle agent behavior — routing, storage, custody timers — is out of scope. |
+| Other Information | Go library implementing Bundle Protocol version 6 block formats: primary block with the RFC 5050 dictionary and RFC 6260 Compressed Bundle Header Encoding, canonical blocks, the CCSDS Extended Class of Service block, fragmentation and reassembly, and both administrative record types. Bundle agent behavior — routing, storage, custody timers — is out of scope. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -47,7 +47,8 @@
 |---|---|---|---|
 | Bundle Protocol version 6 per RFC 5050 | §3.1 | M | Y — not BPv7, which is wire-incompatible |
 | IPN naming scheme | §3.2.1, RFC 6260 §2.1 | M | Y — `IPNEndpoint`, node 1 to 2^64−1, service 0 to 2^64−1 |
-| Node number range enforced | §3.2.1 | M | Y — node 0 rejected |
+| Compressed Bundle Header Encoding | §3.2, RFC 6260 §2 | M | Y — when all four endpoints are ipn (dtn:none as node 0, service 0) the dictionary length encodes as zero and node/service numbers ride in the offset fields; a decoded dictionary length of zero is parsed as CBHE |
+| Node number range enforced | §3.2.1 | M | Y — node 0 rejected; on CBHE decode, node 0 with a nonzero service rejected |
 | Extended Class of Service block | §3.3, annex C | M | Y |
 | DTN time precision relaxation | §3.4 | O | Y — nanoseconds carried, precision left to the caller |
 
@@ -60,9 +61,12 @@
 | Primary bundle block | RFC 5050 §4.5.1 | M | Y |
 | Version field = 6 | §4.5.1 | M | Y — other versions rejected on decode |
 | Bundle processing control flags | §4.2 | M | Y — SDNV, all defined bits |
-| Class of service, bits 7 to 8 | §4.2 | M | Y — bulk, normal, expedited |
+| Class of service, bits 7 to 8 | §4.2 | M | Y — bulk, normal, expedited; the reserved value 3 rejected |
 | Status report request flags, bits 14 to 18 | §4.2 | O | Y |
 | Administrative record flag constraints | §4.2 | M | Y — custody and report flags rejected together with it |
+| Anonymous-source constraints | §4.2 | M | Y — source dtn:none must not request custody and must set the no-fragment flag |
+| Contradictory fragment flags rejected | §4.2 | M | Y — a fragment cannot also forbid fragmentation |
+| Bundle ends at the last block | §4.1 | M | Y — trailing octets rejected (`ErrTrailingBytes`); `DecodeBundleN` returns consumed length for concatenated streams |
 | Dictionary with endpoint offsets | §4.4, §4.5.1 | M | Y — repeated strings interned once |
 | Creation timestamp and sequence number | §4.5.1 | M | Y |
 | Lifetime | §4.5.1 | M | Y |
@@ -82,14 +86,15 @@
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | ECOS block conforms to §4.5.2 and §4.6 | annex C, C2 | M | Y |
-| Replicate-in-every-fragment flag set | C2 b) | M | Y |
-| No EID references | C2 c) | M | Y |
+| Replicate-in-every-fragment flag set | C2 b) | M | Y — enforced by bundle validation and decode, not just the construction helper |
+| No EID references | C2 c) | M | Y — enforced by bundle validation and decode |
 | Block data length 2 + N | C2 d) | M | Y |
 | Flags byte: critical (0x01) | C2 f) 1) | M | Y |
 | Flags byte: streaming (0x02) | C2 f) 2) | M | Y |
 | Flags byte: flow label present (0x04) | C2 f) 3) | M | Y |
 | Flags byte: reliable (0x08) | C2 f) 4) | M | Y |
 | Ordinal byte, 0 to 255 | C2 g) | M | Y |
+| Ordinal 255 reserved for custody signals | C3.1.4 | M | Y — rejected unless the bundle is an administrative record |
 | Flow label as SDNV | C2 h) | O | Y |
 | ECOS precedes the payload block | C3.1.1 | M | Y — validated |
 | At most one ECOS block per bundle | C3.1.2 | M | Y — validated |
@@ -103,7 +108,7 @@
 |---|---|---|---|
 | Fragmentation | RFC 5050 §5.8 | O | Y |
 | Replicated blocks copied to every fragment | §5.8 | M | Y |
-| Non-replicated blocks on the first fragment only | §5.8 | M | Y |
+| Blocks preceding the payload replicated in the first fragment; blocks following the payload in the last | §5.8 | M | Y |
 | "Must not be fragmented" respected | §4.2 | M | Y |
 | Reassembly | §5.9 | O | Y — any order, overlaps tolerated, gaps rejected |
 | Administrative record framing | §6.1 | M | Y — 4-bit type, 4-bit flags |
