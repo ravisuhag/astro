@@ -21,4 +21,8 @@ var (
 
 	// ErrEmptyFrame indicates an attempt to wrap nothing in a PLTU.
 	ErrEmptyFrame = errors.New("cannot build a PLTU around an empty transfer frame")
+
+	// ErrInvalidLength indicates a symbol stream that is not a whole number of
+	// coded bits, so it cannot be decoded.
+	ErrInvalidLength = errors.New("symbol stream length is not a whole number of coded input bits")
 )

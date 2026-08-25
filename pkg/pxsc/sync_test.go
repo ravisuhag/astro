@@ -234,6 +234,36 @@ func TestConvolutionalEncodeDoublesLength(t *testing.T) {
 	}
 }
 
+func TestConvolutionalKnownAnswers(t *testing.T) {
+	// Independent vectors, computed with the libfec / gr-satellites
+	// realization of the CCSDS 171/133 code: newest bit shifted into the
+	// register LSB, taps 0x4F and 0x6D, G2 output inverted. They pin the code
+	// to the convention every deployed CCSDS receiver uses.
+	//
+	// A reciprocal (mirror-image) encoder — the unreversed vectors on this
+	// shift direction — decodes its own output but no one else's. It emits
+	// 86B9 for the 0x80 input, which is how that bug is caught here.
+	tests := []struct {
+		name string
+		in   []byte
+		want []byte
+	}{
+		{"single one, LSB", []byte{0x01}, []byte{0x55, 0x56}},
+		{"single one, MSB", []byte{0x80}, []byte{0xBA, 0x49}},
+		{"two octets", []byte{0xA5, 0x3C}, []byte{0xB4, 0x80, 0xE3, 0xBC}},
+		{"CCSDS", []byte("CCSDS"), []byte{0x6E, 0x9F, 0x23, 0x2F, 0x20, 0x93, 0x53, 0x19, 0xAA, 0x23}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := pxsc.ConvolutionalEncode(test.in)
+			if !bytes.Equal(got, test.want) {
+				t.Errorf("ConvolutionalEncode(%X) = %X, want %X", test.in, got, test.want)
+			}
+		})
+	}
+}
+
 func TestConvolutionalEncoderIsDeterministic(t *testing.T) {
 	data := []byte{0x00, 0xFF, 0xA5, 0x5A}
 

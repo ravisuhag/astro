@@ -121,10 +121,13 @@ for _, pltu := range s.Scan(stream) {
 }
 ```
 
-At each marker the synchronizer tries frame lengths from the minimum upward
-and takes the first whose CRC verifies. A marker with no verifying length is a
-false match: it steps one octet past and keeps hunting, so a marker pattern
-sitting inside frame data does not derail it.
+At each marker the synchronizer first reads the Length field of the Version-3
+frame header that should follow — that is how the §3.6 receiver delimits a
+PLTU — and checks the CRC at exactly that length. Only if the header's claim
+does not verify does it fall back to trying frame lengths from the minimum
+upward and taking the first whose CRC verifies. A marker with no verifying
+length at all is a false match: it steps one octet past and keeps hunting, so
+a marker pattern sitting inside frame data does not derail it.
 
 A PLTU whose CRC fails is skipped, per §3.6, and a good one after it is still
 found. There is a test for exactly that.
@@ -148,24 +151,74 @@ symbols := e.Encode(bitstream)
 Two things to know.
 
 **The G2 output is inverted** (§3.4.3.1 note 1). Connection vectors are
-G1 = 171 octal and G2 = 133 octal, with the second path complemented.
+G1 = 171 octal and G2 = 133 octal, with the second path complemented. The
+encoder realizes the standard CCSDS 171/133 code — the same convention as
+libfec and gr-satellites — and known-answer tests pin it there, because the
+mirror-image (reciprocal) code passes every round-trip test while being
+undecodable by real receivers.
 
 **The encoder state carries across calls.** §3.4.3.2 encodes everything
 transmitted as one continuous stream — PLTUs and idle data alike — so the shift
 register must not reset at unit boundaries. Reuse one `ConvolutionalEncoder`
 for the whole stream; `Reset()` is there if you genuinely need to start over.
 
-**Only the encoder is here.** Decoding a convolutional code means a Viterbi
-trellis search over soft-decision symbols. This library ships no soft-decision
-decoder anywhere — `pkg/tmsc` stops at Reed-Solomon, `pkg/tcsc` at BCH — and
-adding one here alone would be out of step. §3.4.3.3 recommends at least
-three-bit soft decisions, which in practice means the receiver hardware.
+## Viterbi decoding
+
+The matching decoder is a Viterbi trellis search. Six bits of history decide
+what the next input bit will produce, so there are 64 states, and the decoder
+tracks the cheapest path into every one of them at once.
+
+```go
+data, err := pxsc.ViterbiDecode(symbols)
+```
+
+For a stream arriving in pieces, hold a decoder and flush at the end. The
+trellis carries across calls the same way the encoder's register does.
+
+```go
+d := pxsc.NewViterbiDecoder()
+
+for chunk := range symbols {
+    data, err := d.Decode(chunk)
+    if err != nil {
+        return err
+    }
+    handle(data)
+}
+handle(d.Flush())
+```
+
+Three things to know.
+
+**Decoded bits come out late.** The decoder waits 35 steps before committing a
+bit, because that is how long survivor paths take to agree about what was sent.
+So `Decode` returns fewer bits than you fed it, and `Flush` returns the rest at
+the end of the stream. Those last bits are the least reliable in the stream:
+they are decided without the convergence the rest enjoyed.
+
+**Soft decisions are better, and §3.4.3.3 recommends them.** `DecodeSoft` takes
+one value per coded symbol: positive for a one, negative for a zero, and
+further from zero for more confident. Three-bit decisions in the range -4 to 3
+are what §3.4.3.3 has in mind, though only the sign and the relative magnitude
+matter.
+
+```go
+d := pxsc.NewViterbiDecoder()
+
+data, err := d.DecodeSoft(confidences)
+```
+
+The gain is real. On the noisy channel in the package tests, soft decisions
+recover every message and hard decisions about half.
+
+**Nothing here produces soft symbols.** They come from the demodulator, below
+the layer this library works at. `Decode` treats each received bit as a
+full-confidence decision, which is the best it can do from octets alone.
 
 ## What is not here yet
 
 - **The LDPC code** of §3.4.4, its Codeword Sync Marker, and the
   pseudo-randomizer of §3.4.5, which applies only when LDPC is used.
-- **Viterbi decoding**, as above.
 - **Reed-Solomon**, which some transceivers add but §3.4.1 notes is not part of
   the CCSDS Proximity-1 standards and is not intended for cross support.
 - **CLI subcommands** — a follow-up once the API settles.

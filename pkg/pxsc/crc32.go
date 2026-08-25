@@ -2,16 +2,20 @@ package pxsc
 
 // CRC-32 for Proximity-1, per CCSDS 211.2-B-3 annex C.
 //
-// This is NOT the CRC-32 in pkg/crc, and not any of the common ones either.
-// Annex C, C1.3 gives the generator as:
+// This is not any of the common CRC-32s. Annex C, C1.3 gives the
+// generator as:
 //
 //	G(X) = X^32 + X^23 + X^21 + X^11 + X^2 + 1
 //
 // which is 0x00A00805 in the usual MSB-first representation. Compare:
 //
 //	IEEE CRC-32   0x04C11DB7   used by zip, Ethernet
-//	CRC-32C       0x1EDC6F41   Castagnoli, what pkg/crc.ComputeCRC32 computes
+//	CRC-32C       0x1EDC6F41   Castagnoli, used by iSCSI
 //	Proximity-1   0x00A00805   this one
+//
+// pkg/crc.ComputeCRC32 implements the same algorithm for the USLP FECF
+// (CCSDS 732.1-B-2 annex B declares it identical to this one); this copy
+// stays here so the Proximity-1 stack keeps its own known-answer tests.
 //
 // The register also starts at zero, not all-ones. The spec flags that
 // difference itself: "This initialization differs from that performed for the

@@ -12,11 +12,12 @@
 // It plays the same role for Proximity-1 that pkg/tmsc plays for TM and
 // pkg/tcsc for TC, and the shape of the API follows those two.
 //
-// Three things are deliberately absent. The LDPC code of §3.4.4 and its
-// pseudo-randomizer are not implemented. Neither is Viterbi decoding of the
-// convolutional code: this library ships no soft-decision or trellis decoders
-// anywhere, and adding one here would be out of step. The convolutional
-// *encoder* is present, because it is a deterministic bit transform.
+// The convolutional code of §3.4.3 is fully supported: the encoder is in
+// convolutional.go and a matching Viterbi decoder is in viterbi.go, taking
+// hard decisions through Decode and the soft decisions §3.4.3.3 recommends
+// through DecodeSoft. Deliberately absent are the LDPC code of §3.4.4, its
+// Codeword Sync Marker, and the pseudo-randomizer of §3.4.5, which applies
+// only when LDPC is used; the PICS declares all three.
 package pxsc
 
 import "fmt"

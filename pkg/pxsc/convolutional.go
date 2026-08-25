@@ -7,11 +7,8 @@ package pxsc
 // stream doubles in length, and the redundancy lets a receiver correct errors
 // the link introduced.
 //
-// Only the encoder is here. Decoding a convolutional code means a Viterbi
-// trellis search over soft-decision symbols, and this library ships no
-// soft-decision decoder anywhere — pkg/tmsc stops at Reed-Solomon, pkg/tcsc at
-// BCH. Adding one here alone would be out of step, so §3.4.3.3's recommended
-// three-bit soft decisions are left to the receiver hardware.
+// The matching decoder is in viterbi.go. It takes hard decisions by default
+// and soft ones through DecodeSoft, which is what §3.4.3.3 recommends.
 
 // Convolutional code parameters, per CCSDS 131.0-B as referenced by §3.4.3.1.
 const (
@@ -31,6 +28,20 @@ const (
 	// G2 is the second connection vector, 1011011 in binary. Its output is
 	// inverted, per §3.4.3.1 note 1.
 	G2 uint8 = 0o133
+)
+
+// Register masks realizing the connection vectors.
+//
+// CCSDS writes each vector with its leftmost digit tapping the newest bit.
+// This encoder shifts the newest bit into the LSB of the register, so the
+// masks are the vectors bit-reversed across their seven bits: G1 = 1111001
+// becomes 1001111 (0x4F), G2 = 1011011 becomes 1101101 (0x6D). This matches
+// the libfec / gr-satellites realization of the CCSDS 171/133 code; using the
+// unreversed vectors here would produce the reciprocal (mirror-image) code,
+// which no compliant receiver can decode.
+const (
+	g1Mask uint8 = 0x4F
+	g2Mask uint8 = 0x6D
 )
 
 // ConvolutionalEncoder holds the shift register between calls, so a stream can
@@ -71,8 +82,8 @@ func (e *ConvolutionalEncoder) EncodeBit(bit uint8) (c1, c2 uint8) {
 	reg &= 1<<ConstraintLength - 1
 	e.state = reg
 
-	c1 = parity(reg & G1)
-	c2 = parity(reg&G2) ^ 1 // inverted output path
+	c1 = parity(reg & g1Mask)
+	c2 = parity(reg&g2Mask) ^ 1 // inverted output path
 	return c1, c2
 }
 

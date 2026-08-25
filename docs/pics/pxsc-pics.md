@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/pxsc |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | `Synchronizer` frame-length bounds default to the Version-3 range |
-| Other Information | Go library implementing the Proximity Link Transmission Unit, the annex C CRC-32, idle data generation, a stream synchronizer, and the convolutional encoder. LDPC and Viterbi decoding are out of scope. |
+| Other Information | Go library implementing the Proximity Link Transmission Unit, the annex C CRC-32, idle data generation, a stream synchronizer, and the convolutional encoder with a Viterbi decoder. LDPC is out of scope. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -77,7 +77,7 @@
 | Acquisition sequence | §3.3.3 | M | Y — content; duration is a MIB parameter |
 | Idle sequence when no PLTU is available | §3.3.4 | M | Y |
 | Tail sequence before terminating transmission | §3.3.5 | M | Y |
-| PLTU delimiting in a received bitstream | §3.6 | M | Y — `Synchronizer` |
+| PLTU delimiting in a received bitstream | §3.6 | M | Y — `Synchronizer`; the frame's Length field is tried first, brute-force length scan as fallback; octet-aligned input only |
 | PLTU validation before delivery | §3.6 | M | Y — a failing CRC is skipped, not delivered |
 
 ---
@@ -87,10 +87,10 @@
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | No coding | §3.4.2.2 a) | O | Y |
-| Convolutional code, rate 1/2, constraint length 7 | §3.4.3.1 | O | P — encoder only; see A1.6 |
+| Convolutional code, rate 1/2, constraint length 7 | §3.4.3.1 | O | Y — encoder and Viterbi decoder, pinned to the CCSDS 171/133 convention by independent known-answer vectors |
 | G2 output path inverted | §3.4.3.1 note 1 | M | Y |
 | All transmitted data encoded, PLTUs and idle alike | §3.4.3.2 | M | Y — encoder state carries across calls |
-| Soft bit decisions, three-bit quantization | §3.4.3.3 | O | N — no soft-decision decoder |
+| Soft bit decisions, three-bit quantization | §3.4.3.3 | O | Y — `DecodeSoft` takes them; the demodulator must supply them |
 | LDPC code | §3.4.4 | O | N — see A1.6 |
 | Codeword Sync Marker | §3.4.4 | O | N — LDPC only |
 | Pseudo-randomizer | §3.4.5 | O | N — LDPC only |
@@ -101,7 +101,6 @@
 
 | Feature | Reference | Support | Rationale |
 |---|---|---|---|
-| Viterbi decoding of the convolutional code | §3.4.3.3 | N | Decoding needs a trellis search over soft-decision symbols. This library ships no soft-decision decoder in any package — `pkg/tmsc` stops at Reed-Solomon, `pkg/tcsc` at BCH — so adding one here alone would be out of step. The deterministic encoder is provided. |
 | LDPC code, CSM, and pseudo-randomizer | §3.4.4, §3.4.5 | N | A substantial addition; the randomizer applies only when LDPC is used. A follow-up. |
 | Reed-Solomon codes | §3.4.1 note | N | Not specified in the CCSDS Proximity-1 standards, and §3.4.1 states their use is not intended for cross support. |
 | Concatenated convolutional and Reed-Solomon | §3.4.2.2 note 2 | N | Explicitly not specified by the standard. |

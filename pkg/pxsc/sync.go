@@ -82,6 +82,11 @@ func (s *Synchronizer) Scan(data []byte) []PLTU {
 }
 
 // tryAt attempts to read a PLTU beginning at start.
+//
+// §3.6 describes a receiver that reads the frame's own Length field to find
+// the end of the PLTU, so the length the header implies is checked first.
+// Only when that fails — a corrupted header, or a frame this synchronizer
+// cannot parse — does it fall back to scanning every length in bounds.
 func (s *Synchronizer) tryAt(data []byte, start, minLen, maxLen int) (PLTU, bool) {
 	available := len(data) - start - PLTUOverhead
 	if available < minLen {
@@ -91,24 +96,59 @@ func (s *Synchronizer) tryAt(data []byte, start, minLen, maxLen int) (PLTU, bool
 		maxLen = available
 	}
 
-	for frameLen := minLen; frameLen <= maxLen; frameLen++ {
-		end := start + ASMSize + frameLen + CRC32Size
-		body := data[start+ASMSize : end]
-
-		if !VerifyCRC32(body) {
-			continue
+	// The length the frame header claims, tried before any scanning.
+	implied := impliedFrameLength(data[start+ASMSize:])
+	if implied >= minLen && implied <= maxLen {
+		if pltu, ok := s.checkAt(data, start, implied); ok {
+			return pltu, true
 		}
+	}
 
-		frame := make([]byte, frameLen)
-		copy(frame, body[:frameLen])
-
-		crcBytes := body[frameLen:]
-		crc := uint32(crcBytes[0])<<24 | uint32(crcBytes[1])<<16 |
-			uint32(crcBytes[2])<<8 | uint32(crcBytes[3])
-
-		return PLTU{Frame: frame, CRC: crc, Offset: start}, true
+	for frameLen := minLen; frameLen <= maxLen; frameLen++ {
+		if frameLen == implied {
+			continue // already tried
+		}
+		if pltu, ok := s.checkAt(data, start, frameLen); ok {
+			return pltu, true
+		}
 	}
 	return PLTU{}, false
+}
+
+// checkAt verifies a candidate PLTU of exactly frameLen frame octets at start.
+func (s *Synchronizer) checkAt(data []byte, start, frameLen int) (PLTU, bool) {
+	end := start + ASMSize + frameLen + CRC32Size
+	body := data[start+ASMSize : end]
+
+	if !VerifyCRC32(body) {
+		return PLTU{}, false
+	}
+
+	frame := make([]byte, frameLen)
+	copy(frame, body[:frameLen])
+
+	crcBytes := body[frameLen:]
+	crc := uint32(crcBytes[0])<<24 | uint32(crcBytes[1])<<16 |
+		uint32(crcBytes[2])<<8 | uint32(crcBytes[3])
+
+	return PLTU{Frame: frame, CRC: crc, Offset: start}, true
+}
+
+// impliedFrameLength reads the frame length a Version-3 Transfer Frame header
+// claims for itself, or -1 when the octets do not look like one.
+//
+// Per CCSDS 211.0-B-6 §3.2.2.10, the 11-bit Frame Length field spans the low
+// three bits of header octet 2 and all of octet 3, carrying a count one less
+// than the total frame length.
+func impliedFrameLength(body []byte) int {
+	if len(body) < 4 {
+		return -1
+	}
+	// Transfer Frame Version Number '10' in the top two bits marks Version-3.
+	if body[0]>>6 != 0b10 {
+		return -1
+	}
+	return (int(body[2]&0x07)<<8 | int(body[3])) + 1
 }
 
 // ScanFrames finds every PLTU and returns just the transfer frames.
