@@ -28,7 +28,7 @@ This sublayer is the telecommand counterpart to the TM Synchronization and Chann
 - **Per-codeblock FEC**: Each 7-byte block gets its own BCH parity — no single codeword spans the entire frame, unlike TM's Reed-Solomon.
 - **Immediate error detection**: The spacecraft can detect and reject a corrupted codeblock as it arrives, without waiting for the entire frame.
 - **CLTU-based framing**: Uses start/tail sequences instead of TM's Attached Sync Marker, reflecting the on-demand (not continuous) nature of TC transmission.
-- **Conservative correction**: BCH corrects only 1 bit per codeblock but detects up to 3. For commands, it is safer to reject and retransmit than to risk a miscorrection.
+- **Conservative correction**: BCH offers two decoding modes. SEC (Single Error Correction) corrects 1 bit per codeblock. TED (Triple Error Detection) corrects nothing but is guaranteed to detect up to 3 bit errors. For commands, it is safer to reject and retransmit than to risk a miscorrection, which is why TED exists.
 
 ### TC vs. TM Sync Layer: Key Differences
 
@@ -67,7 +67,7 @@ The frame data is divided into 7-byte blocks, each encoded into an 8-byte codebl
 
 ### Tail Sequence
 
-The 8-byte tail sequence `0xC5C5C5C5C5C5C579` signals the end of the CLTU. This pattern is specifically chosen: it is the BCH encoding of all-ones information bits with the standard filler bit, making it recognizable to the codeblock decoder as a termination marker rather than valid data.
+The 8-byte tail sequence `0xC5C5C5C5C5C5C579` signals the end of the CLTU. It is not a valid BCH codeblock — the pattern is chosen so that the decoder rejects it, even after any single bit error. That rejection is what terminates reception: the receiver stops at the first codeblock that fails to decode, so it does not need a bit-exact tail.
 
 ## BCH(63,56) Error Correction
 
@@ -77,7 +77,7 @@ TM uses Reed-Solomon codes that span 255 bytes — powerful but requiring the en
 
 1. **Latency**: The spacecraft would need to buffer 255 bytes before it could decode anything. For a safety-critical command, every millisecond matters.
 2. **Granularity**: A single uncorrectable error in a 255-byte RS codeword discards the entire block. With BCH, only the affected 8-byte codeblock is rejected.
-3. **Safety**: Commands must be correct with extremely high confidence. BCH's conservative approach — correct at most 1 bit, detect up to 3 — means miscorrection is virtually impossible. Reed-Solomon's more aggressive correction increases the (tiny but nonzero) risk of a miscorrection.
+3. **Safety**: Commands must be correct with extremely high confidence. BCH's conservative approach — correct at most 1 bit in SEC mode, or correct nothing and detect up to 3 in TED mode — keeps the miscorrection risk small. Reed-Solomon's more aggressive correction increases the (tiny but nonzero) risk of a miscorrection.
 
 ### How It Works
 
@@ -93,7 +93,12 @@ Codeblock: 56 info bits + 7 parity bits + 1 filler bit = 64 bits (8 bytes)
 
 **Generator polynomial**: g(x) = x^7 + x^6 + x^2 + 1
 
-The encoding is systematic: the 7 information bytes appear unchanged in the codeblock, followed by 1 byte containing 7 parity bits and a filler bit (complement of the last parity bit).
+The encoding is systematic: the 7 information bytes appear unchanged in the codeblock, followed by 1 byte containing 7 parity bits and a filler bit. Two details of that last byte matter for interoperability:
+
+- The parity bits placed on the wire are the **complement** of the LFSR remainder (CCSDS 231.0-B-4 3.3).
+- The filler bit is **always '0'** (3.3.2).
+
+Known-answer check: all-zeros information octets encode to a codeblock whose last octet is `0xFE` (remainder 0, complemented to `1111111`, filler `0`).
 
 ### Encoding Process
 
@@ -103,19 +108,22 @@ The encoder uses a 7-bit Linear Feedback Shift Register (LFSR) driven by the gen
 info bits → [LFSR with g(x) = x^7 + x^6 + x^2 + 1] → 7 parity bits
 ```
 
-After all 56 bits are processed, the LFSR contents are the 7 parity bits. These are packed into the 8th byte along with the filler bit.
+After all 56 bits are processed, the complement of the LFSR contents gives the 7 parity bits. These are packed into the 8th byte along with the '0' filler bit.
 
 ### Decoding Process
 
-1. **Syndrome computation**: Feed all 63 code bits (56 info + 7 parity) through the same LFSR.
+1. **Syndrome computation**: Complement the received parity bits (undoing the on-the-wire inversion), then feed all 63 code bits (56 info + 7 parity) through the same LFSR.
 2. **Zero syndrome**: No errors detected — return the information bytes.
-3. **Non-zero syndrome**: The syndrome value identifies the error position. Search all 63 possible single-bit error positions to find a match.
-4. **Match found**: Correct the bit at that position (1 bit corrected).
-5. **No match**: The error pattern cannot be a single-bit error — report uncorrectable (2+ bit errors detected).
+3. **Non-zero syndrome, TED mode**: Report the error. Nothing is corrected; up to 3 bit errors are guaranteed to be detected.
+4. **Non-zero syndrome, SEC mode**: The syndrome value identifies the error position. Search all 63 possible single-bit error positions to find a match.
+5. **Match found (SEC)**: Correct the bit at that position (1 bit corrected).
+6. **No match (SEC)**: The error pattern cannot be a single-bit error — report uncorrectable.
+
+Note the trade-off: SEC mode fixes single-bit errors but a 3-bit error pattern can silently miscorrect. Missions that prefer certainty over correction run the decoder in TED mode.
 
 ### The Filler Bit
 
-The filler bit (complement of the last parity bit) serves a specific purpose: it ensures that the all-ones pattern (`0xC5C5C5C5C5C5C579`) used as the tail sequence is never produced by valid data with valid parity. This allows the receiver to unambiguously distinguish the tail sequence from a data codeblock.
+The filler bit is fixed at '0' (CCSDS 231.0-B-4 3.3.2). It exists only to round the 63-bit BCH codeword up to a whole number of octets (64 bits); the decoder ignores it.
 
 ## Pseudo-Randomization
 
@@ -123,9 +131,25 @@ TC uses the same pseudo-randomization scheme as TM: XOR with a PN sequence gener
 
 - **Polynomial**: h(x) = x^8 + x^7 + x^5 + x^3 + 1
 - **Initial state**: All 1s (0xFF)
-- **Application**: Applied to the frame data before BCH encoding. The start and tail sequences are never randomized.
+- **Application**: Applied after padding and before BCH encoding, so it covers the frame data AND the 0x55 fill octets — everything between the start and tail sequences. The start and tail sequences themselves are never randomized.
 
 The purpose is identical to TM: prevent long runs of identical bits that could cause clock recovery issues at the receiver.
+
+## Physical Layer Operations Procedures (PLOP)
+
+A PLOP (CCSDS 231.0-B-4 section 8) decides how CLTUs are placed onto the physical channel, using two helper sequences (section 7). Both are the alternating bit pattern `0101...` (0x55 octets):
+
+- **Acquisition sequence**: sent before data so the receiver can lock its bit clock. At least 16 octets (128 bits) are recommended.
+- **Idle sequence**: keeps the channel modulated between CLTUs.
+
+Two procedures exist:
+
+| Procedure | Behavior |
+|-----------|----------|
+| **PLOP-1** | The session ends after each CLTU. Every CLTU gets its own acquisition sequence. |
+| **PLOP-2** | One session carries many CLTUs. One acquisition sequence starts the session; idle sequence fills the gaps between CLTUs. This is the CCSDS-recommended procedure. |
+
+The package builds the resulting symbol stream with `AcquisitionSequence()`, `IdleSequence()`, and `UplinkSequence(plop, cltus, ...)`. Carrier on/off control (the CMM state machine) belongs to the transmitting equipment and is out of scope.
 
 ## Processing Order
 
@@ -135,10 +159,10 @@ The purpose is identical to TM: prevent long runs of identical bits that could c
 TC Transfer Frame
       |
       v
-[Pseudo-Randomize] ──> XOR with PN sequence (optional)
+[Pad to 7-byte boundary] ──> Fill bytes (0x55)
       |
       v
-[Pad to 7-byte boundary] ──> Fill bytes (0x55)
+[Pseudo-Randomize] ──> XOR with PN sequence (optional, fill included)
       |
       v
 [BCH Encode] ──> 7-byte blocks → 8-byte codeblocks
@@ -147,7 +171,10 @@ TC Transfer Frame
 [CLTU Assembly] ──> Start sequence + codeblocks + tail sequence
       |
       v
-    CLTU ──> To physical layer (uplink modulator)
+[PLOP] ──> Acquisition/idle sequences around the CLTUs
+      |
+      v
+  Symbol stream ──> To physical layer (uplink modulator)
 ```
 
 ### Receive Path (Spacecraft)
@@ -159,13 +186,13 @@ TC Transfer Frame
 [Find start sequence] ──> Locate CLTU boundary
       |
       v
-[BCH Decode each codeblock] ──> Correct up to 1 bit error per block
-      |
+[BCH Decode codeblocks] ──> SEC: correct up to 1 bit error per block
+      |                      TED: detect up to 3, correct nothing
       v
-[Strip tail sequence]
-      |
+[Terminate] ──> On the tail sequence, or on the FIRST codeblock
+      |         that fails to decode (tail bit errors tolerated)
       v
-[De-Randomize] ──> XOR with PN sequence (optional)
+[De-Randomize] ──> XOR with PN sequence (optional, fill included)
       |
       v
 [Strip padding] ──> Caller must know original frame length

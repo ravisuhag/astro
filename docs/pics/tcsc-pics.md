@@ -10,8 +10,8 @@
 
 | Field | Value |
 |---|---|
-| Date of Statement (DD/MM/YYYY) | 19/03/2026 |
-| PICS Serial Number | ASTRO-TCSC-PICS-001 |
+| Date of Statement (DD/MM/YYYY) | 25/08/2026 |
+| PICS Serial Number | ASTRO-TCSC-PICS-002 |
 | System Conformance Statement Cross-Reference | This document |
 
 ### A2.1.2 Identification of Implementation Under Test (IUT)
@@ -21,7 +21,7 @@
 | Implementation Name | astro/pkg/tcsc |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing CCSDS TC Synchronization and Channel Coding sublayer. Provides CLTU wrapping/unwrapping with BCH(63,56) forward error correction per codeblock, CCSDS pseudo-randomization, and configurable start/tail sequences. |
+| Other Information | Go library implementing CCSDS TC Synchronization and Channel Coding sublayer. Provides CLTU wrapping/unwrapping with BCH(63,56) forward error correction per codeblock (SEC and TED decoding modes), CCSDS pseudo-randomization, configurable start/tail sequences, and PLOP-1/PLOP-2 acquisition and idle sequence assembly. |
 
 ### A2.1.3 Identification of Supplier
 
@@ -39,55 +39,63 @@
 | Specification | CCSDS 231.0-B-4 (TC Synchronization and Channel Coding, Blue Book, Issue 4, November 2019) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Non-supported optional capabilities (convolutional and LDPC coding) are identified in section A2.2.
+NOTE — Non-supported optional capabilities (LDPC and convolutional coding) are identified in section A2.2. Clause references below are given at section level against the Issue 4 numbering; where a precise sub-clause is cited it follows the section 3 (BCH coding), section 6 (CLTU), section 7 (acquisition/idle sequences), and section 8 (PLOP) structure of the Blue Book.
 
 ---
 
 ## A2.2 REQUIREMENTS LIST
 
-### Table A-1: CLTU Construction
+### Table A-1: BCH(63,56) Coding (section 3)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TCSC-1 | CLTU Start Sequence | 5.2.2 | M | Yes | `DefaultStartSequence()` returns the standard 2-byte start sequence 0xEB90. Custom sequences supported via `WrapCLTU()` parameter. Fresh copy returned each call. |
-| TCSC-2 | CLTU Tail Sequence | 5.2.3 | M | Yes | `DefaultTailSequence()` returns the standard 8-byte tail sequence 0xC5C5C5C5C5C5C579. Custom sequences supported. Fresh copy returned each call. |
-| TCSC-3 | CLTU Assembly (Send) | 5.2.4 | M | Yes | `WrapCLTU(frameData, startSeq, tailSeq, randomize)` assembles a complete CLTU: optional randomization, padding to 7-byte boundary with 0x55 fill, BCH encoding of each block, start sequence prepend, tail sequence append. |
-| TCSC-4 | CLTU Disassembly (Receive) | 5.2.5 | M | Yes | `UnwrapCLTU(cltu, startSeq, tailSeq, randomize)` validates and strips start/tail sequences, BCH-decodes each codeblock with error correction, concatenates information bytes, optionally de-randomizes. Returns total corrections count. |
-| TCSC-5 | CLTU Data Padding | 5.2.6 | M | Yes | Frame data padded to a multiple of `InfoBytes` (7) with fill bytes (0x55) before BCH encoding. |
-| TCSC-6 | CLTU Minimum Length Validation | 5.2.7 | M | Yes | `UnwrapCLTU()` validates minimum length: start sequence + at least one codeblock + tail sequence. Returns `ErrDataTooShort` if too short. |
-| TCSC-7 | CLTU Body Length Validation | 5.2.8 | M | Yes | `UnwrapCLTU()` validates that the body (between start and tail) is a multiple of `CodeblockBytes` (8). Returns `ErrInvalidCLTULength` if not. |
-| TCSC-8 | Start Sequence Validation | 5.2.9 | M | Yes | `UnwrapCLTU()` validates the start sequence matches. Returns `ErrStartSequenceMismatch` if not. |
-| TCSC-9 | Tail Sequence Validation | 5.2.10 | M | Yes | `UnwrapCLTU()` validates the tail sequence matches. Returns `ErrTailSequenceMismatch` if not. |
+| TCSC-1 | BCH Generator Polynomial | 3.2 | M | Yes | g(x) = x^7 + x^6 + x^2 + 1, represented as `bchPoly = 0xC5`. |
+| TCSC-2 | BCH Codeblock Structure | 3.3 | M | Yes | 64 bits per codeblock: 56 information bits (7 bytes) + 7 parity bits + 1 filler bit. Constants: `InfoBytes = 7`, `CodeblockBytes = 8`. |
+| TCSC-3 | BCH Systematic Encoding with Complemented Parity | 3.3 | M | Yes | `BCHEncode(info)` — 7-bit LFSR systematic encoding. The transmitted parity bits are the COMPLEMENT of the LFSR remainder (`parity = ^sr & 0x7F`), per the standard. Information bytes unchanged in first 7 bytes; parity in high 7 bits of the 8th byte. Pinned to the known vector: all-zeros information octets encode to last octet 0xFE. |
+| TCSC-4 | BCH Filler Bit | 3.3.2 | M | Yes | Filler bit (bit 0 of byte 7) is always '0' per 3.3.2. Pinned by `TestBCHEncode_FillerBitAlwaysZero`. |
+| TCSC-5 | BCH Syndrome Computation | 3.4 | M | Yes | `BCHDecodeWithMode()` complements the received parity bits (undoing the on-the-wire inversion) before the LFSR syndrome pass over all 63 code bits. Zero syndrome indicates no errors. |
+| TCSC-6 | SEC Decoding Mode | 3.4 | M | Yes | `BCHDecode()` / `ModeSEC` corrects 1 bit error per codeblock; `findErrorPosition()` searches all 63 bit positions for a syndrome match. Returns corrected information bytes and correction count. NOTE: in SEC mode a 3-bit error pattern can miscorrect; guaranteed detection of up to 3 bit errors requires TED mode. |
+| TCSC-7 | TED Decoding Mode | 3.4 | M | Yes | `BCHDecodeWithMode(cb, ModeTED)` — Triple Error Detection: no correction attempted; any non-zero syndrome returns `ErrUncorrectable`. Guaranteed detection of up to 3 bit errors per codeblock. Also selectable end-to-end via `UnwrapCLTUWithMode()`. |
+| TCSC-8 | BCH Uncorrectable Detection | 3.4 | M | Yes | SEC mode returns `ErrUncorrectable` when the syndrome is non-zero and no single-bit error position matches (2+ bit errors). |
+| TCSC-9 | BCH Error-Free Pass-Through | 3.4 | M | Yes | Zero syndrome: information bytes returned with 0 corrections and nil error. |
 
-### Table A-2: BCH(63,56) Coding
-
-| Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
-| TCSC-10 | BCH Generator Polynomial | 6.2 | M | Yes | g(x) = x^7 + x^6 + x^2 + 1, represented as `bchPoly = 0xC5`. |
-| TCSC-11 | BCH Codeblock Structure | 6.3 | M | Yes | 64 bits per codeblock: 56 information bits (7 bytes) + 7 parity bits + 1 filler bit. Constants: `InfoBytes = 7`, `CodeblockBytes = 8`. |
-| TCSC-12 | BCH Systematic Encoding | 6.4 | M | Yes | `BCHEncode(info)` — 7-bit LFSR-based systematic encoding. Information bytes preserved unchanged in first 7 bytes. Parity in high 7 bits of 8th byte. Returns `[8]byte`. |
-| TCSC-13 | BCH Filler Bit | 6.5 | M | Yes | Filler bit (bit 0 of byte 7) is the complement of the last parity bit. Ensures tail sequence is distinguishable from valid data. |
-| TCSC-14 | BCH Syndrome Computation | 6.6 | M | Yes | `BCHDecode()` computes syndrome by feeding all 63 code bits (56 info + 7 parity) through the LFSR. Zero syndrome indicates no errors. |
-| TCSC-15 | BCH Error Detection | 6.7 | M | Yes | Detects up to 3 bit errors per codeblock via syndrome analysis. |
-| TCSC-16 | BCH Single-Bit Correction | 6.8 | M | Yes | `BCHDecode()` corrects 1 bit error per codeblock. `findErrorPosition()` searches all 63 bit positions for syndrome match. Returns corrected information bytes and correction count. |
-| TCSC-17 | BCH Uncorrectable Detection | 6.9 | M | Yes | Returns `ErrUncorrectable` when syndrome is non-zero but no single-bit error position matches (2+ bit errors). |
-| TCSC-18 | BCH Error-Free Pass-Through | 6.10 | M | Yes | Zero syndrome: information bytes returned immediately with 0 corrections and nil error. |
-
-### Table A-3: Pseudo-Randomization
+### Table A-2: Pseudo-Randomization (section 5)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TCSC-19 | PN Sequence Generation | 7.2 | M | Yes | `GeneratePNSequence(length)` generates the CCSDS pseudo-random sequence using 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1, initialized to 0xFF. |
-| TCSC-20 | Randomization (Send) | 7.3 | M | Yes | `Randomize(data)` XORs data with PN sequence. Returns new slice; input not modified. Applied to frame data before BCH encoding. |
-| TCSC-21 | De-Randomization (Receive) | 7.4 | M | Yes | Same `Randomize()` function — XOR is self-inverse. Integrated into `UnwrapCLTU()` when randomize=true. Applied after BCH decoding. |
-| TCSC-22 | Randomization in CLTU Pipeline | 7.5 | M | Yes | `WrapCLTU()` applies randomization before padding and BCH encoding when randomize=true. `UnwrapCLTU()` applies de-randomization after BCH decoding and concatenation. |
+| TCSC-10 | PN Sequence Generation | 5 | M | Yes | `GeneratePNSequence(length)` — 8-bit LFSR, h(x) = x^8 + x^7 + x^5 + x^3 + 1, preset to all ones. Pinned to the published first 40 digits (0xFF 0x48 0x0E 0xC0 0x9A). |
+| TCSC-11 | Randomization (Send) | 5 | M | Yes | `Randomize(data)` XORs data with the PN sequence. Returns new slice; input not modified. |
+| TCSC-12 | De-Randomization (Receive) | 5 | M | Yes | Same `Randomize()` function — XOR is self-inverse. Integrated into `UnwrapCLTU()` when randomize=true. |
+| TCSC-13 | Randomization Coverage in the CLTU | 5 | M | Yes | `WrapCLTU()` pads to the codeblock boundary with 0x55 fill FIRST, then randomizes the padded buffer, so the fill octets go out randomized like the rest of the data. `UnwrapCLTU()` de-randomizes the full recovered buffer (fill included). Pinned by `TestWrapCLTU_RandomizesFillOctets`. |
 
-### Table A-4: Optional Coding Schemes
+### Table A-3: CLTU (section 6)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TCSC-23 | LDPC Coding | 8 | O | No | Not implemented. |
-| TCSC-24 | Concatenated BCH + Convolutional | 9 | O | No | Not implemented. |
+| TCSC-14 | CLTU Start Sequence | 6 | M | Yes | `DefaultStartSequence()` returns the standard 2-byte start sequence 0xEB90. Custom sequences supported via `WrapCLTU()` parameter. |
+| TCSC-15 | CLTU Tail Sequence | 6 | M | Yes | `DefaultTailSequence()` returns the standard 8-byte tail sequence 0xC5C5C5C5C5C5C579. The pattern is chosen so that it fails BCH decoding even after any single bit error, which is what terminates reception. |
+| TCSC-16 | CLTU Assembly (Send) | 6 | M | Yes | `WrapCLTU(frameData, startSeq, tailSeq, randomize)`: 0x55 padding to the 7-byte boundary, optional randomization of the padded buffer, BCH encoding of each block, start sequence prepend, tail sequence append. |
+| TCSC-17 | CLTU Data Padding | 6 | M | Yes | Frame data padded to a multiple of `InfoBytes` (7) with fill octets (0x55) before randomization and BCH encoding. |
+| TCSC-18 | CLTU Reception and Termination | 6 | M | Yes | `UnwrapCLTU()` / `UnwrapCLTUWithMode()`: validates the start sequence, decodes codeblocks, and terminates on the tail sequence or on the FIRST codeblock that fails to decode — an exact tail match is not required, so bit errors in the tail are tolerated. Trailing octets after the CLTU are ignored. |
+| TCSC-19 | Start Sequence Validation | 6 | M | Yes | `UnwrapCLTU()` validates the start sequence; returns `ErrStartSequenceMismatch` otherwise. |
+| TCSC-20 | Minimum Length Validation | 6 | M | Yes | `UnwrapCLTU()` requires at least the start sequence plus one codeblock; returns `ErrDataTooShort` otherwise. |
+
+### Table A-4: Acquisition, Idle, and PLOP (sections 7 and 8)
+
+| Item | Description | Reference | Status | Support | Notes |
+|------|-------------|-----------|--------|---------|-------|
+| TCSC-21 | Acquisition Sequence | 7 | M | Yes | `AcquisitionSequence(octets)` — alternating '01' pattern (0x55 octets); defaults to the recommended minimum of 16 octets (128 bits). |
+| TCSC-22 | Idle Sequence | 7 | M | Yes | `IdleSequence(octets)` — alternating '01' pattern between CLTUs. |
+| TCSC-23 | PLOP-1 | 8 | M | Yes | `UplinkSequence(PLOP1, ...)` — each CLTU preceded by its own acquisition sequence (session ends after each CLTU). |
+| TCSC-24 | PLOP-2 | 8 | M | Yes | `UplinkSequence(PLOP2, ...)` — one acquisition sequence starts the session; idle sequence keeps the channel modulated between CLTUs. CCSDS-recommended procedure. |
+| TCSC-25 | Carrier Modulation Modes (CMM state machine) | 8 | M | No | The CMM-1..CMM-4 state machine itself is not modeled; the library assembles the symbol stream (acquisition/idle/CLTU ordering) and leaves carrier control to the ground station equipment. |
+
+### Table A-5: Optional Coding Schemes
+
+| Item | Description | Reference | Status | Support | Notes |
+|------|-------------|-----------|--------|---------|-------|
+| TCSC-26 | LDPC Coding | 4 | O | No | Not implemented. |
+| TCSC-27 | Concatenated BCH + Convolutional | — | O | No | Convolutional inner code not implemented. BCH outer code is available. |
 
 ---
 
@@ -97,27 +105,28 @@ NOTE — Non-supported optional capabilities (convolutional and LDPC coding) are
 
 | Category | Total Items | Supported | Not Supported |
 |----------|-------------|-----------|---------------|
-| Mandatory (M) | 22 | 22 | 0 |
+| Mandatory (M) | 25 | 24 | 1 |
 | Optional (O) | 2 | 0 | 2 |
-| **Total** | **24** | **22** | **2** |
+| **Total** | **27** | **24** | **3** |
 
 ### Non-Conformances (Mandatory Items Not Supported)
 
-None. All 22 mandatory items are fully supported.
+| Item | Description | Reason |
+|------|-------------|--------|
+| TCSC-25 | CMM state machine | The library produces the physical-channel symbol stream (`UplinkSequence`) but does not model the carrier modulation mode transitions; carrier on/off control belongs to the transmitting equipment, not to a codec library. |
 
 ### Non-Supported Optional Items
 
 | Item | Description | Reason |
 |------|-------------|--------|
-| TCSC-23 | LDPC Coding | Not implemented. Specialized application for high-data-rate TC links. |
-| TCSC-24 | Concatenated BCH + Convolutional | Convolutional inner code not implemented. BCH outer code is available. |
+| TCSC-26 | LDPC Coding | Not implemented. Specialized application for high-data-rate TC links. |
+| TCSC-27 | Concatenated BCH + Convolutional | Convolutional inner code not implemented. |
 
-### Fully Supported Mandatory Items
-
-All 22 mandatory items (TCSC-1 through TCSC-22) are supported. Key implementations:
+### Key Implementations
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| CLTU Construction | TCSC-1–9 | `DefaultStartSequence()`, `DefaultTailSequence()`, `WrapCLTU()`, `UnwrapCLTU()` with custom sequence support, padding, and validation. |
-| BCH(63,56) Coding | TCSC-10–18 | `BCHEncode()`, `BCHDecode()` with systematic encoding, LFSR-based syndrome computation, single-bit correction, filler bit, uncorrectable detection. |
-| Pseudo-Randomization | TCSC-19–22 | `GeneratePNSequence()`, `Randomize()` (self-inverse), integrated into CLTU pipeline. |
+| BCH(63,56) Coding | TCSC-1–9 | `BCHEncode()` (complemented parity, filler '0', all-zeros → 0xFE vector), `BCHDecode()` / `BCHDecodeWithMode()` with SEC and TED modes. |
+| Pseudo-Randomization | TCSC-10–13 | `GeneratePNSequence()`, `Randomize()`; fill-then-randomize order in `WrapCLTU()`. |
+| CLTU | TCSC-14–20 | `WrapCLTU()`, `UnwrapCLTU()` / `UnwrapCLTUWithMode()` terminating on the first failed codeblock. |
+| Acquisition/Idle/PLOP | TCSC-21–24 | `AcquisitionSequence()`, `IdleSequence()`, `UplinkSequence()` for PLOP-1 and PLOP-2. |

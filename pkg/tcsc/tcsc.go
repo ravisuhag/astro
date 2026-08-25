@@ -49,8 +49,11 @@ func GeneratePNSequence(length int) []byte {
 
 // WrapCLTU produces a Command Link Transmission Unit from TC Transfer Frame
 // data. It:
-//  1. Optionally applies CCSDS pseudo-randomization to the frame data
-//  2. Pads the data to a multiple of 7 bytes (InfoBytes per codeblock)
+//  1. Pads the data to a multiple of 7 bytes (InfoBytes per codeblock)
+//     with 0x55 fill octets
+//  2. Optionally applies CCSDS pseudo-randomization to the padded buffer
+//     (fill octets included, per CCSDS 231.0-B-4: randomization covers
+//     everything between the start and tail sequences)
 //  3. Encodes each 7-byte block with BCH(63,56) to produce 8-byte codeblocks
 //  4. Prepends the start sequence and appends the tail sequence
 //
@@ -66,21 +69,19 @@ func WrapCLTU(frameData, startSeq, tailSeq []byte, randomize bool) ([]byte, erro
 		tailSeq = DefaultTailSequence()
 	}
 
-	data := frameData
-	if randomize {
-		data = Randomize(frameData)
-	}
-
-	// Pad to a multiple of InfoBytes with fill bytes (0x55).
-	padded := data
-	if rem := len(data) % InfoBytes; rem != 0 {
-		padding := make([]byte, InfoBytes-rem)
-		for i := range padding {
-			padding[i] = 0x55
+	// Pad to a multiple of InfoBytes with fill bytes (0x55) FIRST, then
+	// randomize the whole padded buffer, so the fill octets go out
+	// randomized like the rest of the data.
+	padded := frameData
+	if rem := len(frameData) % InfoBytes; rem != 0 {
+		padded = make([]byte, len(frameData)+InfoBytes-rem)
+		copy(padded, frameData)
+		for i := len(frameData); i < len(padded); i++ {
+			padded[i] = 0x55
 		}
-		padded = make([]byte, len(data)+len(padding))
-		copy(padded, data)
-		copy(padded[len(data):], padding)
+	}
+	if randomize {
+		padded = Randomize(padded)
 	}
 
 	numBlocks := len(padded) / InfoBytes
@@ -107,20 +108,28 @@ func WrapCLTU(frameData, startSeq, tailSeq []byte, randomize bool) ([]byte, erro
 	return cltu, nil
 }
 
-// UnwrapCLTU extracts and error-corrects TC Transfer Frame data from a CLTU.
-// It:
-//  1. Validates and strips the start and tail sequences
-//  2. Decodes each 8-byte codeblock with BCH(63,56), correcting up to
-//     1 bit error per codeblock
-//  3. Concatenates the 7-byte info portions
-//  4. Optionally de-randomizes the result
+// UnwrapCLTU extracts and error-corrects TC Transfer Frame data from a CLTU
+// using SEC decoding. See UnwrapCLTUWithMode.
+func UnwrapCLTU(cltu, startSeq, tailSeq []byte, randomize bool) ([]byte, int, error) {
+	return UnwrapCLTUWithMode(cltu, startSeq, tailSeq, randomize, ModeSEC)
+}
+
+// UnwrapCLTUWithMode extracts and error-corrects TC Transfer Frame data
+// from a CLTU. It:
+//  1. Validates and strips the start sequence
+//  2. Decodes 8-byte codeblocks with BCH(63,56) in the given mode
+//  3. Terminates on the tail sequence, or on the first codeblock that
+//     fails to decode (per CCSDS 231.0-B-4 the receiver stops at the
+//     first rejected codeblock, so bit errors in the tail are tolerated)
+//  4. Concatenates the 7-byte info portions
+//  5. Optionally de-randomizes the result (fill octets included)
 //
 // Returns the recovered frame data, total number of corrected bit errors,
 // and any error. If startSeq or tailSeq is nil, CCSDS defaults are used.
 //
 // Note: The caller must know the original data length to strip any padding
 // added during WrapCLTU, as the padding is not self-describing.
-func UnwrapCLTU(cltu, startSeq, tailSeq []byte, randomize bool) ([]byte, int, error) {
+func UnwrapCLTUWithMode(cltu, startSeq, tailSeq []byte, randomize bool, mode DecodeMode) ([]byte, int, error) {
 	if startSeq == nil {
 		startSeq = DefaultStartSequence()
 	}
@@ -128,8 +137,7 @@ func UnwrapCLTU(cltu, startSeq, tailSeq []byte, randomize bool) ([]byte, int, er
 		tailSeq = DefaultTailSequence()
 	}
 
-	minLen := len(startSeq) + CodeblockBytes + len(tailSeq)
-	if len(cltu) < minLen {
+	if len(cltu) < len(startSeq)+CodeblockBytes {
 		return nil, 0, ErrDataTooShort
 	}
 
@@ -138,31 +146,38 @@ func UnwrapCLTU(cltu, startSeq, tailSeq []byte, randomize bool) ([]byte, int, er
 		return nil, 0, ErrStartSequenceMismatch
 	}
 
-	// Validate tail sequence.
-	if !bytes.Equal(cltu[len(cltu)-len(tailSeq):], tailSeq) {
-		return nil, 0, ErrTailSequenceMismatch
-	}
-
-	// Extract the codeblock body.
-	body := cltu[len(startSeq) : len(cltu)-len(tailSeq)]
-	if len(body)%CodeblockBytes != 0 {
-		return nil, 0, ErrInvalidCLTULength
-	}
-
-	numBlocks := len(body) / CodeblockBytes
-	result := make([]byte, 0, numBlocks*InfoBytes)
+	body := cltu[len(startSeq):]
+	result := make([]byte, 0, len(body)/CodeblockBytes*InfoBytes)
 	totalCorr := 0
 
-	for i := range numBlocks {
-		var cb [CodeblockBytes]byte
-		copy(cb[:], body[i*CodeblockBytes:(i+1)*CodeblockBytes])
+	for len(body) >= CodeblockBytes {
+		// An exact tail sequence at a codeblock boundary ends the CLTU.
+		if len(tailSeq) > 0 && len(body) >= len(tailSeq) &&
+			bytes.Equal(body[:len(tailSeq)], tailSeq) {
+			break
+		}
 
-		info, corr, err := BCHDecode(cb)
+		var cb [CodeblockBytes]byte
+		copy(cb[:], body[:CodeblockBytes])
+
+		info, corr, err := BCHDecodeWithMode(cb, mode)
 		if err != nil {
-			return nil, 0, err
+			// First failed codeblock terminates the CLTU. The CCSDS
+			// tail sequence is built to fail BCH decoding, so a tail
+			// with bit errors still ends the CLTU here. A failure on
+			// the very first codeblock means no data was recovered.
+			if len(result) == 0 {
+				return nil, 0, err
+			}
+			break
 		}
 		totalCorr += corr
 		result = append(result, info...)
+		body = body[CodeblockBytes:]
+	}
+
+	if len(result) == 0 {
+		return nil, 0, ErrDataTooShort
 	}
 
 	if randomize {

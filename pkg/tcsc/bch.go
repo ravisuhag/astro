@@ -1,17 +1,24 @@
 package tcsc
 
 // BCH(63,56) codec for CCSDS TC Synchronization and Channel Coding
-// per CCSDS 231.0-B-4.
+// per CCSDS 231.0-B-4 section 3.
 //
 // Each codeblock consists of:
 //   - 56 information bits (7 octets)
-//   - 7 parity bits computed by the BCH generator polynomial
-//   - 1 filler bit (complement of the last parity bit)
+//   - 7 parity bits: the COMPLEMENT of the LFSR remainder
+//     (CCSDS 231.0-B-4 3.3: the parity symbols are inverted on the wire)
+//   - 1 filler bit, always '0' (CCSDS 231.0-B-4 3.3.2)
 //
 // Total: 64 bits (8 octets) per codeblock.
 //
-// The code can detect up to 3 bit errors and correct 1 bit error
-// per codeblock.
+// Known-answer vector: all-zeros information octets encode to a
+// codeblock whose last octet is 0xFE (remainder 0, complemented to
+// 1111111, filler 0).
+//
+// Two decoding modes are defined by the standard:
+//   - SEC (Single Error Correction): corrects 1 bit error per codeblock.
+//   - TED (Triple Error Detection): corrects nothing, detects up to
+//     3 bit errors per codeblock.
 //
 // Generator polynomial: g(x) = x^7 + x^6 + x^2 + 1
 
@@ -29,10 +36,25 @@ const (
 	bchPoly = 0xC5
 )
 
+// DecodeMode selects the BCH decoding mode per CCSDS 231.0-B-4 section 3.
+type DecodeMode int
+
+const (
+	// ModeSEC is Single Error Correction: corrects up to 1 bit error per
+	// codeblock. A 3-bit error pattern can silently miscorrect in this mode.
+	ModeSEC DecodeMode = iota
+
+	// ModeTED is Triple Error Detection: no correction is attempted, and
+	// any detectable error pattern (up to 3 bit errors guaranteed) is
+	// reported as ErrUncorrectable.
+	ModeTED
+)
+
 // BCHEncode computes the 7-bit BCH parity for 7 information bytes (56 bits)
-// and returns an 8-byte codeblock. The parity is placed in the high 7 bits
-// of the 8th byte, and the filler bit (complement of the last parity bit)
-// occupies the LSB. Returns ErrInvalidInfoLength if info is not exactly 7 bytes.
+// and returns an 8-byte codeblock. Per CCSDS 231.0-B-4 3.3, the transmitted
+// parity bits are the COMPLEMENT of the LFSR remainder; they occupy the high
+// 7 bits of the 8th byte. The filler bit (LSB) is always '0' per 3.3.2.
+// Returns ErrInvalidInfoLength if info is not exactly 7 bytes.
 func BCHEncode(info []byte) ([CodeblockBytes]byte, error) {
 	var cb [CodeblockBytes]byte
 	if len(info) != InfoBytes {
@@ -57,22 +79,35 @@ func BCHEncode(info []byte) ([CodeblockBytes]byte, error) {
 		}
 	}
 
-	// sr now contains the 7 parity bits.
-	// Pack into the 8th byte: parity in bits [7:1], filler in bit [0].
-	parity := sr & 0x7F
-	filler := ^parity & 1 // complement of lowest parity bit
-	cb[InfoBytes] = (parity << 1) | filler
+	// sr now contains the LFSR remainder. The transmitted parity bits are
+	// its complement (CCSDS 231.0-B-4 3.3). Pack into the 8th byte:
+	// parity in bits [7:1], filler bit '0' in bit [0] (3.3.2).
+	parity := ^sr & 0x7F
+	cb[InfoBytes] = parity << 1
 
 	return cb, nil
 }
 
-// BCHDecode extracts 7 information bytes from an 8-byte codeblock,
-// correcting up to 1 bit error. Returns the corrected information bytes,
-// the number of corrected bit errors, and any error.
+// BCHDecode extracts 7 information bytes from an 8-byte codeblock in SEC
+// mode, correcting up to 1 bit error. Returns the corrected information
+// bytes, the number of corrected bit errors, and any error.
 // Returns ErrUncorrectable if the codeblock has more than 1 bit error.
 func BCHDecode(cb [CodeblockBytes]byte) ([]byte, int, error) {
+	return BCHDecodeWithMode(cb, ModeSEC)
+}
+
+// BCHDecodeWithMode extracts 7 information bytes from an 8-byte codeblock
+// using the given decoding mode.
+//
+// In ModeSEC, up to 1 bit error is corrected; more errors return
+// ErrUncorrectable. In ModeTED, no correction is attempted and any
+// non-zero syndrome returns ErrUncorrectable (guaranteed detection of
+// up to 3 bit errors).
+func BCHDecodeWithMode(cb [CodeblockBytes]byte, mode DecodeMode) ([]byte, int, error) {
 	// Compute syndrome: feed all 63 code bits (56 info + 7 parity)
-	// through the LFSR. Ignore the filler bit.
+	// through the LFSR. Ignore the filler bit. The received parity bits
+	// are complemented on the wire (CCSDS 231.0-B-4 3.3), so complement
+	// them back before the syndrome pass.
 	var sr byte
 	for i := range InfoBytes {
 		b := cb[i]
@@ -87,10 +122,11 @@ func BCHDecode(cb [CodeblockBytes]byte) ([]byte, int, error) {
 		}
 	}
 
-	// Process the 7 parity bits (high 7 bits of byte 7).
+	// Process the 7 parity bits (high 7 bits of byte 7), complementing
+	// each received bit to undo the on-the-wire inversion.
 	parityByte := cb[InfoBytes]
 	for bit := 7; bit >= 1; bit-- {
-		inBit := (parityByte >> uint(bit)) & 1
+		inBit := ((parityByte >> uint(bit)) & 1) ^ 1
 		feedback := ((sr >> 6) ^ inBit) & 1
 		sr <<= 1
 		if feedback != 0 {
@@ -105,6 +141,11 @@ func BCHDecode(cb [CodeblockBytes]byte) ([]byte, int, error) {
 		info := make([]byte, InfoBytes)
 		copy(info, cb[:InfoBytes])
 		return info, 0, nil
+	}
+
+	if mode == ModeTED {
+		// Triple Error Detection: never correct; report the error.
+		return nil, 0, ErrUncorrectable
 	}
 
 	// Single-bit error correction: the syndrome equals the column of

@@ -230,28 +230,136 @@ func TestUnwrapCLTU_BadStartSequence(t *testing.T) {
 	}
 }
 
-func TestUnwrapCLTU_BadTailSequence(t *testing.T) {
-	// Build a CLTU with valid start but wrong tail.
-	cltu := make([]byte, 18)
-	cltu[0], cltu[1] = 0xEB, 0x90
-	_, _, err := tcsc.UnwrapCLTU(cltu, nil, nil, false)
-	if !errors.Is(err, tcsc.ErrTailSequenceMismatch) {
-		t.Errorf("expected ErrTailSequenceMismatch, got %v", err)
+func TestUnwrapCLTU_ToleratesTailBitErrors(t *testing.T) {
+	// Per CCSDS 231.0-B-4, the receiver terminates on the first codeblock
+	// that fails to decode. The tail sequence is built to fail BCH
+	// decoding, so a tail with bit errors must still end the CLTU.
+	frameData := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
+	cltu, err := tcsc.WrapCLTU(frameData, nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt one bit of the tail sequence (last 8 bytes). The tail is
+	// designed so that any single-bit error still fails BCH decoding.
+	cltu[len(cltu)-8] ^= 0x01
+
+	got, corr, err := tcsc.UnwrapCLTU(cltu, nil, nil, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if corr != 0 {
+		t.Errorf("corrections = %d, want 0", corr)
+	}
+	if !bytes.Equal(got, frameData) {
+		t.Errorf("data = %x, want %x", got, frameData)
 	}
 }
 
-func TestUnwrapCLTU_InvalidBodyLength(t *testing.T) {
-	// CLTU with body that's not a multiple of 8.
-	start := tcsc.DefaultStartSequence()
-	tail := tcsc.DefaultTailSequence()
-	// 2 (start) + 12 (body, not multiple of 8) + 8 (tail) = 22
-	cltu := make([]byte, 22)
-	copy(cltu, start)
-	copy(cltu[len(cltu)-len(tail):], tail)
+func TestUnwrapCLTU_ToleratesTrailingOctets(t *testing.T) {
+	// Extra octets after the tail (for example idle sequence from the
+	// physical channel) must not break unwrapping.
+	frameData := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
+	cltu, err := tcsc.WrapCLTU(frameData, nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cltu = append(cltu, 0x55, 0x55, 0x55)
 
-	_, _, err := tcsc.UnwrapCLTU(cltu, nil, nil, false)
-	if !errors.Is(err, tcsc.ErrInvalidCLTULength) {
-		t.Errorf("expected ErrInvalidCLTULength, got %v", err)
+	got, _, err := tcsc.UnwrapCLTU(cltu, nil, nil, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(got, frameData) {
+		t.Errorf("data = %x, want %x", got, frameData)
+	}
+}
+
+func TestWrapCLTU_RandomizesFillOctets(t *testing.T) {
+	// TCSC randomization covers everything between start and tail
+	// sequences: the 0x55 fill must be added FIRST, then randomized.
+	frameData := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE} // 5 bytes -> 2 fill bytes
+	cltu, err := tcsc.WrapCLTU(frameData, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The single codeblock's info bytes sit right after the 2-byte start
+	// sequence. Positions 5 and 6 hold the fill octets: on the wire they
+	// must be 0x55 XOR the PN sequence, not raw 0x55.
+	pn := tcsc.GeneratePNSequence(7)
+	info := cltu[2 : 2+7]
+	for _, i := range []int{5, 6} {
+		want := 0x55 ^ pn[i]
+		if info[i] != want {
+			t.Errorf("fill octet %d on the wire = 0x%02X, want 0x%02X (randomized)", i, info[i], want)
+		}
+	}
+
+	// And the round trip recovers the original data with 0x55 padding.
+	got, _, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got[:len(frameData)], frameData) {
+		t.Errorf("data = %x, want %x", got[:len(frameData)], frameData)
+	}
+	for i := len(frameData); i < len(got); i++ {
+		if got[i] != 0x55 {
+			t.Errorf("recovered fill octet %d = 0x%02X, want 0x55", i, got[i])
+		}
+	}
+}
+
+func TestUplinkSequence_PLOP1AndPLOP2(t *testing.T) {
+	frame := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
+	cltu, err := tcsc.WrapCLTU(frame, nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	acq := tcsc.AcquisitionSequence(0)
+	if len(acq) != tcsc.DefaultAcquisitionOctets {
+		t.Fatalf("acquisition length = %d, want %d", len(acq), tcsc.DefaultAcquisitionOctets)
+	}
+	for _, b := range acq {
+		if b != 0x55 {
+			t.Fatalf("acquisition octet = 0x%02X, want 0x55", b)
+		}
+	}
+	idle := tcsc.IdleSequence(0)
+	if len(idle) != tcsc.DefaultIdleOctets {
+		t.Fatalf("idle length = %d, want %d", len(idle), tcsc.DefaultIdleOctets)
+	}
+
+	// PLOP-1: acquisition before every CLTU.
+	stream1, err := tcsc.UplinkSequence(tcsc.PLOP1, [][]byte{cltu, cltu}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want1 := 2*(len(acq)+len(cltu))
+	if len(stream1) != want1 {
+		t.Errorf("PLOP-1 stream length = %d, want %d", len(stream1), want1)
+	}
+	if !bytes.Equal(stream1[:len(acq)], acq) {
+		t.Error("PLOP-1 stream must begin with the acquisition sequence")
+	}
+
+	// PLOP-2: one acquisition, idle between CLTUs.
+	stream2, err := tcsc.UplinkSequence(tcsc.PLOP2, [][]byte{cltu, cltu}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want2 := len(acq) + len(cltu) + len(idle) + len(cltu)
+	if len(stream2) != want2 {
+		t.Errorf("PLOP-2 stream length = %d, want %d", len(stream2), want2)
+	}
+
+	if _, err := tcsc.UplinkSequence(tcsc.PLOP2, nil, 0, 0); !errors.Is(err, tcsc.ErrEmptyData) {
+		t.Errorf("expected ErrEmptyData for no CLTUs, got %v", err)
+	}
+	if _, err := tcsc.UplinkSequence(tcsc.PLOP(9), [][]byte{cltu}, 0, 0); !errors.Is(err, tcsc.ErrInvalidPLOP) {
+		t.Errorf("expected ErrInvalidPLOP, got %v", err)
 	}
 }
 

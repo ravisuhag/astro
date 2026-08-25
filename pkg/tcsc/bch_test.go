@@ -1,6 +1,7 @@
 package tcsc_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/tcsc"
@@ -35,16 +36,62 @@ func TestBCHEncode_ParityNotZero(t *testing.T) {
 	}
 }
 
-func TestBCHEncode_AllZeros(t *testing.T) {
+func TestBCHEncode_AllZeros_KnownAnswer(t *testing.T) {
+	// Known-answer vector per CCSDS 231.0-B-4 3.3: for all-zero
+	// information bits the LFSR remainder is zero, the transmitted
+	// parity bits are its complement (1111111), and the filler bit
+	// is '0'. The last codeblock octet is therefore 0xFE.
 	info := make([]byte, tcsc.InfoBytes)
 	cb, err := tcsc.BCHEncode(info)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// For all-zero information, the parity should also be zero.
-	// The filler bit (complement of LSB of parity) should be 1.
-	if cb[tcsc.InfoBytes] != 0x01 {
-		t.Errorf("all-zero parity byte = 0x%02X, want 0x01 (filler=1)", cb[tcsc.InfoBytes])
+	if cb[tcsc.InfoBytes] != 0xFE {
+		t.Errorf("all-zero parity byte = 0x%02X, want 0xFE (complemented parity, filler=0)", cb[tcsc.InfoBytes])
+	}
+}
+
+func TestBCHEncode_FillerBitAlwaysZero(t *testing.T) {
+	patterns := [][]byte{
+		{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+		{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0x42},
+		{0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55},
+	}
+	for _, info := range patterns {
+		cb, err := tcsc.BCHEncode(info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cb[tcsc.InfoBytes]&0x01 != 0 {
+			t.Errorf("info %x: filler bit = 1, want 0 (CCSDS 231.0-B-4 3.3.2)", info)
+		}
+	}
+}
+
+func TestBCHDecodeTED_DetectsWithoutCorrecting(t *testing.T) {
+	info := []byte{0xAB, 0xCD, 0xEF, 0x12, 0x34, 0x56, 0x78}
+	cb, err := tcsc.BCHEncode(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Error-free codeblock decodes fine in TED mode.
+	decoded, corr, err := tcsc.BCHDecodeWithMode(cb, tcsc.ModeTED)
+	if err != nil || corr != 0 {
+		t.Fatalf("clean TED decode: corr=%d err=%v", corr, err)
+	}
+	for i := range tcsc.InfoBytes {
+		if decoded[i] != info[i] {
+			t.Errorf("byte %d = 0x%02X, want 0x%02X", i, decoded[i], info[i])
+		}
+	}
+
+	// A single-bit error is detected, never corrected, in TED mode.
+	cb[2] ^= 0x10
+	_, _, err = tcsc.BCHDecodeWithMode(cb, tcsc.ModeTED)
+	if !errors.Is(err, tcsc.ErrUncorrectable) {
+		t.Errorf("TED with 1-bit error: expected ErrUncorrectable, got %v", err)
 	}
 }
 
