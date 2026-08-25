@@ -154,6 +154,34 @@ func TestMCMultiplexerConcurrentNext(t *testing.T) {
 	}
 }
 
+// TestGapCounterConcurrentTrack drives one GapCounter from many goroutines,
+// each on its own channel. GapCounter was the one stateful type in the
+// package without a mutex, so the maps raced. Run with -race.
+func TestGapCounterConcurrentTrack(t *testing.T) {
+	g := sdl.NewGapCounter[uint8](0xFF)
+
+	var wg sync.WaitGroup
+	for ch := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := range 300 {
+				g.Track(uint8(ch), uint8(n))
+				_ = g.LastGap()
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Each channel counted 0..299 with no loss; a fresh count on any of them
+	// must still line up with what that channel expects.
+	for ch := range 8 {
+		if gap := g.Track(uint8(ch), 300&0xFF); gap != 0 {
+			t.Errorf("channel %d gave gap %d after clean sequence, want 0", ch, gap)
+		}
+	}
+}
+
 // TestServiceManagerConcurrentRegistration races registration against lookup,
 // which previously wrote the virtualServices and masterChannels maps unlocked.
 func TestServiceManagerConcurrentRegistration(t *testing.T) {

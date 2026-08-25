@@ -113,6 +113,56 @@ func TestGapCounterWidths(t *testing.T) {
 			t.Errorf("gap = %d, want 5; a 24-bit counter does not wrap at 65535", gap)
 		}
 	})
+
+	t.Run("56-bit, USLP managed maximum", func(t *testing.T) {
+		// The USLP count length is managed, up to 56 bits (CCSDS 732.1-B-2
+		// 4.1.2.6); the widest configuration needs a uint64 counter.
+		g := sdl.NewGapCounter[uint64](0xFFFFFFFFFFFFFF)
+		g.Track(0, 0xFFFFFFFFFFFFFE)
+		if gap := g.Track(0, 0x00000000000001); gap != 2 {
+			t.Errorf("gap = %d, want 2 across the 56-bit wrap", gap)
+		}
+		g2 := sdl.NewGapCounter[uint64](0xFFFFFFFFFFFFFF)
+		g2.Track(0, 0xFFFFFFFF)
+		if gap := g2.Track(0, 0x100000003); gap != 3 {
+			t.Errorf("gap = %d, want 3; a 56-bit counter does not wrap at 2^32", gap)
+		}
+	})
+}
+
+// TestGapCounterWithCycle covers the AOS pairing of the 24-bit VC frame count
+// with the four-bit frame count cycle from the signaling field (CCSDS
+// 732.0-B-4 4.1.2.5.5): together they behave as one 28-bit count, so a wrap
+// of the 24-bit field accompanied by a cycle increment is not a gap.
+func TestGapCounterWithCycle(t *testing.T) {
+	g := sdl.NewGapCounter[uint32](0xFFFFFF)
+
+	if gap := g.TrackWithCycle(0, 0xFFFFFE, 0, 0xF); gap != 0 {
+		t.Fatalf("first frame gave %d, want 0", gap)
+	}
+	if gap := g.TrackWithCycle(0, 0xFFFFFF, 0, 0xF); gap != 0 {
+		t.Errorf("consecutive frames gave %d, want 0", gap)
+	}
+	// The 24-bit count wraps and the cycle increments: still consecutive.
+	if gap := g.TrackWithCycle(0, 0x000000, 1, 0xF); gap != 0 {
+		t.Errorf("count wrap with cycle increment gave %d, want 0", gap)
+	}
+	// Losing a whole cycle's worth of frames is visible, where the bare
+	// 24-bit arithmetic would have folded it away as zero.
+	if gap := g.TrackWithCycle(0, 0x000001, 2, 0xF); gap != 0xFFFFFF+1 {
+		t.Errorf("one full cycle lost gave %d, want %d", gap, 0xFFFFFF+1)
+	}
+}
+
+// TestGapCounterWithCycleWraps checks the far edge of the 28-bit combined
+// count: cycle 15 rolling over to cycle 0 is a wrap, not a loss.
+func TestGapCounterWithCycleWraps(t *testing.T) {
+	g := sdl.NewGapCounter[uint32](0xFFFFFF)
+
+	g.TrackWithCycle(0, 0xFFFFFF, 0xF, 0xF)
+	if gap := g.TrackWithCycle(0, 0x000000, 0x0, 0xF); gap != 0 {
+		t.Errorf("28-bit wrap gave %d, want 0", gap)
+	}
 }
 
 // TestGapCounterMaximumGap checks the far edge: a count one behind the
