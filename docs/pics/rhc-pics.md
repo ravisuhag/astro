@@ -103,7 +103,7 @@ The five-item list above is coarse, so this section breaks each item down.
 | RHC-13 | Run-length encoding, equation 10 | 5.2.3 | Yes | Including the '10' terminator. Figure 5-1's worked counts transcribed as a test. |
 | RHC-14 | Trailing zeros not encoded | 5.2.3 note 1 | Yes | Inferred from the vector length. |
 | RHC-15 | All-zero vector encodes as the terminator alone | 5.2.3 note 2 | Yes | |
-| RHC-16 | Bit extraction, equation 11 | 5.2.4 | Yes | |
+| RHC-16 | Bit extraction, equation 11 | 5.2.4 | Yes | Emitted last selected position first, which is what the equation says once §1.6.1's conventions are applied — see the interpretation note in A2.4. |
 | RHC-17 | Bit ordering, MSB first | 1.6.1 | Yes | |
 | RHC-18 | Vector operations: XOR, OR, AND, inverse, left shift, reversal, Hamming weight | 1.6.1 | Yes | The examples given in §1.6.1's text are transcribed as tests. |
 
@@ -126,6 +126,42 @@ The five-item list above is coarse, so this section breaks each item down.
 ---
 
 ## A2.4 EXCEPTIONS AND THINGS THE STANDARD LEAVES OPEN
+
+### The bit extraction order of equation 11
+
+Equation 11 defines the bit extraction as
+
+> BE(a, b) = ȧ_{g(H(b)−1)} ∥ ⋯ ∥ ȧ_{g0}, where g_i denotes the position of
+> the ith '1' bit in b, starting from the MSB.
+
+Two readings are possible, and they produce different bit streams. Since g_0
+is the first selected position in transmission order, the concatenation as
+written leads with the bit at the *last* selected position — but an
+implementer could suspect the subscripts of merely reflecting §1.6.1's
+downward bit numbering, in which case a forward scan would be intended.
+
+This implementation takes the reversed reading, on two grounds:
+
+1. **§1.6.1 fixes what the concatenation means.** Equation 1 writes the left
+   shift as a« = {ȧ_{N−2}, …, ȧ_1, ȧ_0, 0} and gives the worked example
+   '10111' → '01110', which is only consistent if the first listed term is
+   the first transmitted bit. Applying the same convention to equation 11,
+   BE transmits ȧ_{g(H−1)} first: the forward scan, reversed. The
+   subscripts-are-just-numbering reading would need the example to come out
+   '11100', and it does not.
+2. **Independent implementations agree.** The VisionSpace PocketPlus C++
+   implementation reverses the extracted sequence at every bit-extraction
+   site.
+
+So `Vector.Extract` emits the reverse of the forward scan, at all three BE
+sites: k_t (equation 17/19) and the two compressed u_t branches
+(equation 22). The derived decompressor mirrors the reversal when consuming
+them. An earlier revision of this package used the forward reading; streams
+it produced do not decode against this one where a k_t or compressed u_t of
+two or more differing bits is involved.
+
+No published test vector arbitrates the point — see below — so the reading
+rests on the two grounds given.
 
 ### The decompressor is derived, not transcribed
 
@@ -176,6 +212,35 @@ The loss test drives this: 300-vector streams, robustness 0 through 7, drop
 rates 5% to 50%, gaps reported through NotifyLoss. Every vector the
 decompressor returns is asserted byte-identical to its original. It is allowed
 to refuse; it is never allowed to be wrong.
+
+### The trust model, and strict mode
+
+The recovery gate above has a trust assumption worth stating plainly. After a
+reported gap, the decompressor accepts the next output when the gap is at most
+that output's effective robustness level V_t — a field the output vector
+declares *about itself* (§5.3.2.2), which nothing in the format lets a
+decompressor verify. The standard offers no integrity mechanism at all: no
+checksum, no signature, no sync marker. So the model is:
+
+- **Transport is trusted to deliver what was sent.** Corruption and forgery
+  are for the layers below — CRCs and FECFs on the space link, SDLS if the
+  mission needs cryptographic integrity.
+- **The caller is trusted to report every gap.** §2.2 makes loss detection
+  the mission's job; NotifyLoss is how it is reported here.
+- **Given both, the output vector's own fields are believed** — V_t
+  included. A hostile or corrupt vector that survives the layers below can
+  claim a reach of up to 15 and be believed, and the reconstruction it
+  produces will be wrong.
+
+For callers who will not extend the third trust across a gap, `Config.Strict`
+narrows the gate: after any reported loss (NotifyLoss, or an output that
+failed to parse), a strict decompressor refuses everything except an
+uncompressed output — the one kind that proves itself by carrying the whole
+input vector, rather than claiming a reach back to state the decompressor no
+longer has. The cost is availability: outputs between the gap and the next
+uncompressed one are refused even when their V_t is honest. Strict mode is
+this package's addition, not the standard's, and is off by default. Pinned by
+`TestStrictModeWaitsForUncompressed`.
 
 ### Mission-tunable knobs exposed as configuration
 

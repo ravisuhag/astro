@@ -160,6 +160,77 @@ func TestLossWithinRobustnessRecoversImmediately(t *testing.T) {
 	}
 }
 
+// TestStrictModeWaitsForUncompressed checks Config.Strict: after a reported
+// loss, a strict decompressor refuses even outputs whose effective robustness
+// level covers the gap — because V_t is the output's own claim about itself —
+// and resumes only on the next uncompressed output.
+func TestStrictModeWaitsForUncompressed(t *testing.T) {
+	config := rhc.Config{
+		VectorLength:         64,
+		Robustness:           3,
+		UncompressedInterval: 8,
+		SendMaskInterval:     4,
+		Strict:               true,
+	}
+	packets := housekeeping(40, config.VectorLength, 1, 14)
+	stream := compressStream(t, config, packets)
+
+	decompressor, err := rhc.NewDecompressor(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 10 {
+		if _, err := decompressor.Decompress(stream[i].data, stream[i].bitLen); err != nil {
+			t.Fatalf("packet %d: %v", i, err)
+		}
+	}
+
+	// Drop one. Robustness 3 covers that, and a non-strict decompressor
+	// accepts the next compressed output — TestLossWithinRobustnessRecovers-
+	// Immediately pins exactly that. Strict must refuse it.
+	decompressor.NotifyLoss(1)
+	if _, err := decompressor.Decompress(stream[11].data, stream[11].bitLen); !errors.Is(err, rhc.ErrNotSynchronized) {
+		t.Fatalf("strict mode accepted a compressed output after a loss: %v", err)
+	}
+
+	// Compressed outputs keep being refused until the uncompressed one.
+	for i := 12; i < 16; i++ {
+		if _, err := decompressor.Decompress(stream[i].data, stream[i].bitLen); err == nil {
+			t.Fatalf("strict mode accepted compressed output %d after a loss", i)
+		}
+	}
+
+	// t = 16 is on the uncompressed interval, and that recovers everything.
+	back, err := decompressor.Decompress(stream[16].data, stream[16].bitLen)
+	if err != nil {
+		t.Fatalf("strict mode refused an uncompressed output: %v", err)
+	}
+	if !bytes.Equal(back, packets[16]) {
+		t.Errorf("packet 16 came back wrong:\n got %08b\nwant %08b", back, packets[16])
+	}
+	for i := 17; i < len(packets); i++ {
+		got, err := decompressor.Decompress(stream[i].data, stream[i].bitLen)
+		if err != nil {
+			t.Fatalf("packet %d after recovery: %v", i, err)
+		}
+		if !bytes.Equal(got, packets[i]) {
+			t.Errorf("packet %d came back wrong", i)
+		}
+	}
+}
+
+// TestNegativeIntervalIsRefused pins the dedicated sentinel: a negative flag
+// interval is a configuration error of its own kind, not a robustness error.
+func TestNegativeIntervalIsRefused(t *testing.T) {
+	config := rhc.Config{VectorLength: 64, SendMaskInterval: -1}
+	if _, err := rhc.NewCompressor(config); !errors.Is(err, rhc.ErrInvalidInterval) {
+		t.Errorf("NewCompressor = %v, want ErrInvalidInterval", err)
+	}
+	if _, err := rhc.NewDecompressor(config); !errors.Is(err, rhc.ErrInvalidInterval) {
+		t.Errorf("NewDecompressor = %v, want ErrInvalidInterval", err)
+	}
+}
+
 // TestLossBeyondRobustnessIsRefused is the other half: a gap the output cannot
 // reach across must produce an error, not a guess.
 func TestLossBeyondRobustnessIsRefused(t *testing.T) {

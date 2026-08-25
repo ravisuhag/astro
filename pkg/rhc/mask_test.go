@@ -162,13 +162,20 @@ func TestVectorOperations(t *testing.T) {
 }
 
 // TestBitExtraction pins §5.2.4: BE(a, b) is the bits of a at the positions
-// where b has a one.
+// where b has a one, emitted last selected position first. Equation 11 writes
+// BE(a, b) = ȧ_{g(H-1)} || ... || ȧ_{g0} with g_0 the first '1' of b from the
+// MSB, and equation 1's a« example fixes that the first term of such a
+// concatenation is the first transmitted bit — so the forward scan comes out
+// reversed.
+//
+// Here b selects a's first two positions, holding '1' then '0'; BE emits the
+// later position first, so the extraction is '0' then '1'.
 func TestBitExtraction(t *testing.T) {
 	a := rhc.VectorFromString("10110")
 	b := rhc.VectorFromString("11000")
 
 	got := a.Extract(b)
-	want := []bool{true, false}
+	want := []bool{false, true}
 	if len(got) != len(want) {
 		t.Fatalf("BE gave %d bits, want %d", len(got), len(want))
 	}

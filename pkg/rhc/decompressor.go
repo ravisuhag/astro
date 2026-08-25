@@ -194,6 +194,11 @@ func (d *Decompressor) parse(r *BitReader) (*decoded, error) {
 				}
 				out.maskValues[i] = bit
 			}
+			// k_t is a bit extraction, and equation 11 emits the last selected
+			// position first (see Vector.Extract). Reversing here puts the
+			// values back in forward scan order, which is how applyChanges
+			// walks the window.
+			reverseBits(out.maskValues)
 			out.changedTwice, err = r.ReadBit()
 			if err != nil {
 				return nil, err
@@ -236,6 +241,9 @@ func (d *Decompressor) parse(r *BitReader) (*decoded, error) {
 		if err != nil {
 			return nil, err
 		}
+		// u_t is a bit extraction too: undo equation 11's reversed emission so
+		// commit can walk the selector in forward order.
+		reverseBits(out.extracted)
 		return out, nil
 	}
 
@@ -274,6 +282,8 @@ func (d *Decompressor) parse(r *BitReader) (*decoded, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The same equation 11 reversal as the d-dot_t = 1 branch above.
+	reverseBits(out.extracted)
 	return out, nil
 }
 
@@ -354,6 +364,16 @@ func (d *Decompressor) checkRecoverable(out *decoded) error {
 	}
 	if !d.maskKnown && !out.haveMask {
 		return ErrMaskUnavailable
+	}
+
+	// Strict mode: after a reported loss, only an uncompressed output — the
+	// one kind that proves itself, handled above — will do. The effective
+	// robustness gate below trusts the output's self-declared V_t, and strict
+	// mode exists for callers who will not extend that trust across a gap.
+	if d.config.Strict && d.pendingLoss > 0 {
+		return fmt.Errorf(
+			"%w: strict mode requires an uncompressed output after %d reported losses",
+			ErrNotSynchronized, d.pendingLoss)
 	}
 
 	// A reported gap is survivable only when this output reaches back across

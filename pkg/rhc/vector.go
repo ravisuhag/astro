@@ -165,11 +165,26 @@ func (v Vector) IsZero() bool { return v.Weight() == 0 }
 
 // Extract returns the bit extraction of v relative to selector, which §5.2.4
 // writes BE(a, b): the bits of v at the positions where selector has a one,
-// taken from the first transmitted bit onwards.
+// emitted in the reverse of transmission order.
 //
-// Equation 11 writes the result as ȧ_{g(H-1)} || ... || ȧ_{g0}, which reads
-// backwards only because the spec's subscripts count up from the last bit. In
-// transmission order it is simply "the selected bits, in order".
+// The order needs spelling out, because a forward scan is the natural
+// implementation and it is wrong. Equation 11 defines
+//
+//	BE(a, b) = ȧ_{g(H(b)-1)} || ... || ȧ_{g0}
+//
+// where g_i is "the position of the ith '1' bit in b, starting from the MSB"
+// — so g_0 is the first selected position in transmission order and g_{H-1}
+// the last. Equation 1 fixes what a concatenation means: it writes the left
+// shift as a« = {ȧ_{N-2}, ..., ȧ_0, 0} and gives the example '10111' becoming
+// '01110', so the first listed element is the first transmitted bit. Put
+// together, BE transmits the bit at the *last* selected position first: the
+// output is the forward scan reversed. The independent VisionSpace PocketPlus
+// implementation reads equation 11 the same way, reversing at every
+// bit-extraction site.
+//
+// So this walks the vector in transmission order collecting selected bits,
+// then reverses. The decompressor mirrors the reversal when it consumes k_t
+// and the compressed u_t.
 func (v Vector) Extract(selector Vector) []bool {
 	out := make([]bool, 0, selector.Weight())
 	for i := range v.bits {
@@ -177,7 +192,15 @@ func (v Vector) Extract(selector Vector) []bool {
 			out = append(out, v.bits[i])
 		}
 	}
+	reverseBits(out)
 	return out
+}
+
+// reverseBits reverses a bit slice in place.
+func reverseBits(bits []bool) {
+	for i, j := 0, len(bits)-1; i < j; i, j = i+1, j-1 {
+		bits[i], bits[j] = bits[j], bits[i]
+	}
 }
 
 // allZero reports whether every bit of a bit slice is false.

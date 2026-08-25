@@ -20,6 +20,11 @@ var (
 	// §3.3.2a.
 	ErrInvalidRobustness = errors.New("invalid robustness level: must be 0 to 7")
 
+	// ErrInvalidInterval indicates a negative flag interval in the Config.
+	// The intervals are this package's convenience, not the standard's; zero
+	// disables one, and nothing below zero means anything.
+	ErrInvalidInterval = errors.New("invalid flag interval: must not be negative")
+
 	// ErrInvalidCount indicates a counter codeword the table of §5.2.2 does
 	// not define.
 	ErrInvalidCount = errors.New("invalid counter codeword")

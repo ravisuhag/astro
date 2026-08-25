@@ -49,6 +49,11 @@
 // Nor are there sync markers: a foreign or corrupt vector that happens to
 // parse will be taken for a real one. Framing is the mission's job too.
 //
+// After a reported gap, recovery normally trusts the next output's
+// self-declared effective robustness level. Config.Strict withdraws that
+// trust: a strict decompressor then accepts nothing but an uncompressed
+// output.
+//
 // # What is here
 //
 // The compressor is the whole of the standard's normative content: inputs
@@ -129,6 +134,24 @@ type Config struct {
 	// uncompressed output carries the whole input vector, which is the only
 	// thing that restores a decompressor's previous-vector state after a gap.
 	UncompressedInterval int
+
+	// Strict makes the decompressor accept nothing but an uncompressed
+	// output after a reported loss — NotifyLoss, or an output that failed to
+	// parse — even when a later output's effective robustness level claims to
+	// reach back across the gap.
+	//
+	// The point is trust. The standard's recovery gate compares the gap
+	// against V_t (§5.3.2.2), a field the output vector declares about
+	// itself; nothing in the format lets a decompressor verify it, so a
+	// corrupt or hostile vector arriving right after a gap can claim any
+	// reach up to 15 and be believed. Strict mode drops that trust and waits
+	// for the one output that proves itself by carrying the whole input.
+	// The cost is availability: everything between the gap and the next
+	// uncompressed output is refused.
+	//
+	// It has no effect on the compressor, and none on a decompressor that
+	// has not been told of any loss.
+	Strict bool
 }
 
 // Validate checks the configuration against the standard's limits.
@@ -145,7 +168,7 @@ func (c Config) Validate() error {
 	}
 	for _, interval := range []int{c.NewMaskInterval, c.SendMaskInterval, c.UncompressedInterval} {
 		if interval < 0 {
-			return fmt.Errorf("%w: negative interval", ErrInvalidRobustness)
+			return fmt.Errorf("%w: got %d", ErrInvalidInterval, interval)
 		}
 	}
 	return nil
@@ -500,6 +523,8 @@ func (c *Compressor) encode(current, change Vector, params CycleParams) (*BitWri
 		w.WriteBit(eBit)
 	}
 	if hasK {
+		// y is already in equation 11's emission order — last selected
+		// position first; see Vector.Extract.
 		for _, bit := range y {
 			w.WriteBit(bit)
 		}

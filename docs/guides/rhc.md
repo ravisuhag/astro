@@ -151,6 +151,20 @@ is the only unconditional repair.
 
 `Synchronized()` reports whether the next output can be reconstructed.
 
+### Strict mode
+
+The recovery rule trusts one thing it cannot check: after a gap, an output is
+accepted when the gap fits inside the output's effective robustness level —
+a field the output declares about itself. The format has no way to verify it,
+so a corrupt vector arriving right after a gap can claim any reach and be
+believed.
+
+`Config.Strict` removes that trust. A strict decompressor, once told of a
+loss, refuses everything until the next uncompressed output — the one kind
+that carries the whole input and so proves itself. The trade is availability:
+honest outputs between the gap and that repair are refused too. It is this
+package's addition, not the standard's, and is off by default.
+
 ## Choosing the knobs
 
 `VectorLength` is fixed by the data. The rest are trades, and only the first is
@@ -162,6 +176,7 @@ in the standard at all:
 | `UncompressedInterval` | policy | How often to send a whole input. The recovery lever. Short means fast recovery and a much worse ratio — an uncompressed output is bigger than the input. |
 | `SendMaskInterval` | policy | How often to send the whole mask. Cheaper than an uncompressed output and fixes half the problem. |
 | `NewMaskInterval` | policy | How often to let positions go back to predictable. Never setting it means the mask fills with ones over a long run and compression decays. |
+| `Strict` | policy | Decompressor side. After a reported loss, accept only an uncompressed output rather than trusting an output's self-declared robustness reach. Safer against corruption; refuses more. |
 
 Only `Robustness` is normative. §3.3.2 makes the three flags user-specified at
 every cycle and says nothing about when to set them, so the intervals here are
@@ -198,6 +213,12 @@ is legitimate — §2.1 lists exactly what a decompressor needs and the encoding
 is losslessly invertible — but it is derived rather than transcribed, and the
 [PICS](../pics/rhc-pics.md) says so. The round-trip and loss tests are what
 stand behind it.
+
+One reading of the standard deserves a flag: equation 11's bit extraction
+emits the selected bits in the *reverse* of transmission order — the last
+selected position travels first. That falls out of §1.6.1's own conventions
+and matches the independent VisionSpace PocketPlus implementation, but no
+published test vector confirms it. The PICS records the full reasoning.
 
 ## Reference
 
