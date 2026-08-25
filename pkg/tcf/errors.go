@@ -16,7 +16,7 @@ var (
 	ErrInvalidCoarseOctets = errors.New("invalid coarse time: must be 1-4 basic octets (up to 7 with extension)")
 
 	// ErrInvalidFineOctets indicates the fine time octet count is out of range.
-	ErrInvalidFineOctets = errors.New("invalid fine time: must be 0-3 basic octets (up to 6 with extension)")
+	ErrInvalidFineOctets = errors.New("invalid fine time: must be 0-3 basic octets (up to 10 with extension)")
 
 	// ErrInvalidDaySegment indicates the day count is negative or out of range.
 	ErrInvalidDaySegment = errors.New("invalid day segment: day count out of range")
@@ -35,4 +35,17 @@ var (
 
 	// ErrOverflow indicates the time value exceeds the representable range.
 	ErrOverflow = errors.New("time value exceeds representable range for the configured octet width")
+
+	// ErrReservedSubmsCode indicates the CDS P-field carried the reserved
+	// sub-millisecond code '11' (CCSDS 301.0-B-4 §3.3.2).
+	ErrReservedSubmsCode = errors.New("reserved CDS sub-millisecond code '11' in P-field")
+
+	// ErrInvalidSubmilliseconds indicates the CDS sub-millisecond value is out
+	// of range for its declared resolution: 0-999 for the 16-bit microsecond
+	// field, 0-999999999 for the 32-bit picosecond field.
+	ErrInvalidSubmilliseconds = errors.New("invalid sub-milliseconds: value out of range for declared resolution")
+
+	// ErrInvalidBCD indicates a T-field octet contained a nibble greater
+	// than 9, which is not a valid binary-coded-decimal digit.
+	ErrInvalidBCD = errors.New("invalid BCD digit: nibble greater than 9")
 )

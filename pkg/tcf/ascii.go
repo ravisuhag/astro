@@ -2,8 +2,6 @@ package tcf
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -20,7 +18,9 @@ const (
 // Type A: YYYY-MM-DDThh:mm:ss.d...dZ (calendar date-time)
 // Type B: YYYY-DDDThh:mm:ss.d...dZ   (ordinal date-time)
 //
-// These are derived from ISO 8601 and are human-readable text representations.
+// These are fixed-field subsets of ISO 8601: every field has a fixed width,
+// the separators are mandatory, the fraction (if present) is 1-9 digits, and
+// the trailing Z is optional. Decode enforces the subset strictly.
 type ASCIITime struct {
 	Type      string // "A" or "B"
 	Precision int    // Number of decimal digits for fractional seconds (0-9)
@@ -65,6 +65,9 @@ func NewASCIITime(typ string, opts ...ASCIIOption) (*ASCIITime, error) {
 // Encode formats a Go time.Time value into a CCSDS ASCII time string.
 func (a *ASCIITime) Encode(t time.Time) (string, error) {
 	t = t.UTC()
+	if t.Year() < 0 || t.Year() > 9999 {
+		return "", ErrInvalidCalendarTime
+	}
 
 	var base string
 	if a.Type == ASCIITypeA {
@@ -89,97 +92,142 @@ func (a *ASCIITime) Encode(t time.Time) (string, error) {
 	return base + "Z", nil
 }
 
-// Decode parses a CCSDS ASCII time string into a Go time.Time value.
-func (a *ASCIITime) Decode(s string) (time.Time, error) {
-	s = strings.TrimSpace(s)
+// parseFixedDigits parses exactly len(s) decimal digits. Unlike
+// strconv.Atoi it rejects signs, spaces, and any non-digit byte, enforcing
+// the fixed-width fields of the §3.5 subsets.
+func parseFixedDigits(s string) (int, bool) {
 	if len(s) == 0 {
-		return time.Time{}, ErrInvalidASCIIFormat
+		return 0, false
 	}
-	// Z terminator is optional per §3.5.1.1
-	if s[len(s)-1] == 'Z' {
+	v := 0
+	for i := 0; i < len(s); i++ {
+		d := s[i]
+		if d < '0' || d > '9' {
+			return 0, false
+		}
+		v = v*10 + int(d-'0')
+	}
+	return v, true
+}
+
+// Decode parses a CCSDS ASCII time string into a Go time.Time value.
+//
+// The §3.5 subsets are enforced strictly: fixed field widths
+// (Type A "YYYY-MM-DDThh:mm:ss[.d...d][Z]", Type B
+// "YYYY-DDDThh:mm:ss[.d...d][Z]"), digits only, mandatory separators, a
+// fraction of 1-9 digits when present, and value ranges checked against the
+// calendar (month 1-12, day valid for the month and year, day-of-year valid
+// for the year's leap status, hour 0-23, minute 0-59).
+//
+// Second 60 is accepted only at 23:59:60 (a positive leap second); because
+// Go's time.Time cannot represent second 60, the returned value is
+// normalized to 00:00:00 of the following day.
+func (a *ASCIITime) Decode(s string) (time.Time, error) {
+	// Optional Z terminator per §3.5
+	if len(s) > 0 && s[len(s)-1] == 'Z' {
 		s = s[:len(s)-1]
 	}
 
-	var datePart, timePart string
-	tIdx := strings.IndexByte(s, 'T')
-	if tIdx < 0 {
+	// Fixed date field widths: Type A "YYYY-MM-DD" (10), Type B "YYYY-DDD" (8).
+	dateLen := 10
+	if a.Type == ASCIITypeB {
+		dateLen = 8
+	}
+	// Minimum remaining: 'T' + "hh:mm:ss"
+	if len(s) < dateLen+1+8 {
 		return time.Time{}, ErrInvalidASCIIFormat
 	}
-	datePart = s[:tIdx]
-	timePart = s[tIdx+1:]
+	if s[dateLen] != 'T' {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	datePart := s[:dateLen]
+	timePart := s[dateLen+1:]
 
 	var year, month, day, doy int
+	var ok bool
 
 	if a.Type == ASCIITypeA {
 		// YYYY-MM-DD
-		parts := strings.Split(datePart, "-")
-		if len(parts) != 3 {
+		if datePart[4] != '-' || datePart[7] != '-' {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
-		var err error
-		year, err = strconv.Atoi(parts[0])
-		if err != nil {
+		if year, ok = parseFixedDigits(datePart[0:4]); !ok {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
-		month, err = strconv.Atoi(parts[1])
-		if err != nil {
+		if month, ok = parseFixedDigits(datePart[5:7]); !ok {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
-		day, err = strconv.Atoi(parts[2])
-		if err != nil {
+		if day, ok = parseFixedDigits(datePart[8:10]); !ok {
+			return time.Time{}, ErrInvalidASCIIFormat
+		}
+		if month < 1 || month > 12 {
+			return time.Time{}, ErrInvalidASCIIFormat
+		}
+		if day < 1 || day > int(daysInMonth(year, month)) {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
 	} else {
 		// YYYY-DDD
-		parts := strings.Split(datePart, "-")
-		if len(parts) != 2 {
+		if datePart[4] != '-' {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
-		var err error
-		year, err = strconv.Atoi(parts[0])
-		if err != nil {
+		if year, ok = parseFixedDigits(datePart[0:4]); !ok {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
-		doy, err = strconv.Atoi(parts[1])
-		if err != nil {
+		if doy, ok = parseFixedDigits(datePart[5:8]); !ok {
+			return time.Time{}, ErrInvalidASCIIFormat
+		}
+		maxDOY := 365
+		if isLeapYear(year) {
+			maxDOY = 366
+		}
+		if doy < 1 || doy > maxDOY {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
 	}
 
-	// Parse time part: hh:mm:ss[.ddd]
-	var hour, min, sec, nsec int
-	timeParts := strings.SplitN(timePart, ".", 2)
-	hmsParts := strings.Split(timeParts[0], ":")
-	if len(hmsParts) != 3 {
+	// Time part: hh:mm:ss with optional .d...d (1-9 digits)
+	if len(timePart) < 8 || timePart[2] != ':' || timePart[5] != ':' {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	hour, ok := parseFixedDigits(timePart[0:2])
+	if !ok {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	min, ok := parseFixedDigits(timePart[3:5])
+	if !ok {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	sec, ok := parseFixedDigits(timePart[6:8])
+	if !ok {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	if hour > 23 || min > 59 || sec > 60 {
+		return time.Time{}, ErrInvalidASCIIFormat
+	}
+	if sec == 60 && (hour != 23 || min != 59) {
+		// A positive leap second occurs only at UTC 23:59:60.
 		return time.Time{}, ErrInvalidASCIIFormat
 	}
 
-	var err error
-	hour, err = strconv.Atoi(hmsParts[0])
-	if err != nil {
-		return time.Time{}, ErrInvalidASCIIFormat
-	}
-	min, err = strconv.Atoi(hmsParts[1])
-	if err != nil {
-		return time.Time{}, ErrInvalidASCIIFormat
-	}
-	sec, err = strconv.Atoi(hmsParts[2])
-	if err != nil {
-		return time.Time{}, ErrInvalidASCIIFormat
-	}
-
-	// Parse fractional seconds
-	if len(timeParts) == 2 {
-		fracStr := timeParts[1]
-		// Pad or truncate to 9 digits (nanoseconds)
-		for len(fracStr) < 9 {
-			fracStr += "0"
-		}
-		fracStr = fracStr[:9]
-		nsec, err = strconv.Atoi(fracStr)
-		if err != nil {
+	nsec := 0
+	if len(timePart) > 8 {
+		if timePart[8] != '.' {
 			return time.Time{}, ErrInvalidASCIIFormat
 		}
+		fracStr := timePart[9:]
+		if len(fracStr) < 1 || len(fracStr) > 9 {
+			return time.Time{}, ErrInvalidASCIIFormat
+		}
+		frac, ok := parseFixedDigits(fracStr)
+		if !ok {
+			return time.Time{}, ErrInvalidASCIIFormat
+		}
+		// Scale to nanoseconds.
+		for range 9 - len(fracStr) {
+			frac *= 10
+		}
+		nsec = frac
 	}
 
 	var t time.Time

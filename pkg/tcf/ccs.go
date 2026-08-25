@@ -12,26 +12,32 @@ import (
 // segment represents two decimal digits.
 //
 // Day-of-Year variant (bit 4 = 1):
-// +----------+--------+------+------+------+------------------+
-// | Year(16) | DOY(16)| H(8) | M(8) | S(8) | Sub-s(0-6 oct)   |
-// +----------+--------+------+------+------+------------------+
+//
+//	+----------+--------+------+------+------+------------------+
+//	| Year(16) | DOY(16)| H(8) | M(8) | S(8) | Sub-s(0-6 oct)   |
+//	+----------+--------+------+------+------+------------------+
 //
 // Month/Day variant (bit 4 = 0):
-// +----------+------+------+------+------+------+------------------+
-// | Year(16) | Mo(8)| Dom(8)| H(8) | M(8) | S(8) | Sub-s(0-6 oct)   |
-// +----------+------+------+------+------+------+------------------+
+//
+//	+----------+------+------+------+------+------+------------------+
+//	| Year(16) | Mo(8)| Dom(8)| H(8) | M(8) | S(8) | Sub-s(0-6 oct)   |
+//	+----------+------+------+------+------+------+------------------+
 //
 // Sub-second resolution: 0 to 6 additional octets, each containing 2 BCD
 // digits, giving 10^-2 to 10^-12 second resolution.
+//
+// CCS is always Level 1 UTC. The Second field may carry 60 during a positive
+// leap second (UTC 23:59:60); see IsLeapSecond and Time for how that maps to
+// Go's time.Time.
 type CCS struct {
 	PField      PField   // Preamble field
-	Year        uint16   // Calendar year
+	Year        uint16   // Calendar year (0-9999)
 	Month       uint8    // Month (1-12), only for Month/Day variant
 	DayOfMonth  uint8    // Day of month (1-31), only for Month/Day variant
 	DayOfYear   uint16   // Day of year (1-366), only for Day-of-Year variant
 	Hour        uint8    // Hour (0-23)
 	Minute      uint8    // Minute (0-59)
-	Second      uint8    // Second (0-60, 60 for leap second)
+	Second      uint8    // Second (0-60, 60 only for the leap second at 23:59)
 	SubSecond   [6]uint8 // Sub-second BCD octets (each holds 2 decimal digits, 0-99)
 	SubSecBytes uint8    // Number of sub-second octets (0-6)
 	MonthDay    bool     // true = Month/Day variant (bit 4=0), false = Day-of-Year variant (bit 4=1)
@@ -75,6 +81,9 @@ func NewCCS(t time.Time, opts ...CCSOption) (*CCS, error) {
 	}
 
 	t = t.UTC()
+	if t.Year() < 0 || t.Year() > 9999 {
+		return nil, ErrInvalidCalendarTime
+	}
 	c.Year = uint16(t.Year())
 	c.Hour = uint8(t.Hour())
 	c.Minute = uint8(t.Minute())
@@ -123,12 +132,24 @@ func NewCCS(t time.Time, opts ...CCSOption) (*CCS, error) {
 // Encode serializes the CCS time code into bytes (P-field + T-field).
 // All segments are BCD-encoded per §3.4.1.
 func (c *CCS) Encode() ([]byte, error) {
-	if err := c.Validate(); err != nil {
+	pBytes, err := c.PField.Encode()
+	if err != nil {
 		return nil, err
 	}
 
-	pBytes, err := c.PField.Encode()
+	tField, err := c.EncodeTField()
 	if err != nil {
+		return nil, err
+	}
+
+	return append(pBytes, tField...), nil
+}
+
+// EncodeTField serializes only the T-field (no P-field). Use this for
+// implicit-P-field contexts where the format parameters are agreed out of
+// band.
+func (c *CCS) EncodeTField() ([]byte, error) {
+	if err := c.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -151,10 +172,11 @@ func (c *CCS) Encode() ([]byte, error) {
 		tField = append(tField, toBCD8(c.SubSecond[i]))
 	}
 
-	return append(pBytes, tField...), nil
+	return tField, nil
 }
 
-// DecodeCCS parses a byte slice into a CCS time code.
+// DecodeCCS parses a byte slice into a CCS time code (P-field + T-field).
+// Octets containing nibbles greater than 9 are rejected with ErrInvalidBCD.
 func DecodeCCS(data []byte) (*CCS, error) {
 	if len(data) < 2 {
 		return nil, ErrDataTooShort
@@ -170,6 +192,12 @@ func DecodeCCS(data []byte) (*CCS, error) {
 		return nil, ErrInvalidTimeCodeID
 	}
 
+	// The CCS P-field is a single octet (§3.4.2): the extension flag is
+	// always zero. A set flag would misalign the T-field.
+	if c.PField.Extension {
+		return nil, ErrInvalidPField
+	}
+
 	// Extract format from P-field detail bits (§3.4.2)
 	// Bit 4 (Detail bit 3): calendar variation (0=Month/Day, 1=Day-of-Year)
 	// Bits 5-7 (Detail bits 2-0): resolution (number of sub-second octets)
@@ -182,40 +210,100 @@ func DecodeCCS(data []byte) (*CCS, error) {
 		return nil, ErrInvalidCalendarTime
 	}
 
-	// Parse T-field
-	offset := c.PField.Size()
-
-	// Minimum T-field: year(2) + day-variant(2) + H(1) + M(1) + S(1) = 7
-	minLen := 7 + int(c.SubSecBytes)
-	if len(data) < offset+minLen {
-		return nil, ErrDataTooShort
-	}
-
-	// Year: 16-bit BCD
-	c.Year = fromBCD16(data[offset], data[offset+1])
-	offset += 2
-
-	if c.MonthDay {
-		c.Month = fromBCD8(data[offset])
-		c.DayOfMonth = fromBCD8(data[offset+1])
-	} else {
-		c.DayOfYear = fromBCD16DOY(data[offset], data[offset+1])
-	}
-	offset += 2
-
-	c.Hour = fromBCD8(data[offset])
-	c.Minute = fromBCD8(data[offset+1])
-	c.Second = fromBCD8(data[offset+2])
-	offset += 3
-
-	for i := range int(c.SubSecBytes) {
-		c.SubSecond[i] = fromBCD8(data[offset+i])
+	if err := c.decodeTField(data[c.PField.Size():]); err != nil {
+		return nil, err
 	}
 
 	return c, c.Validate()
 }
 
+// DecodeCCSTField parses a T-field-only (implicit P-field) CCS time code.
+// The format parameters — calendar variant and sub-second octet count — must
+// be supplied by the caller, as they are in contexts where no P-field is
+// transmitted.
+func DecodeCCSTField(data []byte, monthDay bool, subSecBytes uint8) (*CCS, error) {
+	if subSecBytes > 6 {
+		return nil, ErrInvalidCalendarTime
+	}
+
+	c := &CCS{
+		MonthDay:    monthDay,
+		SubSecBytes: subSecBytes,
+	}
+
+	if err := c.buildPField(); err != nil {
+		return nil, err
+	}
+
+	if err := c.decodeTField(data); err != nil {
+		return nil, err
+	}
+
+	return c, c.Validate()
+}
+
+// decodeTField parses the BCD calendar segments from tf, which must start at
+// the first T-field octet. Non-BCD nibbles are rejected with ErrInvalidBCD.
+func (c *CCS) decodeTField(tf []byte) error {
+	// Minimum T-field: year(2) + day-variant(2) + H(1) + M(1) + S(1) = 7
+	minLen := 7 + int(c.SubSecBytes)
+	if len(tf) < minLen {
+		return ErrDataTooShort
+	}
+
+	// Year: 16-bit BCD
+	year, err := fromBCD16Strict(tf[0], tf[1])
+	if err != nil {
+		return err
+	}
+	c.Year = year
+
+	if c.MonthDay {
+		if c.Month, err = fromBCD8Strict(tf[2]); err != nil {
+			return err
+		}
+		if c.DayOfMonth, err = fromBCD8Strict(tf[3]); err != nil {
+			return err
+		}
+	} else {
+		if c.DayOfYear, err = fromBCD16DOYStrict(tf[2], tf[3]); err != nil {
+			return err
+		}
+	}
+
+	if c.Hour, err = fromBCD8Strict(tf[4]); err != nil {
+		return err
+	}
+	if c.Minute, err = fromBCD8Strict(tf[5]); err != nil {
+		return err
+	}
+	if c.Second, err = fromBCD8Strict(tf[6]); err != nil {
+		return err
+	}
+
+	for i := range int(c.SubSecBytes) {
+		if c.SubSecond[i], err = fromBCD8Strict(tf[7+i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IsLeapSecond reports whether the code represents an instant inside a
+// positive leap second (Second == 60, i.e. UTC 23:59:60). Go's time.Time
+// cannot represent second 60, so Time normalizes such a code to 00:00:00 of
+// the following day; callers that must preserve the distinction should check
+// this flag before converting.
+func (c *CCS) IsLeapSecond() bool {
+	return c.Second == 60
+}
+
 // Time converts the CCS time code to a Go time.Time value.
+//
+// A leap-second code (Second == 60, see IsLeapSecond) is normalized to
+// 00:00:00 of the following day, because Go's time.Time cannot represent
+// UTC second 60. Sub-second digits below one nanosecond are truncated.
 func (c *CCS) Time() time.Time {
 	var t time.Time
 	if c.MonthDay {
@@ -247,8 +335,15 @@ func (c *CCS) Time() time.Time {
 	return t
 }
 
-// Validate checks that the CCS fields conform to CCSDS 301.0-B-4.
+// Validate checks that the CCS fields conform to CCSDS 301.0-B-4, including
+// calendar cross-checks: the year must fit four BCD digits, the day of month
+// must exist in the given month and year, and the day of year must respect
+// the year's leap status. Second 60 is accepted only at 23:59 (the only
+// instant a positive leap second can occur).
 func (c *CCS) Validate() error {
+	if c.Year > 9999 {
+		return ErrInvalidCalendarTime
+	}
 	if c.SubSecBytes > 6 {
 		return ErrInvalidCalendarTime
 	}
@@ -258,18 +353,26 @@ func (c *CCS) Validate() error {
 	if c.Minute > 59 {
 		return ErrInvalidCalendarTime
 	}
-	if c.Second > 60 { // 60 allowed for leap second
+	if c.Second > 60 {
+		return ErrInvalidCalendarTime
+	}
+	if c.Second == 60 && (c.Hour != 23 || c.Minute != 59) {
+		// A positive leap second occurs only at UTC 23:59:60.
 		return ErrInvalidCalendarTime
 	}
 	if c.MonthDay {
 		if c.Month < 1 || c.Month > 12 {
 			return ErrInvalidCalendarTime
 		}
-		if c.DayOfMonth < 1 || c.DayOfMonth > 31 {
+		if c.DayOfMonth < 1 || c.DayOfMonth > daysInMonth(int(c.Year), int(c.Month)) {
 			return ErrInvalidCalendarTime
 		}
 	} else {
-		if c.DayOfYear < 1 || c.DayOfYear > 366 {
+		maxDOY := uint16(365)
+		if isLeapYear(int(c.Year)) {
+			maxDOY = 366
+		}
+		if c.DayOfYear < 1 || c.DayOfYear > maxDOY {
 			return ErrInvalidCalendarTime
 		}
 	}
@@ -332,6 +435,32 @@ func (c *CCS) buildPField() error {
 	return nil
 }
 
+// Calendar helpers.
+
+// isLeapYear reports whether year is a leap year in the proleptic Gregorian
+// calendar.
+func isLeapYear(year int) bool {
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+}
+
+// daysInMonth returns the number of days in the given month of the given
+// year.
+func daysInMonth(year, month int) uint8 {
+	switch month {
+	case 1, 3, 5, 7, 8, 10, 12:
+		return 31
+	case 4, 6, 9, 11:
+		return 30
+	case 2:
+		if isLeapYear(year) {
+			return 29
+		}
+		return 28
+	default:
+		return 0
+	}
+}
+
 // BCD encoding/decoding helpers.
 
 // toBCD8 converts a value 0-99 to a BCD byte.
@@ -339,9 +468,15 @@ func toBCD8(v uint8) byte {
 	return ((v / 10) << 4) | (v % 10)
 }
 
-// fromBCD8 converts a BCD byte to a value 0-99.
-func fromBCD8(b byte) uint8 {
-	return (b>>4)*10 + (b & 0x0F)
+// fromBCD8Strict converts a BCD byte to a value 0-99, rejecting nibbles
+// greater than 9.
+func fromBCD8Strict(b byte) (uint8, error) {
+	hi := b >> 4
+	lo := b & 0x0F
+	if hi > 9 || lo > 9 {
+		return 0, ErrInvalidBCD
+	}
+	return hi*10 + lo, nil
 }
 
 // toBCD16 converts a 4-digit value to 2 BCD bytes (e.g., year 2024 → 0x20 0x24).
@@ -351,9 +486,18 @@ func toBCD16(v uint16) []byte {
 	return []byte{toBCD8(hi), toBCD8(lo)}
 }
 
-// fromBCD16 converts 2 BCD bytes to a 4-digit value.
-func fromBCD16(b0, b1 byte) uint16 {
-	return uint16(fromBCD8(b0))*100 + uint16(fromBCD8(b1))
+// fromBCD16Strict converts 2 BCD bytes to a 4-digit value, rejecting nibbles
+// greater than 9.
+func fromBCD16Strict(b0, b1 byte) (uint16, error) {
+	hi, err := fromBCD8Strict(b0)
+	if err != nil {
+		return 0, err
+	}
+	lo, err := fromBCD8Strict(b1)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(hi)*100 + uint16(lo), nil
 }
 
 // toBCD16DOY converts a day-of-year (1-366) to 2 BCD bytes.
@@ -365,11 +509,18 @@ func toBCD16DOY(v uint16) []byte {
 	return []byte{hundreds & 0x0F, (tens << 4) | ones}
 }
 
-// fromBCD16DOY converts 2 BCD bytes to a day-of-year value.
-// Upper 4 bits of first byte are zero per §3.4.1.2.
-func fromBCD16DOY(b0, b1 byte) uint16 {
-	hundreds := uint16(b0 & 0x0F)
-	tens := uint16(b1 >> 4)
-	ones := uint16(b1 & 0x0F)
-	return hundreds*100 + tens*10 + ones
+// fromBCD16DOYStrict converts 2 BCD bytes to a day-of-year value. The upper
+// 4 bits of the first byte must be zero per §3.4.1.2 and every nibble must
+// be a decimal digit.
+func fromBCD16DOYStrict(b0, b1 byte) (uint16, error) {
+	if b0>>4 != 0 {
+		return 0, ErrInvalidBCD
+	}
+	hundreds := b0 & 0x0F
+	tens := b1 >> 4
+	ones := b1 & 0x0F
+	if hundreds > 9 || tens > 9 || ones > 9 {
+		return 0, ErrInvalidBCD
+	}
+	return uint16(hundreds)*100 + uint16(tens)*10 + uint16(ones), nil
 }

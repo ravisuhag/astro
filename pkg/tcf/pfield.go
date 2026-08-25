@@ -40,6 +40,11 @@ func (p *PField) Encode() ([]byte, error) {
 }
 
 // Decode deserializes 1 or 2 bytes into a PField.
+//
+// Bit 0 of the second octet is itself an extension flag reserved by CCSDS
+// 301.0-B-4 for future P-field octets. No third octet is defined by the
+// standard, so a set bit is rejected with ErrInvalidPField rather than
+// silently misparsing the following octet as T-field data.
 func (p *PField) Decode(data []byte) error {
 	if len(data) < 1 {
 		return ErrDataTooShort
@@ -52,6 +57,9 @@ func (p *PField) Decode(data []byte) error {
 	if p.Extension {
 		if len(data) < 2 {
 			return ErrDataTooShort
+		}
+		if data[1]&0x80 != 0 {
+			return ErrInvalidPField
 		}
 		p.ExtDetail = data[1] & 0x7F
 	}
