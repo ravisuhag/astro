@@ -18,8 +18,15 @@
 //
 // What follows — the SCPPM encoder proper, the channel interleaver, the
 // codeword sync marker, the slot mapper — is coupled to the modulation and is
-// not here. Nor is anything on the receive side: iterative SCPPM decoding is a
-// research-grade job and does not belong in a wire-format library.
+// not here. Neither is iterative SCPPM decoding: that is a research-grade job
+// and does not belong in a wire-format library. What is here on the receive
+// side is everything after the decoder: Recover synchronizes frames on their
+// sync markers (§3.14.1) and delivers each with the quality indicator of
+// §3.14.2 and the sequence indicator of §3.15.
+//
+// Condition is the batch form of the send side; Conditioner is the streaming
+// form the NOTE under §3.2 permits, carrying partial blocks between pushes
+// and zero-filling only at explicit closure.
 //
 // # Everything is bits, not octets
 //
@@ -74,6 +81,10 @@ const (
 	CRCBits = 32
 	// TerminationBits is how many zeros §3.7 appends.
 	TerminationBits = 2
+
+	// MaxFrameLength is the upper bound on the transfer frame length managed
+	// parameter, in octets (§5.2, table 5-1: "Integer (max 65536)").
+	MaxFrameLength = 65536
 )
 
 // InformationBlockSize returns k, the slicer's output length in binary digits,
@@ -120,9 +131,15 @@ func DefaultASM() []byte {
 
 // AttachASM builds a Sync-Marked Transfer Frame, per §3.3.1: the marker
 // followed by the transfer frame.
+//
+// The frame must fit the transfer frame length managed parameter: at most
+// 65536 octets (§5.2, table 5-1).
 func AttachASM(frame []byte) (*BitString, error) {
 	if len(frame) == 0 {
 		return nil, ErrEmptyFrame
+	}
+	if len(frame) > MaxFrameLength {
+		return nil, ErrFrameTooLong
 	}
 	out := NewBitString(0)
 	out.AppendBytes(ASM[:])

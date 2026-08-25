@@ -7,6 +7,11 @@ package ocsc
 // minimum number of zeros needed to make its length a multiple of k. So the
 // final block is always full, padded if it has to be.
 //
+// Slice is a batch call: the end of its input is treated as transmission
+// closure, so the fill lands in this call's final block. To slice one
+// transmission across several calls, use a Conditioner, which carries the
+// partial block between calls and fills only at explicit Close.
+//
 // Note the frames are treated as one continuous bit stream, not as separate
 // units: a block can straddle a frame boundary. Figure 3-3 shows exactly that.
 // The ASM on each frame is what lets the receiver find the boundaries again.

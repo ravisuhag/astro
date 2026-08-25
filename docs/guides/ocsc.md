@@ -27,8 +27,11 @@ transfer frames
 
 Everything after that — the SCPPM encoder proper, the channel interleaver, the
 codeword sync marker, the slot mapper — is coupled to the modulation and is not
-here. Neither is anything on the receive side: iterative SCPPM decoding is a
-research-grade job, and it does not belong in a wire-format library.
+here. Neither is iterative SCPPM decoding: that is a research-grade job, and it
+does not belong in a wire-format library. What **is** here on the receive side
+is everything after the decoder: `Recover` finds the frames again (§3.14.1) and
+delivers each with its quality indicator (§3.14.2) and sequence indicator
+(§3.15).
 
 ## Everything is bits
 
@@ -67,14 +70,80 @@ if err != nil {
 // Each block is exactly k̂ bits: hand it to your SCPPM encoder.
 ```
 
+`Condition` is a **batch** call: it treats its input as one complete
+transmission, so the call itself is the transmission closure of §3.4.2.1.1 and
+the final block gets zero-filled. Call it twice and you have two transmissions,
+not one. Frames may be at most 65536 octets — the frame-length managed
+parameter's bound from §5.2, exposed as `ocsc.MaxFrameLength`.
+
 And back:
 
 ```go
-frames, badBlocks, err := ocsc.Recover(blocks, ocsc.RateOneThird, frameLength)
+recovered, badBlocks, err := ocsc.Recover(blocks, ocsc.RateOneThird, frameLength)
+for _, f := range recovered {
+    f.Data  // the transfer frame
+    f.Valid // Quality Indicator (§3.14.2): false if any carrying block failed its CRC
+    f.Gap   // Sequence Indicator (§3.15): true when a gap precedes this frame
+}
 ```
 
 Or run the stages individually — `AttachASM`, `Slice`, `Randomize`,
 `AttachCRC`, `AttachTermination` — if you need to inspect between them.
+
+## Streaming a transmission
+
+The NOTE under §3.2 says encoding may be performed in a streaming fashion: you
+do not need every frame of a session in hand before you start, and you do not
+need to know how many there will be. `Conditioner` is that form of the send
+side:
+
+```go
+c, err := ocsc.NewConditioner(ocsc.RateOneThird)
+if err != nil {
+    return err
+}
+for frame := range downlink {
+    blocks, err := c.Push(frame) // only the blocks completed so far
+    if err != nil {
+        return err
+    }
+    emit(blocks)
+}
+tail, err := c.Close() // transmission closure: the remainder, zero-filled
+if err != nil {
+    return err
+}
+emit(tail)
+```
+
+Bits short of a full block carry between `Push` calls — no fill is inserted
+mid-stream, because §3.4.2.1.1 permits zero fill only at transmission closure.
+`Close` is that closure, and afterwards the conditioner refuses further use.
+Pushing the same frames through one conditioner produces bit-for-bit the same
+blocks as one batch `Condition` call.
+
+## Frame validation and sequence indication
+
+`Recover` implements the receive side downstream of the SCPPM decoder.
+
+**Quality Indicator (§3.14.2).** A frame is marked valid only if every block
+carrying any of its bits — sync marker included — verified its CRC. A frame
+straddling a corrupt block comes back with `Valid` false rather than being
+dropped: the standard delivers invalid frames marked, it does not discard
+them.
+
+**Sequence Indicator (§3.15).** `Gap` is 'zero' (false) when a frame is the
+direct successor of the previous one and 'one' (true) when a gap was detected
+— the next frame did not start where it should have, and synchronization had
+to hunt for it.
+
+**Locked synchronization (§3.14.1).** With a frame length given, `Recover`
+does not re-hunt the marker at every bit offset. After locking a frame, the
+next marker is expected immediately after it and checked at that one position.
+This is what keeps frame data that happens to contain `1ACFFC1D` from
+producing spurious frames. Only when the expected marker is missing does it
+fall back to a bit-by-bit hunt, and the frame found that way carries a raised
+sequence indicator.
 
 ### Why Recover needs a frame length
 
@@ -132,9 +201,12 @@ taps — the failure mode is silent and total.
 - **The channel interleaver** (§3.9) and **codeword sync marker** (§3.10) —
   both operate on PPM symbols, not bits.
 - **The repeater and slot mapper** (§3.11, §3.12).
-- **Everything on the receive side** — iterative SCPPM decoding, slot and
-  symbol timing, soft decisions, channel estimation.
-- **The AOS transfer frame signaling profile** of §4, with its LDPC codes.
+- **The receive side up to and including the decoder** — iterative SCPPM
+  decoding, slot and symbol timing, soft decisions, channel estimation. (The
+  steps after the decoder — frame synchronization, the quality indicator, the
+  sequence indicator — are here, in `Recover`.)
+- **HPE beacon and optional accompanying data transmission signaling** of §4 —
+  the uplink beacon carrying LDPC-coded AOS or USLP transfer frames.
 - **CLI subcommands** — a follow-up once the API settles.
 
 ## Reference

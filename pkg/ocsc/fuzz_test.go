@@ -39,8 +39,14 @@ func FuzzConditionRoundTrip(f *testing.F) {
 		if len(recovered) != 1 {
 			t.Fatalf("recovered %d frames, want 1", len(recovered))
 		}
-		if string(recovered[0]) != string(frame) {
+		if string(recovered[0].Data) != string(frame) {
 			t.Fatal("the recovered frame differs from the original")
+		}
+		if !recovered[0].Valid {
+			t.Fatal("a frame from clean blocks came back marked invalid")
+		}
+		if recovered[0].Gap {
+			t.Fatal("a lone frame at the start of the stream reports a gap")
 		}
 	})
 }

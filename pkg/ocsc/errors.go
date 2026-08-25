@@ -27,4 +27,12 @@ var (
 
 	// ErrEmptyFrame indicates an attempt to mark an empty transfer frame.
 	ErrEmptyFrame = errors.New("cannot attach a sync marker to an empty transfer frame")
+
+	// ErrFrameTooLong indicates a transfer frame longer than the 65536-octet
+	// bound of the managed parameters (CCSDS 142.0-B-1 §5.2, table 5-1).
+	ErrFrameTooLong = errors.New("transfer frame exceeds the 65536-octet managed-parameter bound")
+
+	// ErrConditionerClosed indicates use of a Conditioner after Close: §3.4.2.1.1
+	// permits zero fill only at transmission closure, so a closed stream is over.
+	ErrConditionerClosed = errors.New("the conditioner is closed: transmission closure has been declared")
 )
