@@ -79,6 +79,11 @@ func (h *PrimaryHeader) Validate() error {
 	if h.VersionNumber != 0 {
 		return ErrInvalidVersion
 	}
+	// Per CCSDS 232.0-B-4 4.1.2.3, Bypass=0 with Control Command=1 is an
+	// invalid frame type. Valid types: AD (0,0), BD (1,0), BC (1,1).
+	if h.BypassFlag == 0 && h.ControlCommandFlag == 1 {
+		return ErrInvalidFrameType
+	}
 	if h.Reserved != 0 {
 		return ErrInvalidReservedBits
 	}
@@ -203,9 +208,13 @@ func WithBypass() FrameOption {
 	}
 }
 
-// WithControlCommand sets the Control Command Flag to 1.
+// WithControlCommand sets the Control Command Flag to 1, producing a
+// Type-BC frame. Per CCSDS 232.0-B-4 4.1.2.3 a control command frame is
+// always a bypass frame (Bypass=0 with Control Command=1 is invalid), so
+// the Bypass Flag is set to 1 as well.
 func WithControlCommand() FrameOption {
 	return func(f *TCTransferFrame) {
+		f.Header.BypassFlag = 1
 		f.Header.ControlCommandFlag = 1
 	}
 }
@@ -238,6 +247,12 @@ func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOptio
 
 	for _, opt := range opts {
 		opt(frame)
+	}
+
+	// Per CCSDS 232.0-B-4 4.1.2.7, the Frame Sequence Number is all zeros
+	// on Type-B (bypass) frames; only Type-A frames carry N(S).
+	if frame.Header.BypassFlag == 1 {
+		frame.Header.FrameSequenceNum = 0
 	}
 
 	// Compute total frame length
@@ -330,7 +345,10 @@ func decodeTCFrame(data []byte, hasSegmentHeader bool) (*TCTransferFrame, error)
 		return nil, err
 	}
 
-	// Verify frame length matches data
+	// Verify frame length matches data. Octets beyond the declared frame
+	// length are deliberately ignored: the synchronization sublayer may
+	// deliver CLTU fill octets after the frame (CCSDS 232.0-B-4 4.1.2.7.2),
+	// and the frame ends where its Frame Length field says it does.
 	expectedLen := int(header.FrameLength) + 1
 	if expectedLen < PrimaryHeaderSize+FECSize {
 		return nil, ErrInvalidFrameLength

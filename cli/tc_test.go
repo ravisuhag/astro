@@ -46,7 +46,9 @@ func TestTCBypassAndControlFlags(t *testing.T) {
 	}{
 		{name: "plain", flags: nil},
 		{name: "bypass", flags: []string{"--bypass"}, wantBypass: true},
-		{name: "control", flags: []string{"--control"}, wantControl: true},
+		// Per CCSDS 232.0-B-4 4.1.2.3 a control (BC) frame is always a
+		// bypass frame: Bypass=0 with Control Command=1 is an invalid type.
+		{name: "control", flags: []string{"--control"}, wantBypass: true, wantControl: true},
 		{name: "bypass and control", flags: []string{"--bypass", "--control"}, wantBypass: true, wantControl: true},
 	}
 

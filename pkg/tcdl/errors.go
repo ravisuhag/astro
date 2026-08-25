@@ -67,6 +67,16 @@ var (
 	// ErrNoPacketSizer indicates no PacketSizer has been set on the MAP Packet service.
 	ErrNoPacketSizer = errors.New("no PacketSizer configured: call SetPacketSizer before Receive")
 
-	// ErrIncompleteSegment indicates a segment reassembly is incomplete.
+	// ErrIncompleteSegment indicates a gap in segment reassembly: a
+	// segmented packet was interrupted before its Last segment arrived,
+	// or a Continuation/Last segment arrived without a First.
 	ErrIncompleteSegment = errors.New("incomplete segment: missing continuation or last segment")
+
+	// ErrInvalidFrameType indicates an invalid Bypass/Control Command flag
+	// combination (Bypass=0 with Control Command=1 per CCSDS 232.0-B-4 4.1.2.3).
+	ErrInvalidFrameType = errors.New("invalid frame type: Bypass=0 with Control Command=1")
+
+	// ErrInvalidControlCommand indicates a Type-BC frame data field that is
+	// neither Unlock (0x00) nor Set V(R) (0x82 0x00 <V(R)>).
+	ErrInvalidControlCommand = errors.New("invalid control command: expected Unlock (0x00) or Set V(R) (0x82 0x00 vr)")
 )

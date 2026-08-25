@@ -64,8 +64,13 @@ type MAPPacketService struct {
 	vc      *VirtualChannel
 	sizer   PacketSizer
 
-	// Receive-side reassembly buffer
+	// Receive-side reassembly buffer for the segmented packet in progress.
 	recvBuf []byte
+	// True while a First segment has been seen and the Last is pending.
+	reassembling bool
+	// Delimited but not yet delivered packet bytes. A frame data field may
+	// carry several packets back to back; the PacketSizer slices them out.
+	pktBuf []byte
 }
 
 // NewMAPPacketService creates a new MAP Packet Service instance.
@@ -130,9 +135,10 @@ func (s *MAPPacketService) emitFrame(data []byte, segFlags uint8) error {
 	sh := SegmentHeader{SequenceFlags: segFlags, MAPID: s.mapID}
 	opts := []FrameOption{WithSegmentHeader(sh)}
 	if s.bypass {
+		// Type-B frames carry N(S) = 0 (CCSDS 232.0-B-4 4.1.2.7); the
+		// COP-1 frame counter applies to Type-A frames only.
 		opts = append(opts, WithBypass())
-	}
-	if s.counter != nil {
+	} else if s.counter != nil {
 		opts = append(opts, WithSequenceNumber(s.counter.Next(s.vcid)))
 	}
 
@@ -143,13 +149,27 @@ func (s *MAPPacketService) emitFrame(data []byte, segFlags uint8) error {
 	return s.vc.Add(frame)
 }
 
-// Receive extracts the next complete packet by reassembling segments.
+// Receive extracts the next complete packet. Segmented packets are
+// reassembled from First/Continuation/Last frames; a frame data field
+// carrying several packets back to back is delimited with the configured
+// PacketSizer, and the extra packets are buffered for later calls.
+//
+// A gap in a segment sequence — a First or Unsegmented frame arriving
+// while a reassembly is in progress, a Continuation or Last without a
+// First, or a MAP ID change mid-packet — discards the partial packet and
+// returns ErrIncompleteSegment. The interrupting frame is preserved and
+// delivered by the next call.
 func (s *MAPPacketService) Receive() ([]byte, error) {
 	if s.sizer == nil {
 		return nil, ErrNoPacketSizer
 	}
 
 	for {
+		// Serve a packet already delimited from earlier frames first.
+		if pkt, ok := s.popPacket(); ok {
+			return pkt, nil
+		}
+
 		frame, err := s.vc.Next()
 		if err != nil {
 			return nil, err
@@ -160,33 +180,77 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 		payload := frame.DataField
 		if frame.SegmentHeader != nil {
 			segFlags = frame.SegmentHeader.SequenceFlags
+			// A segment for another MAP interrupts any reassembly in
+			// progress on this one (TCDL routes one MAP per service).
+			if frame.SegmentHeader.MAPID != s.mapID {
+				if s.dropPartial() {
+					return nil, ErrIncompleteSegment
+				}
+				continue
+			}
 		}
 
 		switch segFlags {
 		case SegUnsegmented:
-			s.recvBuf = nil
-			return payload, nil
+			s.pktBuf = append(s.pktBuf, payload...)
+			if s.dropPartial() {
+				return nil, ErrIncompleteSegment
+			}
 
 		case SegFirst:
-			s.recvBuf = make([]byte, len(payload))
-			copy(s.recvBuf, payload)
+			interrupted := s.dropPartial()
+			s.recvBuf = append([]byte(nil), payload...)
+			s.reassembling = true
+			if interrupted {
+				return nil, ErrIncompleteSegment
+			}
 
 		case SegContinuation:
-			if s.recvBuf == nil {
-				continue
+			if !s.reassembling {
+				return nil, ErrIncompleteSegment
 			}
 			s.recvBuf = append(s.recvBuf, payload...)
 
 		case SegLast:
-			if s.recvBuf == nil {
-				continue
+			if !s.reassembling {
+				return nil, ErrIncompleteSegment
 			}
 			s.recvBuf = append(s.recvBuf, payload...)
-			result := s.recvBuf
+			s.pktBuf = append(s.pktBuf, s.recvBuf...)
 			s.recvBuf = nil
-			return result, nil
+			s.reassembling = false
 		}
 	}
+}
+
+// dropPartial discards a reassembly in progress. It reports whether one
+// was actually dropped.
+func (s *MAPPacketService) dropPartial() bool {
+	if !s.reassembling {
+		return false
+	}
+	s.recvBuf = nil
+	s.reassembling = false
+	return true
+}
+
+// popPacket slices the next complete packet off the front of the delimited
+// buffer using the configured PacketSizer.
+func (s *MAPPacketService) popPacket() ([]byte, bool) {
+	if len(s.pktBuf) == 0 {
+		return nil, false
+	}
+	n := s.sizer(s.pktBuf)
+	if n <= 0 || n > len(s.pktBuf) {
+		// Too short to delimit yet; wait for more frame data.
+		return nil, false
+	}
+	pkt := append([]byte(nil), s.pktBuf[:n]...)
+	s.pktBuf = s.pktBuf[n:]
+	if len(s.pktBuf) == 0 {
+		s.pktBuf = nil
+	}
+	return pkt, true
 }
 
 // Flush is a no-op for MAP Packet Service.
@@ -223,9 +287,10 @@ func (s *MAPAccessService) Send(data []byte) error {
 	sh := SegmentHeader{SequenceFlags: SegUnsegmented, MAPID: s.mapID}
 	opts := []FrameOption{WithSegmentHeader(sh)}
 	if s.bypass {
+		// Type-B frames carry N(S) = 0 (CCSDS 232.0-B-4 4.1.2.7); the
+		// COP-1 frame counter applies to Type-A frames only.
 		opts = append(opts, WithBypass())
-	}
-	if s.counter != nil {
+	} else if s.counter != nil {
 		opts = append(opts, WithSequenceNumber(s.counter.Next(s.vcid)))
 	}
 	frame, err := NewTCTransferFrame(s.scid, s.vcid, data, opts...)

@@ -108,7 +108,16 @@ Type-B is used for urgent commands that must get through regardless of the curre
 | `0` | Data transfer frame |
 | `1` | Control command (COP-1 directive) |
 
-Control commands are used to manage COP-1 itself — for example, to unlock FARM-1 from lockout state or to set the V(R) counter to a specific value.
+Control commands manage COP-1 itself. A control command frame (Type-BC) always has Bypass=1 as well — Bypass=0 with Control Command=1 is an invalid frame type and is rejected. The three valid frame types are AD (0,0), BD (1,0), and BC (1,1).
+
+A BC frame's data field holds exactly one of two directives (CCSDS 232.0-B-4 4.1.3.3):
+
+| Directive | Data field |
+|-----------|-----------|
+| Unlock | `0x00` |
+| Set V(R) | `0x82 0x00 <V(R)>` |
+
+The package builds and parses these with `NewUnlockFrame()`, `NewSetVRFrame()`, `BuildUnlockCommand()`, `BuildSetVRCommand()`, and `ParseControlCommand()`.
 
 #### Spacecraft Identifier (10 bits)
 
@@ -126,7 +135,7 @@ Total frame length **minus one**, in bytes. Range: 0-1023, representing actual l
 
 #### Frame Sequence Number (8 bits)
 
-The per-VC sequence counter N(S) used by COP-1. Range: 0-255, wrapping. This counter is managed by FOP-1 on the ground side and checked by FARM-1 on the spacecraft side.
+The per-VC sequence counter N(S) used by COP-1. Range: 0-255, wrapping. This counter is managed by FOP-1 on the ground side and checked by FARM-1 on the spacecraft side. Only Type-A frames carry it: Type-B (bypass) frames always have this field set to all zeros.
 
 Unlike TM (which has separate MC and VC counters), TC has only this single per-VC counter. There is no Master Channel counter because TC uplink doesn't need MC-level gap detection — COP-1 provides per-VC reliability.
 

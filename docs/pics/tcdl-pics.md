@@ -75,8 +75,8 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | | **MAP Packet Service Primitives** | | | | |
-| TC-13 | MAP_PACKET.request | 3.3.3.2 | M | Yes | `MAPPacketService.Send(data)` implements MAP_PACKET.request. Segments data across multiple frames using Segment Header sequence flags (First/Continuation/Last/Unsegmented). Each segment assigned sequence number via `FrameCounter.Next()`. |
-| TC-14 | MAP_PACKET.indication | 3.3.3.3 | M | Yes | `MAPPacketService.Receive()` implements MAP_PACKET.indication. Reassembles segments by buffering First/Continuation data and delivering on Last segment. Skips orphaned Continuation/Last segments without a First. Requires `SetPacketSizer()`. |
+| TC-13 | MAP_PACKET.request | 3.3.3.2 | M | Yes | `MAPPacketService.Send(data)` implements MAP_PACKET.request. Segments data across multiple frames using Segment Header sequence flags (First/Continuation/Last/Unsegmented). Type-A segments get N(S) from `FrameCounter.Next()`; Type-B frames always carry N(S)=0. NOTE: Send is non-blocking; a full virtual channel returns `ErrBufferFull` instead of blocking (declared simplification). |
+| TC-14 | MAP_PACKET.indication | 3.3.3.3 | M | Yes | `MAPPacketService.Receive()` implements MAP_PACKET.indication. Reassembles segments by buffering First/Continuation data and completing on the Last segment, then delimits packets with the configured `PacketSizer` — a frame data field carrying several packets back to back is delivered one packet at a time. Gaps in a segment sequence (First/Unsegmented interrupting a reassembly, Continuation/Last without a First, MAP ID change mid-packet) discard the partial packet and return `ErrIncompleteSegment`. |
 | | **MAP Access Service Primitives** | | | | |
 | TC-15 | MAP_ACCESS.request | 3.4.3.2 | M | Yes | `MAPAccessService.Send(data)` implements MAP_ACCESS.request. Wraps data in frame with unsegmented segment header. |
 | TC-16 | MAP_ACCESS.indication | 3.4.3.3 | M | Yes | `MAPAccessService.Receive()` implements MAP_ACCESS.indication. Returns data field of next frame. |
@@ -89,7 +89,8 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | TC-19 | TC Transfer Frame | 4.1.1 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTCTransferFrame()` round-trip. Variable length up to 1024 bytes. |
-| TC-20 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader` — 5 octets (40 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Bypass Flag (1 bit), Control Command Flag (1 bit), Reserved (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (6 bits), Frame Length (10 bits, total-1), Frame Sequence Number (8 bits). Big-endian encoding. |
+| TC-20 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader` — 5 octets (40 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Bypass Flag (1 bit), Control Command Flag (1 bit), Reserved (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (6 bits), Frame Length (10 bits, total-1), Frame Sequence Number (8 bits). Big-endian encoding. The invalid type Bypass=0 + Control Command=1 is rejected (`ErrInvalidFrameType`, 4.1.2.3); Type-B frames are forced to N(S)=0 on construction (4.1.2.7). Octets beyond the declared frame length are ignored on decode (CLTU fill, 4.1.2.7.2). |
+| TC-20a | BC Frame Contents (Unlock, Set V(R)) | 4.1.3.3 | M | Yes | `BuildUnlockCommand()` (`0x00`), `BuildSetVRCommand(vr)` (`0x82 0x00 <V(R)>`), `ParseControlCommand()`, plus frame-level builders `NewUnlockFrame()` / `NewSetVRFrame()` producing Type-BC frames (Bypass=1, CC=1, N(S)=0, no segment header). Malformed contents return `ErrInvalidControlCommand`. |
 | TC-21 | Segment Header | 4.1.4.1 | M | Yes | `SegmentHeader` — 1 octet: Sequence Flags (2 bits), MAP ID (6 bits). Present when MAP sublayer is used. `Encode()` / `Decode()` / `Validate()` methods. Constants: `SegUnsegmented`, `SegFirst`, `SegContinuation`, `SegLast`. |
 | TC-22 | Transfer Frame Data Field | 4.1.4.2 | M | Yes | `TCTransferFrame.DataField` — variable-length telecommand payload. |
 | TC-23 | Frame Error Control Field | 4.1.5 | M | Yes | `TCTransferFrame.FrameErrorControl` — 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on construction via `NewTCTransferFrame()`. Verified on decode; CRC mismatch returns `ErrCRCMismatch`. |
@@ -104,7 +105,7 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | TC-27 | VC Multiplexing Function | 4.2.5 | M | Yes | `VirtualChannelMultiplexer` schedules frames from multiple Virtual Channels using weighted round-robin. Integrated into `MasterChannel`. |
 | TC-28 | MC Generation Function | 4.2.6 | M | Yes | `MasterChannel.AddFrame()` routes inbound frames to Virtual Channels by VCID with SCID validation. |
 | TC-29 | MC Multiplexing Function | 4.2.7 | M | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing across registered `MasterChannel`s via `GetNextFrame()`. |
-| TC-30 | MAP Packet Extraction Function | 4.3.2 | M | Yes | `MAPPacketService.Receive()` reassembles segmented packets from frames. Uses `PacketSizer` for packet boundary detection. Discards orphaned segments. |
+| TC-30 | MAP Packet Extraction Function | 4.3.2 | M | Yes | `MAPPacketService.Receive()` reassembles segmented packets and delimits multiple packets per frame with the `PacketSizer` (invoked on every delivery). Reports segment-sequence gaps via `ErrIncompleteSegment` instead of silently dropping them. |
 | TC-31 | MAP Access Extraction Function | 4.3.3 | M | Yes | `MAPAccessService.Receive()` returns data field of next frame. |
 | TC-32 | VC Reception Function | 4.3.4 | M | Yes | `DecodeTCTransferFrame()` parses raw octets into `TCTransferFrame`, verifying CRC and extracting all fields. `MasterChannel.AddFrame()` routes received frames to the appropriate `VirtualChannel` by VCID. |
 | TC-33 | VC Demultiplexing Function | 4.3.5 | M | Yes | `MasterChannel.AddFrame()` demultiplexes inbound frames to Virtual Channels by VCID. |
@@ -146,13 +147,19 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 
 | Category | Total Items | Supported | Not Supported |
 |----------|-------------|-----------|---------------|
-| Mandatory (M) | 48 | 48 | 0 |
+| Mandatory (M) | 49 | 49 | 0 |
 | Optional (O) | 1 | 0 | 1 |
-| **Total** | **49** | **48** | **1** |
+| **Total** | **50** | **49** | **1** |
 
 ### Non-Conformances (Mandatory Items Not Supported)
 
-None. All 48 mandatory items are fully supported.
+None. All 49 mandatory items (including the BC frame contents, TC-20a) are supported.
+
+### Declared Simplifications
+
+| Area | Deviation |
+|------|-----------|
+| Blocking send | `Send()` never blocks; a full virtual channel buffer returns `ErrBufferFull`. The optional blocking behavior of 4.2.2 is left to the caller. |
 
 ### Non-Supported Optional Items
 
@@ -162,7 +169,7 @@ None. All 48 mandatory items are fully supported.
 
 ### Fully Supported Mandatory Items
 
-All 48 mandatory items (TC-1 through TC-48) are supported. Key implementations:
+Key implementations:
 
 | Area | Items | Implementation |
 |------|-------|----------------|
@@ -170,7 +177,7 @@ All 48 mandatory items (TC-1 through TC-48) are supported. Key implementations:
 | MAP Packet Service | TC-5–7, TC-13–14 | `MAPPacketService` with segmentation (First/Continuation/Last/Unsegmented), `PacketSizer`-based reassembly. |
 | MAP Access Service | TC-8–10, TC-15–16 | `MAPAccessService` with unsegmented frame wrapping. |
 | VC Frame Service | TC-11–12, TC-17–18 | `VCFrameService` pass-through via `VirtualChannel`. |
-| Protocol Data Unit | TC-19–23 | `PrimaryHeader` (40-bit), `SegmentHeader` (8-bit), CRC-16-CCITT. |
+| Protocol Data Unit | TC-19–23 | `PrimaryHeader` (40-bit) with frame-type validation and Type-B N(S)=0, BC contents (TC-20a: Unlock / Set V(R)), `SegmentHeader` (8-bit), CRC-16-CCITT. |
 | Packet Processing | TC-24–25, TC-30–31 | MAP Packet segmentation/reassembly, MAP Access raw delivery. |
 | VC Functions | TC-26–27, TC-32–33 | `NewTCTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
 | MC Functions | TC-28–29, TC-34–35 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |

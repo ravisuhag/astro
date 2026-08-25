@@ -119,7 +119,6 @@ func TestTCFrame_NewAndEncode(t *testing.T) {
 func TestTCFrame_RoundTrip(t *testing.T) {
 	data := []byte("telecommand payload")
 	frame, _ := tcdl.NewTCTransferFrame(42, 5, data,
-		tcdl.WithBypass(),
 		tcdl.WithSequenceNumber(7),
 	)
 	encoded, _ := frame.Encode()
@@ -133,14 +132,41 @@ func TestTCFrame_RoundTrip(t *testing.T) {
 	if decoded.Header.VirtualChannelID != 5 {
 		t.Errorf("VCID = %d, want 5", decoded.Header.VirtualChannelID)
 	}
-	if decoded.Header.BypassFlag != 1 {
-		t.Errorf("BypassFlag = %d, want 1", decoded.Header.BypassFlag)
+	if decoded.Header.BypassFlag != 0 {
+		t.Errorf("BypassFlag = %d, want 0 (Type-A carries N(S))", decoded.Header.BypassFlag)
 	}
 	if decoded.Header.FrameSequenceNum != 7 {
 		t.Errorf("FrameSeqNum = %d, want 7", decoded.Header.FrameSequenceNum)
 	}
 	if !bytes.Equal(decoded.DataField, data) {
 		t.Errorf("DataField = %q, want %q", decoded.DataField, data)
+	}
+}
+
+func TestTCFrame_TypeBForcesZeroSequenceNumber(t *testing.T) {
+	// Per CCSDS 232.0-B-4 4.1.2.7, Type-B frames carry N(S) = all zeros.
+	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("x"),
+		tcdl.WithBypass(),
+		tcdl.WithSequenceNumber(7),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.Header.FrameSequenceNum != 0 {
+		t.Errorf("Type-B FrameSeqNum = %d, want 0", frame.Header.FrameSequenceNum)
+	}
+}
+
+func TestTCFrame_RejectsInvalidType(t *testing.T) {
+	// Bypass=0 with Control Command=1 is invalid (CCSDS 232.0-B-4 4.1.2.3).
+	h := tcdl.PrimaryHeader{
+		BypassFlag:         0,
+		ControlCommandFlag: 1,
+		SpacecraftID:       42,
+		FrameLength:        7,
+	}
+	if err := h.Validate(); err == nil {
+		t.Error("expected error for Bypass=0 + Control Command=1, got nil")
 	}
 }
 

@@ -2,6 +2,7 @@ package tcdl_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/spp"
@@ -68,6 +69,94 @@ func TestMAPPacketService_Bypass(t *testing.T) {
 	frame, _ := vc.Next()
 	if frame.Header.BypassFlag != 1 {
 		t.Error("expected BypassFlag=1 for bypass service")
+	}
+}
+
+func TestMAPPacketService_MultiplePacketsPerFrame(t *testing.T) {
+	// A compliant sender may block several packets into one frame data
+	// field. Receive must delimit them with the PacketSizer and hand them
+	// out one at a time.
+	vc := tcdl.NewVirtualChannel(1, 100)
+	svc := tcdl.NewMAPPacketService(42, 1, 0, false, vc, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	pktA, _ := spp.NewTCPacket(100, []byte("first"))
+	encA, _ := pktA.Encode()
+	pktB, _ := spp.NewTCPacket(101, []byte("second"))
+	encB, _ := pktB.Encode()
+
+	blocked := append(append([]byte(nil), encA...), encB...)
+	frame, err := tcdl.NewTCTransferFrame(42, 1, blocked,
+		tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 0}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := vc.Add(frame); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, encA) {
+		t.Errorf("packet 1 = %x, want %x", got, encA)
+	}
+	got, err = svc.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, encB) {
+		t.Errorf("packet 2 = %x, want %x", got, encB)
+	}
+}
+
+func TestMAPPacketService_SegmentGapReturnsIncompleteSegment(t *testing.T) {
+	vc := tcdl.NewVirtualChannel(1, 100)
+	svc := tcdl.NewMAPPacketService(42, 1, 0, false, vc, nil)
+	svc.SetPacketSizer(spp.PacketSizer)
+
+	addSeg := func(flags uint8, data []byte) {
+		frame, err := tcdl.NewTCTransferFrame(42, 1, data,
+			tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: flags, MAPID: 0}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := vc.Add(frame); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pkt, _ := spp.NewTCPacket(100, []byte("complete packet"))
+	enc, _ := pkt.Encode()
+
+	// A First segment interrupted by an Unsegmented frame: the partial
+	// packet is lost and the receiver must say so.
+	addSeg(tcdl.SegFirst, []byte("partial"))
+	addSeg(tcdl.SegUnsegmented, enc)
+
+	if _, err := svc.Receive(); !errors.Is(err, tcdl.ErrIncompleteSegment) {
+		t.Fatalf("expected ErrIncompleteSegment, got %v", err)
+	}
+	// The interrupting frame's packet is still delivered afterwards.
+	got, err := svc.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, enc) {
+		t.Errorf("packet after gap = %x, want %x", got, enc)
+	}
+
+	// A Continuation with no First in progress is also a gap.
+	addSeg(tcdl.SegContinuation, []byte("orphan"))
+	if _, err := svc.Receive(); !errors.Is(err, tcdl.ErrIncompleteSegment) {
+		t.Errorf("orphan continuation: expected ErrIncompleteSegment, got %v", err)
+	}
+
+	// A Last with no First in progress as well.
+	addSeg(tcdl.SegLast, []byte("orphan"))
+	if _, err := svc.Receive(); !errors.Is(err, tcdl.ErrIncompleteSegment) {
+		t.Errorf("orphan last: expected ErrIncompleteSegment, got %v", err)
 	}
 }
 
