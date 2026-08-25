@@ -38,4 +38,15 @@ var (
 
 	// ErrInvalidSeverity indicates an event severity outside ST[05]'s four subtypes.
 	ErrInvalidSeverity = errors.New("invalid event severity")
+
+	// ErrTrailingBytes indicates octets left over after a fixed-size message
+	// body. The PUS acceptance checks verify a request against its type's
+	// structure, so a body longer than its type allows is rejected rather
+	// than silently truncated.
+	ErrTrailingBytes = errors.New("trailing octets after a fixed-size PUS message body")
+
+	// ErrHeaderNotWordAligned indicates a secondary header whose size is not a
+	// whole number of mission words (clauses 7.4.3.1l and 7.4.4.1g), when the
+	// profile declares a word size to check against.
+	ErrHeaderNotWordAligned = errors.New("PUS secondary header is not a whole number of mission words")
 )

@@ -14,6 +14,8 @@ const (
 	SubtypeHighSeverity     uint8 = 4 // TM[5,4] clause 8.5.2.4
 	SubtypeEnableEvents     uint8 = 5 // TC[5,5] clause 8.5.2.5
 	SubtypeDisableEvents    uint8 = 6 // TC[5,6] clause 8.5.2.6
+	SubtypeReportDisabled   uint8 = 7 // TC[5,7] clause 8.5.2.7
+	SubtypeDisabledList     uint8 = 8 // TM[5,8] clause 8.5.2.8
 )
 
 // Severity names the four levels of ST[05] event report.
@@ -166,29 +168,14 @@ func DecodeEventControlRequest(profile MissionProfile, enable bool, data []byte)
 		return nil, err
 	}
 
-	count, err := readUint(data, profile.CountBytes)
+	ids, n, err := readUintList(data, profile.CountBytes, profile.EventDefinitionIDBytes)
 	if err != nil {
 		return nil, err
 	}
-	offset := profile.CountBytes
-
-	// Refuse a count the remaining bytes cannot possibly satisfy, rather than
-	// allocating for it first.
-	width := profile.EventDefinitionIDBytes
-	if width > 0 && uint64(len(data)-offset) < count*uint64(width) {
-		return nil, ErrDataTooShort
+	if n != len(data) {
+		return nil, ErrTrailingBytes
 	}
-
-	r := &EventControlRequest{Profile: profile, Enable: enable}
-	for i := uint64(0); i < count; i++ {
-		id, err := readUint(data[offset:], width)
-		if err != nil {
-			return nil, err
-		}
-		r.EventDefinitionIDs = append(r.EventDefinitionIDs, id)
-		offset += width
-	}
-	return r, nil
+	return &EventControlRequest{Profile: profile, Enable: enable, EventDefinitionIDs: ids}, nil
 }
 
 // Humanize returns a human-readable summary.
@@ -198,6 +185,85 @@ func (r *EventControlRequest) Humanize() string {
 		verb = "enable"
 	}
 	return "PUS TC[5," + itoa(int(r.Key().Subtype)) + "] " + verb + " event report generation" +
+		"\n  Events ... " + itoa(len(r.EventDefinitionIDs))
+}
+
+// ReportDisabledEventsRequest is TC[5,7]: report the list of event definitions
+// whose report generation is disabled, per clause 8.5.2.7. Its application
+// data field is empty; the answer is a TM[5,8] report.
+type ReportDisabledEventsRequest struct{}
+
+// Key returns the message type.
+func (ReportDisabledEventsRequest) Key() MessageKey {
+	return MessageKey{Service: ServiceEventReporting, Subtype: SubtypeReportDisabled}
+}
+
+// Encode returns an empty application data field.
+func (ReportDisabledEventsRequest) Encode() ([]byte, error) { return nil, nil }
+
+// DecodeReportDisabledEventsRequest parses TC[5,7], whose body is empty.
+func DecodeReportDisabledEventsRequest(data []byte) (*ReportDisabledEventsRequest, error) {
+	if len(data) != 0 {
+		return nil, ErrTrailingBytes
+	}
+	return &ReportDisabledEventsRequest{}, nil
+}
+
+// Humanize returns a human-readable summary.
+func (ReportDisabledEventsRequest) Humanize() string {
+	return "PUS TC[5,7] report the disabled event definitions"
+}
+
+// DisabledEventsReport is TM[5,8]: the disabled event definitions list report,
+// per clause 8.5.2.8. It carries a count followed by that many event
+// definition IDs, the answer to TC[5,7].
+type DisabledEventsReport struct {
+	Profile MissionProfile
+	// EventDefinitionIDs names the events whose report generation is disabled.
+	EventDefinitionIDs []uint64
+}
+
+// Key returns the message type.
+func (r *DisabledEventsReport) Key() MessageKey {
+	return MessageKey{Service: ServiceEventReporting, Subtype: SubtypeDisabledList}
+}
+
+// Encode serializes the source data field: a count followed by that many
+// event definition IDs.
+func (r *DisabledEventsReport) Encode() ([]byte, error) {
+	if err := r.Profile.Validate(); err != nil {
+		return nil, err
+	}
+	out, err := putUint(nil, uint64(len(r.EventDefinitionIDs)), r.Profile.CountBytes)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range r.EventDefinitionIDs {
+		if out, err = putUint(out, id, r.Profile.EventDefinitionIDBytes); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// DecodeDisabledEventsReport parses TM[5,8].
+func DecodeDisabledEventsReport(profile MissionProfile, data []byte) (*DisabledEventsReport, error) {
+	if err := profile.Validate(); err != nil {
+		return nil, err
+	}
+	ids, n, err := readUintList(data, profile.CountBytes, profile.EventDefinitionIDBytes)
+	if err != nil {
+		return nil, err
+	}
+	if n != len(data) {
+		return nil, ErrTrailingBytes
+	}
+	return &DisabledEventsReport{Profile: profile, EventDefinitionIDs: ids}, nil
+}
+
+// Humanize returns a human-readable summary.
+func (r *DisabledEventsReport) Humanize() string {
+	return "PUS TM[5,8] disabled event definitions list report" +
 		"\n  Events ... " + itoa(len(r.EventDefinitionIDs))
 }
 
@@ -222,10 +288,26 @@ func registerST05(r *Registry) error {
 	); err != nil {
 		return err
 	}
-	return r.RegisterRequest(
+	if err := r.RegisterRequest(
 		MessageKey{Service: ServiceEventReporting, Subtype: SubtypeDisableEvents},
 		func(p MissionProfile, data []byte) (Request, error) {
 			return DecodeEventControlRequest(p, false, data)
+		},
+	); err != nil {
+		return err
+	}
+	if err := r.RegisterRequest(
+		MessageKey{Service: ServiceEventReporting, Subtype: SubtypeReportDisabled},
+		func(_ MissionProfile, data []byte) (Request, error) {
+			return DecodeReportDisabledEventsRequest(data)
+		},
+	); err != nil {
+		return err
+	}
+	return r.RegisterReport(
+		MessageKey{Service: ServiceEventReporting, Subtype: SubtypeDisabledList},
+		func(p MissionProfile, data []byte) (Report, error) {
+			return DecodeDisabledEventsReport(p, data)
 		},
 	)
 }

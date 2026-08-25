@@ -257,7 +257,7 @@ func (h *TMHeader) Humanize() string {
 // It mirrors how pkg/tcf builds the field for the widths PUS permits: 1 to 4
 // coarse octets and 0 to 3 fine, which always fit one octet with no extension.
 // The time code ID selects Level 1 for the CCSDS 1958 epoch and Level 2 for an
-// agency-defined one, per CCSDS 301.0-B-4 and clause 7.4.4 note 1.
+// agency-defined one, per CCSDS 301.0-B-4 and clause 7.4.3.1j note 1.
 func (p MissionProfile) implicitCUCPField() byte {
 	id := tcf.TimeCodeCUCLevel1
 	if !p.CUCEpoch.IsZero() && !p.CUCEpoch.Equal(tcf.CCSDSEpoch) {

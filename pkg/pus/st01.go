@@ -9,14 +9,15 @@ import "encoding/binary"
 const (
 	ServiceRequestVerification uint8 = 1
 
-	SubtypeAcceptSuccess   uint8 = 1 // TM[1,1] clause 8.1.2.1
-	SubtypeAcceptFailure   uint8 = 2 // TM[1,2] clause 8.1.2.2
-	SubtypeStartSuccess    uint8 = 3 // TM[1,3] clause 8.1.2.3
-	SubtypeStartFailure    uint8 = 4 // TM[1,4] clause 8.1.2.4
-	SubtypeProgressSuccess uint8 = 5 // TM[1,5] clause 8.1.2.5
-	SubtypeProgressFailure uint8 = 6 // TM[1,6] clause 8.1.2.6
-	SubtypeCompleteSuccess uint8 = 7 // TM[1,7] clause 8.1.2.7
-	SubtypeCompleteFailure uint8 = 8 // TM[1,8] clause 8.1.2.8
+	SubtypeAcceptSuccess   uint8 = 1  // TM[1,1] clause 8.1.2.1
+	SubtypeAcceptFailure   uint8 = 2  // TM[1,2] clause 8.1.2.2
+	SubtypeStartSuccess    uint8 = 3  // TM[1,3] clause 8.1.2.3
+	SubtypeStartFailure    uint8 = 4  // TM[1,4] clause 8.1.2.4
+	SubtypeProgressSuccess uint8 = 5  // TM[1,5] clause 8.1.2.5
+	SubtypeProgressFailure uint8 = 6  // TM[1,6] clause 8.1.2.6
+	SubtypeCompleteSuccess uint8 = 7  // TM[1,7] clause 8.1.2.7
+	SubtypeCompleteFailure uint8 = 8  // TM[1,8] clause 8.1.2.8
+	SubtypeRoutingFailure  uint8 = 10 // TM[1,10] clause 8.1.2.10
 )
 
 // RequestIDSize is the encoded width of a request ID, in octets. Figure 8-1
@@ -72,11 +73,12 @@ func DecodeRequestID(data []byte) (RequestID, error) {
 	}, nil
 }
 
-// VerificationReport is any of the eight ST[01] reports.
+// VerificationReport is any of the nine ST[01] reports: TM[1,1] to TM[1,8],
+// plus the TM[1,10] failed routing verification report.
 //
 // Which fields carry meaning depends on the subtype: the progress reports
-// (subtypes 5 and 6) add a step ID, and the failure reports (even subtypes)
-// add a failure notice.
+// (subtypes 5 and 6) add a step ID, and the failure reports (even subtypes,
+// including TM[1,10]) add a failure notice.
 type VerificationReport struct {
 	Profile MissionProfile
 	Subtype uint8
@@ -95,7 +97,8 @@ type VerificationReport struct {
 }
 
 // IsFailure reports whether this subtype carries a failure notice. The even
-// subtypes are the failures, per clause 8.1.2.
+// subtypes are the failures, per clause 8.1.2 — including TM[1,10], whose
+// body is a request ID and a failure notice, like TM[1,2].
 func (r *VerificationReport) IsFailure() bool { return r.Subtype%2 == 0 }
 
 // HasStepID reports whether this subtype carries a step ID.
@@ -108,9 +111,13 @@ func (r *VerificationReport) Key() MessageKey {
 	return MessageKey{Service: ServiceRequestVerification, Subtype: r.Subtype}
 }
 
-// Validate checks the report against clause 8.1.2.
+// Validate checks the report against clause 8.1.2. The valid subtypes are 1
+// to 8 and 10; the standard defines no TM[1,9].
 func (r *VerificationReport) Validate() error {
-	if r.Subtype < SubtypeAcceptSuccess || r.Subtype > SubtypeCompleteFailure {
+	switch {
+	case r.Subtype >= SubtypeAcceptSuccess && r.Subtype <= SubtypeCompleteFailure:
+	case r.Subtype == SubtypeRoutingFailure:
+	default:
 		return ErrWrongMessageType
 	}
 	return r.Profile.Validate()
@@ -179,6 +186,10 @@ func DecodeVerificationReport(profile MissionProfile, subtype uint8, data []byte
 			r.FailureData = make([]byte, len(data)-offset)
 			copy(r.FailureData, data[offset:])
 		}
+	} else if offset != len(data) {
+		// The success reports are fixed-size: a request ID, plus a step ID on
+		// TM[1,5]. Octets beyond that are a malformed body, not padding.
+		return nil, ErrTrailingBytes
 	}
 	return r, nil
 }
@@ -199,7 +210,14 @@ func (r *VerificationReport) Humanize() string {
 
 // registerST01 adds every ST[01] report decoder to a registry.
 func registerST01(r *Registry) error {
-	for subtype := SubtypeAcceptSuccess; subtype <= SubtypeCompleteFailure; subtype++ {
+	subtypes := []uint8{
+		SubtypeAcceptSuccess, SubtypeAcceptFailure,
+		SubtypeStartSuccess, SubtypeStartFailure,
+		SubtypeProgressSuccess, SubtypeProgressFailure,
+		SubtypeCompleteSuccess, SubtypeCompleteFailure,
+		SubtypeRoutingFailure,
+	}
+	for _, subtype := range subtypes {
 		sub := subtype // captured per iteration
 		key := MessageKey{Service: ServiceRequestVerification, Subtype: sub}
 		err := r.RegisterReport(key, func(p MissionProfile, data []byte) (Report, error) {

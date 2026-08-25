@@ -124,6 +124,19 @@ type MissionProfile struct {
 	ParameterIDBytes             int
 	CollectionIntervalBytes      int
 	CountBytes                   int
+
+	// APIDBytes sizes the APID field of TC[17,3] and TM[17,4]. Clauses
+	// 8.17.2.3 and 8.17.2.4 mark it enumerated without a stated width, so it
+	// is mission-tailorable like the other enumerated fields. Zero selects
+	// the 2-octet width most missions use.
+	APIDBytes int
+
+	// WordSizeBytes is the mission's word size, in octets. Clauses 7.4.3.1l
+	// and 7.4.4.1g size the spare fields so each secondary header ends on a
+	// word boundary. When non-zero, Validate checks that both header sizes are
+	// whole multiples of this value. Zero disables the check, leaving word
+	// alignment to the caller-supplied spare widths.
+	WordSizeBytes int
 }
 
 // DefaultProfile returns a profile using the widths most European missions
@@ -145,7 +158,17 @@ func DefaultProfile() MissionProfile {
 		ParameterIDBytes:             2,
 		CollectionIntervalBytes:      4,
 		CountBytes:                   1,
+		APIDBytes:                    2,
 	}
+}
+
+// APIDSize returns the width of the ST[17] APID field in octets: APIDBytes,
+// or the 2-octet default when the profile leaves it zero.
+func (p MissionProfile) APIDSize() int {
+	if p.APIDBytes == 0 {
+		return 2
+	}
+	return p.APIDBytes
 }
 
 // TimeSize returns the width of the TM absolute time field in octets.
@@ -188,6 +211,7 @@ func (p MissionProfile) Validate() error {
 		p.TimeRawBytes, p.StepIDBytes, p.FailureCodeBytes,
 		p.EventDefinitionIDBytes, p.HousekeepingStructureIDBytes,
 		p.ParameterIDBytes, p.CollectionIntervalBytes, p.CountBytes,
+		p.APIDBytes, p.WordSizeBytes,
 	}
 	for _, w := range widths {
 		if w < 0 {
@@ -202,8 +226,8 @@ func (p MissionProfile) Validate() error {
 	switch p.TimeFormat {
 	case TimeNone:
 	case TimeCUC, TimeCUCExplicit:
-		// Clause 7.4.4 note 2 caps coarse time at 4 octets for PUS; pkg/tcf
-		// accepts 1 to 4 coarse and 0 to 3 fine.
+		// Clause 7.4.3.1j and Table 7-10 cap coarse time at 4 octets for PUS;
+		// pkg/tcf accepts 1 to 4 coarse and 0 to 3 fine.
 		if p.CUCCoarseBytes < 1 || p.CUCCoarseBytes > 4 {
 			return ErrInvalidProfile
 		}
@@ -220,6 +244,15 @@ func (p MissionProfile) Validate() error {
 
 	if p.TCHeaderSize() > 63 || p.TMHeaderSize() > 63 {
 		return ErrHeaderTooLarge
+	}
+
+	// Clauses 7.4.3.1l and 7.4.4.1g size the spare fields so each secondary
+	// header ends on a word boundary. A declared word size makes that
+	// checkable; zero leaves it to the caller.
+	if p.WordSizeBytes > 0 {
+		if p.TCHeaderSize()%p.WordSizeBytes != 0 || p.TMHeaderSize()%p.WordSizeBytes != 0 {
+			return ErrHeaderNotWordAligned
+		}
 	}
 	return nil
 }
@@ -253,4 +286,41 @@ func readUint(data []byte, width int) (uint64, error) {
 		v = v<<8 | uint64(data[i])
 	}
 	return v, nil
+}
+
+// readUintList reads a count-prefixed list of big-endian unsigned integers and
+// returns the values plus how many octets were consumed.
+//
+// The count is untrusted input, so it is checked before anything is allocated:
+// a count the remaining octets cannot satisfy is refused, and a non-zero count
+// over a zero-width element is refused outright — otherwise a hostile count
+// would drive an unbounded allocation that consumes no input at all.
+func readUintList(data []byte, countWidth, elemWidth int) ([]uint64, int, error) {
+	count, err := readUint(data, countWidth)
+	if err != nil {
+		return nil, 0, err
+	}
+	offset := countWidth
+	if count == 0 {
+		return nil, offset, nil
+	}
+	if elemWidth == 0 {
+		return nil, 0, ErrInvalidProfile
+	}
+	// Division rather than multiplication, so a huge count cannot overflow
+	// its way past the bound.
+	if uint64(len(data)-offset)/uint64(elemWidth) < count {
+		return nil, 0, ErrDataTooShort
+	}
+
+	list := make([]uint64, 0, count)
+	for i := uint64(0); i < count; i++ {
+		v, err := readUint(data[offset:], elemWidth)
+		if err != nil {
+			return nil, 0, err
+		}
+		list = append(list, v)
+		offset += elemWidth
+	}
+	return list, offset, nil
 }

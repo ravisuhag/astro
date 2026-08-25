@@ -128,24 +128,12 @@ func DecodeHousekeepingStructure(profile MissionProfile, data []byte) (*Housekee
 	s.CollectionInterval = interval
 	offset += p.CollectionIntervalBytes
 
-	n1, err := readUint(data[offset:], p.CountBytes)
+	ids, n, err := readUintList(data[offset:], p.CountBytes, p.ParameterIDBytes)
 	if err != nil {
 		return nil, err
 	}
-	offset += p.CountBytes
-
-	// Reject a count the remaining bytes cannot satisfy before allocating.
-	if p.ParameterIDBytes > 0 && uint64(len(data)-offset) < n1*uint64(p.ParameterIDBytes) {
-		return nil, ErrDataTooShort
-	}
-	for i := uint64(0); i < n1; i++ {
-		pid, err := readUint(data[offset:], p.ParameterIDBytes)
-		if err != nil {
-			return nil, err
-		}
-		s.ParameterIDs = append(s.ParameterIDs, pid)
-		offset += p.ParameterIDBytes
-	}
+	s.ParameterIDs = ids
+	offset += n
 
 	nfa, err := readUint(data[offset:], p.CountBytes)
 	if err != nil {
@@ -160,25 +148,21 @@ func DecodeHousekeepingStructure(profile MissionProfile, data []byte) (*Housekee
 		}
 		offset += p.CountBytes
 
-		n2, err := readUint(data[offset:], p.CountBytes)
+		ids, n, err := readUintList(data[offset:], p.CountBytes, p.ParameterIDBytes)
 		if err != nil {
 			return nil, err
 		}
-		offset += p.CountBytes
+		offset += n
+		s.SuperCommutated = append(s.SuperCommutated, SuperCommutatedSet{
+			RepetitionNumber: rep,
+			ParameterIDs:     ids,
+		})
+	}
 
-		if p.ParameterIDBytes > 0 && uint64(len(data)-offset) < n2*uint64(p.ParameterIDBytes) {
-			return nil, ErrDataTooShort
-		}
-		set := SuperCommutatedSet{RepetitionNumber: rep}
-		for j := uint64(0); j < n2; j++ {
-			pid, err := readUint(data[offset:], p.ParameterIDBytes)
-			if err != nil {
-				return nil, err
-			}
-			set.ParameterIDs = append(set.ParameterIDs, pid)
-			offset += p.ParameterIDBytes
-		}
-		s.SuperCommutated = append(s.SuperCommutated, set)
+	// The counts fully determine the body size; octets beyond it are a
+	// malformed request, not padding.
+	if offset != len(data) {
+		return nil, ErrTrailingBytes
 	}
 	return s, nil
 }
@@ -299,24 +283,14 @@ func DecodeHousekeepingControlRequest(profile MissionProfile, subtype uint8, dat
 		return nil, err
 	}
 
-	count, err := readUint(data, profile.CountBytes)
+	ids, n, err := readUintList(data, profile.CountBytes, profile.HousekeepingStructureIDBytes)
 	if err != nil {
 		return nil, err
 	}
-	offset := profile.CountBytes
-
-	width := profile.HousekeepingStructureIDBytes
-	if width > 0 && uint64(len(data)-offset) < count*uint64(width) {
-		return nil, ErrDataTooShort
+	if n != len(data) {
+		return nil, ErrTrailingBytes
 	}
-	for i := uint64(0); i < count; i++ {
-		id, err := readUint(data[offset:], width)
-		if err != nil {
-			return nil, err
-		}
-		r.StructureIDs = append(r.StructureIDs, id)
-		offset += width
-	}
+	r.StructureIDs = ids
 	return r, nil
 }
 

@@ -64,11 +64,20 @@ profile := pus.MissionProfile{
     ParameterIDBytes:             2,
     CollectionIntervalBytes:      4,
     CountBytes:                   1,
+    APIDBytes:                    2, // ST[17] APID width; zero also means 2
 }
 if err := profile.Validate(); err != nil {
     log.Fatal(err)
 }
 ```
+
+Two optional profile fields help catch mistakes early. `APIDBytes` sizes the
+APID field of TC[17,3] and TM[17,4], which the standard marks enumerated
+without a width; leaving it zero keeps the two-octet width almost every
+mission uses. `WordSizeBytes` declares the mission word size: when it is
+non-zero, `Validate` refuses a profile whose secondary headers are not a
+whole number of words, so a wrong spare-byte count fails at setup rather
+than on the wire. Zero skips the check.
 
 `pus.DefaultProfile()` returns the widths most European missions pick. It is a
 convenience for tooling and tests — **not** a standard-mandated default. The
@@ -179,8 +188,10 @@ follows automatically.
 
 ## Request verification, ST[01]
 
-Eight reports, four success and four failure, tracking a telecommand through
-acceptance, start, progress, and completion.
+Nine reports tracking a telecommand through acceptance, start, progress, and
+completion: four success and four failure pairs, TM[1,1] to TM[1,8], plus
+TM[1,10], the failed routing verification report a node sends when it cannot
+route a request onward.
 
 Every one carries a **request ID** naming the command it concerns. That ID is
 laid out as exactly the first four octets of a CCSDS primary header (Figure
@@ -190,8 +201,10 @@ Note what it does *not* contain: the source of the request. As the standard
 points out, that comes from the destination ID of the report's own secondary
 header.
 
-The odd subtypes are successes, the even ones failures. Only subtypes 5 and 6,
-the progress reports, carry a step ID.
+The odd subtypes are successes, the even ones failures — TM[1,10] included,
+whose body is a request ID and a failure notice like TM[1,2]. Only subtypes 5
+and 6, the progress reports, carry a step ID. There is no TM[1,9]; the decoder
+rejects it.
 
 ## Housekeeping, ST[03]
 
@@ -212,6 +225,14 @@ carries an event definition ID and optional auxiliary data whose shape that ID
 implies.
 
 `TC[5,5]` and `TC[5,6]` enable and disable generation for a list of events.
+`TC[5,7]` — an empty-bodied request — asks which events are disabled, and
+`TM[5,8]` answers with the list.
+
+One decoding rule worth knowing: messages whose size is fully determined by
+their structure are checked exactly. A body with octets left over decodes to
+`ErrTrailingBytes` rather than being silently truncated, matching the PUS
+acceptance checks. Bodies that end in caller-interpreted data — failure data,
+auxiliary data, parameter values — carry those octets verbatim by design.
 
 ## What is not here yet
 
