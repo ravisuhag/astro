@@ -50,16 +50,27 @@ type SpacePacket struct {
 	UserData        []byte          // User data contained in the packet
 	ErrorControl    *uint16         // Optional error control field (e.g., CRC)
 
-	// seqCountSet records that the caller pinned the sequence count via
-	// WithSequenceCount, so Service.SendPacket must not overwrite it.
-	seqCountSet bool
+	// seqCountAuthoritative records that this packet's Packet Sequence Count
+	// is the caller's, not the service's to allocate, so Service.SendPacket
+	// must send it unchanged.
+	//
+	// It is set by WithSequenceCount and by Decode. A decoded packet already
+	// carries the count its originating application assigned (4.1.3.4.3.3);
+	// the Packet Transfer Function of 4.2.3 forwards it, and 3.3.1 requires
+	// Packet Service SDUs to travel "without further formatting", so a relay
+	// must not renumber what it received.
+	seqCountAuthoritative bool
 
-	// shInUserData records that Decode read a packet whose Secondary Header
-	// Flag was '1' while no decoder was configured, so the secondary header
-	// octets are still sitting at the front of UserData. The packet is whole
-	// and re-encodes byte for byte; it just has no parsed header to offer.
-	// Without this, a relay could not forward a packet it received (the
-	// Packet Transfer Function of 4.2.3).
+	// shInUserData records that the Secondary Header Flag is '1' while the
+	// secondary header octets sit at the front of UserData rather than in a
+	// parsed SecondaryHeader. The packet is whole and encodes byte for byte;
+	// it just has no parsed header to offer.
+	//
+	// Decode sets it for a packet received without a decoder configured, so a
+	// relay can forward a packet it cannot itself interpret (4.2.3).
+	// WithSecondaryHeaderIndicator sets it for a caller assembling such a
+	// packet from octets, which is the Secondary Header Indicator parameter of
+	// 3.4.2.3 and 4.2.2.3.
 	shInUserData bool
 }
 
@@ -110,9 +121,12 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 		PacketLength:        0, // Calculated after options are applied
 	}
 
+	// The packet owns its user data. Decode copies out of the buffer it was
+	// handed for the same reason: a caller that reuses or mutates the slice it
+	// passed in must not be able to change what a built packet encodes.
 	packet := &SpacePacket{
 		PrimaryHeader: primaryHeader,
-		UserData:      data,
+		UserData:      append([]byte(nil), data...),
 	}
 
 	for _, option := range options {
@@ -172,14 +186,52 @@ func NewIdlePacket(fill []byte, options ...PacketOption) (*SpacePacket, error) {
 // PacketOption defines a function type for configuring SpacePacket options.
 type PacketOption func(*SpacePacket) error
 
-// WithSecondaryHeader adds a secondary header to the SpacePacket.
+// WithSecondaryHeader adds a secondary header to the SpacePacket and sets the
+// Secondary Header Flag to '1' (4.1.3.3.3.2).
+//
+// The header's octets are written ahead of the user data on encode. Use
+// WithSecondaryHeaderIndicator instead when the octets are already at the
+// front of the data you are passing in.
 func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 	return func(packet *SpacePacket) error {
+		if header == nil {
+			return ErrSecondaryHeaderMissing
+		}
 		if err := validateSecondaryHeader(header); err != nil {
 			return err
 		}
+		if packet.shInUserData {
+			return ErrSecondaryHeaderTwice
+		}
 		packet.PrimaryHeader.SecondaryHeaderFlag = 1
 		packet.SecondaryHeader = header
+		return nil
+	}
+}
+
+// WithSecondaryHeaderIndicator sets the Secondary Header Flag for a packet
+// whose data field already begins with the Packet Secondary Header octets.
+//
+// This is the Secondary Header Indicator parameter of 3.4.2.3: the service
+// user signals that a secondary header leads the octets it is handing over,
+// and the Packet Assembly Function translates that signal into the flag
+// (3.4.2.3.3, 4.2.2.3, 4.2.2.4). No SecondaryHeader implementation is needed,
+// because nothing here has to interpret the octets — they are counted in the
+// Packet Data Length as part of the user data and written verbatim.
+//
+// Passing false is the default and clears the flag.
+func WithSecondaryHeaderIndicator(present bool) PacketOption {
+	return func(packet *SpacePacket) error {
+		if !present {
+			packet.PrimaryHeader.SecondaryHeaderFlag = 0
+			packet.shInUserData = false
+			return nil
+		}
+		if packet.SecondaryHeader != nil {
+			return ErrSecondaryHeaderTwice
+		}
+		packet.PrimaryHeader.SecondaryHeaderFlag = 1
+		packet.shInUserData = true
 		return nil
 	}
 }
@@ -213,7 +265,7 @@ func WithSequenceCount(n uint16) PacketOption {
 			return ErrInvalidSequenceCount
 		}
 		packet.PrimaryHeader.SequenceCount = n
-		packet.seqCountSet = true
+		packet.seqCountAuthoritative = true
 		return nil
 	}
 }
@@ -267,9 +319,14 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 	if PrimaryHeaderSize+dataFieldSize > 65542 {
 		return nil, ErrPacketTooLarge
 	}
-	sp.PrimaryHeader.PacketLength = uint16(dataFieldSize) - 1
 
+	// Validate reads the length field, so it has to be in place first. A
+	// failure puts the old value back: a rejected Encode must leave the packet
+	// exactly as the caller had it.
+	previousLength := sp.PrimaryHeader.PacketLength
+	sp.PrimaryHeader.PacketLength = uint16(dataFieldSize) - 1
 	if err := sp.Validate(); err != nil {
+		sp.PrimaryHeader.PacketLength = previousLength
 		return nil, err
 	}
 
@@ -366,7 +423,12 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 			// more octets than this packet's data field has.
 			return nil, ErrSecondaryHeaderExceedsDataField
 		}
-		if err := secondaryHeader.Decode(data[offset : offset+shSize]); err != nil {
+		// A copy, not a subslice: an implementation that keeps the octets it
+		// was handed must not end up aliasing the caller's buffer, or this
+		// function's promise not to retain the input would not hold.
+		shBytes := make([]byte, shSize)
+		copy(shBytes, data[offset:offset+shSize])
+		if err := secondaryHeader.Decode(shBytes); err != nil {
 			return nil, err
 		}
 		offset += shSize
@@ -402,6 +464,10 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 		// its octets are still at the front of UserData. Recording that keeps
 		// the packet re-encodable byte for byte.
 		shInUserData: primaryHeader.SecondaryHeaderFlag == 1 && secondaryHeader == nil,
+		// The count belongs to the application that generated this packet
+		// (4.1.3.4.3.3). A relay forwarding it through Service.SendPacket must
+		// send it on unchanged rather than stamping its own.
+		seqCountAuthoritative: true,
 	}
 
 	if err := packet.Validate(); err != nil {

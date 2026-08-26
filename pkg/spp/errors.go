@@ -46,6 +46,12 @@ var (
 	// actually written.
 	ErrSecondaryHeaderFlagClear = errors.New("secondary header is set but the secondary header flag is 0")
 
+	// ErrSecondaryHeaderTwice indicates a packet was given both a parsed
+	// SecondaryHeader and a Secondary Header Indicator saying the octets are
+	// already in the user data. Honoring both would count the header twice in
+	// the Packet Data Length (4.1.3.5.3) and write it twice on the wire.
+	ErrSecondaryHeaderTwice = errors.New("secondary header supplied both as a parsed header and as user data octets")
+
 	// ErrSecondaryHeaderExceedsDataField indicates the configured secondary
 	// header decoder wants more octets than the packet data field holds. This
 	// is a decoder/packet mismatch, not a truncated buffer.

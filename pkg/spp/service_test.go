@@ -2,6 +2,10 @@ package spp_test
 
 import (
 	"bytes"
+	"errors"
+	"io"
+	"runtime"
+	"sync"
 	"testing"
 
 	spp2 "github.com/ravisuhag/astro/pkg/spp"
@@ -192,8 +196,8 @@ func TestServiceSendBytesWithSecondaryHeader(t *testing.T) {
 	var buf bytes.Buffer
 	sh := &testSecondaryHeader{Timestamp: 0x0102030405060708}
 	svc := spp2.NewService(&buf, spp2.ServiceConfig{
-		PacketType:      spp2.PacketTypeTC,
-		SecondaryHeader: &testSecondaryHeader{},
+		PacketType:         spp2.PacketTypeTC,
+		NewSecondaryHeader: func() spp2.SecondaryHeader { return &testSecondaryHeader{} },
 	})
 
 	data := []byte{0xDE, 0xAD}
@@ -519,13 +523,91 @@ func TestReceivePacketGivesEachPacketItsOwnSecondaryHeader(t *testing.T) {
 	}
 }
 
-// TestDeprecatedSecondaryHeaderConfigStillClonesPerPacket checks the old
-// single-instance configuration keeps working and no longer aliases.
-func TestDeprecatedSecondaryHeaderConfigStillClonesPerPacket(t *testing.T) {
+// sizedSecondaryHeader is a secondary header whose width lives in the value,
+// which is the usual shape for a real one — a PUS header reads its width from
+// its mission profile. A service must decode into headers the caller's factory
+// built, never into something it constructed itself from the type, because
+// only the caller's value carries the width.
+type sizedSecondaryHeader struct {
+	Width   int
+	Payload []byte
+}
+
+func (h *sizedSecondaryHeader) Size() int { return h.Width }
+
+func (h *sizedSecondaryHeader) Encode() ([]byte, error) {
+	out := make([]byte, h.Width)
+	copy(out, h.Payload)
+	return out, nil
+}
+
+func (h *sizedSecondaryHeader) Decode(data []byte) error {
+	if len(data) != h.Width {
+		return spp2.ErrDataTooShort
+	}
+	h.Payload = append([]byte(nil), data...)
+	return nil
+}
+
+// TestReceivePacketUsesTheFactorysConfiguredHeader checks that the width the
+// caller configured on the header its factory returns is the width the service
+// decodes. An earlier revision cloned a single configured instance by
+// reflecting on its type, which produced a zero value: a 13-octet PUS header
+// was read as 7 octets and the remaining 6 leaked into UserData with no error
+// raised anywhere.
+func TestReceivePacketUsesTheFactorysConfiguredHeader(t *testing.T) {
+	const width = 12
+	var buf bytes.Buffer
+
+	userData := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+	pkt, err := spp2.NewTMPacket(100, userData, spp2.WithSecondaryHeader(
+		&sizedSecondaryHeader{Width: width, Payload: bytes.Repeat([]byte{0xA5}, width)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(wire)
+
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType: spp2.PacketTypeTM,
+		NewSecondaryHeader: func() spp2.SecondaryHeader {
+			return &sizedSecondaryHeader{Width: width}
+		},
+	})
+
+	got, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket: %v", err)
+	}
+	sh, ok := got.SecondaryHeader.(*sizedSecondaryHeader)
+	if !ok {
+		t.Fatalf("secondary header is %T, want *sizedSecondaryHeader", got.SecondaryHeader)
+	}
+	if sh.Size() != width {
+		t.Errorf("decoded header width = %d, want %d", sh.Size(), width)
+	}
+	if len(sh.Payload) != width {
+		t.Errorf("decoded header payload = %d octets, want %d", len(sh.Payload), width)
+	}
+	if !bytes.Equal(got.UserData, userData) {
+		t.Errorf("UserData = %x, want %x — secondary header octets leaked into it",
+			got.UserData, userData)
+	}
+}
+
+// TestReceivePacketDoesNotShareHeadersAcrossPackets holds every delivered
+// packet before reading any of their headers, so a service that decoded them
+// all into one instance shows up. Reading each header right after its own
+// ReceivePacket cannot detect that: the shared instance holds the right value
+// at that moment and is only overwritten by the next arrival.
+func TestReceivePacketDoesNotShareHeadersAcrossPackets(t *testing.T) {
 	var buf bytes.Buffer
 	svc := spp2.NewService(&buf, spp2.ServiceConfig{
-		PacketType:      spp2.PacketTypeTM,
-		SecondaryHeader: &testSecondaryHeader{},
+		PacketType:         spp2.PacketTypeTM,
+		NewSecondaryHeader: func() spp2.SecondaryHeader { return &testSecondaryHeader{} },
 	})
 
 	stamps := []uint64{0xAAAA, 0xBBBB, 0xCCCC}
@@ -536,22 +618,28 @@ func TestDeprecatedSecondaryHeaderConfigStillClonesPerPacket(t *testing.T) {
 		}
 	}
 
-	var got []uint64
+	// Collect everything first; only then inspect.
+	var got []*spp2.SpacePacket
 	for range stamps {
 		pkt, err := svc.ReceivePacket()
 		if err != nil {
 			t.Fatal(err)
 		}
-		sh, ok := pkt.SecondaryHeader.(*testSecondaryHeader)
-		if !ok {
-			t.Fatalf("secondary header is %T, want *testSecondaryHeader", pkt.SecondaryHeader)
-		}
-		got = append(got, sh.Timestamp)
+		got = append(got, pkt)
 	}
 
+	seen := make(map[spp2.SecondaryHeader]bool, len(got))
 	for i, want := range stamps {
-		if got[i] != want {
-			t.Errorf("packet %d timestamp = %#x, want %#x", i, got[i], want)
+		sh, ok := got[i].SecondaryHeader.(*testSecondaryHeader)
+		if !ok {
+			t.Fatalf("packet %d: secondary header is %T", i, got[i].SecondaryHeader)
+		}
+		if seen[got[i].SecondaryHeader] {
+			t.Errorf("packet %d shares its secondary header instance with an earlier packet", i)
+		}
+		seen[got[i].SecondaryHeader] = true
+		if sh.Timestamp != want {
+			t.Errorf("packet %d timestamp = %#x, want %#x", i, sh.Timestamp, want)
 		}
 	}
 }
@@ -704,6 +792,126 @@ func TestReceiveBytesSurfacesSecondaryHeaderIndicator(t *testing.T) {
 	}
 }
 
+// TestReceiveBytesOctetStringKeepsTheSecondaryHeader checks that the Octet
+// String is the whole Packet Data Field even when a decoder is configured.
+//
+// 4.3.2.2 defines the Octet String as what is left after the Packet Extraction
+// Function removes the Packet *Primary* Header, and defines the Secondary
+// Header Indicator as reporting a secondary header "at the start of the Octet
+// String". An earlier revision stripped the header octets whenever a decoder
+// was configured while still setting the indicator, so the indicator described
+// something that was no longer there.
+func TestReceiveBytesOctetStringKeepsTheSecondaryHeader(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:         spp2.PacketTypeTM,
+		NewSecondaryHeader: func() spp2.SecondaryHeader { return &testSecondaryHeader{} },
+	})
+
+	if err := svc.SendBytes(12, []byte{0x0B},
+		spp2.WithSendSecondaryHeader(&testSecondaryHeader{Timestamp: 0x0102030405060708})); err != nil {
+		t.Fatal(err)
+	}
+
+	ind, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ind.SecondaryHeaderIndicator {
+		t.Fatal("Secondary Header Indicator clear on a packet that carries one")
+	}
+	want := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0B}
+	if !bytes.Equal(ind.Data, want) {
+		t.Errorf("octet string = %x, want %x (header octets must lead it)", ind.Data, want)
+	}
+	// The parsed header is offered alongside, not instead.
+	sh, ok := ind.SecondaryHeader.(*testSecondaryHeader)
+	if !ok {
+		t.Fatalf("Indication.SecondaryHeader is %T, want *testSecondaryHeader", ind.SecondaryHeader)
+	}
+	if sh.Timestamp != 0x0102030405060708 {
+		t.Errorf("parsed timestamp = %#x", sh.Timestamp)
+	}
+}
+
+// TestReceiveBytesExcludesErrorControl checks that the two error control
+// octets this layer consumes and verifies are not handed to the octet string
+// user as part of their data.
+func TestReceiveBytesExcludesErrorControl(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:   spp2.PacketTypeTM,
+		ErrorControl: true,
+	})
+
+	payload := []byte{0x11, 0x22, 0x33}
+	if err := svc.SendBytes(13, payload, spp2.WithSendErrorControl()); err != nil {
+		t.Fatal(err)
+	}
+	ind, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(ind.Data, payload) {
+		t.Errorf("octet string = %x, want %x", ind.Data, payload)
+	}
+}
+
+// --- Secondary Header Indicator on the request side (CCSDS 3.4.2.3.2) ---
+
+// TestSendBytesSecondaryHeaderIndicator checks that a user holding a
+// pre-formatted data field can set the Secondary Header Flag without having to
+// supply a SecondaryHeader implementation. Per 3.4.2.3.2 the parameter is a
+// signal about octets the user already assembled, not a header object.
+func TestSendBytesSecondaryHeaderIndicator(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	octets := []byte{0xAA, 0xAA, 0xAA, 0xAA, 0x01, 0x02, 0x03}
+	if err := svc.SendBytes(14, octets,
+		spp2.WithSendSecondaryHeaderIndicator(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	wire := buf.Bytes()
+	if flag := (wire[0] >> 3) & 0x01; flag != 1 {
+		t.Errorf("Secondary Header Flag = %d, want 1", flag)
+	}
+	if declared := int(wire[4])<<8 | int(wire[5]); declared+1 != len(wire)-spp2.PrimaryHeaderSize {
+		t.Errorf("Packet Data Length declares %d octets, %d written",
+			declared+1, len(wire)-spp2.PrimaryHeaderSize)
+	}
+
+	ind, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ind.SecondaryHeaderIndicator {
+		t.Error("indicator did not survive the round trip")
+	}
+	if !bytes.Equal(ind.Data, octets) {
+		t.Errorf("octet string = %x, want %x", ind.Data, octets)
+	}
+}
+
+// TestSendBytesRejectsBothSecondaryHeaderForms checks that supplying a parsed
+// header and an indicator together is refused rather than counting the header
+// twice in the Packet Data Length.
+func TestSendBytesRejectsBothSecondaryHeaderForms(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	err := svc.SendBytes(15, []byte{0x01, 0x02},
+		spp2.WithSendSecondaryHeader(&testSecondaryHeader{}),
+		spp2.WithSendSecondaryHeaderIndicator(true))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderTwice) {
+		t.Errorf("SendBytes = %v, want ErrSecondaryHeaderTwice", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("%d octets written despite the error", buf.Len())
+	}
+}
+
 // --- Octet String request parameters (M1, CCSDS 3.4.3.2.2) ---
 
 func TestSendBytesPacketTypeAndSequenceCount(t *testing.T) {
@@ -793,5 +1001,313 @@ func TestDiscardIdle(t *testing.T) {
 	}
 	if ind.APID != spp2.APIDIdle {
 		t.Errorf("APID = %d, want the idle APID", ind.APID)
+	}
+}
+
+// --- Packet Transfer Function: a relay must not renumber (CCSDS 3.3.1, 4.2.3) ---
+
+// TestSendPacketForwardsADecodedPacketUnchanged checks that a packet read off
+// the wire and handed straight back to SendPacket goes out exactly as it came
+// in. 3.3.1 requires Packet Service SDUs to be transferred "without further
+// formatting", 4.1.3.4.3.3 makes the count the property of the originating
+// application, and the Packet Transfer Function of 4.2.3 does not renumber.
+// The sequence counter belongs to the Packet Assembly Function (4.2.2.4),
+// which serves the Octet String Service.
+func TestSendPacketForwardsADecodedPacketUnchanged(t *testing.T) {
+	// Build an inbound packet carrying sequence count 500 on APID 100.
+	source, err := spp2.NewTMPacket(100, []byte{1, 2, 3}, spp2.WithSequenceCount(500))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbound, err := source.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	received, err := spp2.Decode(inbound)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if received.PrimaryHeader.SequenceCount != 500 {
+		t.Fatalf("decoded count = %d, want 500", received.PrimaryHeader.SequenceCount)
+	}
+
+	var out bytes.Buffer
+	relay := spp2.NewService(&out, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+	if err := relay.SendPacket(received); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(out.Bytes(), inbound) {
+		t.Errorf("relayed packet changed:\n got %x\nwant %x", out.Bytes(), inbound)
+	}
+	if received.PrimaryHeader.SequenceCount != 500 {
+		t.Errorf("relay renumbered the packet in place: count = %d, want 500",
+			received.PrimaryHeader.SequenceCount)
+	}
+
+	// The relay's own counter for that APID resynchronizes to one past what it
+	// forwarded, so a packet it originates itself continues the sequence
+	// rather than jumping back (4.1.3.4.3.4).
+	own, err := spp2.NewTMPacket(100, []byte{9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := relay.SendPacket(own); err != nil {
+		t.Fatal(err)
+	}
+	if own.PrimaryHeader.SequenceCount != 501 {
+		t.Errorf("next originated count = %d, want 501", own.PrimaryHeader.SequenceCount)
+	}
+}
+
+// TestSendPacketStampsAPacketBuiltWithoutACount checks the ordinary case is
+// unaffected: a freshly built packet still gets the service's next count.
+func TestSendPacketStampsAPacketBuiltWithoutACount(t *testing.T) {
+	var out bytes.Buffer
+	svc := spp2.NewService(&out, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+	for want := uint16(0); want < 3; want++ {
+		pkt, err := spp2.NewTMPacket(4, []byte{1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.SendPacket(pkt); err != nil {
+			t.Fatal(err)
+		}
+		if pkt.PrimaryHeader.SequenceCount != want {
+			t.Errorf("count = %d, want %d", pkt.PrimaryHeader.SequenceCount, want)
+		}
+	}
+}
+
+// TestSendPacketRestoresTheCounterOnFailure checks that a send which never
+// reaches the transport does not spend a sequence count. Spending one would
+// leave a hole the receiver reads as a lost packet (4.1.3.4.3.4).
+func TestSendPacketRestoresTheCounterOnFailure(t *testing.T) {
+	var out bytes.Buffer
+	svc := spp2.NewService(&out, spp2.ServiceConfig{
+		PacketType:      spp2.PacketTypeTM,
+		MaxPacketLength: 10,
+	})
+
+	tooBig, err := spp2.NewTMPacket(6, make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	countBefore := tooBig.PrimaryHeader.SequenceCount
+	if err := svc.SendPacket(tooBig); !errors.Is(err, spp2.ErrPacketTooLarge) {
+		t.Fatalf("SendPacket = %v, want ErrPacketTooLarge", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("%d octets written despite the error", out.Len())
+	}
+	if tooBig.PrimaryHeader.SequenceCount != countBefore {
+		t.Errorf("rejected packet was left stamped: count = %d, want %d",
+			tooBig.PrimaryHeader.SequenceCount, countBefore)
+	}
+
+	fits, err := spp2.NewTMPacket(6, []byte{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(fits); err != nil {
+		t.Fatal(err)
+	}
+	if fits.PrimaryHeader.SequenceCount != 0 {
+		t.Errorf("first packet actually sent got count %d, want 0 — the rejected "+
+			"send consumed a count", fits.PrimaryHeader.SequenceCount)
+	}
+}
+
+// --- Concurrency (CCSDS 4.1.3.4.3.4) ---
+
+// countingWriter records each Write as one unit and notes the sequence count
+// it carried, so a test can check the order packets reached the transport.
+type countingWriter struct {
+	mu     sync.Mutex
+	counts []uint16
+}
+
+func (w *countingWriter) Read([]byte) (int, error) { return 0, io.EOF }
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(p) >= 4 {
+		w.counts = append(w.counts, uint16(p[2]&0x3F)<<8|uint16(p[3]))
+	}
+	return len(p), nil
+}
+
+// TestConcurrentSendPacketKeepsTheCountContinuous checks that concurrent
+// senders put packets on the wire in the same order as the counts they were
+// given. Allocating the count under a lock but writing outside it satisfies
+// -race and still emits a discontinuous sequence, which 4.1.3.4.3.4 forbids
+// and a receiver reads as loss.
+func TestConcurrentSendPacketKeepsTheCountContinuous(t *testing.T) {
+	w := &countingWriter{}
+	svc := spp2.NewService(w, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	const senders = 64
+	var wg sync.WaitGroup
+	for range senders {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pkt, err := spp2.NewTMPacket(100, []byte{1, 2, 3, 4})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if err := svc.SendPacket(pkt); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(w.counts) != senders {
+		t.Fatalf("%d packets reached the transport, want %d", len(w.counts), senders)
+	}
+	for i, got := range w.counts {
+		if got != uint16(i) {
+			t.Fatalf("packet %d on the wire carries count %d: the sequence is not "+
+				"continuous (full order %v)", i, got, w.counts)
+		}
+	}
+}
+
+// lockstepTransport is a byte pipe safe for concurrent use, so a concurrency
+// test measures the Service rather than the test's own plumbing.
+//
+// It hands back one octet per Read and yields the processor in between, which
+// is what a real socket does under load: io.ReadFull loops, and any reader
+// that does not hold a lock across its reads will have another reader's octets
+// spliced into the middle of its packet. A transport that satisfied every read
+// in one call would hide exactly the defect this exists to detect.
+type lockstepTransport struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (t *lockstepTransport) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.buf.Len() == 0 {
+		return 0, io.EOF
+	}
+	n, err := t.buf.Read(p[:1])
+	runtime.Gosched()
+	return n, err
+}
+
+func (t *lockstepTransport) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.buf.Write(p)
+}
+
+// TestConcurrentReceivePacketDoesNotSplicePackets checks that a packet's
+// header read and body read are not interleaved with another receiver's. Each
+// packet's user data is four copies of one octet, so a spliced packet shows up
+// immediately.
+func TestConcurrentReceivePacketDoesNotSplicePackets(t *testing.T) {
+	tr := &lockstepTransport{}
+	const packets = 64
+	for i := range packets {
+		pkt, err := spp2.NewTMPacket(100, bytes.Repeat([]byte{byte(i)}, 4))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wire, err := pkt.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr.buf.Write(wire)
+	}
+
+	svc := spp2.NewService(tr, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var delivered int
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				pkt, err := svc.ReceivePacket()
+				if err != nil {
+					return
+				}
+				u := pkt.UserData
+				mu.Lock()
+				delivered++
+				mu.Unlock()
+				if len(u) != 4 || u[0] != u[1] || u[1] != u[2] || u[2] != u[3] {
+					t.Errorf("spliced packet: UserData = %x", u)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	if delivered != packets {
+		t.Errorf("delivered %d packets, want %d", delivered, packets)
+	}
+}
+
+// --- Oversize packets must not desynchronize the reader (CCSDS 4.3.3) ---
+
+// TestReceivePacketResynchronizesAfterAnOversizePacket checks that rejecting a
+// packet longer than the managed Maximum Packet Length leaves the reader on a
+// real packet boundary. The primary header is already consumed when the limit
+// is found, so leaving the body behind made the next read parse payload as a
+// primary header and deliver packets that were never sent.
+func TestReceivePacketResynchronizesAfterAnOversizePacket(t *testing.T) {
+	var buf bytes.Buffer
+
+	oversize, err := spp2.NewTMPacket(5, make([]byte, 100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := oversize.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(wire)
+
+	wanted, err := spp2.NewTMPacket(9, []byte{0xAB, 0xCD})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantedWire, err := wanted.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(wantedWire)
+
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:      spp2.PacketTypeTM,
+		MaxPacketLength: 50,
+	})
+
+	if _, err := svc.ReceivePacket(); !errors.Is(err, spp2.ErrPacketTooLarge) {
+		t.Fatalf("first ReceivePacket = %v, want ErrPacketTooLarge", err)
+	}
+
+	got, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("second ReceivePacket = %v, want the packet after the oversize one", err)
+	}
+	if got.PrimaryHeader.APID != 9 {
+		t.Errorf("APID = %d, want 9 — the reader resynchronized onto the wrong octet",
+			got.PrimaryHeader.APID)
+	}
+	if !bytes.Equal(got.UserData, []byte{0xAB, 0xCD}) {
+		t.Errorf("UserData = %x, want abcd", got.UserData)
 	}
 }
