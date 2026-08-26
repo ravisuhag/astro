@@ -1096,6 +1096,17 @@ func TestDecodeSecondaryHeaderLargerThanDataField(t *testing.T) {
 	if errors.Is(err, spp2.ErrDataTooShort) {
 		t.Error("a decoder mismatch was reported as a short buffer")
 	}
+
+	// The bound is the packet data field, not the buffer. With another packet
+	// following in the same buffer there are plenty of octets left, and a
+	// decoder that measured against the buffer would read the next packet's
+	// header into this packet's secondary header.
+	withTrailing := append(append([]byte(nil), raw...),
+		0x00, 0x02, 0xC0, 0x00, 0x00, 0x00, 0x55)
+	_, err = spp2.Decode(withTrailing, spp2.WithDecodeSecondaryHeader(&testSecondaryHeader{}))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderExceedsDataField) {
+		t.Errorf("Decode with a following packet = %v, want ErrSecondaryHeaderExceedsDataField", err)
+	}
 }
 
 // --- PacketSizer (M3) ---
@@ -1163,6 +1174,29 @@ func TestIsIdleBytes(t *testing.T) {
 	if spp2.IsIdleBytes([]byte{0x07}) {
 		t.Error("IsIdleBytes(one octet) = true, want false")
 	}
+
+	// Only the 11 APID bits decide. The bits above them — version and packet
+	// type — must not be read as part of the APID, or a telecommand idle
+	// packet would go unrecognized and reach an application as if it were
+	// data. pkg/tmdl and pkg/aos both discard fill through this function.
+	tcIdle, err := spp2.NewIdlePacket([]byte{0xFF}, spp2.WithPacketType(spp2.PacketTypeTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tcIdleBytes, err := tcIdle.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !spp2.IsIdleBytes(tcIdleBytes) {
+		t.Errorf("IsIdleBytes(TC idle packet %x) = false, want true", tcIdleBytes)
+	}
+
+	// Every APID whose low 11 bits are all ones is idle, whatever sits above.
+	for _, high := range []byte{0x00, 0x08, 0x10, 0x18} {
+		if !spp2.IsIdleBytes([]byte{high | 0x07, 0xFF}) {
+			t.Errorf("IsIdleBytes(%#02x 0xFF) = false, want true", high|0x07)
+		}
+	}
 }
 
 // TestIdlePacketType checks an idle packet is telemetry by default and can be
@@ -1190,5 +1224,204 @@ func TestIdlePacketType(t *testing.T) {
 
 	if _, err := spp2.NewTMPacket(1, []byte{0x01}, spp2.WithPacketType(2)); !errors.Is(err, spp2.ErrInvalidType) {
 		t.Errorf("WithPacketType(2) = %v, want ErrInvalidType", err)
+	}
+}
+
+// --- The packet owns its data (no aliasing) ---
+
+// TestNewSpacePacketCopiesUserData checks a built packet does not alias the
+// slice it was handed. Decode already copies out of its input; the two have to
+// agree, or whether a caller can change a finished packet by touching its own
+// buffer would depend on how the packet was made.
+func TestNewSpacePacketCopiesUserData(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	pkt, err := spp2.NewTMPacket(5, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range data {
+		data[i] = 0xFF
+	}
+
+	after, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("mutating the caller's slice changed the packet:\nbefore %x\nafter  %x",
+			before, after)
+	}
+}
+
+// retainingSecondaryHeader keeps whatever slice Decode hands it, which is the
+// worst case for Decode's promise not to retain its input.
+type retainingSecondaryHeader struct{ kept []byte }
+
+func (h *retainingSecondaryHeader) Size() int { return 4 }
+
+func (h *retainingSecondaryHeader) Encode() ([]byte, error) {
+	out := make([]byte, 4)
+	copy(out, h.kept)
+	return out, nil
+}
+
+func (h *retainingSecondaryHeader) Decode(data []byte) error {
+	h.kept = data
+	return nil
+}
+
+// TestDecodeDoesNotAliasInputViaSecondaryHeader checks the secondary header
+// decoder is handed a copy too. Decode documents that the returned packet does
+// not retain the input slice, and passing the implementation a subslice of it
+// would leave that promise resting on how the implementation behaves.
+func TestDecodeDoesNotAliasInputViaSecondaryHeader(t *testing.T) {
+	// APID 1, flag set, 4-octet header followed by 2 octets of user data.
+	raw := []byte{0x08, 0x01, 0xC0, 0x00, 0x00, 0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0x01, 0x02}
+
+	sh := &retainingSecondaryHeader{}
+	pkt, err := spp2.Decode(raw, spp2.WithDecodeSecondaryHeader(sh))
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := append([]byte(nil), sh.kept...)
+	userData := append([]byte(nil), pkt.UserData...)
+
+	for i := range raw {
+		raw[i] = 0xFF
+	}
+
+	if !bytes.Equal(sh.kept, kept) {
+		t.Errorf("secondary header aliased the input: %x became %x", kept, sh.kept)
+	}
+	if !bytes.Equal(pkt.UserData, userData) {
+		t.Errorf("user data aliased the input: %x became %x", userData, pkt.UserData)
+	}
+}
+
+// --- A rejected Encode leaves the packet alone ---
+
+// TestEncodeLeavesPacketUnchangedOnFailure checks a failed Encode does not
+// leave a rewritten Packet Data Length behind. A caller that fixes whatever
+// Encode complained about and tries again must not find the length field
+// already changed under it.
+func TestEncodeLeavesPacketUnchangedOnFailure(t *testing.T) {
+	pkt, err := spp2.NewTMPacket(5, []byte{0x01, 0x02, 0x03, 0x04})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lengthBefore := pkt.PrimaryHeader.PacketLength
+
+	pkt.PrimaryHeader.Version = 3 // not CCSDS v1, so Validate refuses
+	pkt.UserData = []byte{0x09}   // and the length would otherwise be rewritten
+
+	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrInvalidVersion) {
+		t.Fatalf("Encode = %v, want ErrInvalidVersion", err)
+	}
+	if pkt.PrimaryHeader.PacketLength != lengthBefore {
+		t.Errorf("Packet Data Length = %d after a failed Encode, want %d unchanged",
+			pkt.PrimaryHeader.PacketLength, lengthBefore)
+	}
+}
+
+// --- Secondary Header Indicator on a hand-assembled data field ---
+
+// TestWithSecondaryHeaderIndicator checks a caller holding a pre-formatted
+// data field can set the Secondary Header Flag without supplying a
+// SecondaryHeader implementation. This is the Secondary Header Indicator of
+// 3.4.2.3, translated into the flag by 4.2.2.4, and it is what lets a relay
+// assemble a packet it cannot itself interpret.
+func TestWithSecondaryHeaderIndicator(t *testing.T) {
+	octets := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0x01, 0x02, 0x03}
+	pkt, err := spp2.NewTMPacket(100, octets, spp2.WithSecondaryHeaderIndicator(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkt.PrimaryHeader.SecondaryHeaderFlag != 1 {
+		t.Errorf("Secondary Header Flag = %d, want 1", pkt.PrimaryHeader.SecondaryHeaderFlag)
+	}
+	if pkt.SecondaryHeader != nil {
+		t.Error("no parsed header was supplied, so SecondaryHeader should be nil")
+	}
+
+	wire, err := pkt.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	// The header octets are counted once, as part of the data field.
+	declared := int(wire[4])<<8 | int(wire[5]) + 1
+	if declared != len(octets) {
+		t.Errorf("Packet Data Length declares %d octets, want %d", declared, len(octets))
+	}
+	if declared != len(wire)-spp2.PrimaryHeaderSize {
+		t.Errorf("declared %d octets, wrote %d", declared, len(wire)-spp2.PrimaryHeaderSize)
+	}
+
+	// It survives a decode and re-encode, so a relay can keep forwarding it.
+	back, err := spp2.Decode(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := back.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(wire, again) {
+		t.Errorf("round trip changed the packet:\n got %x\nwant %x", again, wire)
+	}
+
+	// False is the default and leaves the flag clear.
+	plain, err := spp2.NewTMPacket(100, octets, spp2.WithSecondaryHeaderIndicator(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.PrimaryHeader.SecondaryHeaderFlag != 0 {
+		t.Error("WithSecondaryHeaderIndicator(false) left the flag set")
+	}
+}
+
+// TestSecondaryHeaderSuppliedTwiceRejected checks the two ways of supplying a
+// secondary header cannot be combined. Honoring both would count the header
+// once as a parsed header and again as user data, declaring a data field
+// longer than the packet carries (4.1.3.5.3).
+func TestSecondaryHeaderSuppliedTwiceRejected(t *testing.T) {
+	octets := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0x01}
+
+	_, err := spp2.NewTMPacket(100, octets,
+		spp2.WithSecondaryHeader(&testSecondaryHeader{}),
+		spp2.WithSecondaryHeaderIndicator(true))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderTwice) {
+		t.Errorf("header then indicator = %v, want ErrSecondaryHeaderTwice", err)
+	}
+
+	// Either order.
+	_, err = spp2.NewTMPacket(100, octets,
+		spp2.WithSecondaryHeaderIndicator(true),
+		spp2.WithSecondaryHeader(&testSecondaryHeader{}))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderTwice) {
+		t.Errorf("indicator then header = %v, want ErrSecondaryHeaderTwice", err)
+	}
+}
+
+// TestIdleRejectsSecondaryHeaderIndicator checks 4.1.3.3.3.4 still holds for a
+// flag set through the indicator rather than through a parsed header.
+func TestIdleRejectsSecondaryHeaderIndicator(t *testing.T) {
+	_, err := spp2.NewIdlePacket([]byte{0xFF, 0xFF},
+		spp2.WithSecondaryHeaderIndicator(true))
+	if !errors.Is(err, spp2.ErrIdleWithSecondaryHeader) {
+		t.Errorf("NewIdlePacket(indicator) = %v, want ErrIdleWithSecondaryHeader", err)
+	}
+}
+
+// TestWithSecondaryHeaderRejectsNil checks a nil header is refused rather than
+// silently setting the flag with nothing behind it.
+func TestWithSecondaryHeaderRejectsNil(t *testing.T) {
+	_, err := spp2.NewTMPacket(100, []byte{0x01}, spp2.WithSecondaryHeader(nil))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderMissing) {
+		t.Errorf("WithSecondaryHeader(nil) = %v, want ErrSecondaryHeaderMissing", err)
 	}
 }

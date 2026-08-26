@@ -3,12 +3,22 @@ package spp
 import (
 	"encoding/binary"
 	"io"
-	"reflect"
 	"sync"
 )
 
 // Service provides both the Packet Service (CCSDS 3.3) and the Octet String
 // Service (CCSDS 3.4) over a shared transport.
+//
+// A Service is safe for concurrent use. Sends are serialized against each
+// other and receives against each other, so a sequence count is allocated and
+// its packet written as one step and a packet's header and body are read as
+// one step. Sending and receiving proceed independently, which is what a
+// full-duplex transport wants.
+//
+// Serializing sends is not a convenience: 4.1.3.4.3.4 requires the Packet
+// Sequence Count to be continuous modulo 16384, and allocating counts under a
+// lock while writing outside it would let two senders put their packets on the
+// wire in the opposite order to the counts they were given.
 type Service struct {
 	rw           io.ReadWriter
 	packetType   uint8
@@ -16,6 +26,13 @@ type Service struct {
 	newSH        func() SecondaryHeader // optional decoder factory for inbound packets
 	errorControl bool                   // expect error control field on received packets
 	discardIdle  bool                   // drop received idle packets instead of delivering them
+
+	// sendMu covers a whole send: count allocation, encoding, and the write.
+	// recvMu covers a whole receive: the header read, the body read, and the
+	// decode. Both may be held while taking mu; mu is never held while taking
+	// either, so there is no cycle.
+	sendMu sync.Mutex
+	recvMu sync.Mutex
 
 	mu       sync.Mutex
 	counters map[uint16]uint16 // per-APID send sequence counters
@@ -37,16 +54,12 @@ type ServiceConfig struct {
 	// It is a factory rather than a single value because a decoded header
 	// belongs to the packet it came from. One shared instance would be
 	// overwritten by every later packet, so every delivered packet would end
-	// up showing the newest packet's header.
+	// up showing the newest packet's header. It also has to be a factory
+	// rather than a type the service copies for itself: the width of a
+	// mission's secondary header usually lives in the value (a PUS header
+	// reads it from its mission profile), so only the caller can build one
+	// that is configured correctly.
 	NewSecondaryHeader func() SecondaryHeader
-
-	// SecondaryHeader is the old form of NewSecondaryHeader: one instance the
-	// service decoded every packet into.
-	//
-	// Deprecated: use NewSecondaryHeader. When only this field is set the
-	// service clones the value's type for each packet, so the aliasing bug
-	// does not come back, but the factory states the intent directly.
-	SecondaryHeader SecondaryHeader
 
 	// DiscardIdle drops received idle packets (APID 0x7FF) instead of
 	// delivering them. They are link fill with no application meaning
@@ -61,16 +74,11 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 		maxLen = 65542
 	}
 
-	newSH := cfg.NewSecondaryHeader
-	if newSH == nil && cfg.SecondaryHeader != nil {
-		newSH = cloneFactory(cfg.SecondaryHeader)
-	}
-
 	return &Service{
 		rw:           rw,
 		packetType:   cfg.PacketType,
 		maxPacketLen: maxLen,
-		newSH:        newSH,
+		newSH:        cfg.NewSecondaryHeader,
 		errorControl: cfg.ErrorControl,
 		discardIdle:  cfg.DiscardIdle,
 		counters:     make(map[uint16]uint16),
@@ -79,49 +87,45 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 	}
 }
 
-// cloneFactory turns a single SecondaryHeader value into a factory that
-// returns a fresh zero value of the same type for every call, so decoded
-// packets never share one header instance.
-//
-// A SecondaryHeader must have pointer methods to be decodable into, so a
-// non-pointer value cannot be usefully cloned; such a value is handed back as
-// it is, which is what the old single-instance configuration did.
-func cloneFactory(sh SecondaryHeader) func() SecondaryHeader {
-	t := reflect.TypeOf(sh)
-	if t == nil || t.Kind() != reflect.Pointer {
-		return func() SecondaryHeader { return sh }
-	}
-	elem := t.Elem()
-	return func() SecondaryHeader {
-		fresh, ok := reflect.New(elem).Interface().(SecondaryHeader)
-		if !ok {
-			return sh
-		}
-		return fresh
-	}
-}
-
 // --- Packet Service (CCSDS 3.3) ---
 
-// SendPacket writes a pre-built space packet to the transport.
+// SendPacket writes a pre-built space packet to the transport. It is the
+// PACKET.request primitive of 3.3.3.2.
 //
-// It stamps the packet with the next sequence count for its APID per CCSDS
-// 133.0-B-2 4.1.3.4.3, mutating the caller's packet in place.
+// A packet whose count the caller owns is sent with that count untouched, and
+// the service resynchronizes its own counter for the APID to one past it.
+// 4.1.3.4.3.4 requires the count to be continuous modulo 16384; if the counter
+// kept its old value, an APID that sent one such packet would emit a jump out
+// and a jump back — 0, 1, 2, 1234, 3, 4 — and a receiver would read that as
+// two losses. Two kinds of packet own their count:
 //
-// A packet whose count was pinned with WithSequenceCount keeps that count,
-// and the service resynchronizes its own counter for that APID to one past
-// the pinned value. 4.1.3.4.3.4 requires the count to be continuous modulo
-// 16384; if the counter kept its old value, an APID that sent one pinned
-// packet would emit a jump out and a jump back — 0, 1, 2, 1234, 3, 4 — and a
-// receiver would read that as two losses.
+//   - one built with WithSequenceCount, where the caller said which count to
+//     use;
+//   - one returned by Decode, which already carries the count the originating
+//     application assigned it (4.1.3.4.3.3). 3.3.1 requires Packet Service
+//     SDUs to be transferred "without further formatting" and the Packet
+//     Transfer Function of 4.2.3 does not renumber, so a relay forwards what
+//     it received rather than stamping over it.
+//
+// Any other packet is stamped with the next count for its APID (4.1.3.4.3),
+// which mutates the caller's packet in place.
 func (s *Service) SendPacket(packet *SpacePacket) error {
 	if packet == nil {
 		return ErrNilPacket
 	}
 
-	s.mu.Lock()
+	// One send at a time. The count and the octets that carry it have to reach
+	// the transport together, or concurrent senders would interleave and break
+	// the continuity 4.1.3.4.3.4 requires.
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+
 	apid := packet.PrimaryHeader.APID
-	if packet.seqCountSet {
+	packetCountBefore := packet.PrimaryHeader.SequenceCount
+
+	s.mu.Lock()
+	counterBefore, counterExisted := s.counters[apid]
+	if packet.seqCountAuthoritative {
 		s.counters[apid] = (packet.PrimaryHeader.SequenceCount + 1) & 0x3FFF
 	} else {
 		packet.PrimaryHeader.SequenceCount = s.counters[apid]
@@ -130,12 +134,24 @@ func (s *Service) SendPacket(packet *SpacePacket) error {
 	s.mu.Unlock()
 
 	data, err := packet.Encode()
+	if err == nil && len(data) > s.maxPacketLen {
+		err = ErrPacketTooLarge
+	}
 	if err != nil {
+		// Nothing reached the transport, so the count this packet was handed
+		// was never spent. Put the counter and the packet back as they were,
+		// or a rejected send would leave a hole in the APID's sequence.
+		s.mu.Lock()
+		if counterExisted {
+			s.counters[apid] = counterBefore
+		} else {
+			delete(s.counters, apid)
+		}
+		s.mu.Unlock()
+		packet.PrimaryHeader.SequenceCount = packetCountBefore
 		return err
 	}
-	if len(data) > s.maxPacketLen {
-		return ErrPacketTooLarge
-	}
+
 	_, err = s.rw.Write(data)
 	return err
 }
@@ -149,45 +165,62 @@ func (s *Service) SendPacket(packet *SpacePacket) error {
 // When ServiceConfig.DiscardIdle is set, idle packets are read and dropped
 // and the next real packet is returned.
 func (s *Service) ReceivePacket() (*SpacePacket, error) {
-	packet, _, err := s.receive()
+	packet, _, _, err := s.receive()
 	return packet, err
 }
 
-// receive reads the next deliverable packet and the gap that preceded it.
-func (s *Service) receive() (*SpacePacket, int, error) {
+// receive reads the next deliverable packet, the raw octets it arrived as, and
+// the gap that preceded it.
+func (s *Service) receive() (*SpacePacket, []byte, int, error) {
+	// One receive at a time. A packet's header and body are two reads off the
+	// transport, and a second reader landing between them would splice two
+	// packets together.
+	s.recvMu.Lock()
+	defer s.recvMu.Unlock()
+
 	for {
-		packet, err := s.readPacket()
+		packet, raw, err := s.readPacket()
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
 		gap := s.trackContinuity(packet.PrimaryHeader.APID, packet.PrimaryHeader.SequenceCount)
 		if s.discardIdle && packet.IsIdle() {
 			continue
 		}
-		return packet, gap, nil
+		return packet, raw, gap, nil
 	}
 }
 
-// readPacket reads exactly one packet off the transport.
-func (s *Service) readPacket() (*SpacePacket, error) {
+// readPacket reads exactly one packet off the transport and returns it along
+// with the octets it was read from. The caller must hold recvMu.
+func (s *Service) readPacket() (*SpacePacket, []byte, error) {
 	header := make([]byte, PrimaryHeaderSize)
 	if _, err := io.ReadFull(s.rw, header); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	totalPacketSize, err := calculatePacketSize(header)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if totalPacketSize > s.maxPacketLen {
-		return nil, ErrPacketTooLarge
+		// The header is already off the transport. Leaving its body behind
+		// would resynchronize the reader onto the middle of this packet, where
+		// it would read fill or payload as a primary header and deliver
+		// packets that were never sent. Skip the body so the next read starts
+		// on a real packet boundary. The length is bounded by the 16-bit
+		// length field, so this cannot be made to skip more than 65536 octets.
+		if _, derr := io.CopyN(io.Discard, s.rw, int64(totalPacketSize-PrimaryHeaderSize)); derr != nil {
+			return nil, nil, derr
+		}
+		return nil, nil, ErrPacketTooLarge
 	}
 
 	buffer := make([]byte, totalPacketSize)
 	copy(buffer[:PrimaryHeaderSize], header)
 	if _, err := io.ReadFull(s.rw, buffer[PrimaryHeaderSize:]); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var opts []DecodeOption
@@ -201,7 +234,11 @@ func (s *Service) readPacket() (*SpacePacket, error) {
 	if s.errorControl {
 		opts = append(opts, WithDecodeErrorControl())
 	}
-	return Decode(buffer, opts...)
+	packet, err := Decode(buffer, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return packet, buffer, nil
 }
 
 // --- Packet Sequence Count continuity (CCSDS 4.3.2.2) ---
@@ -260,15 +297,33 @@ type SendOption func(*sendConfig)
 
 type sendConfig struct {
 	sh           SecondaryHeader
+	shIndicator  bool
 	errorControl bool
 	packetType   *uint8
 	seqCount     *uint16
 }
 
-// WithSendSecondaryHeader attaches a secondary header to the outgoing packet.
-// This is the Secondary Header Indicator parameter of 3.4.2.3.
+// WithSendSecondaryHeader builds the outgoing packet's secondary header from a
+// SecondaryHeader implementation, which is encoded ahead of the octet string.
+//
+// It sets the Secondary Header Indicator of 3.4.2.3 as a side effect. Use
+// WithSendSecondaryHeaderIndicator when the octet string you are passing to
+// SendBytes already begins with the header octets.
 func WithSendSecondaryHeader(sh SecondaryHeader) SendOption {
 	return func(cfg *sendConfig) { cfg.sh = sh }
+}
+
+// WithSendSecondaryHeaderIndicator is the Secondary Header Indicator parameter
+// of the OCTET_STRING.request primitive (3.4.2.3, 3.4.3.2.2).
+//
+// Per 3.4.2.3.2 the parameter is a signal, not a header: the service user
+// says whether a Packet Secondary Header is contained at the start of the
+// octet string it is handing over, and the Packet Assembly Function sets the
+// Secondary Header Flag to match (3.4.2.3.3, 4.2.2.3). Nothing in this layer
+// has to interpret the octets, so no SecondaryHeader implementation is needed
+// — which is what lets a user who holds a pre-formatted data field send it.
+func WithSendSecondaryHeaderIndicator(present bool) SendOption {
+	return func(cfg *sendConfig) { cfg.shIndicator = present }
 }
 
 // WithSendErrorControl enables CRC-16-CCITT error control on the outgoing packet.
@@ -324,6 +379,12 @@ func (s *Service) SendBytes(apid uint16, data []byte, opts ...SendOption) error 
 	if cfg.sh != nil {
 		pktOpts = append(pktOpts, WithSecondaryHeader(cfg.sh))
 	}
+	if cfg.shIndicator {
+		// Rejected as ErrSecondaryHeaderTwice if a header was also supplied:
+		// counting it twice would declare a data field longer than the packet
+		// carries.
+		pktOpts = append(pktOpts, WithSecondaryHeaderIndicator(true))
+	}
 	if cfg.errorControl {
 		pktOpts = append(pktOpts, WithErrorControl())
 	}
@@ -342,19 +403,35 @@ func (s *Service) SendBytes(apid uint16, data []byte, opts ...SendOption) error 
 // Indication carries the parameters the OCTET_STRING.indication primitive
 // delivers to the Octet String Service user (CCSDS 133.0-B-2 3.4.3.3.2).
 type Indication struct {
-	// Data is the Octet String: the packet's user data.
+	// Data is the Octet String: the Packet Data Field, which is what is left
+	// once the Packet Extraction Function removes the Packet Primary Header
+	// (4.3.2.2).
+	//
+	// When the packet carried a Packet Secondary Header its octets lead Data,
+	// whether or not a decoder was configured, because 4.3.2.2 defines
+	// SecondaryHeaderIndicator as reporting a secondary header "at the start
+	// of the Octet String" and the two have to agree. A configured decoder
+	// does not remove them from here; it fills SecondaryHeader in as well.
+	//
+	// The one thing Data omits is the error control field, when the service
+	// was configured to expect one. Those two octets are consumed and checked
+	// by this layer and are not part of the octet string the user sent.
 	Data []byte
 
 	// APID identifies the managed data path the octet string arrived on
 	// (3.4.2.2).
 	APID uint16
 
-	// SecondaryHeaderIndicator reports whether the received packet carried a
-	// Packet Secondary Header (3.4.2.3). It is a mandatory parameter, read
-	// straight from the Secondary Header Flag. When the service has no
-	// secondary header decoder configured, the header octets are at the front
-	// of Data; with a decoder they have been stripped.
+	// SecondaryHeaderIndicator reports whether a Packet Secondary Header leads
+	// Data (3.4.2.3, 4.3.2.2). It is a mandatory parameter, read straight from
+	// the Secondary Header Flag.
 	SecondaryHeaderIndicator bool
+
+	// SecondaryHeader is the parsed secondary header, when the service had a
+	// ServiceConfig.NewSecondaryHeader factory and the flag was set. It is nil
+	// otherwise. This is a convenience beyond the primitive of 3.4.3.3.2 —
+	// the octets themselves are always at the front of Data.
+	SecondaryHeader SecondaryHeader
 
 	// DataLoss is the Data Loss Indicator (3.4.2.4): true when the Packet
 	// Sequence Count for this APID skipped ahead, so packets were lost in
@@ -371,18 +448,34 @@ type Indication struct {
 // Octet String with the indication parameters of 3.4.3.3.2: the APID, the
 // mandatory Secondary Header Indicator, and the optional Data Loss Indicator.
 //
+// The Octet String is the Packet Data Field, per the Packet Extraction
+// Function of 4.3.2.2: "extract Octet Strings by removing the Packet Primary
+// Header". Any secondary header octets stay at the front of it, which is what
+// the Secondary Header Indicator is there to announce.
+//
 // When ServiceConfig.DiscardIdle is set, idle packets are dropped and the
 // next real packet is delivered instead.
 func (s *Service) ReceiveBytes() (Indication, error) {
-	packet, lost, err := s.receive()
+	packet, raw, lost, err := s.receive()
 	if err != nil {
 		return Indication{}, err
 	}
 
+	// raw is a buffer readPacket allocated for this packet alone and holds the
+	// whole packet, so the data field is everything past the primary header.
+	// Decode has already checked that the buffer is at least as long as the
+	// declared packet and, when error control is expected, that the data field
+	// has room for it.
+	field := raw[PrimaryHeaderSize:]
+	if s.errorControl {
+		field = field[:len(field)-2]
+	}
+
 	return Indication{
-		Data:                     packet.UserData,
+		Data:                     field,
 		APID:                     packet.PrimaryHeader.APID,
 		SecondaryHeaderIndicator: packet.PrimaryHeader.SecondaryHeaderFlag == 1,
+		SecondaryHeader:          packet.SecondaryHeader,
 		DataLoss:                 lost > 0,
 		PacketsLost:              lost,
 	}, nil
