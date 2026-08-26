@@ -272,12 +272,14 @@ func TestSpacePacketValidate(t *testing.T) {
 	}
 	packet.PrimaryHeader.PacketLength = uint16(len(data)) - 1
 
-	// Test case: Secondary header flag set but no secondary header struct.
-	// This is valid — it represents a decoded packet where no decoder was provided,
-	// so the secondary header bytes are included in UserData.
+	// Test case: Secondary header flag set but no secondary header struct on a
+	// packet the caller built. CCSDS 4.1.3.3.3.2 makes the flag the signal that
+	// a header is present, so a hand-built packet that promises one and has
+	// none is rejected. (A packet Decode produced in this state is legal and is
+	// covered by TestDecodeEncodeRoundTripWithoutSecondaryHeaderDecoder.)
 	packet.PrimaryHeader.SecondaryHeaderFlag = 1
-	if err := packet.Validate(); err != nil {
-		t.Errorf("Expected valid packet (secondary header bytes in UserData), but got error: %v", err)
+	if err := packet.Validate(); !errors.Is(err, spp2.ErrSecondaryHeaderMissing) {
+		t.Errorf("Validate(flag set, no header) = %v, want ErrSecondaryHeaderMissing", err)
 	}
 	packet.PrimaryHeader.SecondaryHeaderFlag = 0
 
@@ -892,7 +894,7 @@ func TestNewIdlePacket(t *testing.T) {
 }
 
 func TestIdleWithSecondaryHeaderRejected(t *testing.T) {
-	// SPP-F1: CCSDS 4.1.4.2.1.4 — idle packets carry no secondary header.
+	// CCSDS 4.1.3.3.3.4: the Secondary Header Flag is '0' for idle packets.
 	sh := &testSecondaryHeader{Timestamp: 1}
 	_, err := spp2.NewSpacePacket(0x7FF, spp2.PacketTypeTM, []byte{0xFF}, spp2.WithSecondaryHeader(sh))
 	if !errors.Is(err, spp2.ErrIdleWithSecondaryHeader) {
@@ -959,5 +961,234 @@ func TestEncodeSecondaryHeaderSizeMismatch(t *testing.T) {
 	}
 	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrSecondaryHeaderSizeMismatch) {
 		t.Errorf("Encode = %v, want ErrSecondaryHeaderSizeMismatch", err)
+	}
+}
+
+// --- Secondary Header Flag / field agreement (CCSDS 4.1.3.3.3.2, 4.1.3.5.3) ---
+
+// TestEncodeRejectsSecondaryHeaderWithFlagClear pins the fix for the length
+// asymmetry: Encode used to add the secondary header's size to the Packet Data
+// Length whenever the field was set, but write those octets only when the flag
+// was set. A packet with the field set and the flag clear therefore went on the
+// wire declaring six octets of data field while carrying two, and the receiver
+// read the shortfall out of the packet that followed.
+func TestEncodeRejectsSecondaryHeaderWithFlagClear(t *testing.T) {
+	pkt, err := spp2.NewTMPacket(100, []byte{0xAA, 0xBB},
+		spp2.WithSecondaryHeader(&testSecondaryHeader{Timestamp: 0x1122334455667788}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear the flag behind the constructor's back, exactly the state the old
+	// code accepted.
+	pkt.PrimaryHeader.SecondaryHeaderFlag = 0
+
+	if err := pkt.Validate(); !errors.Is(err, spp2.ErrSecondaryHeaderFlagClear) {
+		t.Errorf("Validate = %v, want ErrSecondaryHeaderFlagClear", err)
+	}
+	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrSecondaryHeaderFlagClear) {
+		t.Errorf("Encode = %v, want ErrSecondaryHeaderFlagClear", err)
+	}
+}
+
+// TestNoCrossPacketBleedWithMismatchedFlag streams two packets and checks the
+// second one arrives whole. Before the fix the first packet's declared length
+// overran into the second, so decoding the stream produced garbage from the
+// second packet's octets.
+func TestNoCrossPacketBleedWithMismatchedFlag(t *testing.T) {
+	first, err := spp2.NewTMPacket(100, []byte{0xAA, 0xBB},
+		spp2.WithSecondaryHeader(&testSecondaryHeader{Timestamp: 0x1122334455667788}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.PrimaryHeader.SecondaryHeaderFlag = 0
+
+	// The bad packet must not encode at all.
+	if _, err := first.Encode(); err == nil {
+		t.Fatal("Encode accepted a packet whose declared length exceeds its octets")
+	}
+
+	// With the flag set, the same packet encodes to a self-consistent stream:
+	// the second packet starts exactly where the first one ends.
+	first.PrimaryHeader.SecondaryHeaderFlag = 1
+	firstBytes, err := first.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := spp2.NewTMPacket(200, []byte{0xCC, 0xDD, 0xEE})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBytes, err := second.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := append(append([]byte{}, firstBytes...), secondBytes...)
+
+	n := spp2.PacketSizer(stream)
+	if n != len(firstBytes) {
+		t.Fatalf("first packet size = %d, want %d", n, len(firstBytes))
+	}
+	got, err := spp2.Decode(stream[n:])
+	if err != nil {
+		t.Fatalf("decoding the second packet: %v", err)
+	}
+	if got.PrimaryHeader.APID != 200 {
+		t.Errorf("second packet APID = %d, want 200 (the first packet bled over)", got.PrimaryHeader.APID)
+	}
+	if !bytes.Equal(got.UserData, []byte{0xCC, 0xDD, 0xEE}) {
+		t.Errorf("second packet data = %v, want CC DD EE", got.UserData)
+	}
+}
+
+// TestDecodeEncodeRoundTripWithoutSecondaryHeaderDecoder checks that a packet
+// received with the Secondary Header Flag set but no decoder configured can be
+// forwarded unchanged. Its header octets sit at the front of UserData; Encode
+// used to refuse the packet outright, which broke the Packet Transfer Function
+// (4.2.3) for any relay.
+func TestDecodeEncodeRoundTripWithoutSecondaryHeaderDecoder(t *testing.T) {
+	original, err := spp2.NewTMPacket(42, []byte{0xDE, 0xAD, 0xBE, 0xEF},
+		spp2.WithSecondaryHeader(&testSecondaryHeader{Timestamp: 0x0102030405060708}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := original.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	relayed, err := spp2.Decode(wire)
+	if err != nil {
+		t.Fatalf("Decode without a secondary header decoder: %v", err)
+	}
+	if relayed.PrimaryHeader.SecondaryHeaderFlag != 1 {
+		t.Error("the Secondary Header Flag was not preserved")
+	}
+	if relayed.SecondaryHeader != nil {
+		t.Error("no decoder was configured, so no header should have been parsed")
+	}
+	if len(relayed.UserData) != 12 {
+		t.Errorf("UserData = %d octets, want 12 (8 header + 4 user)", len(relayed.UserData))
+	}
+
+	again, err := relayed.Encode()
+	if err != nil {
+		t.Fatalf("re-encoding a received packet: %v", err)
+	}
+	if !bytes.Equal(again, wire) {
+		t.Errorf("re-encoded packet\n got %x\nwant %x", again, wire)
+	}
+}
+
+// TestDecodeSecondaryHeaderLargerThanDataField checks the error tells the truth:
+// the buffer is complete, the configured decoder simply wants more octets than
+// this packet's data field holds.
+func TestDecodeSecondaryHeaderLargerThanDataField(t *testing.T) {
+	// APID 1, flag set, data field of 4 octets — smaller than the 8-octet
+	// decoder.
+	raw := []byte{0x08, 0x01, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x02, 0x03, 0x04}
+
+	_, err := spp2.Decode(raw, spp2.WithDecodeSecondaryHeader(&testSecondaryHeader{}))
+	if !errors.Is(err, spp2.ErrSecondaryHeaderExceedsDataField) {
+		t.Errorf("Decode = %v, want ErrSecondaryHeaderExceedsDataField", err)
+	}
+	if errors.Is(err, spp2.ErrDataTooShort) {
+		t.Error("a decoder mismatch was reported as a short buffer")
+	}
+}
+
+// --- PacketSizer (M3) ---
+
+func TestPacketSizerRefusesIncompletePacket(t *testing.T) {
+	pkt, err := spp2.NewTMPacket(7, []byte{1, 2, 3, 4, 5, 6, 7, 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := pkt.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := spp2.PacketSizer(wire); got != len(wire) {
+		t.Errorf("PacketSizer(complete) = %d, want %d", got, len(wire))
+	}
+	// One octet short: the declared length reaches past the buffer, so slicing
+	// data[:n] would panic or read the next packet's octets.
+	if got := spp2.PacketSizer(wire[:len(wire)-1]); got != -1 {
+		t.Errorf("PacketSizer(truncated) = %d, want -1", got)
+	}
+	if got := spp2.PacketSizer(wire[:3]); got != -1 {
+		t.Errorf("PacketSizer(partial header) = %d, want -1", got)
+	}
+	// Extra octets after the packet are another packet, not this one.
+	if got := spp2.PacketSizer(append(wire, 0xFF, 0xFF)); got != len(wire) {
+		t.Errorf("PacketSizer(with trailing octets) = %d, want %d", got, len(wire))
+	}
+
+	// DeclaredPacketSize answers from the header alone, which is what a stream
+	// reader needs before it has fetched the body.
+	if got := spp2.DeclaredPacketSize(wire[:6]); got != len(wire) {
+		t.Errorf("DeclaredPacketSize(header only) = %d, want %d", got, len(wire))
+	}
+	if got := spp2.DeclaredPacketSize(wire[:5]); got != -1 {
+		t.Errorf("DeclaredPacketSize(partial header) = %d, want -1", got)
+	}
+}
+
+func TestIsIdleBytes(t *testing.T) {
+	idle, err := spp2.NewIdlePacket([]byte{0xFF, 0xFF})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idleBytes, err := idle.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !spp2.IsIdleBytes(idleBytes) {
+		t.Error("IsIdleBytes(idle packet) = false, want true")
+	}
+
+	normal, err := spp2.NewTMPacket(100, []byte{0x01})
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalBytes, err := normal.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spp2.IsIdleBytes(normalBytes) {
+		t.Error("IsIdleBytes(APID 100) = true, want false")
+	}
+	if spp2.IsIdleBytes([]byte{0x07}) {
+		t.Error("IsIdleBytes(one octet) = true, want false")
+	}
+}
+
+// TestIdlePacketType checks an idle packet is telemetry by default and can be
+// built as a telecommand: CCSDS 4.1.3.3.2.3 and 4.1.3.3.4.4 do not tie the idle
+// APID to either type.
+func TestIdlePacketType(t *testing.T) {
+	tm, err := spp2.NewIdlePacket([]byte{0xFF})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tm.PrimaryHeader.Type != spp2.PacketTypeTM {
+		t.Errorf("default idle packet type = %d, want TM", tm.PrimaryHeader.Type)
+	}
+
+	tc, err := spp2.NewIdlePacket([]byte{0xFF}, spp2.WithPacketType(spp2.PacketTypeTC))
+	if err != nil {
+		t.Fatalf("NewIdlePacket(WithPacketType(TC)) failed: %v", err)
+	}
+	if tc.PrimaryHeader.Type != spp2.PacketTypeTC {
+		t.Errorf("idle packet type = %d, want TC", tc.PrimaryHeader.Type)
+	}
+	if _, err := tc.Encode(); err != nil {
+		t.Fatalf("encoding a TC idle packet: %v", err)
+	}
+
+	if _, err := spp2.NewTMPacket(1, []byte{0x01}, spp2.WithPacketType(2)); !errors.Is(err, spp2.ErrInvalidType) {
+		t.Errorf("WithPacketType(2) = %v, want ErrInvalidType", err)
 	}
 }

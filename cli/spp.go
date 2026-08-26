@@ -127,6 +127,16 @@ func seqFlagsName(f uint8) string {
 	}
 }
 
+// decodeOpts turns the --crc flag into decode options. Without it the two CRC
+// octets a packet carries are indistinguishable from user data, so a packet
+// encoded with --crc decodes showing them as the tail of its payload.
+func decodeOpts(crc bool) []spp.DecodeOption {
+	if !crc {
+		return nil
+	}
+	return []spp.DecodeOption{spp.WithDecodeErrorControl()}
+}
+
 func formatPacket(pkt *spp.SpacePacket, data []byte, format string) (string, error) {
 	switch format {
 	case "json":
@@ -146,6 +156,7 @@ func formatPacket(pkt *spp.SpacePacket, data []byte, format string) (string, err
 
 func sppDecodeCmd() *cobra.Command {
 	var inputFmt, outputFmt string
+	var crcFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "decode [file]",
@@ -158,7 +169,10 @@ func sppDecodeCmd() *cobra.Command {
   astro spp decode --input bin packet.bin
 
   # Decode with JSON output
-  astro spp decode --input hex --format json packet.hex`,
+  astro spp decode --input hex --format json packet.hex
+
+  # Decode a packet that carries a CRC, so the CRC is not shown as user data
+  astro spp encode --apid 100 --type tm --data 61626364 --crc | astro spp decode --crc`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := readInput(args, inputFmt)
@@ -166,7 +180,7 @@ func sppDecodeCmd() *cobra.Command {
 				return err
 			}
 
-			pkt, err := spp.Decode(data)
+			pkt, err := spp.Decode(data, decodeOpts(crcFlag)...)
 			if err != nil {
 				return fmt.Errorf("decoding packet: %w", err)
 			}
@@ -182,6 +196,7 @@ func sppDecodeCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
 	cmd.Flags().StringVar(&outputFmt, "format", "text", "Output format: text, json, or hex")
+	cmd.Flags().BoolVar(&crcFlag, "crc", false, "Treat the last 2 octets as a CRC-16-CCITT error control field and verify it")
 
 	return cmd
 }
@@ -270,6 +285,7 @@ func sppEncodeCmd() *cobra.Command {
 
 func sppInspectCmd() *cobra.Command {
 	var inputFmt string
+	var crcFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "inspect [file]",
@@ -279,7 +295,10 @@ func sppInspectCmd() *cobra.Command {
   echo "0C01C000000461626364" | astro spp inspect --input hex
 
   # Inspect binary file
-  astro spp inspect --input bin packet.bin`,
+  astro spp inspect --input bin packet.bin
+
+  # Inspect a packet that carries a CRC
+  astro spp encode --apid 100 --type tm --data 61626364 --crc | astro spp inspect --crc`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := readInput(args, inputFmt)
@@ -287,7 +306,7 @@ func sppInspectCmd() *cobra.Command {
 				return err
 			}
 
-			pkt, err := spp.Decode(data)
+			pkt, err := spp.Decode(data, decodeOpts(crcFlag)...)
 			if err != nil {
 				return fmt.Errorf("decoding packet: %w", err)
 			}
@@ -298,6 +317,7 @@ func sppInspectCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
+	cmd.Flags().BoolVar(&crcFlag, "crc", false, "Treat the last 2 octets as a CRC-16-CCITT error control field and verify it")
 
 	return cmd
 }
@@ -401,12 +421,7 @@ func sppValidateCmd() *cobra.Command {
 				return err
 			}
 
-			var opts []spp.DecodeOption
-			if crcFlag {
-				opts = append(opts, spp.WithDecodeErrorControl())
-			}
-
-			pkt, err := spp.Decode(data, opts...)
+			pkt, err := spp.Decode(data, decodeOpts(crcFlag)...)
 			if err != nil {
 				return fmt.Errorf("validation failed: %w", err)
 			}
@@ -434,6 +449,7 @@ func sppValidateCmd() *cobra.Command {
 
 func sppStreamCmd() *cobra.Command {
 	var inputFmt, outputFmt string
+	var crcFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "stream [file]",
@@ -456,7 +472,7 @@ func sppStreamCmd() *cobra.Command {
 			offset := 0
 
 			handle := func(pktData []byte) error {
-				pkt, err := spp.Decode(pktData)
+				pkt, err := spp.Decode(pktData, decodeOpts(crcFlag)...)
 				if err != nil {
 					return fmt.Errorf("packet #%d at offset %d: %w", count+1, offset, err)
 				}
@@ -493,7 +509,10 @@ func sppStreamCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", n)
 			}
 
-			if err := streamUnits(source, spp.PacketSizer, spp.PrimaryHeaderSize, handle, trailing); err != nil {
+			// DeclaredPacketSize, not PacketSizer: the stream reader has to
+			// learn a packet's length from its header before it has fetched
+			// the body, and reports a short tail itself.
+			if err := streamUnits(source, spp.DeclaredPacketSize, spp.PrimaryHeaderSize, handle, trailing); err != nil {
 				return err
 			}
 
@@ -506,6 +525,7 @@ func sppStreamCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
 	cmd.Flags().StringVar(&outputFmt, "format", "text", "Output format: text, json, or hex")
+	cmd.Flags().BoolVar(&crcFlag, "crc", false, "Treat the last 2 octets of each packet as a CRC-16-CCITT error control field and verify it")
 
 	return cmd
 }

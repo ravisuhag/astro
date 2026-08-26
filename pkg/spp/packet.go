@@ -33,7 +33,8 @@ Space Packet Protocol (SPP):
 Legend:
 - b = bits
 - APID = Application Process Identifier
-- Sequence Flags: 00 (continuation), 01 (start), 10 (end), 11 (standalone)
+- Sequence Flags (4.1.3.4.2.2): 00 (continuation segment), 01 (first segment),
+  10 (last segment), 11 (unsegmented)
 - Packet Length: (Packet Data Field size) - 1, where Data Field = Secondary Header + User Data + Error Control
 
 The Error Control field is not defined by CCSDS 133.0-B-2; it is a
@@ -52,6 +53,43 @@ type SpacePacket struct {
 	// seqCountSet records that the caller pinned the sequence count via
 	// WithSequenceCount, so Service.SendPacket must not overwrite it.
 	seqCountSet bool
+
+	// shInUserData records that Decode read a packet whose Secondary Header
+	// Flag was '1' while no decoder was configured, so the secondary header
+	// octets are still sitting at the front of UserData. The packet is whole
+	// and re-encodes byte for byte; it just has no parsed header to offer.
+	// Without this, a relay could not forward a packet it received (the
+	// Packet Transfer Function of 4.2.3).
+	shInUserData bool
+}
+
+// secondaryHeaderOctets returns how many octets the parsed secondary header
+// adds to the packet data field.
+//
+// It is zero unless the Secondary Header Flag is '1' and a header is attached.
+// CCSDS 133.0-B-2 4.1.3.3.3.2 makes the flag the only signal of the header's
+// presence, so the flag decides whether the octets are written, and the same
+// condition must therefore decide whether they are counted in the Packet Data
+// Length (4.1.3.5.3). Header octets that Decode left inside UserData are
+// already counted by len(UserData).
+func (sp *SpacePacket) secondaryHeaderOctets() int {
+	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader != nil {
+		return sp.SecondaryHeader.Size()
+	}
+	return 0
+}
+
+// checkSecondaryHeaderAgreement verifies that the Secondary Header Flag and
+// the SecondaryHeader field say the same thing (4.1.3.3.3.2).
+func (sp *SpacePacket) checkSecondaryHeaderAgreement() error {
+	flagSet := sp.PrimaryHeader.SecondaryHeaderFlag == 1
+	switch {
+	case sp.SecondaryHeader != nil && !flagSet:
+		return ErrSecondaryHeaderFlagClear
+	case sp.SecondaryHeader == nil && flagSet && !sp.shInUserData:
+		return ErrSecondaryHeaderMissing
+	}
+	return nil
 }
 
 // NewSpacePacket creates a new SpacePacket instance.
@@ -90,10 +128,7 @@ func NewSpacePacket(apid uint16, packetType uint8, data []byte, options ...Packe
 
 	// Calculate PacketLength per CCSDS: (packet data field size) - 1
 	// Packet data field = secondary header + user data + error control
-	dataFieldSize := len(packet.UserData)
-	if packet.SecondaryHeader != nil {
-		dataFieldSize += packet.SecondaryHeader.Size()
-	}
+	dataFieldSize := len(packet.UserData) + packet.secondaryHeaderOctets()
 	if packet.ErrorControl != nil {
 		dataFieldSize += 2
 	}
@@ -123,8 +158,13 @@ func NewTCPacket(apid uint16, data []byte, options ...PacketOption) (*SpacePacke
 }
 
 // NewIdlePacket creates an idle SpacePacket (APID 0x7FF) carrying the given
-// fill data. Per CCSDS 133.0-B-2 4.1.4.2.1.4 an idle packet has no secondary
-// header; its data field content is mission-defined fill (at least 1 octet).
+// fill data. Per CCSDS 133.0-B-2 4.1.3.3.3.4 the Secondary Header Flag of an
+// idle packet is '0'; its data field content is mission-defined fill (at
+// least 1 octet).
+//
+// The packet is a telemetry packet by default. Neither 4.1.3.3.2.3 nor
+// 4.1.3.3.4.4 ties the idle APID to a packet type, so a telecommand idle
+// packet is equally legal; pass WithPacketType(PacketTypeTC) for one.
 func NewIdlePacket(fill []byte, options ...PacketOption) (*SpacePacket, error) {
 	return NewSpacePacket(APIDIdle, PacketTypeTM, fill, options...)
 }
@@ -144,9 +184,29 @@ func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 	}
 }
 
+// WithPacketType overrides the Packet Type of the SpacePacket: PacketTypeTM
+// (0) or PacketTypeTC (1) per CCSDS 133.0-B-2 4.1.3.3.2.
+//
+// NewSpacePacket, NewTMPacket, and NewTCPacket already fix the type, so this
+// option is mainly for NewIdlePacket, which defaults to telemetry.
+func WithPacketType(packetType uint8) PacketOption {
+	return func(packet *SpacePacket) error {
+		if packetType > 1 {
+			return ErrInvalidType
+		}
+		packet.PrimaryHeader.Type = packetType
+		return nil
+	}
+}
+
 // WithSequenceCount pins the sequence count on the SpacePacket.
-// Service.SendPacket honors a pinned count: it sends the packet as-is
-// instead of stamping the service's per-APID counter onto it.
+//
+// Service.SendPacket honors a pinned count: it sends the packet with that
+// count instead of stamping its own. It then resynchronizes the per-APID
+// counter to one past the pinned value, so later unpinned packets on the
+// same APID carry on from there. CCSDS 133.0-B-2 4.1.3.4.3.4 requires the
+// count to stay continuous modulo 16384; leaving the counter where it was
+// would make the APID emit a jump and then a jump back.
 func WithSequenceCount(n uint16) PacketOption {
 	return func(packet *SpacePacket) error {
 		if n > 16383 {
@@ -184,16 +244,20 @@ func WithErrorControl() PacketOption {
 // header, user data, and error control sizes, so mutating those fields after
 // construction cannot produce an inconsistent length on the wire. The packet
 // is validated before encoding.
+//
+// The Secondary Header Flag decides everything about the secondary header:
+// whether its octets are written and whether its size counts towards the
+// Packet Data Length (4.1.3.3.3.2 and 4.1.3.5.3). A SecondaryHeader attached
+// while the flag is '0' is rejected rather than silently dropped, because
+// counting it and not writing it would declare a data field longer than the
+// packet carries and make the receiver eat into the next packet.
 func (sp *SpacePacket) Encode() ([]byte, error) {
-	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 && sp.SecondaryHeader == nil {
-		return nil, ErrSecondaryHeaderMissing
+	if err := sp.checkSecondaryHeaderAgreement(); err != nil {
+		return nil, err
 	}
 
 	// Recompute the length field from the actual data field composition.
-	dataFieldSize := len(sp.UserData)
-	if sp.SecondaryHeader != nil {
-		dataFieldSize += sp.SecondaryHeader.Size()
-	}
+	dataFieldSize := len(sp.UserData) + sp.secondaryHeaderOctets()
 	if sp.ErrorControl != nil {
 		dataFieldSize += 2
 	}
@@ -216,8 +280,10 @@ func (sp *SpacePacket) Encode() ([]byte, error) {
 
 	packetData := append([]byte{}, headerBytes...)
 
-	// Encode secondary header if present
-	if sp.PrimaryHeader.SecondaryHeaderFlag == 1 {
+	// Encode the secondary header when one is attached. When the flag is set
+	// but no header is attached, Decode left its octets at the front of
+	// UserData and they are written with the rest of it.
+	if sp.secondaryHeaderOctets() > 0 {
 		secondaryBytes, err := sp.SecondaryHeader.Encode()
 		if err != nil {
 			return nil, err
@@ -296,7 +362,9 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 		secondaryHeader = cfg.sh
 		shSize := secondaryHeader.Size()
 		if remainingDataField < shSize {
-			return nil, ErrDataTooShort
+			// The buffer holds the whole packet; the decoder simply wants
+			// more octets than this packet's data field has.
+			return nil, ErrSecondaryHeaderExceedsDataField
 		}
 		if err := secondaryHeader.Decode(data[offset : offset+shSize]); err != nil {
 			return nil, err
@@ -330,6 +398,10 @@ func Decode(data []byte, opts ...DecodeOption) (*SpacePacket, error) {
 		SecondaryHeader: secondaryHeader,
 		UserData:        userData,
 		ErrorControl:    errorControl,
+		// The flag says a secondary header is there but nothing parsed it, so
+		// its octets are still at the front of UserData. Recording that keeps
+		// the packet re-encodable byte for byte.
+		shInUserData: primaryHeader.SecondaryHeaderFlag == 1 && secondaryHeader == nil,
 	}
 
 	if err := packet.Validate(); err != nil {
@@ -352,7 +424,13 @@ func (sp *SpacePacket) Validate() error {
 		}
 	}
 
-	// CCSDS 4.1.4.2.1.4: idle packets (APID 0x7FF) carry no secondary header.
+	// CCSDS 4.1.3.3.3.2: the Secondary Header Flag is the only signal of the
+	// header's presence, so the flag and the field must agree.
+	if err := sp.checkSecondaryHeaderAgreement(); err != nil {
+		return err
+	}
+
+	// CCSDS 4.1.3.3.3.4: the Secondary Header Flag is '0' for idle packets.
 	if sp.PrimaryHeader.APID == APIDIdle &&
 		(sp.PrimaryHeader.SecondaryHeaderFlag == 1 || sp.SecondaryHeader != nil) {
 		return ErrIdleWithSecondaryHeader
@@ -366,11 +444,9 @@ func (sp *SpacePacket) Validate() error {
 		return ErrEmptyPacket
 	}
 
-	// Calculate total packet data field size per CCSDS
-	dataFieldSize := len(sp.UserData)
-	if sp.SecondaryHeader != nil {
-		dataFieldSize += sp.SecondaryHeader.Size()
-	}
+	// Calculate total packet data field size per CCSDS 4.1.3.5.3:
+	// C = (total number of octets in the packet data field) - 1.
+	dataFieldSize := len(sp.UserData) + sp.secondaryHeaderOctets()
 	if sp.ErrorControl != nil {
 		dataFieldSize += 2
 	}
@@ -411,17 +487,54 @@ func (sp *SpacePacket) Humanize() string {
 
 // IsIdle reports whether the packet is an idle packet (APID 0x7FF).
 func (sp *SpacePacket) IsIdle() bool {
-	return sp.PrimaryHeader.APID == 0x7FF
+	return sp.PrimaryHeader.APID == APIDIdle
 }
 
-// PacketSizer returns the total length in bytes of the Space Packet starting
-// at data[0], or -1 if the data is too short to determine length.
-// It reads the Packet Data Length field (bytes 4-5) and returns
-// total packet length: 6 (primary header) + PacketDataLength + 1.
+// PacketSizer returns the total length in bytes of the complete Space Packet
+// at the front of data, or -1 if data does not hold a complete packet.
+//
+// It implements the sdl.PacketSizer signature used by the data link packet
+// services to slice packets out of a reassembly buffer. Those callers hold
+// whatever frame data has arrived so far, so a packet that reaches past the
+// end of the buffer is not a packet yet: -1 tells them to pull another frame
+// rather than to read octets that are not there.
+//
+// Use DeclaredPacketSize when you are reading from a stream and want the
+// length before you have fetched the body.
 func PacketSizer(data []byte) int {
+	size := DeclaredPacketSize(data)
+	if size < 1 || size > len(data) {
+		return -1
+	}
+	return size
+}
+
+// DeclaredPacketSize returns the total packet length declared by the primary
+// header at the front of data — 6 (primary header) + Packet Data Length + 1 —
+// or -1 when data is shorter than the 6-octet primary header.
+//
+// The returned length may be longer than data: it is what the header claims,
+// not what is present. That is exactly what a stream reader needs, since it
+// must learn how many octets to fetch before it has them. Callers holding a
+// fixed buffer should use PacketSizer, which refuses a packet that is not all
+// there.
+func DeclaredPacketSize(data []byte) int {
 	if len(data) < PrimaryHeaderSize {
 		return -1
 	}
 	dataLen := int(binary.BigEndian.Uint16(data[4:6]))
 	return PrimaryHeaderSize + 1 + dataLen
+}
+
+// IsIdleBytes reports whether the encoded packet at the front of data carries
+// the idle APID (0x7FF, CCSDS 133.0-B-2 4.1.3.3.4.4). Idle packets are fill:
+// a receiver discards them instead of delivering them to an application.
+//
+// It reads only the two APID octets, so it works on a packet that is not yet
+// complete in the buffer.
+func IsIdleBytes(data []byte) bool {
+	if len(data) < 2 {
+		return false
+	}
+	return uint16(data[0]&0x07)<<8|uint16(data[1]) == APIDIdle
 }

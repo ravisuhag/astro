@@ -14,9 +14,11 @@ var (
 	// ErrInvalidProfile indicates mission-tailorable widths that cannot work.
 	ErrInvalidProfile = errors.New("invalid mission profile")
 
-	// ErrHeaderTooLarge indicates a secondary header beyond the 63 octets
-	// CCSDS 133.0-B-2 allows, which pkg/spp enforces.
-	ErrHeaderTooLarge = errors.New("PUS secondary header exceeds the 63-octet CCSDS limit")
+	// ErrHeaderTooLarge indicates a mission profile whose secondary header is
+	// wider than this package accepts. The bound is this package's own; CCSDS
+	// 133.0-B-2 puts no upper limit on a Packet Secondary Header beyond the
+	// packet data field maximum.
+	ErrHeaderTooLarge = errors.New("PUS secondary header exceeds the 63-octet mission profile limit")
 
 	// ErrUnknownMessageType indicates no codec is registered for a
 	// (service, subtype) pair.

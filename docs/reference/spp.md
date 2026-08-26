@@ -13,8 +13,9 @@ svc := spp.NewService(conn, spp.ServiceConfig{
 // Send raw bytes — packet construction is handled automatically
 err := svc.SendBytes(100, []byte("temperature=22.5"))
 
-// Receive — returns APID and user data
-apid, data, err := svc.ReceiveBytes()
+// Receive — returns the OCTET_STRING.indication parameters
+ind, err := svc.ReceiveBytes()
+fmt.Println(ind.APID, ind.Data, ind.SecondaryHeaderIndicator, ind.DataLoss)
 ```
 
 ## Service Layer
@@ -27,9 +28,14 @@ The `Service` type provides two CCSDS-defined service interfaces over an `io.Rea
 ```go
 svc := spp.NewService(conn, spp.ServiceConfig{
     PacketType:      spp.PacketTypeTM,
-    MaxPacketLength: 1024,               // optional, defaults to 65542
-    SecondaryHeader: &TimestampHeader{},  // optional decoder for inbound packets
-    ErrorControl:    true,               // optional, validate CRC on received packets
+    MaxPacketLength: 1024, // optional, defaults to 65542
+    ErrorControl:    true, // optional, validate CRC on received packets
+    DiscardIdle:     true, // optional, drop received idle packets (APID 0x7FF)
+
+    // Optional decoder for inbound secondary headers. It is a factory, not a
+    // single value: every received packet gets its own header, so one packet's
+    // values are never overwritten by the next one's.
+    NewSecondaryHeader: func() spp.SecondaryHeader { return &TimestampHeader{} },
 })
 ```
 
@@ -41,15 +47,27 @@ The simplest way to send and receive data. The service wraps your bytes in a val
 // Send raw bytes
 err := svc.SendBytes(100, []byte("payload data"))
 
-// Send with a secondary header and CRC
+// Send with all the request parameters of CCSDS 3.4.3.2.2
 err := svc.SendBytes(100, data,
-    spp.WithSendSecondaryHeader(myHeader),
+    spp.WithSendSecondaryHeader(myHeader),   // Secondary Header Indicator
+    spp.WithSendPacketType(spp.PacketTypeTC), // Packet Type
+    spp.WithSendSequenceCount(42),            // Packet Sequence Count
     spp.WithSendErrorControl(),
 )
 
-// Receive — returns APID and user data
-apid, data, err := svc.ReceiveBytes()
+// Receive — returns the indication parameters of CCSDS 3.4.3.3.2
+ind, err := svc.ReceiveBytes()
 ```
+
+`ReceiveBytes` returns an `Indication`:
+
+| Field | Meaning |
+|-------|---------|
+| `Data` | The octet string |
+| `APID` | The managed data path it arrived on |
+| `SecondaryHeaderIndicator` | Whether the packet carried a Packet Secondary Header |
+| `DataLoss` | Whether the sequence count for this APID skipped ahead |
+| `PacketsLost` | How many packets the count skipped |
 
 ### Packet Service
 
@@ -65,7 +83,25 @@ packet, err := svc.ReceivePacket()
 
 ### Sequence Counting
 
-The service automatically maintains a per-APID 14-bit sequence counter (per CCSDS 133.0-B-2 Section 4.1.3.5). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
+The service automatically maintains a per-APID 14-bit sequence counter (CCSDS 133.0-B-2 4.1.3.4.3). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
+
+Pinning a count with `WithSequenceCount` (or `WithSendSequenceCount`) does not break the run: the service resynchronizes its counter to one past the pinned value, so the APID's count stays continuous as 4.1.3.4.3.4 requires.
+
+### Loss Detection
+
+Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication`; after `ReceivePacket`, read it with `LastDataLoss()`:
+
+```go
+packet, err := svc.ReceivePacket()
+if lost := svc.LastDataLoss(); lost > 0 {
+    log.Printf("%d packet(s) lost before this one", lost)
+}
+
+// After a link outage, the gap across the break means nothing.
+svc.ResetContinuity()
+```
+
+The first packet seen on an APID never reports a loss.
 
 ## Creating Packets
 
@@ -112,18 +148,32 @@ packet, err := spp.NewTMPacket(100, data,
 // Check if a packet is an idle packet (APID 0x7FF)
 if packet.IsIdle() { ... }
 
+// Same question about a raw encoded packet
+if spp.IsIdleBytes(raw) { ... }
+
 // Human-readable dump for debugging
 fmt.Println(packet.Humanize())
 ```
 
 ### Packet Sizing
 
-The `PacketSizer` function returns the total packet length from the first 6 header bytes of a Space Packet. It is used by the `tmdl` VCP service for detecting packet boundaries during reassembly from fixed-length transfer frames. Call `SetPacketSizer` on the VCP service to wire it up:
+Two functions read a packet's length, and which one you want depends on whether you already hold the octets.
+
+`PacketSizer` returns the length of the **complete** packet at the front of a buffer, and -1 when the buffer does not hold all of it. That is what the data link packet services need: a packet reaching past the end of the reassembly buffer is not a packet yet, so -1 tells them to pull another frame. Wire it up with `SetPacketSizer`:
 
 ```go
-// PacketSizer returns the total packet length from header bytes.
-// header must be at least 6 bytes (the primary header size).
-totalLen := spp.PacketSizer(headerBytes)
+vcp.SetPacketSizer(spp.PacketSizer)
+
+n := spp.PacketSizer(buf)
+if n > 0 {
+    packet := buf[:n] // safe: the whole packet is there
+}
+```
+
+`DeclaredPacketSize` returns what the 6-octet primary header claims, whether or not the body has arrived. A stream reader needs this, since it must know how many octets to fetch before it has them:
+
+```go
+total := spp.DeclaredPacketSize(header) // header need only be 6 octets
 ```
 
 ## Encoding and Decoding
@@ -148,19 +198,23 @@ decoded, err := spp.Decode(encoded,
 )
 ```
 
-When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation via `WithDecodeSecondaryHeader`. If none is provided, the secondary header bytes are included in `UserData`.
+When decoding a packet that has the secondary header flag set, you can pass a `SecondaryHeader` implementation via `WithDecodeSecondaryHeader`. If none is provided, the secondary header bytes are included in `UserData`; the packet still re-encodes byte for byte, so a relay can forward a packet whose secondary header format it does not know.
+
+The Secondary Header Flag is the only signal that a header is present (CCSDS 4.1.3.3.3.2), so it decides both whether the header's octets are written and whether its size counts towards the Packet Data Length. `Encode` and `Validate` refuse a packet where the flag and the `SecondaryHeader` field disagree.
 
 When `WithDecodeErrorControl()` is used, the trailing 2 bytes are extracted as a CRC-16-CCITT checksum and verified against the packet contents. If the CRC does not match, `ErrCRCValidationFailed` is returned.
 
 ## Secondary Headers
 
-The secondary header format is mission-defined. Implement the `SecondaryHeader` interface:
+The secondary header's contents and length are mission-defined (CCSDS 4.1.4.2.1.4). Its layout is not free-form: 4.1.4.2.1.5 allows a Time Code Field alone, an Ancillary Data Field alone, or a Time Code Field followed by an Ancillary Data Field, and 4.1.4.2.1.6 requires the same choice throughout a managed data path's life. The interface sees only octets, so keeping to one of those three shapes is your implementation's job.
+
+Implement the `SecondaryHeader` interface:
 
 ```go
 type SecondaryHeader interface {
     Encode() ([]byte, error)
     Decode([]byte) error
-    Size() int  // fixed size in bytes (1–63)
+    Size() int  // fixed size in bytes (at least 1)
 }
 ```
 
@@ -201,7 +255,7 @@ func (h *TimestampHeader) Size() int { return 6 }
 +----------------+----------------+----------------+----------------+
 | Packet Length (16b)                                               |
 +----------------+----------------+----------------+----------------+
-| Secondary Header (optional, 1–63 bytes, mission-defined)         |
+| Secondary Header (optional, mission-defined length)               |
 +----------------+----------------+----------------+----------------+
 | User Data Field (variable length)                                |
 +----------------+----------------+----------------+----------------+
@@ -228,9 +282,12 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrPacketTooLarge` | Total packet size outside 7–65542 bytes |
 | `ErrDataTooShort` | Input data too short to decode |
 | `ErrPacketLengthMismatch` | Data field size doesn't match header length |
-| `ErrSecondaryHeaderMissing` | Flag is set but no secondary header provided |
+| `ErrSecondaryHeaderMissing` | Flag is set on a hand-built packet but no secondary header provided |
+| `ErrSecondaryHeaderFlagClear` | A secondary header is attached but the flag is 0 |
 | `ErrSecondaryHeaderTooSmall` | Secondary header less than 1 byte |
-| `ErrSecondaryHeaderTooLarge` | Secondary header exceeds 63 bytes |
+| `ErrSecondaryHeaderSizeMismatch` | `Encode()` returned a byte count different from `Size()` |
+| `ErrSecondaryHeaderExceedsDataField` | The configured decoder is wider than the packet's data field |
+| `ErrIdleWithSecondaryHeader` | An idle packet (APID 0x7FF) carries a secondary header |
 | `ErrCRCValidationFailed` | CRC integrity check failed |
 
 ## Reference
