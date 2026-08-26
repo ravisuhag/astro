@@ -72,9 +72,14 @@ func isIdleFill(data []byte, pattern []byte) bool {
 const minIdlePacketLen = spp.PrimaryHeaderSize + 1
 
 // newIdlePacket returns an encoded SPP idle packet with the given total
-// length (>= minIdlePacketLen), its data field filled with the channel's
-// idle pattern.
+// length, its data field filled with the channel's idle pattern.
+//
+// A total below minIdlePacketLen is refused rather than passed on: the data
+// field length would be negative and the allocation would panic.
 func newIdlePacket(total int, pattern []byte) ([]byte, error) {
+	if total < minIdlePacketLen {
+		return nil, ErrDataFieldTooSmall
+	}
 	payload := make([]byte, total-spp.PrimaryHeaderSize)
 	fillIdle(payload, pattern)
 	pkt, err := spp.NewIdlePacket(payload)
@@ -86,10 +91,7 @@ func newIdlePacket(total int, pattern []byte) ([]byte, error) {
 
 // isIdlePacket reports whether the packet's APID marks it as an idle packet.
 func isIdlePacket(pkt []byte) bool {
-	if len(pkt) < 2 {
-		return false
-	}
-	return uint16(pkt[0]&0x07)<<8|uint16(pkt[1]) == spp.APIDIdle
+	return spp.IsIdleBytes(pkt)
 }
 
 // MultiplexingService implements the M_PDU service for AOS.
@@ -154,7 +156,7 @@ func (s *MultiplexingService) Send(data []byte) error {
 // packet (APID 0x7FF) and emits the final frame(s), per CCSDS 732.0-B-4
 // §4.1.4.2.2: a partially filled packet zone is completed with an idle
 // packet, not raw fill. When the leftover space is too small to hold a
-// whole idle packet, the idle packet spans into one extra frame.
+// whole idle packet, the idle packet spans into further frames.
 func (s *MultiplexingService) Flush() error {
 	if len(s.sendBuf) == 0 {
 		return nil
@@ -165,42 +167,31 @@ func (s *MultiplexingService) Flush() error {
 		return ErrDataFieldTooSmall
 	}
 
-	fhp := FHPNoPacketStart
-	for _, off := range s.packetOffsets {
-		if off < len(s.sendBuf) {
-			fhp = uint16(off)
-			break
+	if remaining := capacity - len(s.sendBuf); remaining > 0 {
+		// The idle packet has to be a whole packet: at least a 6-octet
+		// primary header and one octet of fill. While the leftover space is
+		// smaller than that, grow the packet by another packet zone so it
+		// ends exactly on a later frame boundary. One extra zone is not
+		// always enough — a small zone may need several — so this loops.
+		idleLen := remaining
+		for idleLen < minIdlePacketLen {
+			idleLen += capacity
 		}
-	}
 
-	remaining := capacity - len(s.sendBuf)
-	idleLen := remaining
-	if idleLen < minIdlePacketLen {
-		// The idle packet cannot fit in this frame alone; let it span
-		// into one extra frame that it fills completely.
-		idleLen = remaining + capacity
+		idlePkt, err := newIdlePacket(idleLen, s.config.IdlePattern)
+		if err != nil {
+			return err
+		}
+		// The idle packet's own start is deliberately not recorded as a
+		// packet offset: the First Header Pointer keeps pointing at the first
+		// user packet in the zone, and the spanning tail frames report no
+		// packet start.
+		s.sendBuf = append(s.sendBuf, idlePkt...)
 	}
-	idlePkt, err := newIdlePacket(idleLen, s.config.IdlePattern)
-	if err != nil {
-		return err
-	}
+	// Otherwise the buffered data fills the zone exactly, so there is nothing
+	// to pad and no extra idle frame to emit.
 
-	chunk := make([]byte, 0, capacity)
-	chunk = append(chunk, s.sendBuf...)
-	chunk = append(chunk, idlePkt[:remaining]...)
-
-	s.sendBuf = nil
-	s.packetOffsets = nil
-
-	if err := s.emitFrame(chunk, fhp); err != nil {
-		return err
-	}
-	if idleLen > remaining {
-		// Tail of the spanning idle packet: fills the next frame exactly;
-		// no packet starts within it.
-		return s.emitFrame(idlePkt[remaining:], FHPNoPacketStart)
-	}
-	return nil
+	return s.emitFullFrames()
 }
 
 func (s *MultiplexingService) emitFullFrames() error {

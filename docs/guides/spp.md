@@ -36,7 +36,7 @@ SPP sits between the application processes that generate data and the Data Link 
 - **Fixed header, variable payload**: The 6-byte primary header is always the same structure; the data field varies from 1 to 65,536 bytes.
 - **Dual direction**: The same format serves both telemetry (spacecraft → ground) and telecommand (ground → spacecraft).
 - **Application addressing**: Each packet is tagged with an Application Process Identifier (APID) that identifies the source or destination application.
-- **Sequencing**: Built-in per-APID sequence counters detect lost or out-of-order packets.
+- **Sequencing**: Built-in per-APID sequence counters. The receiving service checks the count for continuity and reports how many packets went missing, so gaps in a stream are visible.
 
 ## Packet Structure
 
@@ -96,7 +96,7 @@ This bit determines the direction of data flow. A spacecraft's onboard router us
 | `0` | No secondary header present |
 | `1` | Secondary header is present |
 
-When set, the Packet Data Field begins with a mission-defined secondary header (typically containing a timestamp). The CCSDS standard does not prescribe the format of the secondary header — it is entirely mission-specific.
+When set, the Packet Data Field begins with a secondary header (typically containing a timestamp). The contents are mission-defined, but the layout is not free-form: clause 4.1.4.2.1.5 allows a Time Code Field alone, an Ancillary Data Field alone, or a Time Code Field followed by an Ancillary Data Field — in that order and nothing else.
 
 #### Application Process Identifier — APID (11 bits)
 
@@ -137,7 +137,7 @@ Most packets use `11` (unsegmented). The segmentation flags are used when a sing
 A per-APID counter that increments with each packet sent. Range: 0–16,383, wrapping back to 0 after 16,383.
 
 **Purpose:**
-- **Loss detection**: If the ground receives packets with counts 41, 42, 44, it knows packet 43 was lost.
+- **Loss detection**: If the ground receives packets with counts 41, 42, 44, it knows packet 43 was lost. `Service` does this check on every received packet and reports the result through `LastDataLoss()` and the `Indication` from `ReceiveBytes()`.
 - **Ordering**: If packets arrive out of order (possible with some link configurations), the sequence count restores the original order.
 - **Duplicate detection**: Two packets with the same APID and sequence count indicate a duplicate.
 
@@ -174,7 +174,9 @@ When the Secondary Header Flag is set, the first bytes of the Packet Data Field 
 - **Packet subcategory**: Further classifying data within an APID
 - **Data quality flags**: Indicating sensor status at acquisition time
 
-The CCSDS standard does not fix the secondary header's length — it is mission-defined (at least 1 byte, and it must fit within the packet data field). The standard requires the format to be fixed for a given APID — all packets from the same APID must use the same secondary header structure. Idle packets (APID `0x7FF`) must not carry a secondary header.
+The CCSDS standard does not fix the secondary header's length — it is mission-defined (at least 1 byte, and it must fit within the packet data field). It does fix the shape. Clause 4.1.4.2.1.5 says a secondary header is one of exactly three things: a Time Code Field on its own, an Ancillary Data Field on its own, or a Time Code Field followed by an Ancillary Data Field. Clause 4.1.4.2.1.6 says the choice must stay the same for a managed data path through every mission phase, so all packets on one APID share one structure.
+
+The `SecondaryHeader` interface in `pkg/spp` cannot check that. It sees only octets, so which of the three shapes an implementation produces — and whether it keeps producing the same one — is up to the implementation. What `pkg/spp` does check is that the header is at least 1 octet, that it encodes to exactly the size it declares, and that it fits inside the packet data field. Idle packets (APID `0x7FF`) must not carry a secondary header (clause 4.1.3.3.3.4).
 
 #### User Data
 
@@ -193,7 +195,9 @@ Idle packets (APID = `0x7FF`) serve as **fill data**. They are used when:
 - Transfer Frame slots need to be filled to maintain the fixed frame length.
 - Timing synchronization requires continuous transmission.
 
-Receivers should recognize and discard idle packets. Their data field content is meaningless (typically all `0xFF` or zeros), and they never carry a secondary header. Build them with `spp.NewIdlePacket(fill)`.
+Receivers should recognize and discard idle packets. Their data field content is meaningless (typically all `0xFF` or zeros), and they never carry a secondary header. Build them with `spp.NewIdlePacket(fill)`, and set `ServiceConfig.DiscardIdle` to have the receiving service drop them instead of handing them to the application. `spp.IsIdleBytes(data)` answers the same question about a raw encoded packet, which is what the data link packages use to strip fill out of a frame.
+
+An idle packet is telemetry by default. Nothing in the standard ties the idle APID to a packet type, so pass `spp.WithPacketType(spp.PacketTypeTC)` for a telecommand one.
 
 ## Services
 
@@ -207,7 +211,9 @@ This service gives the application full control over the packet structure, inclu
 
 ### Octet String Service
 
-The application provides raw bytes and an APID. The service layer wraps them in a valid Space Packet automatically — constructing the header, assigning the sequence count, and optionally computing the CRC.
+The application provides raw bytes and an APID. The service layer wraps them in a valid Space Packet automatically — constructing the header, assigning the sequence count, and optionally computing the CRC. Send options cover the rest of the request parameters: `WithSendSecondaryHeader`, `WithSendPacketType`, and `WithSendSequenceCount` (spelled `WithSendPacketName` when the 14 bits carry a Packet Name on a telecommand packet).
+
+On the receive side, `ReceiveBytes` returns an `Indication` carrying the parameters clause 3.4.3.3.2 lists: the octet string, the APID, the Secondary Header Indicator, and the Data Loss Indicator with the number of packets the sequence count skipped.
 
 This is the simpler interface, suitable for applications that just need to move data without worrying about packet structure.
 

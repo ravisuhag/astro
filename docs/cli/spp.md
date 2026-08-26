@@ -44,6 +44,9 @@ astro spp decode [file] [flags]
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
+| `--crc` | `false` | Treat the last 2 octets as a CRC-16-CCITT error control field and verify it |
+
+Without `--crc` the two CRC octets are indistinguishable from payload, so a packet built with `astro spp encode --crc` decodes with them shown at the end of its user data. Pass `--crc` to split them off and check them.
 
 **Examples**
 
@@ -56,6 +59,9 @@ echo "0064c000000361626364" | astro spp decode --input hex --format json
 
 # Decode a binary file
 astro spp decode --input bin packet.bin
+
+# Round-trip a packet that carries a CRC
+astro spp encode --apid 100 --type tm --data 61626364 --crc | astro spp decode --crc
 ```
 
 ---
@@ -108,6 +114,7 @@ astro spp inspect [file] [flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
+| `--crc` | `false` | Treat the last 2 octets as a CRC-16-CCITT error control field and verify it |
 
 **Examples**
 
@@ -117,6 +124,9 @@ echo "0064c000000361626364" | astro spp inspect --input hex
 
 # Inspect a binary file
 astro spp inspect --input bin packet.bin
+
+# Inspect a packet that carries a CRC
+astro spp encode --apid 100 --type tm --data 61626364 --crc | astro spp inspect --crc
 ```
 
 **Sample Output**
@@ -183,8 +193,11 @@ astro spp stream [file] [flags]
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
+| `--crc` | `false` | Treat the last 2 octets of each packet as a CRC-16-CCITT error control field and verify it |
 
 With `--format json`, each packet is printed as a single JSON line (NDJSON), suitable for piping to `jq` or other tools.
+
+A stream of packets built with `astro spp encode --crc` needs `--crc` here too; otherwise every packet shows its CRC octets as the tail of its user data.
 
 **Examples**
 

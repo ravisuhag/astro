@@ -62,6 +62,16 @@ const (
 // this package supports: one octet, since no extension octet is needed.
 const cucPFieldSize = 1
 
+// maxProfileHeaderSize is the widest PUS secondary header a MissionProfile may
+// describe, in octets.
+//
+// It is a bound this package chose, not one CCSDS 133.0-B-2 imposes: the Blue
+// Book leaves the Packet Secondary Header's length to the mission and caps it
+// only through the packet data field maximum. Sixty-three octets is far beyond
+// any realistic PUS header, so exceeding it almost always means a mistyped
+// profile.
+const maxProfileHeaderSize = 63
+
 // String names the time format.
 func (t TimeFormat) String() string {
 	switch t {
@@ -203,8 +213,15 @@ func (p MissionProfile) TMHeaderSize() int {
 
 // Validate checks the profile's widths.
 //
-// Both header sizes must land inside the 1-to-63 octet window CCSDS 133.0-B-2
-// allows for a secondary header, since pkg/spp enforces it.
+// Both header sizes must be at least 1 octet and no more than 63. Only the
+// lower bound comes from a standard: CCSDS 133.0-B-2 4.1.4.2.1.3 requires the
+// Packet Secondary Header to be a whole number of octets, and pkg/spp refuses
+// a zero-length one. The Blue Book sets no upper limit at all — the data field
+// maximum is the only ceiling it gives. The 63-octet cap here is this
+// package's own sanity bound on a mission profile: a PUS secondary header of
+// that width already carries an 8-octet time code and 50-odd octets of spare,
+// so a larger one is far more likely to be a mistyped profile than a real
+// design. Missions that genuinely need more should raise it here.
 func (p MissionProfile) Validate() error {
 	widths := []int{
 		p.TCSpareBytes, p.TMSpareBytes, p.CUCCoarseBytes, p.CUCFineBytes,
@@ -242,7 +259,9 @@ func (p MissionProfile) Validate() error {
 		return ErrUnsupportedTimeFormat
 	}
 
-	if p.TCHeaderSize() > 63 || p.TMHeaderSize() > 63 {
+	// A mission-profile sanity bound, not a CCSDS 133.0-B-2 rule; see the
+	// comment on Validate.
+	if p.TCHeaderSize() > maxProfileHeaderSize || p.TMHeaderSize() > maxProfileHeaderSize {
 		return ErrHeaderTooLarge
 	}
 

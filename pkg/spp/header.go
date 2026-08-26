@@ -25,9 +25,20 @@ const (
 const APIDIdle uint16 = 0x7FF
 
 // SecondaryHeader is implemented by mission-specific secondary headers.
-// The CCSDS standard defines the existence of the secondary header, but its
-// format and length are mission-defined; the only structural constraint is
-// that it contains at least one octet and fits within the packet data field.
+//
+// The contents are specified by the source end user and passed to the
+// destination by management (CCSDS 133.0-B-2 4.1.4.2.1.4), and the length is
+// mission-defined, but the layout is not a free-for-all. Per 4.1.4.2.1.5 a
+// Packet Secondary Header consists of either a Time Code Field alone, an
+// Ancillary Data Field alone, or a Time Code Field followed by an Ancillary
+// Data Field — in that order — and 4.1.4.2.1.6 requires the chosen option to
+// stay the same for a managed data path through every mission phase.
+//
+// This interface cannot check that: it sees only octets, so which of the
+// three shapes an implementation produces, and whether it keeps producing the
+// same one, is the implementation's responsibility. What is checked here is
+// structural: the header must be at least one octet and must fit inside the
+// packet data field.
 type SecondaryHeader interface {
 	// Encode serializes the secondary header into bytes.
 	Encode() ([]byte, error)

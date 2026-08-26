@@ -121,11 +121,7 @@ func idleFillPacket(n, capacity int) ([]byte, error) {
 // (all ones). ECSS-E-ST-50-03C 5.4.3.5d and CCSDS 132.0-B-3 §4.3.2 require
 // the packet extraction function to discard such packets.
 func isIdlePacket(pkt []byte) bool {
-	if len(pkt) < 2 {
-		return false
-	}
-	apid := uint16(pkt[0]&0x07)<<8 | uint16(pkt[1])
-	return apid == spp.APIDIdle
+	return spp.IsIdleBytes(pkt)
 }
 
 // VirtualChannelPacketService implements the VCP service.

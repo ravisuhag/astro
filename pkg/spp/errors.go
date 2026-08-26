@@ -39,6 +39,18 @@ var (
 	// ErrSecondaryHeaderMissing indicates that a required secondary header is missing.
 	ErrSecondaryHeaderMissing = errors.New("secondary header flag is set but no secondary header is provided")
 
+	// ErrSecondaryHeaderFlagClear indicates a packet carries a SecondaryHeader
+	// while its Secondary Header Flag is '0'. CCSDS 133.0-B-2 4.1.3.3.3.2 makes
+	// the flag the sole signal of the header's presence, so the two must agree:
+	// encoding such a packet would declare a data field longer than the octets
+	// actually written.
+	ErrSecondaryHeaderFlagClear = errors.New("secondary header is set but the secondary header flag is 0")
+
+	// ErrSecondaryHeaderExceedsDataField indicates the configured secondary
+	// header decoder wants more octets than the packet data field holds. This
+	// is a decoder/packet mismatch, not a truncated buffer.
+	ErrSecondaryHeaderExceedsDataField = errors.New("secondary header size exceeds the packet data field")
+
 	// ErrSecondaryHeaderTooSmall indicates the secondary header is less than 1 octet.
 	ErrSecondaryHeaderTooSmall = errors.New("secondary header must be at least 1 octet")
 
@@ -47,7 +59,7 @@ var (
 	ErrSecondaryHeaderSizeMismatch = errors.New("secondary header encoded size does not match Size()")
 
 	// ErrIdleWithSecondaryHeader indicates an idle packet (APID 0x7FF) carries a
-	// secondary header, which CCSDS 133.0-B-2 4.1.4.2.1.4 forbids.
+	// secondary header, which CCSDS 133.0-B-2 4.1.3.3.3.4 forbids.
 	ErrIdleWithSecondaryHeader = errors.New("idle packet must not contain a secondary header")
 
 	// ErrCRCValidationFailed indicates that the CRC validation of the packet failed.
