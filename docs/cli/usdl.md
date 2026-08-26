@@ -1,6 +1,6 @@
 # astro usdl
 
-USLP Transfer Frame operations — encode, decode, inspect, and generate USLP Transfer Frames ([CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf)).
+USLP Transfer Frame operations — encode, decode, inspect, and generate USLP Transfer Frames ([CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf)).
 
 ## Subcommands
 
@@ -17,7 +17,7 @@ USLP Transfer Frame operations — encode, decode, inspect, and generate USLP Tr
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
-| `--crc32` | `false` | Use CRC-32 instead of CRC-16 for FECF |
+| `--no-fecf` | `false` | Frame carries no FECF (decode/inspect) |
 
 ---
 
@@ -35,7 +35,7 @@ astro usdl decode [file] [flags]
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
-| `--crc32` | `false` | Use CRC-32 instead of CRC-16 |
+| `--no-fecf` | `false` | Frame carries no FECF |
 
 **Examples**
 
@@ -67,7 +67,6 @@ astro usdl encode [flags]
 | `--data` | required | Data field as hex string |
 | `--ocf` | | Operational Control Field as hex string (4 bytes) |
 | `--seq` | `0` | Frame sequence number |
-| `--crc32` | `false` | Use CRC-32 instead of CRC-16 |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
 
 **Examples**
@@ -76,8 +75,8 @@ astro usdl encode [flags]
 # Encode a basic USLP frame
 astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405
 
-# Encode with OCF and CRC-32
-astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405 --ocf 00000000 --crc32
+# Encode with an OCF
+astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405 --ocf 00000000
 
 # Encode with JSON output
 astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405 --format json
@@ -98,7 +97,7 @@ astro usdl inspect [file] [flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
-| `--crc32` | `false` | Use CRC-32 instead of CRC-16 |
+| `--no-fecf` | `false` | Frame carries no FECF |
 
 **Examples**
 
@@ -129,7 +128,6 @@ astro usdl gen [flags]
 | `--mapid` | `0` | MAP ID (0-63) |
 | `--count` | `10` | Number of frames to generate |
 | `--data-size` | `64` | Data field size in bytes per frame |
-| `--crc32` | `false` | Use CRC-32 instead of CRC-16 |
 | `--format` | `bin` | Output format: `bin` or `hex` |
 
 **Examples**
@@ -138,6 +136,6 @@ astro usdl gen [flags]
 # Generate 10 USLP frames
 astro usdl gen --scid 100 --vcid 1 --mapid 0 --count 10 --data-size 64
 
-# Generate with CRC-32 and hex output
-astro usdl gen --scid 100 --vcid 1 --count 5 --data-size 32 --crc32 --format hex
+# Generate with hex output
+astro usdl gen --scid 100 --vcid 1 --count 5 --data-size 32 --format hex
 ```

@@ -8,7 +8,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/usdl"
 )
 
-// Golden wire vectors, hand-computed from the CCSDS 732.1-B-2 §4.1.2 and
+// Golden wire vectors, hand-computed from the CCSDS 732.1-B-3 §4.1.2 and
 // §4.1.4 field layouts and checked with independent CRC implementations.
 
 // Non-truncated frame: TFVN='1100', SCID=1234 (0x04D2), source/dest=1,
@@ -101,18 +101,17 @@ func TestGoldenVector_Truncated(t *testing.T) {
 	}
 }
 
-// Non-truncated frame with OCF and 32-bit FECF: SCID=100, VCID=1, MAP=0,
-// no VCF count, rule '111' UPID 0, TFDZ=0102, OCF=aabbccdd. The OCF flag
-// (bit 52) is set: byte 6 = 0x08. The CRC-32 is the CCSDS/Proximity-1
-// variant (poly 0x00A00805, zero preset), computed independently.
-func TestGoldenVector_OCFAndCRC32(t *testing.T) {
-	want, _ := hex.DecodeString("c0064020001108e00102aabbccddacae4104")
+// Non-truncated frame with OCF: SCID=100, VCID=1, MAP=0, no VCF count,
+// rule '111' UPID 0, TFDZ=0102, OCF=aabbccdd, 16-bit FECF (§4.1.6.2.2:
+// the FECF, when present, is the last 16 bits of the frame). The OCF flag
+// (bit 52) is set: byte 6 = 0x08. Total 16 octets, frame length field 15.
+func TestGoldenVector_OCFAndCRC16(t *testing.T) {
+	want, _ := hex.DecodeString("c0064020000f08e00102aabbccdd778e")
 
 	frame, err := usdl.NewTransferFrame(100, 1, 0, []byte{0x01, 0x02},
 		usdl.WithConstructionRule(usdl.RuleNoSegmentation),
 		usdl.WithUPID(usdl.UPIDSpacePackets),
 		usdl.WithOCF([]byte{0xAA, 0xBB, 0xCC, 0xDD}),
-		usdl.WithCRC32(),
 	)
 	if err != nil {
 		t.Fatalf("NewTransferFrame() error = %v", err)
@@ -127,7 +126,7 @@ func TestGoldenVector_OCFAndCRC32(t *testing.T) {
 
 	// The OCF is recovered from the in-band OCF flag, not out-of-band
 	// knowledge.
-	decoded, err := usdl.DecodeTransferFrame(want, usdl.FECSize32, 0)
+	decoded, err := usdl.DecodeTransferFrame(want, usdl.FECSize16, 0)
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -139,6 +138,30 @@ func TestGoldenVector_OCFAndCRC32(t *testing.T) {
 	}
 	if !bytes.Equal(decoded.DataField, []byte{0x01, 0x02}) {
 		t.Errorf("decoded TFDZ = %x, want 0102", decoded.DataField)
+	}
+}
+
+// oidPNPrefix is the start of the mandatory OID PN sequence exactly as
+// printed in CCSDS 732.1-B-3 annex H ("Generated data pattern in both
+// cases: FF FF FF FF 6D B6 D8 61 45 1F 11 F1 97 16 72 3C BE 7E 00 B1").
+const oidPNPrefix = "ffffffff6db6d861451f11f19716723cbe7e00b1"
+
+// The OID fill generator must reproduce the annex H known-answer stream:
+// a 32-cell Fibonacci LFSR with polynomial D0+D1+D2+D22+D32 seeded all
+// ones (§4.1.4.1.10).
+func TestGoldenVector_OIDPNSequence(t *testing.T) {
+	want, _ := hex.DecodeString(oidPNPrefix)
+
+	seq := usdl.NewOIDSequence()
+	got := make([]byte, len(want))
+	seq.Fill(got)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("PN stream mismatch:\n got %x\nwant %x", got, want)
+	}
+
+	// §4.1.6.2.2: only 16-bit FECFs exist; a 32-bit size is refused.
+	if _, err := usdl.DecodeTransferFrame(want, 4, 0); err != usdl.ErrInvalidFECSize {
+		t.Errorf("DecodeTransferFrame(fecSize=4) error = %v, want ErrInvalidFECSize", err)
 	}
 }
 

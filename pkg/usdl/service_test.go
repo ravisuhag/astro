@@ -172,8 +172,9 @@ func TestMAPPacketService_FixedLength_RoundTrip(t *testing.T) {
 }
 
 func TestMAPPacketService_MAPDemultiplexing(t *testing.T) {
-	// Two MAP channels sharing one VC: each service must receive only its
-	// own MAP's frames.
+	// Two MAP channels sharing one VC: each service must receive its own
+	// MAP's traffic, and pulling one MAP's frame past the other's must not
+	// discard the other's data (§4.3 MAP demultiplexing).
 	config := usdl.ChannelConfig{HasFECF: true}
 	vc := usdl.NewVirtualChannel(1, 100)
 
@@ -187,13 +188,25 @@ func TestMAPPacketService_MAPDemultiplexing(t *testing.T) {
 		t.Fatalf("Send(A) error = %v", err)
 	}
 
+	// MAP 0 receives first: its frame sits behind MAP 5's in the shared
+	// VC buffer, so the demux must hold the MAP 5 frame for its service.
 	rxA := usdl.NewMAPPacketService(100, 1, 0, vc, config, nil)
+	rxB := usdl.NewMAPPacketService(100, 1, 5, vc, config, nil)
+
 	got, err := rxA.Receive()
 	if err != nil {
 		t.Fatalf("Receive(A) error = %v", err)
 	}
 	if !bytes.Equal(got, []byte{0xA0, 0xA1}) {
 		t.Errorf("MAP 0 received %x, want a0a1 (MAP 5 frame must be filtered)", got)
+	}
+
+	gotB, err := rxB.Receive()
+	if err != nil {
+		t.Fatalf("Receive(B) error = %v (frame discarded by the other MAP's service?)", err)
+	}
+	if !bytes.Equal(gotB, []byte{0xB0, 0xB1}) {
+		t.Errorf("MAP 5 received %x, want b0b1", gotB)
 	}
 }
 
@@ -392,14 +405,22 @@ func TestMAPOctetStreamService_EmptyData(t *testing.T) {
 func TestFrameCounter(t *testing.T) {
 	fc := usdl.NewFrameCounter()
 
-	if got := fc.Next(1); got != 0 {
+	if got := fc.Next(1, false); got != 0 {
 		t.Errorf("Next(1) #1 = %d, want 0", got)
 	}
-	if got := fc.Next(1); got != 1 {
+	if got := fc.Next(1, false); got != 1 {
 		t.Errorf("Next(1) #2 = %d, want 1", got)
 	}
-	if got := fc.Next(2); got != 0 {
+	if got := fc.Next(2, false); got != 0 {
 		t.Errorf("Next(2) = %d, want 0 (separate VC)", got)
+	}
+	// §4.1.2.12.4-12.5: the expedited count of a VC is independent of its
+	// sequence-controlled count.
+	if got := fc.Next(1, true); got != 0 {
+		t.Errorf("Next(1, expedited) = %d, want 0 (separate QoS counter)", got)
+	}
+	if got := fc.Next(1, false); got != 2 {
+		t.Errorf("Next(1) #3 = %d, want 2 (expedited count must not advance it)", got)
 	}
 }
 
@@ -411,4 +432,172 @@ func TestMAPAccessService_Flush(t *testing.T) {
 	if err := svc.Flush(); err != nil {
 		t.Errorf("Flush() error = %v", err)
 	}
+}
+
+// §4.1.4.2.4.3-4.4.4: the FHP points at the first packet header starting
+// in the TFDZ; 'all ones' only when NO packet starts there. A flush frame
+// that carries just a spanning packet's tail still has the appended
+// Encapsulation Idle Packet starting in it, so the FHP must point at the
+// idle packet — and a receiver that lost the preceding frame must be able
+// to resynchronize on the flush frame.
+func TestMAPPacketService_FlushFHP_ResyncAfterLoss(t *testing.T) {
+	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, VCFCountLen: 2}
+	capacity := config.DataFieldCapacity(3)
+	sendVC := usdl.NewVirtualChannel(1, 100)
+	counter := usdl.NewFrameCounter()
+	tx := usdl.NewMAPPacketService(100, 1, 0, sendVC, config, counter)
+
+	// pkt1 spans two frames: capacity octets in frame 1, a 10-octet tail
+	// in the flush frame.
+	pkt1 := makeSPP(t, 100, make([]byte, capacity+10-6))
+	if err := tx.Send(pkt1); err != nil {
+		t.Fatalf("Send(pkt1) error = %v", err)
+	}
+	if err := tx.Flush(); err != nil {
+		t.Fatalf("Flush(1) error = %v", err)
+	}
+	pkt2 := makeSPP(t, 200, []byte{0xCA, 0xFE})
+	if err := tx.Send(pkt2); err != nil {
+		t.Fatalf("Send(pkt2) error = %v", err)
+	}
+	if err := tx.Flush(); err != nil {
+		t.Fatalf("Flush(2) error = %v", err)
+	}
+
+	frame1, _ := sendVC.Next()
+	frame2, _ := sendVC.Next()
+	frame3, _ := sendVC.Next()
+	if frame1.DataFieldHeader.Pointer != 0 {
+		t.Errorf("frame1 FHP = 0x%04X, want 0 (pkt1 starts at octet 0)", frame1.DataFieldHeader.Pointer)
+	}
+	if frame2.DataFieldHeader.Pointer != 10 {
+		t.Errorf("frame2 FHP = 0x%04X, want 10 (the idle packet behind pkt1's tail)",
+			frame2.DataFieldHeader.Pointer)
+	}
+	if frame3.DataFieldHeader.Pointer != 0 {
+		t.Errorf("frame3 FHP = 0x%04X, want 0", frame3.DataFieldHeader.Pointer)
+	}
+
+	// Lose frame 1. The receiver must resynchronize at the flush frame's
+	// FHP and still deliver pkt2 intact.
+	recvVC := usdl.NewVirtualChannel(1, 100)
+	_ = recvVC.Add(frame2)
+	_ = recvVC.Add(frame3)
+	rx := usdl.NewMAPPacketService(100, 1, 0, recvVC, config, nil)
+	rx.SetPacketSizer(spp.PacketSizer)
+
+	got, err := rx.Receive()
+	if err != nil {
+		t.Fatalf("Receive() error = %v", err)
+	}
+	if !bytes.Equal(got, pkt2) {
+		t.Fatalf("resynced packet mismatch:\n got %x\nwant %x", got, pkt2)
+	}
+	if extra, err := rx.Receive(); err == nil {
+		t.Fatalf("unexpected extra packet: %x", extra)
+	}
+}
+
+// User data that happens to coincide with the project idle pattern must
+// not be dropped: rule '000' fill is exactly delimited by Encapsulation
+// Idle Packets, so no pattern heuristic may run on user data.
+func TestMAPPacketService_PatternLikePayloadDelivered(t *testing.T) {
+	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, VCFCountLen: 2}
+	capacity := config.DataFieldCapacity(3)
+	sendVC := usdl.NewVirtualChannel(1, 100)
+	tx := usdl.NewMAPPacketService(100, 1, 0, sendVC, config, usdl.NewFrameCounter())
+
+	// Two fixed-size packets exactly fill one frame; the second is all
+	// 0x55 — byte-identical to the default idle pattern.
+	half := capacity / 2
+	pkt1 := bytes.Repeat([]byte{0x11}, half)
+	pkt2 := bytes.Repeat([]byte{usdl.DefaultIdleFill}, capacity-half)
+	if err := tx.Send(pkt1); err != nil {
+		t.Fatalf("Send(pkt1) error = %v", err)
+	}
+	if err := tx.Send(pkt2); err != nil {
+		t.Fatalf("Send(pkt2) error = %v", err)
+	}
+
+	rx := usdl.NewMAPPacketService(100, 1, 0, sendVC, config, nil)
+	sizes := []int{len(pkt1), len(pkt2)}
+	i := 0
+	rx.SetPacketSizer(func(data []byte) int {
+		if i >= len(sizes) || len(data) < sizes[i] {
+			return -1
+		}
+		n := sizes[i]
+		i++
+		return n
+	})
+
+	got1, err := rx.Receive()
+	if err != nil {
+		t.Fatalf("Receive(1) error = %v", err)
+	}
+	if !bytes.Equal(got1, pkt1) {
+		t.Fatalf("packet 1 mismatch: %x", got1)
+	}
+	got2, err := rx.Receive()
+	if err != nil {
+		t.Fatalf("Receive(2) error = %v (pattern-like payload dropped?)", err)
+	}
+	if !bytes.Equal(got2, pkt2) {
+		t.Fatalf("packet 2 mismatch: %x", got2)
+	}
+}
+
+// A channel configured with HasOCF requires an OCF supplier; the OCF is
+// then carried on every emitted frame (§4.1.5).
+func TestMAPServices_OCFSupplier(t *testing.T) {
+	config := usdl.ChannelConfig{HasFECF: true, HasOCF: true}
+	clcw := []byte{0xC1, 0xC2, 0xC3, 0xC4}
+
+	t.Run("MAPP", func(t *testing.T) {
+		vc := usdl.NewVirtualChannel(1, 10)
+		svc := usdl.NewMAPPacketService(100, 1, 0, vc, config, nil)
+		if err := svc.Send([]byte{0x01}); err != usdl.ErrNoOCFSupplier {
+			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
+		}
+		svc.SetOCFSupplier(func() []byte { return clcw })
+		if err := svc.Send([]byte{0x01}); err != nil {
+			t.Fatalf("Send() error = %v", err)
+		}
+		frame, _ := vc.Next()
+		if !bytes.Equal(frame.OCF, clcw) {
+			t.Errorf("OCF = %x, want %x", frame.OCF, clcw)
+		}
+	})
+
+	t.Run("MAPA", func(t *testing.T) {
+		vc := usdl.NewVirtualChannel(1, 10)
+		svc := usdl.NewMAPAccessService(100, 1, 0, 4, vc, config, nil)
+		if err := svc.Send([]byte{1, 2, 3, 4}); err != usdl.ErrNoOCFSupplier {
+			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
+		}
+		svc.SetOCFSupplier(func() []byte { return clcw })
+		if err := svc.Send([]byte{1, 2, 3, 4}); err != nil {
+			t.Fatalf("Send() error = %v", err)
+		}
+		frame, _ := vc.Next()
+		if !bytes.Equal(frame.OCF, clcw) {
+			t.Errorf("OCF = %x, want %x", frame.OCF, clcw)
+		}
+	})
+
+	t.Run("MAPO", func(t *testing.T) {
+		vc := usdl.NewVirtualChannel(1, 10)
+		svc := usdl.NewMAPOctetStreamService(100, 1, 0, vc, config, nil)
+		if err := svc.Send([]byte{0x01}); err != usdl.ErrNoOCFSupplier {
+			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
+		}
+		svc.SetOCFSupplier(func() []byte { return clcw })
+		if err := svc.Send([]byte{0x01}); err != nil {
+			t.Fatalf("Send() error = %v", err)
+		}
+		frame, _ := vc.Next()
+		if !bytes.Equal(frame.OCF, clcw) {
+			t.Errorf("OCF = %x, want %x", frame.OCF, clcw)
+		}
+	})
 }

@@ -13,9 +13,10 @@ package pxsc
 //	CRC-32C       0x1EDC6F41   Castagnoli, used by iSCSI
 //	Proximity-1   0x00A00805   this one
 //
-// pkg/crc.ComputeCRC32 implements the same algorithm for the USLP FECF
-// (CCSDS 732.1-B-2 annex B declares it identical to this one); this copy
-// stays here so the Proximity-1 stack keeps its own known-answer tests.
+// pkg/crc.ComputeCRC32 implements the same algorithm (the retired USLP
+// issue 732.1-B-1 once borrowed it for an optional 32-bit FECF; current
+// USLP carries only the 16-bit FECF); this copy stays here so the
+// Proximity-1 stack keeps its own known-answer tests.
 //
 // The register also starts at zero, not all-ones. The spec flags that
 // difference itself: "This initialization differs from that performed for the

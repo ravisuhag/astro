@@ -15,7 +15,7 @@ func usdlCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "usdl <command>",
 		Short: "USLP Transfer Frame operations",
-		Long:  "Encode, decode, inspect, and generate USLP Transfer Frames (CCSDS 732.1-B-2).",
+		Long:  "Encode, decode, inspect, and generate USLP Transfer Frames (CCSDS 732.1-B-3).",
 		Annotations: map[string]string{
 			"group": "protocol",
 		},
@@ -93,20 +93,19 @@ func toUSDLFrameJSON(f *usdl.TransferFrame) usdlFrameJSON {
 	return j
 }
 
-// usdlFECSize maps the decode flags to the managed FECF size.
-func usdlFECSize(crc32, noFECF bool) int {
+// usdlFECSize maps the decode flags to the managed FECF size. The USLP
+// FECF, when present, is always the 16-bit CRC (CCSDS 732.1-B-3
+// §4.1.6.2.2).
+func usdlFECSize(noFECF bool) int {
 	if noFECF {
 		return 0
-	}
-	if crc32 {
-		return usdl.FECSize32
 	}
 	return usdl.FECSize16
 }
 
 func usdlDecodeCmd() *cobra.Command {
 	var inputFmt, outputFmt string
-	var crc32, noFECF bool
+	var noFECF bool
 	var insertZoneLen int
 
 	cmd := &cobra.Command{
@@ -116,8 +115,8 @@ func usdlDecodeCmd() *cobra.Command {
 		Example: `  # Decode from hex stdin
   echo "c00640..." | astro usdl decode --input hex
 
-  # Decode with CRC-32
-  astro usdl decode --input hex --crc32 < frame.hex`,
+  # Decode a frame without a FECF
+  astro usdl decode --input hex --no-fecf < frame.hex`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := readInput(args, inputFmt)
@@ -125,7 +124,7 @@ func usdlDecodeCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(crc32, noFECF), insertZoneLen)
+			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(noFECF), insertZoneLen)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -136,7 +135,6 @@ func usdlDecodeCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
 	cmd.Flags().StringVar(&outputFmt, "format", "text", "Output format: text, json, or hex")
-	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
 	cmd.Flags().BoolVar(&noFECF, "no-fecf", false, "Frame carries no FECF")
 	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
 
@@ -150,7 +148,6 @@ func usdlEncodeCmd() *cobra.Command {
 		mapid     uint8
 		dataHex   string
 		ocfHex    string
-		crc32     bool
 		vcfLen    uint8
 		vcfCount  uint64
 		rule      uint8
@@ -165,8 +162,8 @@ func usdlEncodeCmd() *cobra.Command {
 		Example: `  # Encode a basic USLP frame
   astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405
 
-  # Encode with OCF and CRC-32
-  astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405 --ocf 00000000 --crc32
+  # Encode with an OCF
+  astro usdl encode --scid 100 --vcid 1 --mapid 0 --data 0102030405 --ocf 00000000
 
   # Encode with a 2-octet VCF count
   astro usdl encode --scid 100 --vcid 1 --data 0102 --vcf-len 2 --vcf-count 42`,
@@ -195,10 +192,6 @@ func usdlEncodeCmd() *cobra.Command {
 				opts = append(opts, usdl.WithOCF(ocf))
 			}
 
-			if crc32 {
-				opts = append(opts, usdl.WithCRC32())
-			}
-
 			frame, err := usdl.NewTransferFrame(scid, vcid, mapid, userData, opts...)
 			if err != nil {
 				return fmt.Errorf("building frame: %w", err)
@@ -218,7 +211,6 @@ func usdlEncodeCmd() *cobra.Command {
 	cmd.Flags().Uint8Var(&mapid, "mapid", 0, "MAP ID (0-15)")
 	cmd.Flags().StringVar(&dataHex, "data", "", "Data field as hex string")
 	cmd.Flags().StringVar(&ocfHex, "ocf", "", "Operational Control Field as hex string (4 bytes)")
-	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
 	cmd.Flags().Uint8Var(&vcfLen, "vcf-len", 0, "VCF count field length in octets (0-7)")
 	cmd.Flags().Uint64Var(&vcfCount, "vcf-count", 0, "VCF count value")
 	cmd.Flags().Uint8Var(&rule, "rule", usdl.RuleNoSegmentation, "TFDZ construction rule (0-7)")
@@ -232,7 +224,7 @@ func usdlEncodeCmd() *cobra.Command {
 
 func usdlInspectCmd() *cobra.Command {
 	var inputFmt string
-	var crc32, noFECF bool
+	var noFECF bool
 	var insertZoneLen int
 
 	cmd := &cobra.Command{
@@ -251,7 +243,7 @@ func usdlInspectCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(crc32, noFECF), insertZoneLen)
+			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(noFECF), insertZoneLen)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -262,7 +254,6 @@ func usdlInspectCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
-	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
 	cmd.Flags().BoolVar(&noFECF, "no-fecf", false, "Frame carries no FECF")
 	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
 
@@ -276,7 +267,6 @@ func usdlGenCmd() *cobra.Command {
 		mapid     uint8
 		count     int
 		dataSize  int
-		crc32     bool
 		outputFmt string
 	)
 
@@ -287,8 +277,8 @@ func usdlGenCmd() *cobra.Command {
 		Example: `  # Generate 10 USLP frames
   astro usdl gen --scid 100 --vcid 1 --mapid 0 --count 10 --data-size 64
 
-  # Generate with CRC-32
-  astro usdl gen --scid 100 --vcid 1 --count 5 --data-size 32 --crc32`,
+  # Generate hex output
+  astro usdl gen --scid 100 --vcid 1 --count 5 --data-size 32 --format hex`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var frameSize int
 
@@ -304,9 +294,6 @@ func usdlGenCmd() *cobra.Command {
 
 				opts := []usdl.FrameOption{
 					usdl.WithVCFCount(2, uint64(i)&0xFFFF),
-				}
-				if crc32 {
-					opts = append(opts, usdl.WithCRC32())
 				}
 
 				frame, err := usdl.NewTransferFrame(scid, vcid, mapid, data, opts...)
@@ -339,7 +326,6 @@ func usdlGenCmd() *cobra.Command {
 	cmd.Flags().Uint8Var(&mapid, "mapid", 0, "MAP ID (0-15)")
 	cmd.Flags().IntVar(&count, "count", 10, "Number of frames to generate")
 	cmd.Flags().IntVar(&dataSize, "data-size", 64, "Data field size in bytes per frame")
-	cmd.Flags().BoolVar(&crc32, "crc32", false, "Use CRC-32 instead of CRC-16 for FECF")
 	cmd.Flags().StringVar(&outputFmt, "format", "bin", "Output format: bin or hex")
 
 	return cmd
@@ -433,11 +419,7 @@ func printUSDLInspect(f *usdl.TransferFrame, raw []byte) {
 	// FECF
 	if len(f.FECF) > 0 {
 		fmt.Println(strings.Repeat("─", 60))
-		if f.UseCRC32 {
-			fmt.Printf("Frame Error Control: 0x%s (CCSDS CRC-32)\n", hex.EncodeToString(f.FECF))
-		} else {
-			fmt.Printf("Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
-		}
+		fmt.Printf("Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
 	}
 
 	// Full hex dump

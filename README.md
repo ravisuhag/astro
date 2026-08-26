@@ -92,7 +92,7 @@ checksum := crc.CRC16CCITT(caduBytes)
 | Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/guides/cop.md) \| [PICS](docs/pics/cop-pics.md) |
 | Space Data Link Security | [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) | [`pkg/sdls`](pkg/sdls) | [Guide](docs/guides/sdls.md) \| [PICS](docs/pics/sdls-pics.md) |
 | AOS Space Data Link Protocol | [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) | [`pkg/aos`](pkg/aos) | [Guide](docs/guides/aos.md) \| [CLI](docs/cli/aos.md) \| [PICS](docs/pics/aos-pics.md) |
-| Unified Space Data Link Protocol | [CCSDS 732.1-B-2](https://public.ccsds.org/Pubs/732x1b2.pdf) | [`pkg/usdl`](pkg/usdl) | [Guide](docs/guides/usdl.md) \| [CLI](docs/cli/usdl.md) \| [PICS](docs/pics/usdl-pics.md) |
+| Unified Space Data Link Protocol | [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf) | [`pkg/usdl`](pkg/usdl) | [Guide](docs/guides/usdl.md) \| [CLI](docs/cli/usdl.md) \| [PICS](docs/pics/usdl-pics.md) |
 | **Synchronization and Channel Coding** | | | |
 | TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/guides/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
 | Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | [`pkg/ocsc`](pkg/ocsc) | [Guide](docs/guides/ocsc.md) \| [PICS](docs/pics/ocsc-pics.md) |
