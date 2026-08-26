@@ -23,27 +23,40 @@ const (
 	MAPO                    // MAP Octet Stream Service
 )
 
-// FrameCounter manages per-VC Virtual Channel Frame Counts per CCSDS
-// 732.1-B-2 §4.1.2.13-14. The count is carried in the primary header's
-// VCF Count field, whose width (0-7 octets) is a managed parameter.
+// counterKey identifies one VCF Count: per CCSDS 732.1-B-3
+// §4.1.2.12.4-12.5 the sequence-controlled and expedited counts of a VC
+// are independent, so the key carries the Bypass/Sequence Control Flag
+// alongside the VCID.
+type counterKey struct {
+	vcid      uint8
+	expedited bool
+}
+
+// FrameCounter manages Virtual Channel Frame Counts per CCSDS 732.1-B-3
+// §4.1.2.12, keyed by VC and quality of service (§4.1.2.12.4-12.5: one
+// sequence-controlled and one expedited count per VC). The count is
+// carried in the primary header's VCF Count field, whose width (0-7
+// octets) is a managed parameter (§4.1.2.11).
 type FrameCounter struct {
 	mu       sync.Mutex
-	vcCounts map[uint8]uint64
+	vcCounts map[counterKey]uint64
 }
 
 // NewFrameCounter creates a new FrameCounter.
 func NewFrameCounter() *FrameCounter {
-	return &FrameCounter{vcCounts: make(map[uint8]uint64)}
+	return &FrameCounter{vcCounts: make(map[counterKey]uint64)}
 }
 
-// Next returns the current VC frame count for the given VCID, then
-// increments the counter. Callers mask the value to the managed VCF
-// Count field width.
-func (fc *FrameCounter) Next(vcid uint8) uint64 {
+// Next returns the current frame count for the given VCID and quality of
+// service (expedited = Bypass/Sequence Control Flag set), then increments
+// the counter. Callers mask the value to the managed VCF Count field
+// width.
+func (fc *FrameCounter) Next(vcid uint8, expedited bool) uint64 {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	count := fc.vcCounts[vcid]
-	fc.vcCounts[vcid] = count + 1
+	key := counterKey{vcid: vcid, expedited: expedited}
+	count := fc.vcCounts[key]
+	fc.vcCounts[key] = count + 1
 	return count
 }
 
@@ -54,56 +67,65 @@ func (fc *FrameCounter) Next(vcid uint8) uint64 {
 func stampFrame(frame *TransferFrame, counter *FrameCounter, vcid uint8, countLen uint8) error {
 	if counter != nil && countLen > 0 {
 		frame.Header.VCFCountLen = countLen
-		frame.Header.VCFCount = counter.Next(vcid) & maxVCFCount(countLen)
+		frame.Header.VCFCount = counter.Next(vcid, frame.Header.BypassSeqCtrl) & maxVCFCount(countLen)
 	}
 	return recomputeFECF(frame)
 }
 
 // vcfCountOpt returns the frame option carrying the next VCF Count, or
-// nothing when the channel carries no count.
+// nothing when the channel carries no count. The services emit sequence-
+// controlled frames (Bypass/Sequence Control Flag '0'), so the sequence-
+// controlled counter of the VC is used.
 func vcfCountOpt(config ChannelConfig, counter *FrameCounter, vcid uint8) []FrameOption {
 	if counter == nil || config.VCFCountLen == 0 {
 		return nil
 	}
-	count := counter.Next(vcid) & maxVCFCount(config.VCFCountLen)
+	count := counter.Next(vcid, false) & maxVCFCount(config.VCFCountLen)
 	return []FrameOption{WithVCFCount(config.VCFCountLen, count)}
 }
 
+// makeOCF builds the Operational Control Field for a frame: nil when the
+// channel carries no OCF, and the supplier's 4 octets otherwise. A channel
+// configured with HasOCF requires a supplier — the OCF content comes from
+// the OCF service user (§4.1.5); emitting zeros would fabricate an empty
+// Type-1 report.
+func makeOCF(config ChannelConfig, supplier func() []byte) ([]byte, error) {
+	if !config.HasOCF {
+		return nil, nil
+	}
+	if supplier == nil {
+		return nil, ErrNoOCFSupplier
+	}
+	ocf := supplier()
+	if len(ocf) != OCFSize {
+		return nil, ErrInvalidOCFLength
+	}
+	out := make([]byte, OCFSize)
+	copy(out, ocf)
+	return out, nil
+}
+
 // channelOpts returns the frame options that derive directly from the
-// channel configuration: insert zone, OCF, and FECF selection.
-func channelOpts(config ChannelConfig) []FrameOption {
+// channel configuration and the supplied OCF: insert zone, OCF, and FECF
+// presence.
+func channelOpts(config ChannelConfig, ocf []byte) []FrameOption {
 	var opts []FrameOption
 	if config.InsertZoneLen > 0 {
 		opts = append(opts, WithInsertZone(make([]byte, config.InsertZoneLen)))
 	}
-	if config.HasOCF {
-		opts = append(opts, WithOCF(make([]byte, OCFSize)))
+	if ocf != nil {
+		opts = append(opts, WithOCF(ocf))
 	}
 	if !config.HasFECF {
 		opts = append(opts, WithoutFECF())
-	} else if config.UseCRC32 {
-		opts = append(opts, WithCRC32())
 	}
 	return opts
-}
-
-// isIdleFill reports whether all bytes match the repeating idle pattern.
-func isIdleFill(data []byte, pattern []byte) bool {
-	if len(pattern) == 0 {
-		pattern = []byte{DefaultIdleFill}
-	}
-	for i, b := range data {
-		if b != pattern[i%len(pattern)] {
-			return false
-		}
-	}
-	return true
 }
 
 // isIdleEncap reports whether data begins with an Encapsulation Idle
 // Packet header: packet version '111' with protocol ID '000'
 // (CCSDS 133.1-B-3), the fill mandated for partially completed
-// fixed-length TFDZs by CCSDS 732.1-B-2 §4.1.4.3.4.
+// fixed-length TFDZs by CCSDS 732.1-B-3 §4.1.4.3.4.
 func isIdleEncap(data []byte) bool {
 	return len(data) > 0 && data[0]&0xFC == 0xE0
 }
@@ -130,12 +152,13 @@ func stripIdleEncap(buf []byte) []byte {
 // Encapsulation Idle Packet (§4.1.4.3.4). On variable-length channels,
 // each Send emits one frame under rule '111' (No Segmentation).
 type MAPPacketService struct {
-	scid    uint16
-	vcid    uint8
-	mapid   uint8
-	config  ChannelConfig
-	counter *FrameCounter
-	vc      *VirtualChannel
+	scid        uint16
+	vcid        uint8
+	mapid       uint8
+	config      ChannelConfig
+	counter     *FrameCounter
+	vc          *VirtualChannel
+	ocfSupplier func() []byte
 
 	// Send-side buffer for multi-packet packing
 	sendBuf       []byte
@@ -166,6 +189,15 @@ func (s *MAPPacketService) SetPacketSizer(sizer PacketSizer) {
 	s.sizer = sizer
 }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for every frame emitted on a channel
+// configured with HasOCF. Without a supplier such a channel refuses to
+// emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
+// Type-1 report (§4.1.5).
+func (s *MAPPacketService) SetOCFSupplier(supplier func() []byte) {
+	s.ocfSupplier = supplier
+}
+
 // dfhSize is the TFDF header size for pointer-carrying rules.
 const dfhSizeWithPointer = 3
 
@@ -191,11 +223,15 @@ func (s *MAPPacketService) Send(data []byte) error {
 }
 
 func (s *MAPPacketService) sendVariableLength(data []byte) error {
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
+	}
 	opts := []FrameOption{
 		WithConstructionRule(RuleNoSegmentation),
 		WithUPID(UPIDSpacePackets),
 	}
-	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, channelOpts(s.config, ocf)...)
 	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
 	if err != nil {
@@ -222,6 +258,16 @@ func (s *MAPPacketService) Flush() error {
 			fhp = uint16(off)
 			break
 		}
+	}
+	if fhp == FHPNoPacketStart {
+		// The buffer holds only the tail of a packet that started in an
+		// earlier frame, and the Encapsulation Idle Packet appended below
+		// starts right behind it. §4.1.4.2.4.3-4.4.4: the FHP points at
+		// the first packet header starting in the TFDZ — 'all ones' is
+		// reserved for TFDZs in which no packet starts at all, and the
+		// idle packet is a packet. Pointing at it lets a receiver that
+		// lost the preceding frame resynchronize on this one.
+		fhp = uint16(len(s.sendBuf))
 	}
 
 	fill := byte(DefaultIdleFill)
@@ -282,12 +328,16 @@ func (s *MAPPacketService) emitFullFrames() error {
 }
 
 func (s *MAPPacketService) emitFrame(dataField []byte, fhp uint16) error {
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
+	}
 	opts := []FrameOption{
 		WithConstructionRule(RulePacketsSpanning),
 		WithUPID(UPIDSpacePackets),
 		WithPointer(fhp),
 	}
-	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, channelOpts(s.config, ocf)...)
 	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, dataField, opts...)
@@ -297,29 +347,15 @@ func (s *MAPPacketService) emitFrame(dataField []byte, fhp uint16) error {
 	return s.vc.Add(frame)
 }
 
-// nextFrameForMAP pulls frames from the virtual channel until one for
-// this service's MAP ID arrives, skipping OID frames and frames belonging
-// to other MAP channels.
-func nextFrameForMAP(vc *VirtualChannel, mapid uint8) (*TransferFrame, error) {
-	for {
-		frame, err := vc.Next()
-		if err != nil {
-			return nil, err
-		}
-		if IsIdleFrame(frame) {
-			continue
-		}
-		if frame.Header.MAPID != mapid {
-			continue
-		}
-		return frame, nil
-	}
-}
-
 // Receive extracts the next complete packet from frame data.
+//
+// Rule '000' fill is exactly delimited: spare TFDZ space carries
+// Encapsulation Idle Packets (§4.1.4.3.4), which stripIdleEncap removes.
+// No pattern heuristic is applied to user data, so payloads that happen to
+// look like an idle pattern are delivered intact.
 func (s *MAPPacketService) Receive() ([]byte, error) {
 	if s.config.FrameLength == 0 {
-		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		frame, err := s.vc.NextForMAP(s.mapid)
 		if err != nil {
 			return nil, err
 		}
@@ -333,31 +369,27 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 	if s.gapDetector == nil {
 		s.gapDetector = NewFrameGapDetector(s.config.VCFCountLen)
 	}
-	pattern := s.config.IdlePattern
 
 	for {
 		// Drop any idle fill packets before sizing user packets.
 		s.recvBuf = stripIdleEncap(s.recvBuf)
 
-		if s.synced && len(s.recvBuf) > 0 && !isIdleFill(s.recvBuf, pattern) {
+		if s.synced && len(s.recvBuf) > 0 {
 			pktLen := sizer(s.recvBuf)
 			if pktLen > 0 && pktLen <= len(s.recvBuf) {
 				pkt := make([]byte, pktLen)
 				copy(pkt, s.recvBuf[:pktLen])
 				s.recvBuf = stripIdleEncap(s.recvBuf[pktLen:])
-				if isIdleFill(s.recvBuf, pattern) {
-					s.recvBuf = nil
-				}
 				return pkt, nil
 			}
 		}
 
-		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		frame, err := s.vc.NextForMAP(s.mapid)
 		if err != nil {
 			return nil, err
 		}
 
-		// Frame loss detection via the VCF Count (§4.1.2.14).
+		// Frame loss detection via the VCF Count (§4.1.2.12).
 		vcGap := s.gapDetector.Track(frame)
 		if vcGap > 0 {
 			s.recvBuf = nil
@@ -401,9 +433,6 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 			s.recvBuf = make([]byte, len(data)-int(fhp))
 			copy(s.recvBuf, data[fhp:])
 			s.synced = true
-			if isIdleFill(s.recvBuf, pattern) {
-				s.recvBuf = nil
-			}
 			if completed != nil && !isIdleEncap(completed) {
 				return completed, nil
 			}
@@ -419,13 +448,14 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 // delimited by the Last Valid Octet Pointer. On variable-length channels
 // each SDU rides alone in a rule '111' frame.
 type MAPAccessService struct {
-	scid    uint16
-	vcid    uint8
-	mapid   uint8
-	sduSize int
-	config  ChannelConfig
-	counter *FrameCounter
-	vc      *VirtualChannel
+	scid        uint16
+	vcid        uint8
+	mapid       uint8
+	sduSize     int
+	config      ChannelConfig
+	counter     *FrameCounter
+	vc          *VirtualChannel
+	ocfSupplier func() []byte
 
 	// Receive-side reassembly state
 	recvBuf    []byte
@@ -445,6 +475,15 @@ func NewMAPAccessService(scid uint16, vcid, mapid uint8, sduSize int, vc *Virtua
 	}
 }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for every frame emitted on a channel
+// configured with HasOCF. Without a supplier such a channel refuses to
+// emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
+// Type-1 report (§4.1.5).
+func (s *MAPAccessService) SetOCFSupplier(supplier func() []byte) {
+	s.ocfSupplier = supplier
+}
+
 // Send transfers one MAPA_SDU of the configured constant length.
 func (s *MAPAccessService) Send(data []byte) error {
 	if len(data) == 0 {
@@ -455,11 +494,15 @@ func (s *MAPAccessService) Send(data []byte) error {
 	}
 
 	if s.config.FrameLength == 0 {
+		ocf, err := makeOCF(s.config, s.ocfSupplier)
+		if err != nil {
+			return err
+		}
 		opts := []FrameOption{
 			WithConstructionRule(RuleNoSegmentation),
 			WithUPID(UPIDMissionSpecific1),
 		}
-		opts = append(opts, channelOpts(s.config)...)
+		opts = append(opts, channelOpts(s.config, ocf)...)
 		opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 		frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
 		if err != nil {
@@ -496,12 +539,16 @@ func (s *MAPAccessService) Send(data []byte) error {
 }
 
 func (s *MAPAccessService) emitFrame(dataField []byte, rule uint8, lvop uint16) error {
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
+	}
 	opts := []FrameOption{
 		WithConstructionRule(rule),
 		WithUPID(UPIDMissionSpecific1),
 		WithPointer(lvop),
 	}
-	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, channelOpts(s.config, ocf)...)
 	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, dataField, opts...)
 	if err != nil {
@@ -514,7 +561,7 @@ func (s *MAPAccessService) emitFrame(dataField []byte, rule uint8, lvop uint16) 
 // frames via the construction rules and Last Valid Octet Pointer.
 func (s *MAPAccessService) Receive() ([]byte, error) {
 	if s.config.FrameLength == 0 {
-		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		frame, err := s.vc.NextForMAP(s.mapid)
 		if err != nil {
 			return nil, err
 		}
@@ -522,7 +569,7 @@ func (s *MAPAccessService) Receive() ([]byte, error) {
 	}
 
 	for {
-		frame, err := nextFrameForMAP(s.vc, s.mapid)
+		frame, err := s.vc.NextForMAP(s.mapid)
 		if err != nil {
 			return nil, err
 		}
@@ -567,15 +614,16 @@ func (s *MAPAccessService) Flush() error { return nil }
 
 // MAPOctetStreamService implements the MAP Octet Stream service (MAPO)
 // for USLP: a continuous octet-aligned stream under construction rule
-// '011'. Per CCSDS 732.1-B-2 §4.2.4.1 an octet stream is carried only in
+// '011'. Per CCSDS 732.1-B-3 §4.2.4.1 an octet stream is carried only in
 // variable-length Transfer Frames.
 type MAPOctetStreamService struct {
-	scid    uint16
-	vcid    uint8
-	mapid   uint8
-	config  ChannelConfig
-	counter *FrameCounter
-	vc      *VirtualChannel
+	scid        uint16
+	vcid        uint8
+	mapid       uint8
+	config      ChannelConfig
+	counter     *FrameCounter
+	vc          *VirtualChannel
+	ocfSupplier func() []byte
 }
 
 // NewMAPOctetStreamService creates a new MAPO service instance.
@@ -590,6 +638,15 @@ func NewMAPOctetStreamService(scid uint16, vcid, mapid uint8, vc *VirtualChannel
 	}
 }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for every frame emitted on a channel
+// configured with HasOCF. Without a supplier such a channel refuses to
+// emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
+// Type-1 report (§4.1.5).
+func (s *MAPOctetStreamService) SetOCFSupplier(supplier func() []byte) {
+	s.ocfSupplier = supplier
+}
+
 // Send emits the supplied octets in one rule '011' frame.
 func (s *MAPOctetStreamService) Send(data []byte) error {
 	if len(data) == 0 {
@@ -601,11 +658,15 @@ func (s *MAPOctetStreamService) Send(data []byte) error {
 		return ErrOctetStreamFixedLength
 	}
 
+	ocf, err := makeOCF(s.config, s.ocfSupplier)
+	if err != nil {
+		return err
+	}
 	opts := []FrameOption{
 		WithConstructionRule(RuleOctetStream),
 		WithUPID(UPIDUserOctetStream),
 	}
-	opts = append(opts, channelOpts(s.config)...)
+	opts = append(opts, channelOpts(s.config, ocf)...)
 	opts = append(opts, vcfCountOpt(s.config, s.counter, s.vcid)...)
 	frame, err := NewTransferFrame(s.scid, s.vcid, s.mapid, data, opts...)
 	if err != nil {
@@ -616,7 +677,7 @@ func (s *MAPOctetStreamService) Send(data []byte) error {
 
 // Receive retrieves the next frame's data field.
 func (s *MAPOctetStreamService) Receive() ([]byte, error) {
-	frame, err := nextFrameForMAP(s.vc, s.mapid)
+	frame, err := s.vc.NextForMAP(s.mapid)
 	if err != nil {
 		return nil, err
 	}

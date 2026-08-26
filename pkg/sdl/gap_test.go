@@ -115,8 +115,8 @@ func TestGapCounterWidths(t *testing.T) {
 	})
 
 	t.Run("56-bit, USLP managed maximum", func(t *testing.T) {
-		// The USLP count length is managed, up to 56 bits (CCSDS 732.1-B-2
-		// 4.1.2.6); the widest configuration needs a uint64 counter.
+		// The USLP count length is managed, up to 56 bits (CCSDS 732.1-B-3
+		// 4.1.2.11); the widest configuration needs a uint64 counter.
 		g := sdl.NewGapCounter[uint64](0xFFFFFFFFFFFFFF)
 		g.Track(0, 0xFFFFFFFFFFFFFE)
 		if gap := g.Track(0, 0x00000000000001); gap != 2 {

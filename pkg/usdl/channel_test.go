@@ -127,6 +127,37 @@ func TestFrameGapDetector(t *testing.T) {
 	}
 }
 
+// §4.1.2.12.4-12.5: sequence-controlled and expedited frames keep
+// independent counts per VC, so mixed traffic must not read as a gap.
+func TestFrameGapDetector_PerQoSCounts(t *testing.T) {
+	det := usdl.NewFrameGapDetector(2)
+
+	mk := func(count uint64, expedited bool) *usdl.TransferFrame {
+		opts := []usdl.FrameOption{usdl.WithVCFCount(2, count)}
+		if expedited {
+			opts = append(opts, usdl.WithBypassSeqCtrl())
+		}
+		f, err := usdl.NewTransferFrame(100, 1, 0, []byte{0x01}, opts...)
+		if err != nil {
+			t.Fatalf("NewTransferFrame() error = %v", err)
+		}
+		return f
+	}
+
+	if gap := det.Track(mk(0, false)); gap != 0 {
+		t.Errorf("seq #0 gap = %d, want 0", gap)
+	}
+	if gap := det.Track(mk(0, true)); gap != 0 {
+		t.Errorf("expedited #0 gap = %d, want 0 (independent counter)", gap)
+	}
+	if gap := det.Track(mk(1, false)); gap != 0 {
+		t.Errorf("seq #1 gap = %d, want 0 (expedited frame must not disturb it)", gap)
+	}
+	if gap := det.Track(mk(3, true)); gap != 2 {
+		t.Errorf("expedited #3 gap = %d, want 2", gap)
+	}
+}
+
 func TestFrameGapDetector_NoCount(t *testing.T) {
 	det := usdl.NewFrameGapDetector(0)
 	f, err := usdl.NewTransferFrame(100, 1, 0, []byte{0x01})

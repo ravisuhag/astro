@@ -1,6 +1,6 @@
 # Unified Space Data Link Protocol
 
-> CCSDS 732.1-B-2 — Unified Space Data Link Protocol
+> CCSDS 732.1-B-3 — Unified Space Data Link Protocol
 
 ## Overview
 
@@ -33,7 +33,7 @@ USLP is the modern successor to the separate TM (CCSDS 132.0-B-3), TC (CCSDS 232
 - **MAP multiplexing**: up to 16 MAP channels per Virtual Channel (4-bit MAP ID).
 - **16-bit Spacecraft ID**: supports up to 65,536 spacecraft (vs. 1,024 in TM/TC).
 - **Managed frame counting**: a per-VC Virtual Channel Frame Count of 0 to 7 octets, sized by a managed parameter and declared in the header.
-- **Flexible error control**: 16-bit CRC-16-CCITT or the 32-bit CCSDS CRC-32 (the Proximity-1 polynomial `0x00A00805` — not CRC-32C).
+- **Error control**: an optional 16-bit CRC-16-CCITT FECF. When present it is the last 16 bits of every frame (§4.1.6.2.2); USLP defines no other FECF size. (A 32-bit option existed only in the retired first issue, 732.1-B-1.)
 - **Bidirectional**: the same frame format is used for uplink and downlink, with a source/destination flag.
 - **Truncated frames**: a minimal 4-octet header variant for short telecommands (annex D).
 
@@ -121,20 +121,22 @@ Plus a **16-bit pointer**, present only for rules `000`, `001`, and `010`:
 | `110` | variable | last segment | — |
 | `111` | variable | complete, unsegmented SDUs/packets | — |
 
-Common UPIDs (constants in this package): 0 = Space/Encapsulation Packets, 1 = COP-1 control, 2 = COP-P control, 3 = SDLS control, 4 = user octet stream, 5 = Mission Specific Information-1 (MAPA_SDU), 7 = Proximity-1 SPDUs, 31 = Idle Data.
+Common UPIDs from the SANA registry (constants in this package): 0 = Space/Encapsulation Packets, 1 = COP-1 control, 2 = COP-P control, 4 = user octet stream, 5 = Mission Specific Information-1 (MAPA_SDU), 7 = Proximity-1 SPDUs, 31 = Idle Data. (UPID 3 is not assigned by SANA or any USLP issue.)
 
 ### OCF and FECF
 
 - **OCF** (4 bytes): Operational Control Field — its presence is signaled in-band by the OCF flag, so the decoder needs no out-of-band knowledge.
-- **FECF** (2 or 4 bytes): Frame Error Control Field, a managed parameter of the physical channel. CRC-16-CCITT, or the CCSDS CRC-32 (polynomial `0x00A00805`, register preset to zero, no inversion — identical to Proximity-1, and *not* CRC-32C).
+- **FECF** (2 bytes): Frame Error Control Field, a managed parameter of the physical channel. When present it occupies the last 16 bits of every frame and carries the CRC-16-CCITT of annex B (§4.1.6.2.2-2.3).
 
 ### Idle (OID) frames
 
-When a fixed-length channel has nothing to send, an Only Idle Data frame is emitted on VCID 63 with MAP ID 0, construction rule `001`, UPID 31 (Idle Data), and the Last Valid Octet Pointer marking the last TFDZ octet. The fill pattern is project-specified (`ChannelConfig.IdlePattern`). A partially filled *packet* zone (rule `000`) is completed with an Encapsulation Idle Packet instead, which the receiver strips.
+When a fixed-length channel has nothing to send, an Only Idle Data frame is emitted on VCID 63 with MAP ID 0, construction rule `001`, UPID 31 (Idle Data), and the Last Valid Octet Pointer marking the last TFDZ octet. Its TFDZ carries the mandatory Pseudo Noise sequence of §4.1.4.1.10: a 32-cell Fibonacci LFSR (polynomial D0+D1+D2+D22+D32, all-ones seed) that is never restarted across frames — `MasterChannel` keeps one persistent generator (`usdl.OIDSequence`). The project-specified `ChannelConfig.IdlePattern` fills only non-OID spare TFDZ space behind the Last Valid Octet Pointer. A partially filled *packet* zone (rule `000`) is completed with an Encapsulation Idle Packet instead, which the receiver strips; its First Header Pointer points at that idle packet so receivers can resynchronize.
 
 ## Services
 
-USLP provides three data service types, all operating at the MAP level. Every service's Receive filters by MAP ID, so two MAPs sharing a VC do not corrupt each other.
+USLP provides three data service types, all operating at the MAP level. The Virtual Channel owns a per-MAP receive demultiplexer: each service pulls only its own MAP's frames, and frames for other MAPs are queued for their services rather than lost, so two MAPs sharing a VC both receive their traffic.
+
+On channels configured with an OCF (`ChannelConfig.HasOCF`), install an OCF supplier on the service (and on the `MasterChannel` for idle frames) with `SetOCFSupplier`; the callback provides the 4-octet OCF (typically a CLCW) for every emitted frame. Without a supplier the services return `ErrNoOCFSupplier` instead of fabricating an all-zero Type-1 report.
 
 ### MAP Packet Service (MAPP)
 
@@ -146,14 +148,14 @@ Transfers constant-length MAPA_SDUs. On fixed-length channels an SDU starts in a
 
 ### MAP Octet Stream Service (MAPO)
 
-Transfers an unstructured octet stream under rule `011`. Octet streams exist only on variable-length channels (CCSDS 732.1-B-2 §4.2.4.1); sending on a fixed-length channel returns an error.
+Transfers an unstructured octet stream under rule `011`. Octet streams exist only on variable-length channels (CCSDS 732.1-B-3 §4.2.4.1); sending on a fixed-length channel returns an error.
 
 ## Library Usage
 
 ```go
 import "github.com/ravisuhag/astro/pkg/usdl"
 
-// Create a USLP Transfer Frame (full header, CRC-16 FECF)
+// Create a USLP Transfer Frame (full header, 16-bit FECF)
 frame, _ := usdl.NewTransferFrame(100, 1, 0, payload,
     usdl.WithConstructionRule(usdl.RuleNoSegmentation),
     usdl.WithUPID(usdl.UPIDSpacePackets),
@@ -161,14 +163,12 @@ frame, _ := usdl.NewTransferFrame(100, 1, 0, payload,
 )
 encoded, _ := frame.Encode()
 
-// Decode a frame (CRC-16, no insert zone). OCF presence is read from
-// the in-band OCF flag.
+// Decode a frame (16-bit FECF, no insert zone). OCF presence is read
+// from the in-band OCF flag.
 decoded, _ := usdl.DecodeTransferFrame(data, usdl.FECSize16, 0)
 
-// CCSDS CRC-32 FECF instead
-frame32, _ := usdl.NewTransferFrame(100, 1, 0, payload, usdl.WithCRC32())
-
-// Truncated frame for a short telecommand (annex D)
+// Truncated frame for a short telecommand (annex D; the TFDZ must be
+// 1-27 octets so the whole frame stays within 6-32 octets)
 tc, _ := usdl.NewTruncatedFrame(100, 1, 0, cmdBytes)
 
 // Channel hierarchy
@@ -188,6 +188,6 @@ svc.Flush() // completes the last frame with an Encapsulation Idle Packet
 
 ## References
 
-- [CCSDS 732.1-B-2](https://ccsds.org/Pubs/732x1b3e1.pdf) — Unified Space Data Link Protocol (Blue Book; link points to the current issue)
+- [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf) — Unified Space Data Link Protocol (Blue Book, Issue 3, June 2024)
 - [SANA UPID registry](https://sanaregistry.org/r/uslp_protocol_id) — USLP Protocol Identifiers
 - [CCSDS 130.0-G-3](https://public.ccsds.org/Pubs/130x0g3.pdf) — Overview of Space Communications Protocols

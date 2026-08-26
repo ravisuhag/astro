@@ -2,6 +2,7 @@ package usdl_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/usdl"
@@ -233,7 +234,7 @@ func TestDataFieldHeader_EncodeDecode(t *testing.T) {
 }
 
 func TestConstructionRuleValues(t *testing.T) {
-	// Spec values per CCSDS 732.1-B-2 §4.1.4.2.2.2 / table 4-3.
+	// Spec values per CCSDS 732.1-B-3 §4.1.4.2.2.2 / table 4-3.
 	want := map[uint8]uint8{
 		usdl.RulePacketsSpanning:   0b000,
 		usdl.RuleStartOfSDU:        0b001,
@@ -283,10 +284,9 @@ func TestTransferFrame_EncodeDecode_CRC16(t *testing.T) {
 	}
 }
 
-func TestTransferFrame_EncodeDecode_CRC32(t *testing.T) {
+func TestTransferFrame_EncodeDecode_OctetStreamRule(t *testing.T) {
 	data := []byte{0x0A, 0x0B, 0x0C}
 	frame, err := usdl.NewTransferFrame(200, 5, 10, data,
-		usdl.WithCRC32(),
 		usdl.WithConstructionRule(usdl.RuleOctetStream),
 		usdl.WithUPID(usdl.UPIDUserOctetStream),
 	)
@@ -299,7 +299,7 @@ func TestTransferFrame_EncodeDecode_CRC32(t *testing.T) {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize32, 0)
+	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -408,12 +408,37 @@ func TestNewTruncatedFrame_RejectsTrailers(t *testing.T) {
 	}
 }
 
+func TestNewTruncatedFrame_LengthBounds(t *testing.T) {
+	// Annex D1.3.2 note 2: minimum 6 octets — headers plus one TFDZ octet.
+	if _, err := usdl.NewTruncatedFrame(1, 1, 0, nil); err != usdl.ErrTruncatedFrameTooShort {
+		t.Errorf("empty TFDZ: expected ErrTruncatedFrameTooShort, got %v", err)
+	}
+
+	// Annex D1.4.2.4: the TFDZ tops out at 27 octets, so the whole frame
+	// fits the 32-octet maximum of D1.3.2 note 3.
+	frame, err := usdl.NewTruncatedFrame(1, 1, 0, make([]byte, 27))
+	if err != nil {
+		t.Fatalf("27-octet TFDZ should be accepted, got %v", err)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if len(encoded) != usdl.MaxTruncatedFrameLen {
+		t.Errorf("frame length = %d, want %d", len(encoded), usdl.MaxTruncatedFrameLen)
+	}
+
+	if _, err := usdl.NewTruncatedFrame(1, 1, 0, make([]byte, 28)); err != usdl.ErrTruncatedFrameTooLong {
+		t.Errorf("28-octet TFDZ: expected ErrTruncatedFrameTooLong, got %v", err)
+	}
+}
+
 func TestNewIdleFrame(t *testing.T) {
 	config := usdl.ChannelConfig{
 		FrameLength: 64,
 		HasFECF:     true,
 	}
-	frame, err := usdl.NewIdleFrame(100, config)
+	frame, err := usdl.NewIdleFrame(100, config, nil, nil)
 	if err != nil {
 		t.Fatalf("NewIdleFrame() error = %v", err)
 	}
@@ -451,22 +476,54 @@ func TestNewIdleFrame(t *testing.T) {
 	}
 }
 
-func TestNewIdleFrame_CustomPattern(t *testing.T) {
+// The OID TFDZ carries the mandatory PN sequence (§4.1.4.1.10), drawn
+// from a persistent generator that is never restarted across frames.
+func TestNewIdleFrame_PNFillContinues(t *testing.T) {
+	// FrameLength 22 gives a 10-octet TFDZ (22 - 7 header - 3 TFDF - 2
+	// FECF), so two frames consume exactly the 20 annex H octets.
 	config := usdl.ChannelConfig{
-		FrameLength: 32,
+		FrameLength: 22,
 		HasFECF:     true,
-		IdlePattern: []byte{0xA5, 0x5A},
+		IdlePattern: []byte{0xA5, 0x5A}, // must NOT be used for OID fill
 	}
-	frame, err := usdl.NewIdleFrame(100, config)
+	seq := usdl.NewOIDSequence()
+	f1, err := usdl.NewIdleFrame(100, config, seq, nil)
+	if err != nil {
+		t.Fatalf("NewIdleFrame(1) error = %v", err)
+	}
+	f2, err := usdl.NewIdleFrame(100, config, seq, nil)
+	if err != nil {
+		t.Fatalf("NewIdleFrame(2) error = %v", err)
+	}
+
+	got := append(append([]byte{}, f1.DataField...), f2.DataField...)
+	want, _ := hex.DecodeString("ffffffff6db6d861451f11f19716723cbe7e00b1")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("OID fill across two frames:\n got %x\nwant %x (annex H)", got, want)
+	}
+}
+
+// A channel with HasOCF refuses to build idle frames without OCF content
+// rather than fabricating an all-zero Type-1 report.
+func TestNewIdleFrame_OCFRequired(t *testing.T) {
+	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, HasOCF: true}
+	if _, err := usdl.NewIdleFrame(100, config, nil, nil); err != usdl.ErrNoOCFSupplier {
+		t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
+	}
+	clcw := []byte{0x01, 0x02, 0x03, 0x04}
+	frame, err := usdl.NewIdleFrame(100, config, nil, clcw)
 	if err != nil {
 		t.Fatalf("NewIdleFrame() error = %v", err)
 	}
-	for i, b := range frame.DataField {
-		want := config.IdlePattern[i%2]
-		if b != want {
-			t.Errorf("idle fill[%d] = 0x%02X, want 0x%02X", i, b, want)
-			break
-		}
+	if !bytes.Equal(frame.OCF, clcw) {
+		t.Errorf("OCF = %x, want %x", frame.OCF, clcw)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	if len(encoded) != config.FrameLength {
+		t.Errorf("frame length = %d, want %d", len(encoded), config.FrameLength)
 	}
 }
 

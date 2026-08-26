@@ -43,11 +43,25 @@ var (
 	// cannot have (insert zone, OCF, FECF, or a pointer-carrying rule).
 	ErrTruncatedFrameFields = errors.New("truncated frame cannot carry insert zone, OCF, FECF, or a pointer")
 
-	// ErrInvalidFECSize indicates the FECF size is not 0, 2, or 4 octets.
-	ErrInvalidFECSize = errors.New("invalid FECF size: must be 0, 2, or 4 octets")
+	// ErrInvalidFECSize indicates the FECF size is not 0 or 2 octets. The
+	// USLP FECF, when present, is always the 16-bit CRC of §4.1.6.2.2.
+	ErrInvalidFECSize = errors.New("invalid FECF size: must be 0 or 2 octets (USLP has only the 16-bit FECF)")
+
+	// ErrTruncatedFrameTooShort indicates a truncated frame with an empty
+	// TFDZ (annex D1.3.2 note 2: minimum 6 octets in total).
+	ErrTruncatedFrameTooShort = errors.New("truncated frame TFDZ must carry at least one octet (minimum frame length 6)")
+
+	// ErrTruncatedFrameTooLong indicates a truncated frame over 32 octets
+	// (annex D1.3.2 note 3 and D1.4.2.4).
+	ErrTruncatedFrameTooLong = errors.New("truncated frame exceeds the 32-octet maximum length")
+
+	// ErrNoOCFSupplier indicates the channel is configured with HasOCF but
+	// no OCF supplier is installed; the OCF content must come from the OCF
+	// service user (§4.1.5) rather than being fabricated as zeros.
+	ErrNoOCFSupplier = errors.New("channel requires an OCF but no supplier is set: call SetOCFSupplier")
 
 	// ErrOctetStreamFixedLength indicates an octet stream was sent on a
-	// fixed-length channel (CCSDS 732.1-B-2 §4.2.4.1 forbids it).
+	// fixed-length channel (CCSDS 732.1-B-3 §4.2.4.1 forbids it).
 	ErrOctetStreamFixedLength = errors.New("octet stream service requires variable-length transfer frames")
 
 	// ErrInvalidConstructionRule indicates an invalid TFDZ construction rule.

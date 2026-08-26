@@ -2,16 +2,21 @@ package usdl
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/ravisuhag/astro/pkg/sdl"
 )
 
 // ChannelConfig defines the managed parameters of a USLP channel.
+//
+// IdlePattern is the project-specified idle pattern that fills the unused
+// tail of fixed-length TFDZs behind the Last Valid Octet Pointer and the
+// body of Encapsulation Idle Packets (§4.1.4.3 note 1). It does not fill
+// OID frames: their TFDZ carries the mandatory PN sequence (§4.1.4.1.10).
 type ChannelConfig struct {
 	FrameLength   int    // Total frame length in octets (fixed per physical channel; 0 = variable)
-	HasOCF        bool   // Whether the Operational Control Field (4 bytes) is generated
-	HasFECF       bool   // Whether the Frame Error Control Field is present
-	UseCRC32      bool   // true = CRC-32 FECF (4 bytes), false = CRC-16 (2 bytes)
+	HasOCF        bool   // Whether the Operational Control Field (4 bytes) is carried
+	HasFECF       bool   // Whether the 16-bit Frame Error Control Field is present
 	InsertZoneLen int    // Insert zone length in bytes (0 if none)
 	VCFCountLen   uint8  // VCF Count field length in octets (0-7; 0 = no count)
 	IdlePattern   []byte // Idle fill pattern (repeating); empty means DefaultIdleFill
@@ -29,21 +34,56 @@ func (c ChannelConfig) DataFieldCapacity(dfhSize int) int {
 		capacity -= OCFSize
 	}
 	if c.HasFECF {
-		if c.UseCRC32 {
-			capacity -= FECSize32
-		} else {
-			capacity -= FECSize16
-		}
+		capacity -= FECSize16
 	}
 	return capacity
 }
 
-// VirtualChannel is a frame buffer for a single USLP virtual channel.
-type VirtualChannel = sdl.Channel[*TransferFrame]
+// VirtualChannel is a frame buffer for a single USLP virtual channel. It
+// owns the MAP demultiplexer for the up-to-16 MAP channels it carries
+// (§4.3): services pull their own MAP's frames via NextForMAP, and frames
+// for other MAP channels are held for their services rather than lost.
+type VirtualChannel struct {
+	*sdl.Channel[*TransferFrame]
+
+	mu        sync.Mutex
+	mapQueues map[uint8][]*TransferFrame
+}
 
 // NewVirtualChannel creates a new USLP Virtual Channel with the given VCID and buffer capacity.
 func NewVirtualChannel(vcid uint8, bufferSize int) *VirtualChannel {
-	return sdl.NewChannel[*TransferFrame](vcid, bufferSize)
+	return &VirtualChannel{Channel: sdl.NewChannel[*TransferFrame](vcid, bufferSize)}
+}
+
+// NextForMAP returns the next frame for the given MAP channel. Frames of
+// other MAP IDs pulled from the shared VC buffer are queued for their own
+// services instead of being discarded (§4.3 MAP demultiplexing); OID
+// frames carry no service data and are dropped.
+func (vc *VirtualChannel) NextForMAP(mapid uint8) (*TransferFrame, error) {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+
+	if q := vc.mapQueues[mapid]; len(q) > 0 {
+		frame := q[0]
+		vc.mapQueues[mapid] = q[1:]
+		return frame, nil
+	}
+	for {
+		frame, err := vc.Channel.Next()
+		if err != nil {
+			return nil, err
+		}
+		if IsIdleFrame(frame) {
+			continue
+		}
+		if frame.Header.MAPID == mapid {
+			return frame, nil
+		}
+		if vc.mapQueues == nil {
+			vc.mapQueues = make(map[uint8][]*TransferFrame)
+		}
+		vc.mapQueues[frame.Header.MAPID] = append(vc.mapQueues[frame.Header.MAPID], frame)
+	}
 }
 
 // VirtualChannelMultiplexer is a weighted round-robin frame scheduler
@@ -64,8 +104,11 @@ func NewUSDLServiceManager() *USDLServiceManager {
 }
 
 // FrameGapDetector tracks per-VC Virtual Channel Frame Counts to detect
-// gaps caused by lost frames (CCSDS 732.1-B-2 §4.1.2.13-14). The count
-// width is the managed VCF Count Length of the channel.
+// gaps caused by lost frames (CCSDS 732.1-B-3 §4.1.2.12). The count width
+// is the managed VCF Count Length of the channel (§4.1.2.11). Sequence-
+// controlled and expedited frames keep separate counts per VC
+// (§4.1.2.12.4-12.5), so tracking is keyed by both the VCID and the
+// Bypass/Sequence Control Flag.
 type FrameGapDetector struct {
 	countLen uint8
 	vc       *sdl.GapCounter[uint64]
@@ -90,7 +133,14 @@ func (d *FrameGapDetector) Track(frame *TransferFrame) int {
 	if d.countLen == 0 || frame.Header.VCFCountLen == 0 {
 		return 0
 	}
-	return d.vc.Track(frame.Header.VCID, frame.Header.VCFCount)
+	// §4.1.2.12.4-12.5: the sequence-controlled and expedited counts are
+	// independent per VC. The VCID is 6 bits, so the bypass flag rides in
+	// bit 6 of the tracking key.
+	key := frame.Header.VCID
+	if frame.Header.BypassSeqCtrl {
+		key |= 0x40
+	}
+	return d.vc.Track(key, frame.Header.VCFCount)
 }
 
 // VCFrameGap returns the VC gap detected by the last Track call.
@@ -106,6 +156,8 @@ type MasterChannel struct {
 	channels    map[uint8]*VirtualChannel
 	detector    *FrameGapDetector
 	idleCounter *FrameCounter
+	oidFill     *OIDSequence
+	ocfSupplier func() []byte
 }
 
 // NewMasterChannel creates a new Master Channel for the given spacecraft ID.
@@ -117,16 +169,26 @@ func NewMasterChannel(scid uint16, config ChannelConfig) *MasterChannel {
 		channels:    make(map[uint8]*VirtualChannel),
 		detector:    NewFrameGapDetector(config.VCFCountLen),
 		idleCounter: NewFrameCounter(),
+		oidFill:     NewOIDSequence(),
 	}
 }
 
 // SCID returns the Spacecraft Identifier for this Master Channel.
 func (mc *MasterChannel) SCID() uint16 { return mc.scid }
 
+// SetOCFSupplier installs a callback that supplies the 4-octet Operational
+// Control Field (typically a CLCW) for the OID frames GetNextFrameOrIdle
+// generates on a channel configured with HasOCF. Without a supplier such a
+// channel refuses to build idle frames (ErrNoOCFSupplier) rather than
+// fabricating an all-zero Type-1 report.
+func (mc *MasterChannel) SetOCFSupplier(supplier func() []byte) {
+	mc.ocfSupplier = supplier
+}
+
 // AddVirtualChannel registers a Virtual Channel with this Master Channel.
 func (mc *MasterChannel) AddVirtualChannel(vc *VirtualChannel, priority int) {
 	mc.channels[vc.ID] = vc
-	mc.mux.AddChannel(vc, priority)
+	mc.mux.AddChannel(vc.Channel, priority)
 }
 
 // AddFrame routes an inbound frame to the appropriate Virtual Channel.
@@ -149,6 +211,8 @@ func (mc *MasterChannel) GetNextFrame() (*TransferFrame, error) {
 
 // GetNextFrameOrIdle returns the next frame or an OID idle frame if none
 // is available. OID frames exist only on fixed-length physical channels.
+// Their TFDZ is drawn from the master channel's persistent PN sequence,
+// which is never restarted across frames (§4.1.4.1.10).
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	frame, err := mc.mux.Next()
 	if err == nil {
@@ -160,7 +224,11 @@ func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	if mc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	idle, err := NewIdleFrame(mc.scid, mc.config)
+	ocf, err := makeOCF(mc.config, mc.ocfSupplier)
+	if err != nil {
+		return nil, err
+	}
+	idle, err := NewIdleFrame(mc.scid, mc.config, mc.oidFill, ocf)
 	if err != nil {
 		return nil, err
 	}

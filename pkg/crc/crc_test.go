@@ -47,11 +47,10 @@ func TestComputeCRC16(t *testing.T) {
 }
 
 func TestComputeCRC32(t *testing.T) {
-	// Known-answer values for the CCSDS CRC-32 (poly 0x00A00805 MSB-first,
-	// zero preset, no reflection, no final XOR), hand-computed with an
-	// independent bitwise implementation and cross-checked against the
-	// Proximity-1 implementation in pkg/pxsc — CCSDS 732.1-B-2 annex B
-	// states the USLP CRC-32 is identical to the Proximity-1 one.
+	// Known-answer values for the Proximity-1 CRC-32 (CCSDS 211.2-B-3
+	// annex C: poly 0x00A00805 MSB-first, zero preset, no reflection, no
+	// final XOR), hand-computed with an independent bitwise implementation
+	// and cross-checked against the implementation in pkg/pxsc.
 	tests := []struct {
 		name string
 		data []byte
@@ -94,20 +93,20 @@ func TestComputeCRC32(t *testing.T) {
 	}
 }
 
-// TestComputeCRC32USLPFECF ties ComputeCRC32 to its normative use: the
-// optional 32-bit USLP Frame Error Control Field (CCSDS 732.1-B-2 §4.1.6,
-// annex B), computed over the whole frame ahead of the FECF.
-func TestComputeCRC32USLPFECF(t *testing.T) {
-	// A minimal USLP-like frame: 7-byte primary header + data field. The
-	// exact content is arbitrary; the point is the FECF procedure over the
-	// frame bytes.
+// TestComputeCRC32Syndrome ties ComputeCRC32 to its CRC-appended-codeword
+// use (CCSDS 211.2-B-3 annex C: the Proximity-1 CRC-32 attached after the
+// message it covers). Current USLP has no 32-bit FECF — the option existed
+// only in the retired 732.1-B-1.
+func TestComputeCRC32Syndrome(t *testing.T) {
+	// An arbitrary message; the point is the append-and-check procedure
+	// over the message bytes.
 	frame := []byte{
-		0xC0, 0x00, 0x00, 0x01, 0x02, 0x00, 0x0D, // primary header
-		0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x42, // data field
+		0xC0, 0x00, 0x00, 0x01, 0x02, 0x00, 0x0D,
+		0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x42,
 	}
 	got := crc.ComputeCRC32(frame)
 
-	// FECF procedure: append the CRC big-endian. For this MSB-first,
+	// Codeword procedure: append the CRC big-endian. For this MSB-first,
 	// zero-preset CRC the syndrome of a correct codeword is zero (CCSDS
 	// 211.2-B-3 annex C2.2), so running the CRC over message plus FECF
 	// must give zero.

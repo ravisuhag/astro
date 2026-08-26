@@ -10,7 +10,7 @@ import (
 // Every data link protocol in this repository counts frames per virtual
 // channel in a field that wraps: eight bits for TM and TC, twenty-four for
 // AOS, and a managed width for USLP — the USLP count length is a managed
-// parameter of up to 56 bits (CCSDS 732.1-B-2 4.1.2.6), not a fixed size. A
+// parameter of up to 56 bits (CCSDS 732.1-B-3 4.1.2.11), not a fixed size. A
 // receiver notices loss by comparing the count it got against the one it
 // expected, modulo that width.
 //
