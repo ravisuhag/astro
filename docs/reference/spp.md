@@ -39,6 +39,27 @@ svc := spp.NewService(conn, spp.ServiceConfig{
 })
 ```
 
+### Per-APID Receive Configuration
+
+CCSDS 133.0-B-2 manages the secondary header contents per APID (table 5-1), so two APIDs on one transport may carry different header formats — and one may carry a trailing CRC while another does not. `ServiceConfig.APIDs` overrides the receive-side handling for chosen APIDs:
+
+```go
+svc := spp.NewService(conn, spp.ServiceConfig{
+    PacketType:         spp.PacketTypeTM,
+    NewSecondaryHeader: func() spp.SecondaryHeader { return &TimestampHeader{} },
+    ErrorControl:       true,
+
+    APIDs: map[uint16]spp.APIDConfig{
+        // APID 200 carries a different secondary header and no CRC.
+        200: {NewSecondaryHeader: func() spp.SecondaryHeader { return &PositionHeader{} }},
+        // Idle packets carry neither.
+        0x7FF: {},
+    },
+})
+```
+
+An entry replaces both service-wide settings for its APID, including their zero values. APIDs without an entry keep the service-wide behavior.
+
 ### Octet String Service
 
 The simplest way to send and receive data. The service wraps your bytes in a valid space packet automatically:
@@ -79,7 +100,24 @@ err := svc.SendPacket(packet)
 
 // Receive and decode a packet
 packet, err := svc.ReceivePacket()
+
+// Receive with the PACKET.indication parameters of CCSDS 3.3.3.3.2 —
+// the loss figures are bound to the returned packet.
+ind, err := svc.ReceivePacketIndication()
+if ind.PacketLoss {
+    log.Printf("%d packet(s) lost on APID %d", ind.PacketsLost, ind.APID)
+}
 ```
+
+### QoS Requirement
+
+`WithQoS` attaches the optional QoS Requirement of PACKET.request (CCSDS 3.3.2.4), which selects a service level when the underlying subnetwork offers more than one — for example Type-A versus Type-B service on a telecommand link. The transport declares support by implementing `QoSWriter`; without it, a send carrying a QoS requirement is refused with `ErrQoSUnsupported` before anything reaches the wire:
+
+```go
+err := svc.SendPacket(packet, spp.WithQoS(1))
+```
+
+What each level means belongs to the transport. The Octet String Service has no QoS parameter (3.4.3.2.2), so `SendBytes` takes no QoS option.
 
 ### Sequence Counting
 
@@ -89,7 +127,7 @@ Pinning a count with `WithSequenceCount` (or `WithSendSequenceCount`) does not b
 
 ### Loss Detection
 
-Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication`; after `ReceivePacket`, read it with `LastDataLoss()`:
+Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication` and `ReceivePacketIndication` on the `PacketIndication`, bound to the delivered packet. After a plain `ReceivePacket`, read it with `LastDataLoss()` — but note the figure is service-wide, so with concurrent receivers prefer `ReceivePacketIndication`:
 
 ```go
 packet, err := svc.ReceivePacket()
