@@ -78,6 +78,30 @@ func makeOCF(config ChannelConfig, supplier func() []byte) ([]byte, error) {
 	return make([]byte, 4), nil
 }
 
+// makeFSH builds the Transfer Frame Secondary Header data field for a frame
+// on the given channel: nil when the channel carries no secondary header, the
+// supplier's octets when one is installed, and zeros otherwise.
+//
+// The length is the channel's, not the supplier's choice: CCSDS 132.0-B-3
+// §4.1.3.1.6 fixes the secondary header length for the associated channel
+// throughout a Mission Phase, and §4.1.3.1.5 requires the field to occur in
+// every frame of that channel — so a frame is emitted with a zero-filled
+// header rather than none when the user has nothing to say.
+func makeFSH(config ChannelConfig, supplier func() []byte) ([]byte, error) {
+	if config.FSHDataLength <= 0 {
+		return nil, nil
+	}
+	out := make([]byte, config.FSHDataLength)
+	if supplier != nil {
+		sdu := supplier()
+		if len(sdu) != config.FSHDataLength {
+			return nil, ErrFSHSizeMismatch
+		}
+		copy(out, sdu)
+	}
+	return out, nil
+}
+
 // isIdleFill checks if all bytes are 0xFF (raw idle fill pattern).
 //
 // Conformant streams built by this package no longer produce raw 0xFF fill —
@@ -150,6 +174,13 @@ type VirtualChannelPacketService struct {
 	// ocfSupplier, when set, provides the 4-octet Operational Control Field
 	// for each emitted frame on a channel with HasOCF.
 	ocfSupplier func() []byte
+
+	// fshSupplier, when set, provides the Transfer Frame Secondary Header
+	// data field for each emitted frame on a channel with FSHDataLength > 0.
+	fshSupplier func() []byte
+
+	// lastFSH is the FSH_SDU from the most recently received frame.
+	lastFSH []byte
 }
 
 // NewVirtualChannelPacketService creates a new VCP service instance.
@@ -190,6 +221,21 @@ func (s *VirtualChannelPacketService) SetPacketSizer(sizer PacketSizer) {
 func (s *VirtualChannelPacketService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
+
+// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 §3.5): a
+// callback whose FSH_SDU fills the Transfer Frame Secondary Header of every
+// frame this service emits. The SDU must be exactly
+// ChannelConfig.FSHDataLength octets. Without a supplier the header is
+// zero-filled, since §4.1.3.1.5 requires it in every frame of the channel
+// once the channel carries one.
+func (s *VirtualChannelPacketService) SetFSHSupplier(supplier func() []byte) {
+	s.fshSupplier = supplier
+}
+
+// LastFSH returns the FSH_SDU carried by the most recently received frame, or
+// nil when none carried one. It is the VC_FSH.indication of §3.5.3.3; pair it
+// with the VC frame gap for the optional FSH_SDU Loss Flag.
+func (s *VirtualChannelPacketService) LastFSH() []byte { return s.lastFSH }
 
 // Send appends packet data to the send buffer and generates full frames.
 // When ChannelConfig is set, packs packets into fixed-length frames with
@@ -237,7 +283,7 @@ func (s *VirtualChannelPacketService) Flush() error {
 		return nil
 	}
 
-	capacity := s.config.DataFieldCapacity(0)
+	capacity := s.config.DataFieldCapacity(s.config.FSHDataLength)
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
@@ -258,7 +304,7 @@ func (s *VirtualChannelPacketService) Flush() error {
 
 // emitFullFrames generates frames from sendBuf while it has >= capacity bytes.
 func (s *VirtualChannelPacketService) emitFullFrames() error {
-	capacity := s.config.DataFieldCapacity(0)
+	capacity := s.config.DataFieldCapacity(s.config.FSHDataLength)
 	if capacity <= 0 {
 		return ErrDataFieldTooSmall
 	}
@@ -295,8 +341,12 @@ func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) er
 	if err != nil {
 		return err
 	}
+	fsh, err := makeFSH(s.config, s.fshSupplier)
+	if err != nil {
+		return err
+	}
 
-	frame, err := NewTMTransferFrame(s.scid, s.vcid, dataField, nil, ocf)
+	frame, err := NewTMTransferFrame(s.scid, s.vcid, dataField, fsh, ocf)
 	if err != nil {
 		return err
 	}
@@ -353,6 +403,14 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		frame, err := s.vc.Next()
 		if err != nil {
 			return nil, err
+		}
+
+		// The Virtual Channel Reception Function decommutates every frame of
+		// the channel (§4.3.3.2), so the FSH_SDU of an OID frame counts too:
+		// only its data field is idle, the secondary header can carry valid
+		// data (§4.1.4.6.3 note 1).
+		if frame.Header.FSHFlag {
+			s.lastFSH = append([]byte(nil), frame.SecondaryHeader.DataField...)
 		}
 
 		if IsIdleFrame(frame) {
@@ -470,12 +528,22 @@ func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
 // Flush is a no-op for VCF service.
 func (s *VirtualChannelFrameService) Flush() error { return nil }
 
-// VCAStatus contains the Transfer Frame Data Field Status fields
-// delivered alongside a VCA SDU per CCSDS 132.0-B-3 §3.4.2.3.
+// VCAStatus contains the VCA Status Fields of CCSDS 132.0-B-3 §3.4.2.3: the
+// Packet Order Flag, the Segment Length Identifier, and the First Header
+// Pointer of the Transfer Frame Data Field Status. With the Synchronization
+// Flag set these bits are undefined by CCSDS and belong to the VCA service
+// user, who gives them whatever meaning the mission needs — validity,
+// sequence, or other status of the VCA_SDU. Providing the field is mandatory;
+// the semantics are user-optional.
+//
+// SyncFlag is reported on receive for completeness. It is not a status field
+// the user sets: §4.1.2.7.3.2 fixes it at '1' for a frame carrying a VCA_SDU,
+// and VirtualChannelAccessService.Send always sets it.
 type VCAStatus struct {
 	SyncFlag        bool
 	PacketOrderFlag bool
 	SegmentLengthID uint8
+	FirstHeaderPtr  uint16
 }
 
 // VirtualChannelAccessService implements the VCA service.
@@ -491,6 +559,17 @@ type VirtualChannelAccessService struct {
 	// ocfSupplier, when set, provides the 4-octet Operational Control Field
 	// for each emitted frame on a channel with HasOCF.
 	ocfSupplier func() []byte
+
+	// fshSupplier, when set, provides the Transfer Frame Secondary Header
+	// data field for each emitted frame on a channel with FSHDataLength > 0.
+	fshSupplier func() []byte
+
+	// sendStatus is the VCA Status Fields the next Send writes into the
+	// Transfer Frame Data Field Status.
+	sendStatus VCAStatus
+
+	// lastFSH is the FSH_SDU from the most recently received frame.
+	lastFSH []byte
 }
 
 // NewVirtualChannelAccessService creates a new VCA service instance.
@@ -502,6 +581,12 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 		config:  config,
 		counter: counter,
 		vc:      vc,
+		// A user who sets no status fields gets all ones in the First Header
+		// Pointer, the value §4.1.2.7.6.4 uses for 'no packet starts here'.
+		// It is the least surprising thing to put in a field CCSDS leaves
+		// undefined for VCA frames, and matches what a receiver that ignores
+		// the VCA status fields expects to see.
+		sendStatus: VCAStatus{FirstHeaderPtr: FHPNoPacketStart},
 	}
 }
 
@@ -510,6 +595,27 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 // configured with HasOCF. Without a supplier the field is all zeros.
 func (s *VirtualChannelAccessService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
+}
+
+// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 §3.5) for
+// this virtual channel; see VirtualChannelPacketService.SetFSHSupplier.
+func (s *VirtualChannelAccessService) SetFSHSupplier(supplier func() []byte) {
+	s.fshSupplier = supplier
+}
+
+// LastFSH returns the FSH_SDU carried by the most recently received frame, or
+// nil when none carried one (the VC_FSH.indication of §3.5.3.3).
+func (s *VirtualChannelAccessService) LastFSH() []byte { return s.lastFSH }
+
+// SetSendStatus sets the VCA Status Fields carried by frames from subsequent
+// Send calls. It is the VCA Status Fields parameter of the VCA.request
+// primitive (CCSDS 132.0-B-3 §3.4.3.2.2), a mandatory parameter whose
+// semantics belong to the service user.
+//
+// The Synchronization Flag field of the argument is ignored: §4.1.2.7.3.2
+// fixes it at '1' for a frame carrying a VCA_SDU, and Send always sets it.
+func (s *VirtualChannelAccessService) SetSendStatus(status VCAStatus) {
+	s.sendStatus = status
 }
 
 // Send wraps a fixed-length SDU into a TM Transfer Frame.
@@ -527,7 +633,7 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 		return ErrSizeMismatch
 	}
 	if s.config.FrameLength > 0 {
-		capacity := s.config.DataFieldCapacity(0)
+		capacity := s.config.DataFieldCapacity(s.config.FSHDataLength)
 		if s.vcaSize > capacity {
 			return ErrDataTooLarge
 		}
@@ -538,17 +644,26 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-
-	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, nil, ocf)
+	fsh, err := makeFSH(s.config, s.fshSupplier)
 	if err != nil {
 		return err
 	}
 
+	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, fsh, ocf)
+	if err != nil {
+		return err
+	}
+
+	// §4.1.2.7.3.2: the Synchronization Flag is '1' when a VCA_SDU is
+	// inserted into the data field.
 	frame.Header.SyncFlag = true
-	// §5.2.7.6c: with the Synchronization Flag set the data field carries a
-	// VCA_SDU rather than packets, so the pointer has no meaning and is set
-	// to all ones.
-	frame.Header.FirstHeaderPtr = FHPNoPacketStart
+
+	// The remaining Transfer Frame Data Field Status bits are the VCA Status
+	// Fields of §3.4.2.3, undefined by CCSDS with the Synchronization Flag
+	// set and carried on behalf of the service user.
+	frame.Header.PacketOrderFlag = s.sendStatus.PacketOrderFlag
+	frame.Header.SegmentLengthID = s.sendStatus.SegmentLengthID & 0x03
+	frame.Header.FirstHeaderPtr = s.sendStatus.FirstHeaderPtr & 0x07FF
 
 	if err := stampFrame(frame, s.counter, s.vcid); err != nil {
 		return err
@@ -566,6 +681,10 @@ func (s *VirtualChannelAccessService) Receive() ([]byte, error) {
 		SyncFlag:        frame.Header.SyncFlag,
 		PacketOrderFlag: frame.Header.PacketOrderFlag,
 		SegmentLengthID: frame.Header.SegmentLengthID,
+		FirstHeaderPtr:  frame.Header.FirstHeaderPtr,
+	}
+	if frame.Header.FSHFlag {
+		s.lastFSH = append([]byte(nil), frame.SecondaryHeader.DataField...)
 	}
 	if s.config.FrameLength > 0 {
 		if len(frame.DataField) < s.vcaSize {

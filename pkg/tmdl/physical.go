@@ -21,6 +21,19 @@ type ChannelConfig struct {
 	FrameLength int  // Total frame length in octets (fixed per physical channel)
 	HasOCF      bool // Whether Operational Control Field (4 bytes) is present
 	HasFEC      bool // Whether Frame Error Control (2-byte CRC) is present
+
+	// FSHDataLength is the length in octets of the Transfer Frame Secondary
+	// Header Data Field carried by every frame on the channel, or 0 when the
+	// channel carries no secondary header. CCSDS 132.0-B-3 §4.1.3.1.6 fixes
+	// the secondary header length for the associated channel throughout a
+	// Mission Phase, which is why it is channel configuration rather than a
+	// per-frame choice. The encoded header adds one identification octet, so
+	// a value of N costs N+1 octets of frame space. Range 1 to 63.
+	//
+	// Services fill the header from their FSH supplier (the VC_FSH service of
+	// §3.5) or with zeros when none is installed; MasterChannel's supplier
+	// (the MC_FSH service of §3.8) overwrites it at frame release.
+	FSHDataLength int
 }
 
 // Validate checks the configuration against the profile limits.
@@ -34,6 +47,9 @@ func (c ChannelConfig) Validate() error {
 	}
 	if c.FrameLength > MaxFrameLength {
 		return ErrFrameTooLong
+	}
+	if c.FSHDataLength < 0 || c.FSHDataLength > MaxSecondaryHeaderSize-1 {
+		return ErrInvalidHeaderLength
 	}
 	return nil
 }
@@ -67,6 +83,10 @@ type PhysicalChannel struct {
 	config         ChannelConfig
 	mux            *sdl.MCMultiplexer[*TMTransferFrame]
 	masterChannels map[uint16]*MasterChannel
+
+	// oidFill is the fallback PN generator for idle frames produced with no
+	// Master Channel registered; a registered Master Channel uses its own.
+	oidFill *OIDSequence
 }
 
 // NewPhysicalChannel creates a physical channel with the given configuration.
@@ -95,10 +115,13 @@ func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
 // or an idle frame if no Master Channel has pending data.
 //
-// The idle frame's SCID is chosen deterministically: the lowest registered
-// Master Channel SCID (0 when none are registered). Its MC and VC counts are
-// stamped from that Master Channel's FrameCounter when one was installed via
-// SetFrameCounter, so idle frames continue the channel's count sequence.
+// The idle frame comes from a deterministically chosen Master Channel — the
+// lowest registered SCID — which builds it per CCSDS 132.0-B-3 §4.2.6.4: on a
+// packet-carrying VCID, counted by the channel's FrameCounter, filled from
+// its persistent PN generator, and carrying its MC_FSH/MC_OCF SDUs when
+// suppliers are installed. With no Master Channel registered at all, a bare
+// idle frame is produced with SCID 0 and the fallback IdleFrameVCID, drawing
+// on the physical channel's own PN generator.
 func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	frame, err := pc.GetNextFrame()
 	if err == nil {
@@ -116,13 +139,13 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 			chosen = mc
 		}
 	}
-	var scid uint16
-	var counter *FrameCounter
 	if chosen != nil {
-		scid = chosen.scid
-		counter = chosen.counter
+		return chosen.GetNextFrameOrIdle()
 	}
-	return NewIdleFrameWithCounter(scid, IdleFrameVCID, pc.config, counter)
+	if pc.oidFill == nil {
+		pc.oidFill = NewOIDSequence()
+	}
+	return NewIdleFrameWithCounter(0, IdleFrameVCID, pc.config, nil, pc.oidFill)
 }
 
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel

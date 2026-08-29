@@ -117,3 +117,36 @@ func TestSequenceEdgeCases(t *testing.T) {
 		t.Errorf("Sequence(1) = % X, want FF", got)
 	}
 }
+
+// TestOIDSequenceMatchesTheCCSDSVector pins the 32-cell OID generator to the
+// octets CCSDS publishes for it (132.0-B-3 §4.1.4.6.2.2 note, 732.1-B-3 annex
+// H). As with the 8-bit randomizer above, a permuted set of taps still yields
+// a plausible maximal-length sequence that no round-trip test can catch; only
+// the published digits distinguish right from wrong.
+func TestOIDSequenceMatchesTheCCSDSVector(t *testing.T) {
+	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
+	got := make([]byte, len(want))
+	pn.NewOIDSequence().Fill(got)
+	if !bytes.Equal(got, want) {
+		t.Errorf("OID sequence = % X, want % X", got, want)
+	}
+}
+
+// TestOIDSequenceIsContinuousAcrossFills checks that the generator streams:
+// filling two buffers must give the same octets as filling one of the combined
+// length. Idle frames are filled one at a time and the sequence may not
+// restart between them (132.0-B-3 §4.1.4.6.2.1).
+func TestOIDSequenceIsContinuousAcrossFills(t *testing.T) {
+	whole := make([]byte, 32)
+	pn.NewOIDSequence().Fill(whole)
+
+	split := make([]byte, 32)
+	s := pn.NewOIDSequence()
+	s.Fill(split[:7])
+	s.Fill(split[7:20])
+	s.Fill(split[20:])
+
+	if !bytes.Equal(whole, split) {
+		t.Errorf("split fills = % X, want % X", split, whole)
+	}
+}

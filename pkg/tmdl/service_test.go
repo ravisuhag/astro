@@ -1053,19 +1053,24 @@ func TestMasterChannel_IdleFrameCounterContinuity(t *testing.T) {
 	if idle1.Header.MCFrameCount != 1 {
 		t.Errorf("Idle 1: MC count = %d, want 1", idle1.Header.MCFrameCount)
 	}
-	if idle1.Header.VCFrameCount != 0 {
-		t.Errorf("Idle 1: VC count = %d, want 0 (first on idle VC)", idle1.Header.VCFrameCount)
+	// CCSDS 132.0-B-3 §4.1.4.6.3: an OID frame's VCID is one of those used
+	// for transferring packets. VC 1 is the only registered channel, so the
+	// idle frame joins its sequence — the data frame above took VC count 0,
+	// making this one 1.
+	if idle1.Header.VirtualChannelID != 1 {
+		t.Errorf("Idle VCID = %d, want 1 (a packet-carrying VCID)",
+			idle1.Header.VirtualChannelID)
 	}
-	if idle1.Header.VirtualChannelID != tmdl.IdleFrameVCID {
-		t.Errorf("Idle VCID = %d, want %d", idle1.Header.VirtualChannelID, tmdl.IdleFrameVCID)
+	if idle1.Header.VCFrameCount != 1 {
+		t.Errorf("Idle 1: VC count = %d, want 1", idle1.Header.VCFrameCount)
 	}
 
 	idle2, err := mc.GetNextFrameOrIdle()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if idle2.Header.MCFrameCount != 2 || idle2.Header.VCFrameCount != 1 {
-		t.Errorf("Idle 2: MC=%d VC=%d, want MC=2 VC=1",
+	if idle2.Header.MCFrameCount != 2 || idle2.Header.VCFrameCount != 2 {
+		t.Errorf("Idle 2: MC=%d VC=%d, want MC=2 VC=2",
 			idle2.Header.MCFrameCount, idle2.Header.VCFrameCount)
 	}
 
@@ -1220,5 +1225,343 @@ func TestOCFSupplier_BadLengthRejected(t *testing.T) {
 
 	if err := svc.Send([]byte("12345678")); !errors.Is(err, tmdl.ErrInvalidOCFLength) {
 		t.Errorf("Got %v, want ErrInvalidOCFLength", err)
+	}
+}
+
+// --- OID frame conformance (CCSDS 132.0-B-3 §4.1.4.6) ---
+
+// TestOIDSequenceMatchesTheStandardPattern checks the PN generator against the
+// octets the note under §4.1.4.6.2.2 publishes, which is the only published
+// check value for the D0+D1+D2+D22+D32 LFSR.
+func TestOIDSequenceMatchesTheStandardPattern(t *testing.T) {
+	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
+	got := make([]byte, len(want))
+	tmdl.NewOIDSequence().Fill(got)
+	if !bytes.Equal(got, want) {
+		t.Errorf("PN sequence = % X, want % X", got, want)
+	}
+}
+
+// TestIdleFramesDoNotRestartThePNSequence checks §4.1.4.6.2.1: the generator
+// is initialized once at start-up and never restarted, so two consecutive
+// idle frames must carry different octets. Restarting it per frame would
+// repeat the same pattern forever, which is exactly the insufficient
+// randomization note 5 of §4.1.4.6.3 warns about.
+func TestIdleFramesDoNotRestartThePNSequence(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	mc := tmdl.NewMasterChannel(933, config)
+	mc.AddVirtualChannel(tmdl.NewVirtualChannel(1, 4), 1)
+
+	first, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tmdl.IsIdleFrame(first) || !tmdl.IsIdleFrame(second) {
+		t.Fatal("expected two idle frames from an empty master channel")
+	}
+	if bytes.Equal(first.DataField, second.DataField) {
+		t.Errorf("consecutive idle frames carry identical data fields (% X); "+
+			"the PN generator was restarted", first.DataField)
+	}
+
+	// The first frame still starts at the documented sequence head.
+	head := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6}
+	if !bytes.Equal(first.DataField[:len(head)], head) {
+		t.Errorf("first idle frame starts % X, want % X",
+			first.DataField[:len(head)], head)
+	}
+}
+
+// TestIdleFrameUsesAPacketCarryingVCID checks §4.1.4.6.3: the VCID of an OID
+// frame is one of the VCIDs used for transferring packets, not an arbitrary
+// channel the receiver has no reception function for.
+func TestIdleFrameUsesAPacketCarryingVCID(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	mc := tmdl.NewMasterChannel(933, config)
+	mc.AddVirtualChannel(tmdl.NewVirtualChannel(3, 4), 1)
+	mc.AddVirtualChannel(tmdl.NewVirtualChannel(5, 4), 1)
+
+	idle, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idle.Header.VirtualChannelID != 3 {
+		t.Errorf("idle VCID = %d, want 3 (lowest registered channel)",
+			idle.Header.VirtualChannelID)
+	}
+
+	// An explicit choice wins, so a mission with a dedicated OID channel can
+	// say so (note 2 under §4.1.4.6.3 prefers a separate one).
+	mc.SetIdleVCID(5)
+	idle, err = mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idle.Header.VirtualChannelID != 5 {
+		t.Errorf("idle VCID = %d, want 5 (pinned via SetIdleVCID)",
+			idle.Header.VirtualChannelID)
+	}
+}
+
+// --- MC_FSH / MC_OCF services (CCSDS 132.0-B-3 §3.8, §3.9, §4.2.5) ---
+
+func TestMasterChannelFSHAndOCFServices(t *testing.T) {
+	config := tmdl.ChannelConfig{
+		FrameLength:   40,
+		FSHDataLength: 4,
+		HasOCF:        true,
+		HasFEC:        true,
+	}
+	counter := tmdl.NewFrameCounter()
+	vc := tmdl.NewVirtualChannel(1, 8)
+	mc := tmdl.NewMasterChannel(933, config)
+	mc.AddVirtualChannel(vc, 1)
+	mc.SetFrameCounter(counter)
+
+	fshSDU := []byte{0xAA, 0xBB, 0xCC, 0xDD}
+	ocfSDU := []byte{0x01, 0x02, 0x03, 0x04}
+	mc.SetFSHSupplier(func() []byte { return fshSDU })
+	mc.SetOCFSupplier(func() []byte { return ocfSDU })
+
+	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, counter)
+	svc.SetPacketSizer(spp.PacketSizer)
+	if err := svc.Send(makeTestPacket([]byte{0x11, 0x22})); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	// A data frame released through the master channel carries both SDUs.
+	frame, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(frame.SecondaryHeader.DataField, fshSDU) {
+		t.Errorf("data frame FSH = % X, want % X",
+			frame.SecondaryHeader.DataField, fshSDU)
+	}
+	if !bytes.Equal(frame.OperationalControl, ocfSDU) {
+		t.Errorf("data frame OCF = % X, want % X",
+			frame.OperationalControl, ocfSDU)
+	}
+
+	// So does an idle frame: §4.1.4.6.3 note 1 says only the data field of an
+	// OID frame is idle, its secondary header and OCF can carry valid data.
+	idle, err := mc.GetNextFrameOrIdle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tmdl.IsIdleFrame(idle) {
+		t.Fatal("expected an idle frame from the drained channel")
+	}
+	if !bytes.Equal(idle.SecondaryHeader.DataField, fshSDU) {
+		t.Errorf("idle frame FSH = % X, want % X",
+			idle.SecondaryHeader.DataField, fshSDU)
+	}
+	if !bytes.Equal(idle.OperationalControl, ocfSDU) {
+		t.Errorf("idle frame OCF = % X, want % X",
+			idle.OperationalControl, ocfSDU)
+	}
+
+	// The applied SDUs must be under the CRC and the frame still fixed-length.
+	encoded, err := idle.EncodeWithConfig(config)
+	if err != nil {
+		t.Fatalf("idle frame does not encode to the fixed length: %v", err)
+	}
+	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	if err != nil {
+		t.Fatalf("idle frame CRC invalid after MC field insertion: %v", err)
+	}
+
+	// The receive side decommutates them: MC_FSH.indication / MC_OCF.indication.
+	if err := mc.AddFrame(back); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(mc.LastFSH(), fshSDU) {
+		t.Errorf("LastFSH = % X, want % X", mc.LastFSH(), fshSDU)
+	}
+	if !bytes.Equal(mc.LastOCF(), ocfSDU) {
+		t.Errorf("LastOCF = % X, want % X", mc.LastOCF(), ocfSDU)
+	}
+}
+
+func TestMasterChannelFSHRejectsMisconfiguration(t *testing.T) {
+	// A supplier with no secondary header on the channel: the SDU has nowhere
+	// to go, and silently dropping it would lose user data.
+	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	counter := tmdl.NewFrameCounter()
+	vc := tmdl.NewVirtualChannel(1, 4)
+	mc := tmdl.NewMasterChannel(933, config)
+	mc.AddVirtualChannel(vc, 1)
+	mc.SetFrameCounter(counter)
+	mc.SetFSHSupplier(func() []byte { return []byte{0x01} })
+
+	if _, err := mc.GetNextFrameOrIdle(); !errors.Is(err, tmdl.ErrFSHNotPresent) {
+		t.Errorf("got %v, want ErrFSHNotPresent", err)
+	}
+
+	// A supplier whose SDU is the wrong width for the channel.
+	sized := tmdl.ChannelConfig{FrameLength: 40, FSHDataLength: 4, HasFEC: true}
+	mc2 := tmdl.NewMasterChannel(933, sized)
+	mc2.AddVirtualChannel(tmdl.NewVirtualChannel(1, 4), 1)
+	mc2.SetFSHSupplier(func() []byte { return []byte{0x01, 0x02} })
+	if _, err := mc2.GetNextFrameOrIdle(); !errors.Is(err, tmdl.ErrFSHSizeMismatch) {
+		t.Errorf("got %v, want ErrFSHSizeMismatch", err)
+	}
+}
+
+// --- VC_FSH service (CCSDS 132.0-B-3 §3.5) ---
+
+func TestVCPSecondaryHeaderRoundTrip(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 40, FSHDataLength: 3, HasFEC: true}
+	counter := tmdl.NewFrameCounter()
+	vc := tmdl.NewVirtualChannel(1, 8)
+
+	sdu := []byte{0xDE, 0xAD, 0xBE}
+	tx := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, counter)
+	tx.SetPacketSizer(spp.PacketSizer)
+	tx.SetFSHSupplier(func() []byte { return sdu })
+
+	payload := []byte{0x11, 0x22, 0x33}
+	if err := tx.Send(makeTestPacket(payload)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !frame.Header.FSHFlag {
+		t.Fatal("FSHFlag not set on a channel configured with FSHDataLength")
+	}
+	if !bytes.Equal(frame.SecondaryHeader.DataField, sdu) {
+		t.Errorf("FSH = % X, want % X", frame.SecondaryHeader.DataField, sdu)
+	}
+
+	// The frame must still be exactly the channel's fixed length: the
+	// secondary header takes its octets out of the data field, not out of
+	// thin air (§4.1.4.2).
+	encoded, err := frame.EncodeWithConfig(config)
+	if err != nil {
+		t.Fatalf("frame with secondary header is not the fixed length: %v", err)
+	}
+	if len(encoded) != config.FrameLength {
+		t.Errorf("encoded length = %d, want %d", len(encoded), config.FrameLength)
+	}
+
+	// The packet survives the round trip and the receiver reports the SDU.
+	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rxVC := tmdl.NewVirtualChannel(1, 8)
+	_ = rxVC.Add(back)
+	rx := tmdl.NewVirtualChannelPacketService(933, 1, rxVC, config, nil)
+	rx.SetPacketSizer(spp.PacketSizer)
+	got, err := rx.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, makeTestPacket(payload)) {
+		t.Errorf("packet = % X, want % X", got, makeTestPacket(payload))
+	}
+	if !bytes.Equal(rx.LastFSH(), sdu) {
+		t.Errorf("LastFSH = % X, want % X", rx.LastFSH(), sdu)
+	}
+}
+
+// --- VCA Status Fields (CCSDS 132.0-B-3 §3.4.2.3) ---
+
+// TestVCAStatusFieldsRoundTrip checks that the Packet Order Flag, Segment
+// Length ID, and First Header Pointer a VCA user sets are carried to the
+// receiving user unchanged. Providing the field is mandatory (§3.4.2.3) and
+// the semantics are the user's, so the protocol must not overwrite them.
+func TestVCAStatusFieldsRoundTrip(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	counter := tmdl.NewFrameCounter()
+	vc := tmdl.NewVirtualChannel(1, 4)
+
+	sdu := []byte{0x01, 0x02, 0x03, 0x04}
+	tx := tmdl.NewVirtualChannelAccessService(933, 1, len(sdu), vc, config, counter)
+	want := tmdl.VCAStatus{
+		PacketOrderFlag: true,
+		SegmentLengthID: 0b10,
+		FirstHeaderPtr:  0x123,
+	}
+	tx.SetSendStatus(want)
+	if err := tx.Send(sdu); err != nil {
+		t.Fatal(err)
+	}
+
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !frame.Header.SyncFlag {
+		t.Error("SyncFlag = false; §4.1.2.7.3.2 requires '1' for a VCA_SDU")
+	}
+	if frame.Header.PacketOrderFlag != want.PacketOrderFlag ||
+		frame.Header.SegmentLengthID != want.SegmentLengthID ||
+		frame.Header.FirstHeaderPtr != want.FirstHeaderPtr {
+		t.Errorf("status on the wire = {POF:%v SLI:%d FHP:0x%03X}, want {POF:%v SLI:%d FHP:0x%03X}",
+			frame.Header.PacketOrderFlag, frame.Header.SegmentLengthID, frame.Header.FirstHeaderPtr,
+			want.PacketOrderFlag, want.SegmentLengthID, want.FirstHeaderPtr)
+	}
+
+	encoded, err := frame.EncodeWithConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rxVC := tmdl.NewVirtualChannel(1, 4)
+	_ = rxVC.Add(back)
+	rx := tmdl.NewVirtualChannelAccessService(933, 1, len(sdu), rxVC, config, nil)
+	got, err := rx.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, sdu) {
+		t.Errorf("VCA_SDU = % X, want % X", got, sdu)
+	}
+	status := rx.LastStatus()
+	if !status.SyncFlag || status.PacketOrderFlag != want.PacketOrderFlag ||
+		status.SegmentLengthID != want.SegmentLengthID ||
+		status.FirstHeaderPtr != want.FirstHeaderPtr {
+		t.Errorf("LastStatus = %+v, want POF:%v SLI:%d FHP:0x%03X with SyncFlag",
+			status, want.PacketOrderFlag, want.SegmentLengthID, want.FirstHeaderPtr)
+	}
+}
+
+// TestVCADefaultStatusFieldsAreAllOnes checks the unconfigured default: a user
+// who sets no status fields gets the 'no packet starts here' pointer rather
+// than a zero that reads as 'a packet starts at octet 0'.
+func TestVCADefaultStatusFieldsAreAllOnes(t *testing.T) {
+	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
+	vc := tmdl.NewVirtualChannel(1, 4)
+	tx := tmdl.NewVirtualChannelAccessService(933, 1, 4, vc, config, nil)
+	if err := tx.Send([]byte{0x01, 0x02, 0x03, 0x04}); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := vc.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frame.Header.FirstHeaderPtr != tmdl.FHPNoPacketStart {
+		t.Errorf("FHP = 0x%03X, want 0x%03X", frame.Header.FirstHeaderPtr, tmdl.FHPNoPacketStart)
+	}
+	if frame.Header.PacketOrderFlag {
+		t.Error("PacketOrderFlag set without the user asking for it")
 	}
 }
