@@ -26,6 +26,7 @@ type Service struct {
 	newSH        func() SecondaryHeader // optional decoder factory for inbound packets
 	errorControl bool                   // expect error control field on received packets
 	discardIdle  bool                   // drop received idle packets instead of delivering them
+	apids        map[uint16]APIDConfig  // per-APID receive overrides; never mutated after NewService
 
 	// sendMu covers a whole send: count allocation, encoding, and the write.
 	// recvMu covers a whole receive: the header read, the body read, and the
@@ -45,7 +46,7 @@ type Service struct {
 type ServiceConfig struct {
 	PacketType      uint8 // PacketTypeTM or PacketTypeTC
 	MaxPacketLength int   // maximum total packet size in octets; default 65542
-	ErrorControl    bool  // if true, received packets are expected to contain a trailing CRC
+	ErrorControl    bool  // if true, received packets are expected to contain a trailing CRC; APIDs entries override this per APID
 
 	// NewSecondaryHeader builds a fresh secondary header for each received
 	// packet whose Secondary Header Flag is set. Leave it nil to have the
@@ -58,13 +59,41 @@ type ServiceConfig struct {
 	// rather than a type the service copies for itself: the width of a
 	// mission's secondary header usually lives in the value (a PUS header
 	// reads it from its mission profile), so only the caller can build one
-	// that is configured correctly.
+	// that is configured correctly. APIDs entries override this per APID.
 	NewSecondaryHeader func() SecondaryHeader
 
 	// DiscardIdle drops received idle packets (APID 0x7FF) instead of
 	// delivering them. They are link fill with no application meaning
 	// (4.1.3.3.4.4), so a receiving application normally wants them gone.
 	DiscardIdle bool
+
+	// APIDs overrides the receive-side handling per APID. CCSDS 133.0-B-2
+	// manages the Packet Secondary Header Contents per APID and managed data
+	// path (table 5-1), so two APIDs on the same transport may carry
+	// different secondary header formats — and, since the error control
+	// field is likewise a per-data-path convention, one APID may carry a
+	// trailing CRC while another does not.
+	//
+	// An entry replaces both service-wide settings for its APID: received
+	// packets on that APID use the entry's NewSecondaryHeader and
+	// ErrorControl instead of the fields above, including their zero values.
+	// APIDs without an entry keep the service-wide behavior.
+	APIDs map[uint16]APIDConfig
+}
+
+// APIDConfig is the receive-side handling for one APID, overriding the
+// service-wide ServiceConfig fields of the same names. The zero value means
+// "no secondary header decoder, no error control" for that APID — an entry is
+// a complete replacement, not a partial override.
+type APIDConfig struct {
+	// NewSecondaryHeader builds a fresh secondary header for each received
+	// packet on this APID whose Secondary Header Flag is set. Nil delivers
+	// the header octets at the front of UserData instead.
+	NewSecondaryHeader func() SecondaryHeader
+
+	// ErrorControl reports whether packets received on this APID carry a
+	// trailing CRC-16 error control field.
+	ErrorControl bool
 }
 
 // NewService creates a new SPP service over the given transport.
@@ -74,6 +103,16 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 		maxLen = 65542
 	}
 
+	// A copy, so the caller mutating its map after NewService cannot race
+	// with receives reading it.
+	var apids map[uint16]APIDConfig
+	if len(cfg.APIDs) > 0 {
+		apids = make(map[uint16]APIDConfig, len(cfg.APIDs))
+		for apid, ac := range cfg.APIDs {
+			apids[apid] = ac
+		}
+	}
+
 	return &Service{
 		rw:           rw,
 		packetType:   cfg.PacketType,
@@ -81,16 +120,62 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 		newSH:        cfg.NewSecondaryHeader,
 		errorControl: cfg.ErrorControl,
 		discardIdle:  cfg.DiscardIdle,
+		apids:        apids,
 		counters:     make(map[uint16]uint16),
 		expected:     make(map[uint16]uint16),
 		seen:         make(map[uint16]bool),
 	}
 }
 
+// receiveConfigFor resolves the secondary header factory and error control
+// expectation for packets received on the given APID: the APID's own entry
+// when one was configured, the service-wide settings otherwise.
+func (s *Service) receiveConfigFor(apid uint16) (func() SecondaryHeader, bool) {
+	if cfg, ok := s.apids[apid]; ok {
+		return cfg.NewSecondaryHeader, cfg.ErrorControl
+	}
+	return s.newSH, s.errorControl
+}
+
 // --- Packet Service (CCSDS 3.3) ---
 
+// QoS is the QoS Requirement parameter of the PACKET.request primitive
+// (CCSDS 133.0-B-2 3.3.2.4). It selects a quality-of-service level when an
+// underlying subnetwork offers more than one — for example Type-A
+// (sequence-controlled) versus Type-B (expedited) service on a Telecommand
+// space data link. What each value means belongs to the transport, since the
+// standard leaves the levels themselves to the underlying subnetworks.
+//
+// QoS is a Packet Service parameter only: the OCTET_STRING.request primitive
+// of 3.4.3.2.2 does not carry one, so SendBytes takes no QoS option.
+type QoS uint8
+
+// QoSWriter is implemented by transports whose underlying subnetwork offers
+// multiple quality-of-service levels. SendPacket hands the QoS Requirement of
+// a WithQoS send to WriteQoS; a transport without the method cannot honor the
+// requirement, and such sends are refused with ErrQoSUnsupported rather than
+// silently downgraded.
+type QoSWriter interface {
+	WriteQoS(p []byte, qos QoS) (n int, err error)
+}
+
+// PacketSendOption configures optional parameters of a SendPacket call.
+type PacketSendOption func(*packetSendConfig)
+
+type packetSendConfig struct {
+	qos *QoS
+}
+
+// WithQoS attaches the QoS Requirement of 3.3.2.4 to a SendPacket call. The
+// transport must implement QoSWriter, or the send fails with
+// ErrQoSUnsupported before anything reaches the wire.
+func WithQoS(qos QoS) PacketSendOption {
+	return func(cfg *packetSendConfig) { cfg.qos = &qos }
+}
+
 // SendPacket writes a pre-built space packet to the transport. It is the
-// PACKET.request primitive of 3.3.3.2.
+// PACKET.request primitive of 3.3.3.2; WithQoS supplies the primitive's
+// optional QoS Requirement parameter.
 //
 // A packet whose count the caller owns is sent with that count untouched, and
 // the service resynchronizes its own counter for the APID to one past it.
@@ -109,9 +194,25 @@ func NewService(rw io.ReadWriter, cfg ServiceConfig) *Service {
 //
 // Any other packet is stamped with the next count for its APID (4.1.3.4.3),
 // which mutates the caller's packet in place.
-func (s *Service) SendPacket(packet *SpacePacket) error {
+func (s *Service) SendPacket(packet *SpacePacket, opts ...PacketSendOption) error {
 	if packet == nil {
 		return ErrNilPacket
+	}
+
+	var cfg packetSendConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	// A QoS requirement needs a transport that can carry it. Refusing before
+	// the counter is touched means a failed send leaves no hole in the
+	// APID's sequence.
+	var qw QoSWriter
+	if cfg.qos != nil {
+		var ok bool
+		if qw, ok = s.rw.(QoSWriter); !ok {
+			return ErrQoSUnsupported
+		}
 	}
 
 	// One send at a time. The count and the octets that carry it have to reach
@@ -152,7 +253,11 @@ func (s *Service) SendPacket(packet *SpacePacket) error {
 		return err
 	}
 
-	_, err = s.rw.Write(data)
+	if qw != nil {
+		_, err = qw.WriteQoS(data, *cfg.qos)
+	} else {
+		_, err = s.rw.Write(data)
+	}
 	return err
 }
 
@@ -167,6 +272,46 @@ func (s *Service) SendPacket(packet *SpacePacket) error {
 func (s *Service) ReceivePacket() (*SpacePacket, error) {
 	packet, _, _, err := s.receive()
 	return packet, err
+}
+
+// PacketIndication carries the parameters the PACKET.indication primitive
+// delivers to the Packet Service user (CCSDS 133.0-B-2 3.3.3.3.2): the Space
+// Packet, its APID, and the optional Packet Loss Indicator.
+type PacketIndication struct {
+	// Packet is the Space Packet, delivered intact (3.3.1).
+	Packet *SpacePacket
+
+	// APID identifies the managed data path the packet arrived on (3.3.2.2).
+	APID uint16
+
+	// PacketLoss is the Packet Loss Indicator (3.3.2.3): true when the Packet
+	// Sequence Count for this APID skipped ahead, so packets were lost in
+	// transmission.
+	PacketLoss bool
+
+	// PacketsLost is how many packets the count skipped, modulo 16384. It is
+	// zero unless PacketLoss is true.
+	PacketsLost int
+}
+
+// ReceivePacketIndication reads a space packet and delivers it with the
+// indication parameters of 3.3.3.3.2, including the Packet Loss Indicator for
+// this packet's APID.
+//
+// Unlike ReceivePacket followed by LastDataLoss, the loss figure here is
+// bound to the returned packet, so concurrent receivers cannot misattribute
+// one packet's gap to another.
+func (s *Service) ReceivePacketIndication() (PacketIndication, error) {
+	packet, _, lost, err := s.receive()
+	if err != nil {
+		return PacketIndication{}, err
+	}
+	return PacketIndication{
+		Packet:      packet,
+		APID:        packet.PrimaryHeader.APID,
+		PacketLoss:  lost > 0,
+		PacketsLost: lost,
+	}, nil
 }
 
 // receive reads the next deliverable packet, the raw octets it arrived as, and
@@ -223,15 +368,22 @@ func (s *Service) readPacket() (*SpacePacket, []byte, error) {
 		return nil, nil, err
 	}
 
+	// The APID picks the decode configuration (4.1.4.2.1.4 leaves the
+	// secondary header contents to each managed data path, and this service
+	// carries one data path per APID), so it is read straight off the header
+	// octets before anything is parsed.
+	apid := uint16(header[0]&0x07)<<8 | uint16(header[1])
+	newSH, errorControl := s.receiveConfigFor(apid)
+
 	var opts []DecodeOption
 	// A fresh header per packet: the decoded values belong to this packet and
 	// must not be overwritten when the next one arrives.
-	if s.newSH != nil {
-		if sh := s.newSH(); sh != nil {
+	if newSH != nil {
+		if sh := newSH(); sh != nil {
 			opts = append(opts, WithDecodeSecondaryHeader(sh))
 		}
 	}
-	if s.errorControl {
+	if errorControl {
 		opts = append(opts, WithDecodeErrorControl())
 	}
 	packet, err := Decode(buffer, opts...)
@@ -273,6 +425,12 @@ func (s *Service) trackContinuity(apid, count uint16) int {
 //
 // This is the Data Loss Indicator of 3.4.2.4, an optional service parameter;
 // the continuity check that produces it is not optional (4.3.2.2).
+//
+// The value is service-wide: with concurrent receivers, another packet may
+// land between a ReceivePacket and this call, so the figure read here may
+// belong to that packet instead. Use ReceivePacketIndication (or
+// ReceiveBytes, whose Indication carries the same figures) when the loss must
+// be bound to a specific packet.
 func (s *Service) LastDataLoss() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -465,9 +623,10 @@ func (s *Service) ReceiveBytes() (Indication, error) {
 	// whole packet, so the data field is everything past the primary header.
 	// Decode has already checked that the buffer is at least as long as the
 	// declared packet and, when error control is expected, that the data field
-	// has room for it.
+	// has room for it. Whether it was expected is the received APID's setting,
+	// the same one readPacket decoded with.
 	field := raw[PrimaryHeaderSize:]
-	if s.errorControl {
+	if _, errorControl := s.receiveConfigFor(packet.PrimaryHeader.APID); errorControl {
 		field = field[:len(field)-2]
 	}
 
