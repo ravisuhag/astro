@@ -1311,3 +1311,242 @@ func TestReceivePacketResynchronizesAfterAnOversizePacket(t *testing.T) {
 		t.Errorf("UserData = %x, want abcd", got.UserData)
 	}
 }
+
+// qosTransport is a transport whose subnetwork offers QoS levels, which is
+// what the QoS Requirement of 3.3.2.4 exists to select between.
+type qosTransport struct {
+	bytes.Buffer
+	lastQoS  spp2.QoS
+	qosCalls int
+}
+
+func (q *qosTransport) WriteQoS(p []byte, qos spp2.QoS) (int, error) {
+	q.lastQoS = qos
+	q.qosCalls++
+	return q.Buffer.Write(p)
+}
+
+func TestSendPacketQoSReachesTheTransport(t *testing.T) {
+	transport := &qosTransport{}
+	svc := spp2.NewService(transport, spp2.ServiceConfig{PacketType: spp2.PacketTypeTC})
+
+	pkt, err := spp2.NewTCPacket(42, []byte{0x01, 0x02})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(pkt, spp2.WithQoS(2)); err != nil {
+		t.Fatalf("SendPacket with QoS: %v", err)
+	}
+	if transport.qosCalls != 1 {
+		t.Fatalf("WriteQoS calls = %d, want 1", transport.qosCalls)
+	}
+	if transport.lastQoS != 2 {
+		t.Errorf("QoS = %d, want 2", transport.lastQoS)
+	}
+
+	// A send without a QoS requirement takes the plain Write path even on a
+	// QoS-capable transport: no requirement means no level to select.
+	plain, err := spp2.NewTCPacket(42, []byte{0x03})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(plain); err != nil {
+		t.Fatal(err)
+	}
+	if transport.qosCalls != 1 {
+		t.Errorf("WriteQoS calls after plain send = %d, want still 1", transport.qosCalls)
+	}
+
+	// Both packets must have reached the wire intact and in order.
+	first, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first.UserData, []byte{0x01, 0x02}) {
+		t.Errorf("first UserData = %x, want 0102", first.UserData)
+	}
+	second, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.PrimaryHeader.SequenceCount != 1 {
+		t.Errorf("second sequence count = %d, want 1", second.PrimaryHeader.SequenceCount)
+	}
+}
+
+func TestSendPacketQoSOnPlainTransportIsRefused(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{PacketType: spp2.PacketTypeTC})
+
+	pkt, err := spp2.NewTCPacket(42, []byte{0x01})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(pkt, spp2.WithQoS(1)); !errors.Is(err, spp2.ErrQoSUnsupported) {
+		t.Fatalf("SendPacket = %v, want ErrQoSUnsupported", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("refused send wrote %d octets to the transport", buf.Len())
+	}
+
+	// The refused send must not have spent a sequence count.
+	next, err := spp2.NewTCPacket(42, []byte{0x02})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(next); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PrimaryHeader.SequenceCount != 0 {
+		t.Errorf("sequence count = %d, want 0 — the refused send left a hole",
+			got.PrimaryHeader.SequenceCount)
+	}
+}
+
+// TestPerAPIDReceiveConfig runs two APIDs with different managed parameters
+// over one transport: APID 100 keeps the service-wide settings (a secondary
+// header decoder and a trailing CRC), APID 200 overrides them to neither.
+// Table 5-1 of CCSDS 133.0-B-2 manages both per APID, so one service must be
+// able to hold both shapes at once.
+func TestPerAPIDReceiveConfig(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:         spp2.PacketTypeTM,
+		NewSecondaryHeader: func() spp2.SecondaryHeader { return &testSecondaryHeader{} },
+		ErrorControl:       true,
+		APIDs: map[uint16]spp2.APIDConfig{
+			200: {}, // no secondary header decoder, no error control
+		},
+	})
+
+	if err := svc.SendBytes(100, []byte{0xAA, 0xBB},
+		spp2.WithSendSecondaryHeader(&testSecondaryHeader{Timestamp: 0x0102030405060708}),
+		spp2.WithSendErrorControl()); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendBytes(200, []byte{0xCC, 0xDD}); err != nil {
+		t.Fatal(err)
+	}
+
+	withDefaults, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket APID 100: %v", err)
+	}
+	sh, ok := withDefaults.SecondaryHeader.(*testSecondaryHeader)
+	if !ok {
+		t.Fatalf("APID 100 secondary header is %T, want *testSecondaryHeader", withDefaults.SecondaryHeader)
+	}
+	if sh.Timestamp != 0x0102030405060708 {
+		t.Errorf("APID 100 timestamp = %#x, want 0x0102030405060708", sh.Timestamp)
+	}
+	if withDefaults.ErrorControl == nil {
+		t.Error("APID 100 packet has no error control, want the service-wide CRC")
+	}
+	if !bytes.Equal(withDefaults.UserData, []byte{0xAA, 0xBB}) {
+		t.Errorf("APID 100 UserData = %x, want aabb", withDefaults.UserData)
+	}
+
+	// Without the override, the service-wide settings would misread this
+	// packet: the decoder would eat its user data as a header and the CRC
+	// check would fail on octets that carry none.
+	overridden, err := svc.ReceivePacket()
+	if err != nil {
+		t.Fatalf("ReceivePacket APID 200: %v", err)
+	}
+	if overridden.SecondaryHeader != nil {
+		t.Errorf("APID 200 secondary header = %T, want none", overridden.SecondaryHeader)
+	}
+	if overridden.ErrorControl != nil {
+		t.Error("APID 200 packet has error control, want none")
+	}
+	if !bytes.Equal(overridden.UserData, []byte{0xCC, 0xDD}) {
+		t.Errorf("APID 200 UserData = %x, want ccdd", overridden.UserData)
+	}
+}
+
+// TestReceiveBytesStripsErrorControlPerAPID checks that the octet string an
+// Indication delivers is cut for the received APID's own error control
+// setting, not the service-wide one.
+func TestReceiveBytesStripsErrorControlPerAPID(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{
+		PacketType:   spp2.PacketTypeTM,
+		ErrorControl: true,
+		APIDs: map[uint16]spp2.APIDConfig{
+			200: {},
+		},
+	})
+
+	if err := svc.SendBytes(100, []byte{0xAA, 0xBB}, spp2.WithSendErrorControl()); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendBytes(200, []byte{0xCC, 0xDD}); err != nil {
+		t.Fatal(err)
+	}
+
+	withCRC, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(withCRC.Data, []byte{0xAA, 0xBB}) {
+		t.Errorf("APID 100 octet string = %x, want aabb without the CRC octets", withCRC.Data)
+	}
+
+	withoutCRC, err := svc.ReceiveBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(withoutCRC.Data, []byte{0xCC, 0xDD}) {
+		t.Errorf("APID 200 octet string = %x, want ccdd in full", withoutCRC.Data)
+	}
+}
+
+func TestReceivePacketIndicationBindsTheLossToThePacket(t *testing.T) {
+	var buf bytes.Buffer
+	svc := spp2.NewService(&buf, spp2.ServiceConfig{PacketType: spp2.PacketTypeTM})
+
+	first, err := spp2.NewTMPacket(300, []byte{0x01}, spp2.WithSequenceCount(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(first); err != nil {
+		t.Fatal(err)
+	}
+	// Count jumps from 0 to 5: four packets (1, 2, 3, 4) went missing.
+	skipped, err := spp2.NewTMPacket(300, []byte{0x02}, spp2.WithSequenceCount(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SendPacket(skipped); err != nil {
+		t.Fatal(err)
+	}
+
+	ind, err := svc.ReceivePacketIndication()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ind.PacketLoss {
+		t.Errorf("first packet reports loss of %d, want none", ind.PacketsLost)
+	}
+	if ind.APID != 300 {
+		t.Errorf("APID = %d, want 300", ind.APID)
+	}
+	if ind.Packet == nil || !bytes.Equal(ind.Packet.UserData, []byte{0x01}) {
+		t.Errorf("first indication does not carry the first packet")
+	}
+
+	ind, err = svc.ReceivePacketIndication()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ind.PacketLoss || ind.PacketsLost != 4 {
+		t.Errorf("PacketLoss = %v with %d lost, want true with 4", ind.PacketLoss, ind.PacketsLost)
+	}
+	if ind.Packet == nil || !bytes.Equal(ind.Packet.UserData, []byte{0x02}) {
+		t.Errorf("second indication does not carry the packet after the gap")
+	}
+}

@@ -70,4 +70,10 @@ var (
 
 	// ErrCRCValidationFailed indicates that the CRC validation of the packet failed.
 	ErrCRCValidationFailed = errors.New("CRC validation failed: data integrity check failed")
+
+	// ErrQoSUnsupported indicates a QoS Requirement was passed to SendPacket
+	// but the transport does not implement QoSWriter, so the requested service
+	// level cannot be honored. Sending anyway would silently downgrade the
+	// packet, which is worse than refusing.
+	ErrQoSUnsupported = errors.New("transport does not support QoS: it does not implement QoSWriter")
 )
