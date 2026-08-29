@@ -406,8 +406,8 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 		fhp := frame.DataFieldHeader.Pointer
 		data := frame.DataField
 
-		switch {
-		case fhp == FHPNoPacketStart:
+		switch fhp {
+		case FHPNoPacketStart:
 			// Continuation only
 			if s.synced {
 				s.recvBuf = append(s.recvBuf, data...)
