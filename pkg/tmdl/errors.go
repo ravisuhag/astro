@@ -86,4 +86,19 @@ var (
 	// ErrFrameLengthMismatch indicates a frame whose encoded length differs
 	// from the fixed ChannelConfig.FrameLength of its physical channel.
 	ErrFrameLengthMismatch = errors.New("frame length does not match the fixed channel frame length")
+
+	// ErrFSHNotPresent indicates an FSH_SDU was supplied for a channel whose
+	// frames carry no Transfer Frame Secondary Header. Set
+	// ChannelConfig.FSHDataLength so the frames have a header to fill.
+	ErrFSHNotPresent = errors.New("frame secondary header service configured but frames carry no secondary header")
+
+	// ErrOCFNotPresent indicates an OCF_SDU was supplied for a channel whose
+	// frames carry no Operational Control Field. Set ChannelConfig.HasOCF.
+	ErrOCFNotPresent = errors.New("operational control field service configured but frames carry no OCF")
+
+	// ErrFSHSizeMismatch indicates an FSH_SDU whose length differs from the
+	// channel's fixed ChannelConfig.FSHDataLength. CCSDS 132.0-B-3 §4.1.3.1.6
+	// fixes the secondary header length for the channel, so a differently
+	// sized SDU cannot be carried.
+	ErrFSHSizeMismatch = errors.New("FSH_SDU length does not match the channel's fixed secondary header length")
 )

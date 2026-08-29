@@ -107,13 +107,19 @@ func TestPrimaryHeader_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "FHP with sync flag",
+			// With the Synchronization Flag set, the First Header Pointer,
+			// Packet Order Flag, and Segment Length ID are undefined by
+			// CCSDS 132.0-B-3 (notes under §4.1.2.7.4 to §4.1.2.7.6) and are
+			// handed to the VCA service user as the VCA Status Fields of
+			// §3.4.2.3, so any value is legal.
+			name: "VCA status fields with sync flag",
 			header: tmdl.PrimaryHeader{
 				SyncFlag:        true,
-				SegmentLengthID: 0b11,
+				PacketOrderFlag: true,
+				SegmentLengthID: 0b01,
 				FirstHeaderPtr:  0x0000,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -645,8 +651,8 @@ func TestNewIdleFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ECSS-E-ST-50-03C 5.2.7.6g: a data field of only idle data takes the OID
-	// pointer 0x7FE, not the 0x7FF that means "no packet starts here".
+	// CCSDS 132.0-B-3 §4.1.2.7.6.5: a data field of only idle data takes the
+	// OID pointer 0x7FE, not the 0x7FF that means "no packet starts here".
 	if frame.Header.FirstHeaderPtr != tmdl.FHPOnlyIdleData {
 		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x%04X (OID)",
 			frame.Header.FirstHeaderPtr, tmdl.FHPOnlyIdleData)
@@ -657,11 +663,14 @@ func TestNewIdleFrame(t *testing.T) {
 	if len(frame.DataField) != capacity {
 		t.Errorf("DataField len = %d, want %d", len(frame.DataField), capacity)
 	}
-	for i, b := range frame.DataField {
-		if b != 0xFF {
-			t.Errorf("DataField[%d] = 0x%02X, want 0xFF", i, b)
-			break
-		}
+
+	// §4.1.4.6.2: the data field carries the mandatory PN sequence, whose
+	// first octets the note under §4.1.4.6.2.2 gives as FF FF FF FF 6D B6 D8
+	// 61 45 1F. Constant fill is what this replaced — it defeats the
+	// randomization the sequence exists to provide.
+	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
+	if n := min(len(want), len(frame.DataField)); !bytes.Equal(frame.DataField[:n], want[:n]) {
+		t.Errorf("DataField[:%d] = % X, want % X", n, frame.DataField[:n], want[:n])
 	}
 
 	// Verify CRC is valid via round-trip
@@ -947,12 +956,12 @@ func TestChannelConfigValidate(t *testing.T) {
 	}
 }
 
-// --- SyncFlag=1 First Header Pointer leniency (CCSDS 132.0-B-3 §4.1.2.7.4) ---
+// --- SyncFlag=1 First Header Pointer (CCSDS 132.0-B-3 §4.1.2.7.6.2) ---
 
-// TestDecodeLenientFHPWithSyncFlag checks the asymmetry the spec requires:
-// when the Synchronization Flag is set the FHP is undefined, so a receiver
-// must accept any value there, while this package's own construction path
-// still pins it to 0x7FF.
+// TestDecodeLenientFHPWithSyncFlag checks that a First Header Pointer carried
+// under a set Synchronization Flag survives a decode/encode round trip
+// untouched. The field is undefined for such frames and §3.4.2.3 gives those
+// bits to the VCA service user as status, so neither side may rewrite them.
 func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	// Build a valid VCA-style frame (SyncFlag=1, FHP=0x7FF) and encode it.
 	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("vca-sdu"), nil, nil)
@@ -984,11 +993,18 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 			back.Header.SyncFlag, back.Header.FirstHeaderPtr)
 	}
 
-	// The construction side stays strict: Validate and Encode reject it.
-	if err := back.Header.Validate(); !errors.Is(err, tmdl.ErrInvalidFirstHeaderPtr) {
-		t.Errorf("Validate: got %v, want ErrInvalidFirstHeaderPtr", err)
+	// Re-encoding must keep the value: with the Synchronization Flag set the
+	// pointer is a VCA Status Field belonging to the service user (§3.4.2.3),
+	// so a relay that rewrote it to all ones would destroy user data.
+	if err := back.Header.Validate(); err != nil {
+		t.Errorf("Validate rejected a VCA status field value: %v", err)
 	}
-	if _, err := back.Encode(); !errors.Is(err, tmdl.ErrInvalidFirstHeaderPtr) {
-		t.Errorf("Encode: got %v, want ErrInvalidFirstHeaderPtr", err)
+	reencoded, err := back.Encode()
+	if err != nil {
+		t.Fatalf("Encode rejected a VCA status field value: %v", err)
+	}
+	if !bytes.Equal(reencoded, patched) {
+		t.Errorf("Re-encoded frame differs from the received one:\n got % X\nwant % X",
+			reencoded, patched)
 	}
 }
