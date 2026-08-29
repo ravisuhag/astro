@@ -1323,7 +1323,7 @@ type qosTransport struct {
 func (q *qosTransport) WriteQoS(p []byte, qos spp2.QoS) (int, error) {
 	q.lastQoS = qos
 	q.qosCalls++
-	return q.Buffer.Write(p)
+	return q.Write(p)
 }
 
 func TestSendPacketQoSReachesTheTransport(t *testing.T) {

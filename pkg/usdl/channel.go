@@ -69,7 +69,7 @@ func (vc *VirtualChannel) NextForMAP(mapid uint8) (*TransferFrame, error) {
 		return frame, nil
 	}
 	for {
-		frame, err := vc.Channel.Next()
+		frame, err := vc.Next()
 		if err != nil {
 			return nil, err
 		}
