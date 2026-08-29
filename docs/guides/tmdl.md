@@ -328,12 +328,14 @@ The LFSR is initialized to all 1s (`0xFF`) and generates one bit per clock. The 
 
 When no Virtual Channel has data to send but the link must keep transmitting (continuous-mode links), the protocol generates **idle frames** (Only-Idle-Data frames):
 
-- Data Field filled entirely with idle data
+- Data Field filled with the mandatory Pseudo Noise sequence
 - `FirstHeaderPtr = 0x07FE` (the OID sentinel: only idle data)
 - `SyncFlag = 0`
-- Typically sent on VCID 7 (convention, not required)
+- A VCID that also carries packets
 
-Idle frames still carry valid headers with incrementing MC/VC frame counts, maintaining synchronization. In astro, pass the shared `FrameCounter` via `MasterChannel.SetFrameCounter` (or use `NewIdleFrameWithCounter`) so inserted idle frames continue the Master Channel count.
+The fill is not free choice. CCSDS 132.0-B-3 §4.1.4.6.2 requires a PN sequence from a 32-cell shift register with polynomial D0+D1+D2+D22+D32, started at all ones and never restarted. The reason is in note 5 of §4.1.4.6.3: a repeating pattern gives the receiver too little to lock onto, and frame reception suffers. Its first octets are `FF FF FF FF 6D B6 D8 61 45 1F`. In astro each `MasterChannel` owns one generator, so back-to-back idle frames carry different data.
+
+Idle frames still carry valid headers with incrementing MC/VC frame counts, maintaining synchronization. In astro, pass the shared `FrameCounter` via `MasterChannel.SetFrameCounter` so inserted idle frames continue the Master Channel count. Only the data field is idle — the secondary header and Operational Control Field of an OID frame can carry real data, and astro fills them from the master channel's MC_FSH and MC_OCF suppliers.
 
 ## Frame Gap Detection
 

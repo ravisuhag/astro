@@ -82,3 +82,51 @@ func Apply(data []byte) []byte {
 	}
 	return out
 }
+
+// OIDSequence generates the Pseudo Noise sequence that fills the data field of
+// Only Idle Data transfer frames. CCSDS 132.0-B-3 §4.1.4.6.2 (TM, annex D) and
+// CCSDS 732.1-B-3 §4.1.4.1.10 (USLP, annex H) mandate the same generator: a
+// 32-cell Fibonacci-form linear feedback shift register realising
+//
+//	D^0 + D^1 + D^2 + D^22 + D^32
+//
+// seeded to all ones at device start-up and never restarted between frames.
+// Both standards publish the same opening octets, FF FF FF FF 6D B6 D8 61 45
+// 1F, which is the only way to tell correct taps from a plausible-looking
+// permutation of them — the same trap the 8-bit randomizer above fell into.
+//
+// This is not the randomizer of Sequence and Apply: that one is an 8-bit
+// register applied by the channel coding layer to every frame, while this one
+// is a 32-bit register whose output *is* the payload of an idle frame.
+//
+// Unlike the randomizer this sequence is not tiled: its period is 2^32-1
+// octets, so it is generated as a stream. A value is safe for concurrent use.
+type OIDSequence struct {
+	mu  sync.Mutex
+	reg uint32 // bit i holds LFSR cell D(32-i): bit 0 is D32, bit 31 is D1
+}
+
+// NewOIDSequence returns a generator in the 'all ones' start-up state. Keep
+// one per channel for the life of the device; restarting it makes every idle
+// frame carry the same octets, which is the insufficient randomization the
+// standards warn against.
+func NewOIDSequence() *OIDSequence {
+	return &OIDSequence{reg: 0xFFFFFFFF}
+}
+
+// Fill writes the next len(buf) octets of the sequence into buf, most
+// significant bit first, advancing the generator.
+func (s *OIDSequence) Fill(buf []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range buf {
+		var b byte
+		for range 8 {
+			out := byte(s.reg & 1)                                // cell D32
+			fb := (s.reg>>31 ^ s.reg>>30 ^ s.reg>>10 ^ s.reg) & 1 // D1+D2+D22+D32
+			b = b<<1 | out
+			s.reg = s.reg>>1 | fb<<31
+		}
+		buf[i] = b
+	}
+}

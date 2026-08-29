@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/ravisuhag/astro/internal/pn"
 	"github.com/ravisuhag/astro/pkg/crc"
 )
 
@@ -819,34 +819,15 @@ func padDataField(data []byte, capacity int, pattern []byte) []byte {
 // state at device start-up and never restarted for subsequent frames.
 // The first octets of the stream are FF FF FF FF 6D B6 D8 61 ...
 // (annex H). It is safe for concurrent use.
-type OIDSequence struct {
-	mu  sync.Mutex
-	reg uint32 // bit i holds LFSR cell D(32-i): bit 0 is D32, bit 31 is D1
-}
+//
+// TM mandates the same generator (CCSDS 132.0-B-3 §4.1.4.6.2), so the
+// implementation is shared with pkg/tmdl rather than copied.
+type OIDSequence = pn.OIDSequence
 
 // NewOIDSequence returns a PN generator in the 'all ones' start-up state.
 // Keep one generator per physical channel for the life of the device; the
 // sequence must not be restarted across OID frames (§4.1.4.1.10.1).
-func NewOIDSequence() *OIDSequence {
-	return &OIDSequence{reg: 0xFFFFFFFF}
-}
-
-// Fill writes the next len(buf) octets of the PN stream into buf, most
-// significant bit first, advancing the generator.
-func (s *OIDSequence) Fill(buf []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i := range buf {
-		var b byte
-		for range 8 {
-			out := byte(s.reg & 1)                                // cell D32
-			fb := (s.reg>>31 ^ s.reg>>30 ^ s.reg>>10 ^ s.reg) & 1 // D1+D2+D22+D32
-			b = b<<1 | out
-			s.reg = s.reg>>1 | fb<<31
-		}
-		buf[i] = b
-	}
-}
+func NewOIDSequence() *OIDSequence { return pn.NewOIDSequence() }
 
 // NewIdleFrame creates an OID (Only Idle Data) Transfer Frame per CCSDS
 // 732.1-B-3 §4.1.4.1: VCID 63, MAP ID 0, construction rule '001' with the

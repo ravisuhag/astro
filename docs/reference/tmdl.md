@@ -59,8 +59,12 @@ frame, err := tmdl.NewTMTransferFrame(0x1A, 1, data, secondaryHeaderBytes, nil)
 // Frame with Operational Control Field (4 bytes)
 frame, err := tmdl.NewTMTransferFrame(0x1A, 1, data, nil, ocfBytes)
 
-// Idle frame (all-ones data, FHP=0x07FF)
+// Idle (OID) frame: PN-filled data field, FHP=0x07FE
 idle, err := tmdl.NewIdleFrame(0x1A, 7, config)
+
+// Long-lived senders pass the channel's frame counter and PN generator so
+// the counts continue and the PN sequence is never restarted.
+idle, err := tmdl.NewIdleFrameWithCounter(0x1A, 1, config, counter, oidFill)
 ```
 
 ### Encoding and Decoding
@@ -153,15 +157,18 @@ frame, err := tmdl.NewTMTransferFrame(scid, vcid, data, myHeaderBytes, nil)
 
 ```go
 config := tmdl.ChannelConfig{
-    FrameLength: 1024, // Total frame length in octets
-    HasOCF:      true, // Operational Control Field (4 bytes)
-    HasFEC:      true, // Frame Error Control (2-byte CRC)
+    FrameLength:   1024, // Total frame length in octets
+    HasOCF:        true, // Operational Control Field (4 bytes)
+    HasFEC:        true, // Frame Error Control (2-byte CRC)
+    FSHDataLength: 4,    // Secondary header data field, 0 for none
 }
 
 // Calculate available space for user data
 capacity := config.DataFieldCapacity(0)                  // No secondary header
 capacity := config.DataFieldCapacity(len(secHeaderData)) // With secondary header
 ```
+
+`FSHDataLength` is the length of the Transfer Frame Secondary Header data field carried by *every* frame on the channel. CCSDS 132.0-B-3 §4.1.3.1.6 fixes that length for the channel, so it belongs here rather than per frame. Set it and the services emit a secondary header on every frame, filling it from a VC_FSH supplier when one is installed.
 
 `DataFieldCapacity` accounts for the 6-byte primary header, optional secondary header (1 + N bytes), optional OCF (4 bytes), and optional FEC (2 bytes).
 
@@ -243,7 +250,7 @@ data, err := vcf.Receive()
 
 ### Virtual Channel Access Service (VCA)
 
-Fixed-length SDU service for housekeeping data or fixed-rate streams. Sets `SyncFlag=true` and `FirstHeaderPtr=0x07FF` per CCSDS spec.
+Fixed-length SDU service for housekeeping data or fixed-rate streams. Sets `SyncFlag=true` per CCSDS 132.0-B-3 §4.1.2.7.3.2.
 
 ```go
 counter := tmdl.NewFrameCounter()
@@ -255,8 +262,41 @@ err := vca.Send(sduData)
 
 // Receive SDU and check status
 data, err := vca.Receive()
-status := vca.LastStatus() // VCAStatus{SyncFlag, PacketOrderFlag, SegmentLengthID}
+status := vca.LastStatus() // VCAStatus{SyncFlag, PacketOrderFlag, SegmentLengthID, FirstHeaderPtr}
 ```
+
+### VCA Status Fields
+
+With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user — they are the VCA Status Fields of §3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
+
+```go
+vca.SetSendStatus(tmdl.VCAStatus{
+    PacketOrderFlag: true,
+    SegmentLengthID: 0b10,
+    FirstHeaderPtr:  0x123,
+})
+err := vca.Send(sduData) // carries those bits
+
+status := rx.LastStatus() // the receiving user reads them back
+```
+
+Without `SetSendStatus`, the First Header Pointer defaults to all ones (`FHPNoPacketStart`), which is what a receiver ignoring the status fields expects to see.
+
+### Secondary Header and OCF Services (VC_FSH, VC_OCF)
+
+The VCP and VCA services carry data for two more of the standard's services: VC_FSH (§3.5) puts an SDU in every frame's Transfer Frame Secondary Header, VC_OCF (§3.6) puts four octets in every frame's Operational Control Field. Both are synchronous with frame release, so they are installed as suppliers polled as each frame is built:
+
+```go
+config := tmdl.ChannelConfig{FrameLength: 1024, FSHDataLength: 4, HasOCF: true, HasFEC: true}
+
+svc.SetFSHSupplier(func() []byte { return timecode() })  // VC_FSH
+svc.SetOCFSupplier(func() []byte { return clcw.Encode() }) // VC_OCF
+
+// Receiving side reads what arrived
+fsh := svc.LastFSH()
+```
+
+The FSH SDU must be exactly `FSHDataLength` octets, and the OCF SDU exactly 4; a wrong size is refused rather than truncated. Without a supplier the fields are zero-filled, because §4.1.3.1.5 requires the secondary header in every frame of a channel that has one.
 
 ### Frame Counter
 
@@ -282,7 +322,7 @@ mc.AddVirtualChannel(vc2, 1) // Lower priority
 
 // Send path: retrieve next frame from multiplexer
 frame, err := mc.GetNextFrame()
-frame, err := mc.GetNextFrameOrIdle() // Returns idle frame if none available
+frame, err := mc.GetNextFrameOrIdle() // Returns an OID idle frame if none available
 
 // Receive path: route inbound frame to correct VC
 err := mc.AddFrame(frame)
@@ -294,6 +334,36 @@ vcGap := mc.VCFrameGap() // VC frame gap from last AddFrame
 // Check pending state
 hasPending := mc.HasPendingFrames()
 ```
+
+### Master Channel FSH and OCF Services (MC_FSH, MC_OCF)
+
+The master channel has its own pair of services (§3.8, §3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there — that is the Master Channel Generation Function of §4.2.5:
+
+```go
+mc.SetFSHSupplier(func() []byte { return spacecraftTime() })  // MC_FSH
+mc.SetOCFSupplier(func() []byte { return clcw.Encode() })     // MC_OCF
+
+// Receiving side: the SDUs from the most recent AddFrame
+fsh := mc.LastFSH()
+ocf := mc.LastOCF()
+```
+
+Use the master-channel services when the data is spacecraft-wide (a time code, the CLCW for the whole link) and the virtual-channel ones when it differs per stream. A supplier on a channel whose frames have nowhere to put the SDU fails with `ErrFSHNotPresent` or `ErrOCFNotPresent` rather than dropping it.
+
+### Idle (OID) Frames
+
+When no virtual channel has a frame ready at release time, `GetNextFrameOrIdle` creates an Only Idle Data frame to keep the stream continuous (§4.2.4.4). Getting one right takes more than zero-filling:
+
+```go
+mc.SetFrameCounter(counter) // counts continue through idle frames (§4.1.2.5)
+mc.SetIdleVCID(1)           // optional: pin the VCID, else lowest registered
+idle, err := mc.GetNextFrameOrIdle()
+```
+
+- The First Header Pointer is `0x7FE` (`FHPOnlyIdleData`), which says "only idle data", not the `0x7FF` that says "no packet starts here" (§4.1.2.7.6.5).
+- The data field carries the mandatory PN sequence from `OIDSequence` — a 32-cell LFSR with polynomial D0+D1+D2+D22+D32 (§4.1.4.6.2). Each `MasterChannel` keeps one generator for its lifetime, since §4.1.4.6.2.1 forbids restarting it, so consecutive idle frames carry different octets. Constant fill would defeat the randomization the sequence exists to provide.
+- The VCID is one that carries packets (§4.1.4.6.3), so a receiver has a reception function for it.
+- The secondary header and OCF still carry their MC service data: only the *data field* of an OID frame is idle (§4.1.4.6.3 note 1).
 
 ## Physical Channel
 
@@ -453,6 +523,9 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrDataFieldTooSmall` | Data field capacity too small for framing |
 | `ErrNoMasterChannels` | No master channels on physical channel |
 | `ErrInvalidOCFLength` | OCF not exactly 4 bytes |
+| `ErrFSHNotPresent` | An FSH supplier is installed but the channel's frames carry no secondary header (set `ChannelConfig.FSHDataLength`) |
+| `ErrOCFNotPresent` | An OCF supplier is installed but the channel's frames carry no OCF (set `ChannelConfig.HasOCF`) |
+| `ErrFSHSizeMismatch` | An FSH_SDU whose length differs from the channel's fixed `FSHDataLength` |
 
 > **Note:** Sync-layer errors such as `ErrSyncMarkerMismatch` and `ErrDataTooShort` are defined in the `tmsc` package.
 

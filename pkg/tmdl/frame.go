@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ravisuhag/astro/internal/pn"
 	"github.com/ravisuhag/astro/pkg/crc"
 )
 
@@ -78,11 +79,6 @@ func (h *PrimaryHeader) Encode() ([]byte, error) {
 }
 
 // Decode parses a byte slice into the PrimaryHeader.
-//
-// Decoding is deliberately lenient about the First Header Pointer when the
-// Synchronization Flag is set: CCSDS 132.0-B-3 §4.1.2.7.4 leaves the pointer
-// undefined in that case, so a conformant sender may put anything there. Only
-// frame construction (Encode/Validate) pins it to 0x7FF.
 func (h *PrimaryHeader) Decode(data []byte) error {
 	if len(data) < 6 {
 		return ErrDataTooShort
@@ -100,20 +96,18 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 	h.SegmentLengthID = (data[4] >> 3) & 0x03
 	h.FirstHeaderPtr = (uint16(data[4]&0x07) << 8) | uint16(data[5])
 
-	return h.validate(false)
+	return h.Validate()
 }
 
-// Validate checks if the header values are within valid ranges. It applies
-// the construction-side rules, including FHP=0x7FF when the Synchronization
-// Flag is set (§4.1.2.7.4 recommends the sender set all ones there).
+// Validate checks if the header values are within valid ranges.
+//
+// With the Synchronization Flag set, the Packet Order Flag, Segment Length
+// Identifier, and First Header Pointer are undefined by CCSDS 132.0-B-3
+// (notes under §4.1.2.7.4 through §4.1.2.7.6), and §3.4.2.3 hands those bits
+// to the VCA service user as the VCA Status Fields — so any value passes
+// here. With the flag clear, the Packet Order Flag must be '0' and the
+// Segment Length Identifier '11'.
 func (h *PrimaryHeader) Validate() error {
-	return h.validate(true)
-}
-
-// validate checks the header fields. strictFHP applies the encode-side rule
-// that a set Synchronization Flag carries FHP=0x7FF; the decode side accepts
-// any value there because the spec leaves the field undefined for receivers.
-func (h *PrimaryHeader) validate(strictFHP bool) error {
 	if h.VersionNumber != 0 {
 		return ErrInvalidVersion
 	}
@@ -130,9 +124,6 @@ func (h *PrimaryHeader) validate(strictFHP bool) error {
 		return ErrInvalidSegmentLengthID
 	}
 	if h.FirstHeaderPtr > 0x07FF {
-		return ErrInvalidFirstHeaderPtr
-	}
-	if strictFHP && h.SyncFlag && h.FirstHeaderPtr != 0x07FF {
 		return ErrInvalidFirstHeaderPtr
 	}
 	return nil
@@ -411,41 +402,81 @@ const (
 	FHPOnlyIdleData uint16 = 0x07FE
 )
 
-// IdleFrameVCID is the virtual channel idle frames are emitted on. VCID 7 is
-// the conventional idle channel (CCSDS 132.0-B-3 recommends the highest VCID
-// for idle frames).
+// IdleFrameVCID is the fallback virtual channel for idle frames when the
+// caller knows no better. CCSDS 132.0-B-3 §4.1.4.6.3 requires the VCID of an
+// OID frame to be one of the VCIDs used for transferring packets, so
+// MasterChannel picks a registered packet VCID instead; this constant is used
+// only when no virtual channel is registered at all, where no conformant
+// choice exists.
 const IdleFrameVCID uint8 = 7
 
-// NewIdleFrame creates an idle (OID) TM Transfer Frame: an all-idle data field
-// with the First Header Pointer set to FHPOnlyIdleData, per
-// ECSS-E-ST-50-03C 5.2.7.6g.
+// OIDSequence generates the mandatory Pseudo Noise (PN) sequence that fills
+// the data field of OID Transfer Frames (CCSDS 132.0-B-3 §4.1.4.6.2, annex D):
+// a 32-cell Fibonacci-form Linear Feedback Shift Register with polynomial
+// D0 + D1 + D2 + D22 + D32, initialized to the 'all ones' state at device
+// start-up and never restarted for subsequent frames. The first octets of the
+// stream are FF FF FF FF 6D B6 D8 61 45 1F. It is safe for concurrent use.
 //
-// The frame's MC and VC counts are zero. Use NewIdleFrameWithCounter so idle
-// frames continue the master channel sequence.
+// USLP mandates the same generator (CCSDS 732.1-B-3 §4.1.4.1.10), so the
+// implementation is shared with pkg/usdl rather than copied.
+type OIDSequence = pn.OIDSequence
+
+// NewOIDSequence returns a PN generator in the 'all ones' start-up state.
+// Keep one generator per channel for the life of the device; §4.1.4.6.2.1
+// forbids restarting the sequence across OID frames.
+func NewOIDSequence() *OIDSequence { return pn.NewOIDSequence() }
+
+// NewIdleFrame creates an idle (OID) TM Transfer Frame: a PN-filled data
+// field with the First Header Pointer set to FHPOnlyIdleData, per CCSDS
+// 132.0-B-3 §4.1.2.7.6.5 and §4.1.4.6.
+//
+// The frame's MC and VC counts are zero and its PN sequence starts fresh. Use
+// NewIdleFrameWithCounter so idle frames continue the master channel sequence
+// and draw from the channel's persistent PN generator.
 func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFrame, error) {
-	return NewIdleFrameWithCounter(scid, vcid, config, nil)
+	return NewIdleFrameWithCounter(scid, vcid, config, nil, nil)
 }
 
-// NewIdleFrameWithCounter creates an idle (OID) TM Transfer Frame and stamps
-// its MC and VC frame counts from the given counter. Pass the same
-// FrameCounter the channel's services use: CCSDS 132.0-B-3 §4.1.2.5 counts
-// every frame of the master channel, idle frames included, so an unstamped
-// idle frame breaks the MC sequence at any conformant receiver. A nil counter
-// leaves both counts zero.
-func NewIdleFrameWithCounter(scid uint16, vcid uint8, config ChannelConfig, counter *FrameCounter) (*TMTransferFrame, error) {
-	capacity := config.DataFieldCapacity(0)
+// NewIdleFrameWithCounter creates an idle (OID) TM Transfer Frame, stamps its
+// MC and VC frame counts from the given counter, and fills its data field
+// from the given PN generator.
+//
+// Pass the same FrameCounter the channel's services use: CCSDS 132.0-B-3
+// §4.1.2.5 counts every frame of the master channel, idle frames included, so
+// an unstamped idle frame breaks the MC sequence at any conformant receiver.
+// A nil counter leaves both counts zero.
+//
+// Pass the channel's persistent OIDSequence: §4.1.4.6.2 mandates the PN fill
+// and forbids restarting the generator between frames. A nil fill starts a
+// fresh sequence for this frame only, which is fine for a single frame but
+// repeats the same octets on every frame of a long-lived sender —
+// MasterChannel keeps one generator for exactly this reason.
+//
+// When the channel carries a secondary header (config.FSHDataLength > 0) the
+// idle frame includes a zero-filled one: §4.1.2.7.2.3 keeps the Secondary
+// Header Flag static across the channel, and the OID notes under §4.1.4.6
+// expect the header to stay usable on idle frames. MasterChannel overwrites
+// it from the MC_FSH supplier when one is installed. The same applies to the
+// Operational Control Field under config.HasOCF.
+func NewIdleFrameWithCounter(scid uint16, vcid uint8, config ChannelConfig, counter *FrameCounter, fill *OIDSequence) (*TMTransferFrame, error) {
+	capacity := config.DataFieldCapacity(config.FSHDataLength)
 	if capacity <= 0 {
 		return nil, ErrDataFieldTooSmall
 	}
+	if fill == nil {
+		fill = NewOIDSequence()
+	}
 	idleData := make([]byte, capacity)
-	for i := range idleData {
-		idleData[i] = 0xFF
+	fill.Fill(idleData)
+	var fsh []byte
+	if config.FSHDataLength > 0 {
+		fsh = make([]byte, config.FSHDataLength)
 	}
 	var ocf []byte
 	if config.HasOCF {
 		ocf = make([]byte, 4)
 	}
-	frame, err := NewTMTransferFrame(scid, vcid, idleData, nil, ocf)
+	frame, err := NewTMTransferFrame(scid, vcid, idleData, fsh, ocf)
 	if err != nil {
 		return nil, err
 	}
