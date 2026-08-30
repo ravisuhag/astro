@@ -1,6 +1,7 @@
 package tcf
 
-// Regression tests for the AUDIT.md §11 findings (TCF-1 .. TCF-18).
+// Conformance regression tests for the CCSDS 301.0-B-4 time codes. The
+// TCF-n tags below label the individual defects each test pins down.
 
 import (
 	"bytes"
