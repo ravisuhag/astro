@@ -3,6 +3,8 @@ package epp_test
 import (
 	"bytes"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -239,5 +241,40 @@ func TestHeaderHumanize(t *testing.T) {
 	s := h.Humanize()
 	if s == "" {
 		t.Error("Humanize returned empty string")
+	}
+}
+
+// TestHeaderProtocolIDNames pins the name shown for every Protocol ID to the
+// SANA "Protocol Identifier for Encapsulation Packet Protocol" registry, which
+// 4.1.2.3.3 makes normative. The registry has eight records; only '101' has no
+// entry, so only '101' is reported as reserved.
+func TestHeaderProtocolIDNames(t *testing.T) {
+	tests := []struct {
+		pid  uint8
+		want string
+	}{
+		{epp.ProtocolIDIdle, "Idle"},
+		{epp.ProtocolIDLTP, "LTP"},
+		{epp.ProtocolIDIPE, "Internet Protocol Extension"},
+		{epp.ProtocolIDCFDP, "CFDP"},
+		{epp.ProtocolIDBP, "Bundle Protocol"},
+		{5, "Reserved"},
+		{epp.ProtocolIDExtended, "Protocol ID Extension"},
+		{epp.ProtocolIDMission, "Mission-Specific"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			h := epp.Header{
+				PVN:            epp.PVN,
+				ProtocolID:     tt.pid,
+				LengthOfLength: epp.LoL1Octet,
+				PacketLength:   3,
+			}
+			want := "Protocol ID: " + strconv.Itoa(int(tt.pid)) + " (" + tt.want + ")"
+			if got := h.Humanize(); !strings.Contains(got, want) {
+				t.Errorf("Humanize() for Protocol ID %d = %q, want it to contain %q", tt.pid, got, want)
+			}
+		})
 	}
 }

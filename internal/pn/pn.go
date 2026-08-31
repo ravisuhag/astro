@@ -1,87 +1,139 @@
-// Package pn generates the CCSDS pseudo-randomizer sequence shared by the TM
+// Package pn generates the CCSDS pseudo-randomizer sequences used by the TM
 // and TC synchronization and channel coding layers.
 //
-// CCSDS 131.0-B (TM) and CCSDS 231.0-B (TC) specify the same randomizer:
-// an 8-bit linear feedback shift register realising
+// TM and TC do NOT share a randomizer. Both are 8-bit linear feedback shift
+// registers preset to all ones, and both repeat after 255 bits, but the
+// polynomials differ:
 //
-//	h(x) = x^8 + x^7 + x^5 + x^3 + 1
+//	CCSDS 131.0-B-5 §10.4.2 (TM)  h(x) = x^8 + x^7 + x^5 + x^3 + 1
+//	CCSDS 231.0-B-4 §6.2   (TC)   h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
 //
-// preset to all ones. pkg/tmsc and pkg/tcsc both need it, and both used to
-// carry their own byte-for-byte copy. One copy means one place for the taps to
-// be wrong — and they were wrong in both until the sequence was pinned to the
-// digits CCSDS publishes.
+// The two sequences diverge at the second octet — TM opens FF 48 0E C0 9A and
+// TC opens FF 39 9E 5A 68 — so equipment fed the wrong one recovers noise. The
+// generators are therefore named for the standard they belong to, and neither
+// name is available unqualified: TMSequence and TMApply are for pkg/tmsc,
+// TCSequence and TCApply are for pkg/tcsc.
+//
+// Nothing about a randomizer can be checked by round-tripping it. XOR is its
+// own inverse, so any sequence at all — right taps, wrong taps, or a constant —
+// randomizes and derandomizes back to the input. Correctness here rests
+// entirely on the vectors CCSDS publishes; see the tests.
 //
 // pkg/ocsc deliberately does not use this. The optical randomizer of
 // CCSDS 142.0-B works on blocks that are not a whole number of octets, so it
 // needs a bit-addressable implementation of its own.
 package pn
 
-import "sync"
+import (
+	"math/bits"
+	"sync"
+)
 
-// Period is the length in octets after which the sequence repeats.
+// Period is the length in octets after which either sequence repeats.
 //
-// The register is 8 bits with a maximal-length polynomial, so the bit sequence
+// Each register is 8 bits with a maximal-length polynomial, so the bit sequence
 // has period 2^8-1 = 255. Since 255 and 8 share no factor, the octet sequence
 // only realigns after 255 octets.
 const Period = 255
 
-var (
-	once   sync.Once
-	period [Period]byte
+// Feedback tap masks, in the Fibonacci form the generator below uses: the
+// output bit is the register's most significant bit, the feedback bit is the
+// parity of the tapped cells, and the register then shifts left with the
+// feedback entering at the bottom.
+//
+// With that convention the register cell at bit 7 holds the oldest output bit
+// and bit 0 the newest, so a tap at bit k contributes output bit b(n+7-k) to
+// the recurrence b(n+8) = sum of taps. Reading the polynomial exponents
+// straight off as bit indices gives a different maximal-length sequence in both
+// cases. Only the published vectors tell the two apart, which is what
+// TestTMSequenceMatchesTheCCSDSVector and TestTCSequenceMatchesTheCCSDSVector
+// exist to check.
+const (
+	// tmTaps: bits 7, 4, 2, 0 give b(n+8) = b(n+7)+b(n+5)+b(n+3)+b(n),
+	// which is CCSDS 131.0-B-5 §10.4.2's h(x) = x^8 + x^7 + x^5 + x^3 + 1.
+	tmTaps = 0b10010101
+
+	// tcTaps: bits 7, 6, 5, 4, 3, 1 give
+	// b(n+8) = b(n+6)+b(n+4)+b(n+3)+b(n+2)+b(n+1)+b(n), which is
+	// CCSDS 231.0-B-4 §6.2's h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1.
+	tcTaps = 0b11111010
 )
 
-// buildPeriod runs the register once over a full period.
-func buildPeriod() {
+// generator holds one randomizer's tap set and its cached period.
+type generator struct {
+	taps   uint8
+	once   sync.Once
+	period [Period]byte
+}
+
+var (
+	tm = generator{taps: tmTaps}
+	tc = generator{taps: tcTaps}
+)
+
+// build runs the register once over a full period.
+func (g *generator) build() {
 	reg := uint8(0xFF)
-	for i := range period {
+	for i := range g.period {
 		var b uint8
 		for bit := 7; bit >= 0; bit-- {
 			b |= ((reg >> 7) & 1) << uint(bit)
 
-			// Feedback taps for h(x) = x^8 + x^7 + x^5 + x^3 + 1, at register
-			// bits 7, 4, 2 and 0.
-			//
-			// Reading the polynomial exponents straight off as bit indices
-			// gives 7, 6, 4, 2 — a different maximal-length sequence that no
-			// round-trip test can tell apart, because XOR is its own inverse.
-			// The only way to know it is right is the published sequence; see
-			// TestSequenceMatchesTheCCSDSVector.
-			feedback := ((reg >> 7) ^ (reg >> 4) ^ (reg >> 2) ^ reg) & 1
-			reg = ((reg << 1) | feedback) & 0xFF
+			feedback := uint8(bits.OnesCount8(reg&g.taps) & 1)
+			reg = (reg << 1) | feedback
 		}
-		period[i] = b
+		g.period[i] = b
 	}
 }
 
-// Sequence returns the first length octets of the sequence.
-//
-// The period is computed once and tiled, so a caller randomizing every frame
-// on a channel is not re-running the register each time.
-func Sequence(length int) []byte {
+// sequence returns the first length octets, tiled from the cached period.
+func (g *generator) sequence(length int) []byte {
 	if length <= 0 {
 		return nil
 	}
-	once.Do(buildPeriod)
+	g.once.Do(g.build)
 
 	out := make([]byte, length)
 	for i := 0; i < length; i += Period {
-		copy(out[i:], period[:])
+		copy(out[i:], g.period[:])
 	}
 	return out
 }
 
-// Apply XORs data with the sequence and returns a new slice, leaving the input
-// untouched. The operation is its own inverse, so it both randomizes and
-// derandomizes.
-func Apply(data []byte) []byte {
-	once.Do(buildPeriod)
+// apply XORs data with the sequence, returning a new slice.
+func (g *generator) apply(data []byte) []byte {
+	g.once.Do(g.build)
 
 	out := make([]byte, len(data))
 	for i, b := range data {
-		out[i] = b ^ period[i%Period]
+		out[i] = b ^ g.period[i%Period]
 	}
 	return out
 }
+
+// TMSequence returns the first length octets of the TM randomizer sequence of
+// CCSDS 131.0-B-5 §10.4.2. It opens FF 48 0E C0 9A.
+//
+// The period is computed once and tiled, so a caller randomizing every frame
+// on a channel is not re-running the register each time.
+func TMSequence(length int) []byte { return tm.sequence(length) }
+
+// TMApply XORs data with the TM sequence and returns a new slice, leaving the
+// input untouched. The operation is its own inverse, so it both randomizes and
+// derandomizes.
+func TMApply(data []byte) []byte { return tm.apply(data) }
+
+// TCSequence returns the first length octets of the TC randomizer sequence of
+// CCSDS 231.0-B-4 §6.2. It opens FF 39 9E 5A 68, which is a different sequence
+// from TMSequence — see the package comment.
+//
+// It is cached and tiled exactly like the TM sequence.
+func TCSequence(length int) []byte { return tc.sequence(length) }
+
+// TCApply XORs data with the TC sequence and returns a new slice, leaving the
+// input untouched. Like TMApply it is its own inverse, and like TMApply that
+// property proves nothing about the taps being right.
+func TCApply(data []byte) []byte { return tc.apply(data) }
 
 // OIDSequence generates the Pseudo Noise sequence that fills the data field of
 // Only Idle Data transfer frames. CCSDS 132.0-B-3 §4.1.4.6.2 (TM, annex D) and
@@ -95,9 +147,9 @@ func Apply(data []byte) []byte {
 // 1F, which is the only way to tell correct taps from a plausible-looking
 // permutation of them — the same trap the 8-bit randomizer above fell into.
 //
-// This is not the randomizer of Sequence and Apply: that one is an 8-bit
-// register applied by the channel coding layer to every frame, while this one
-// is a 32-bit register whose output *is* the payload of an idle frame.
+// This is neither of the randomizers above: those are 8-bit registers applied
+// by the channel coding layer to every frame, while this one is a 32-bit
+// register whose output *is* the payload of an idle frame.
 //
 // Unlike the randomizer this sequence is not tiled: its period is 2^32-1
 // octets, so it is generated as a stream. A value is safe for concurrent use.

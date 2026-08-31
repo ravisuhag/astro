@@ -1407,6 +1407,51 @@ func TestSecondaryHeaderSuppliedTwiceRejected(t *testing.T) {
 	}
 }
 
+// TestSecondaryHeaderAssignedOverIndicatorRejected checks the two ways of
+// supplying a secondary header are still refused when the parsed header is
+// assigned straight to the exported field instead of going through
+// WithSecondaryHeader. Encode would otherwise count the header once as a
+// parsed header and again as user data (4.1.3.5.3) and write it twice. The
+// result passes as a well-formed packet, since the length field matches the
+// octets sent, so the receiver hands its application duplicated header octets
+// as data.
+func TestSecondaryHeaderAssignedOverIndicatorRejected(t *testing.T) {
+	octets := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0x01}
+
+	pkt, err := spp2.NewTMPacket(100, octets, spp2.WithSecondaryHeaderIndicator(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Straight past both option guards.
+	pkt.SecondaryHeader = &testSecondaryHeader{Timestamp: 0x0102030405060708}
+
+	if _, err := pkt.Encode(); !errors.Is(err, spp2.ErrSecondaryHeaderTwice) {
+		t.Errorf("Encode = %v, want ErrSecondaryHeaderTwice", err)
+	}
+	if err := pkt.Validate(); !errors.Is(err, spp2.ErrSecondaryHeaderTwice) {
+		t.Errorf("Validate = %v, want ErrSecondaryHeaderTwice", err)
+	}
+
+	// Each way on its own is still fine.
+	parsed, err := spp2.NewTMPacket(100, octets,
+		spp2.WithSecondaryHeader(&testSecondaryHeader{Timestamp: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsed.Encode(); err != nil {
+		t.Errorf("parsed header alone: Encode = %v, want no error", err)
+	}
+
+	indicated, err := spp2.NewTMPacket(100, octets, spp2.WithSecondaryHeaderIndicator(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indicated.Encode(); err != nil {
+		t.Errorf("indicator alone: Encode = %v, want no error", err)
+	}
+}
+
 // TestIdleRejectsSecondaryHeaderIndicator checks 4.1.3.3.3.4 still holds for a
 // flag set through the indicator rather than through a parsed header.
 func TestIdleRejectsSecondaryHeaderIndicator(t *testing.T) {

@@ -154,7 +154,8 @@ type Header struct {
 	SCID uint16
 	// PCID selects one of two physical channels, 1 bit.
 	PCID uint8
-	// PortID identifies the port, 3 bits.
+	// PortID identifies the port, 3 bits. §3.2.2.8.2 requires zero on a
+	// P-frame.
 	PortID uint8
 	// SourceOrDest says whether SCID names the source or the destination.
 	SourceOrDest SourceOrDest
@@ -191,6 +192,23 @@ func (h *Header) Validate() error {
 	// §3.2.4.1: SPDUs travel only on the Expedited service.
 	if h.PDUType == SupervisoryData && h.QoS != Expedited {
 		return ErrInvalidQoS
+	}
+	if err := h.checkPortIDAllowed(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkPortIDAllowed verifies that a P-frame carries no Port ID (§3.2.2.8.2).
+func (h *Header) checkPortIDAllowed() error {
+	// A Port ID names the output port the I/O Sublayer delivers a U-frame's
+	// SDUs to (§3.2.2.8.3). A P-frame's data field is the protocol talking to
+	// itself and reaches no port at all, so a port on one is a caller who
+	// meant to send user data. Zeroing it quietly would carry that mistake
+	// onto the link, and PortID is exported and assignable past the
+	// constructor, so the check belongs on the header.
+	if h.PDUType == SupervisoryData && h.PortID != 0 {
+		return ErrPortIDOnSupervisoryFrame
 	}
 	return nil
 }
@@ -345,6 +363,10 @@ func NewTransferFrame(scid uint16, portID uint8, data []byte, opts ...FrameOptio
 //
 // §3.2.4.1 restricts SPDUs to the Expedited service and §3.2.2.5.2 requires a
 // zero DFC ID, so both are set here rather than left to the caller.
+//
+// portID must be zero: §3.2.2.8.2 leaves the Port ID unused in a P-frame. It
+// is refused rather than forced, because a caller with a port in hand wanted
+// NewTransferFrame.
 func NewSupervisoryFrame(scid uint16, portID uint8, spdus []byte, opts ...FrameOption) (*TransferFrame, error) {
 	if len(spdus) > MaxDataFieldSize {
 		return nil, ErrDataTooLarge

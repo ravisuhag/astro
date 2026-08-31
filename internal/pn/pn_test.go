@@ -7,10 +7,10 @@ import (
 	"github.com/ravisuhag/astro/internal/pn"
 )
 
-// TestSequenceMatchesTheCCSDSVector is the only test here that can catch wrong
-// taps. CCSDS 131.0-B specifies h(x) = x^8 + x^7 + x^5 + x^3 + 1 preset to all
-// ones, and CCSDS 142.0-B-1 §3.5.2.1, which adopts the same sequence,
-// publishes the first 40 digits:
+// TestTMSequenceMatchesTheCCSDSVector is one of the two tests here that can
+// catch wrong taps. CCSDS 131.0-B-5 §10.4.2 specifies
+// h(x) = x^8 + x^7 + x^5 + x^3 + 1 preset to all ones, and CCSDS 142.0-B-1
+// §3.5.2.1, which adopts the same sequence, publishes the first 40 digits:
 //
 //	1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
 //
@@ -18,109 +18,245 @@ import (
 //
 // A round trip cannot substitute for this. The randomizer is XOR, so it is its
 // own inverse and any sequence at all round-trips perfectly.
-func TestSequenceMatchesTheCCSDSVector(t *testing.T) {
+func TestTMSequenceMatchesTheCCSDSVector(t *testing.T) {
 	want := []byte{0xFF, 0x48, 0x0E, 0xC0, 0x9A}
-	if got := pn.Sequence(len(want)); !bytes.Equal(got, want) {
-		t.Errorf("sequence = % X, want % X", got, want)
+	if got := pn.TMSequence(len(want)); !bytes.Equal(got, want) {
+		t.Errorf("TM sequence = % X, want % X", got, want)
 	}
 }
 
-// TestPeriodIs255Octets checks the constant the tiling relies on. The register
-// is 8 bits with a maximal-length polynomial, so the bit sequence repeats after
-// 255 bits; 255 and 8 are coprime, so the octet sequence realigns only after
-// 255 octets.
+// TestTCSequenceMatchesTheCCSDSVector is the other. TC does not reuse the TM
+// randomizer: CCSDS 231.0-B-4 §6.2 specifies
+// h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, also preset to all ones, and
+// prints the first 40 digits of its sequence:
+//
+//	1111 1111 0011 1001 1001 1110 0101 1010 0110 1000
+//
+// as octets: FF 39 9E 5A 68.
+//
+// This vector is the whole defence. Feeding TC the TM sequence produced a
+// perfectly self-consistent implementation that no conformant receiver could
+// read, and every round-trip test passed throughout.
+func TestTCSequenceMatchesTheCCSDSVector(t *testing.T) {
+	want := []byte{0xFF, 0x39, 0x9E, 0x5A, 0x68}
+	if got := pn.TCSequence(len(want)); !bytes.Equal(got, want) {
+		t.Errorf("TC sequence = % X, want % X", got, want)
+	}
+}
+
+// TestTMAndTCSequencesDiffer states the fact the package exists to keep
+// straight. Both sequences start FF, because both registers are preset to all
+// ones; they part company at the second octet and never realign within a
+// period. If this ever passes trivially, the two generators have been wired to
+// the same taps again.
+func TestTMAndTCSequencesDiffer(t *testing.T) {
+	tm := pn.TMSequence(pn.Period)
+	tc := pn.TCSequence(pn.Period)
+
+	if bytes.Equal(tm, tc) {
+		t.Fatal("the TM and TC sequences are identical; one generator has the other's taps")
+	}
+	if tm[1] == tc[1] {
+		t.Errorf("the sequences agree at octet 1: TM %02X, TC %02X", tm[1], tc[1])
+	}
+
+	// Neither may be a rotation of the other either, which is what a
+	// misapplied preset would look like.
+	for shift := 1; shift < pn.Period; shift++ {
+		rotated := append(append([]byte{}, tm[shift:]...), tm[:shift]...)
+		if bytes.Equal(rotated, tc) {
+			t.Fatalf("the TC sequence is the TM sequence rotated by %d octets", shift)
+		}
+	}
+}
+
+// TestPeriodIs255Octets checks the constant the tiling relies on, for both
+// generators. Each register is 8 bits with a maximal-length polynomial, so the
+// bit sequence repeats after 255 bits; 255 and 8 are coprime, so the octet
+// sequence realigns only after 255 octets.
 func TestPeriodIs255Octets(t *testing.T) {
-	seq := pn.Sequence(pn.Period * 3)
+	for _, tc := range []struct {
+		name string
+		seq  func(int) []byte
+	}{
+		{"TM", pn.TMSequence},
+		{"TC", pn.TCSequence},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seq := tc.seq(pn.Period * 3)
 
-	for i := range pn.Period * 2 {
-		if seq[i] != seq[i+pn.Period] {
-			t.Fatalf("octet %d differs from octet %d: %02X vs %02X",
-				i, i+pn.Period, seq[i], seq[i+pn.Period])
-		}
-	}
-	// And it must not repeat sooner, or the period constant is wrong.
-	for shorter := 1; shorter < pn.Period; shorter++ {
-		same := true
-		for i := range pn.Period {
-			if seq[i] != seq[i+shorter] {
-				same = false
-				break
+			for i := range pn.Period * 2 {
+				if seq[i] != seq[i+pn.Period] {
+					t.Fatalf("octet %d differs from octet %d: %02X vs %02X",
+						i, i+pn.Period, seq[i], seq[i+pn.Period])
+				}
 			}
-		}
-		if same {
-			t.Fatalf("the sequence repeats every %d octets, not %d", shorter, pn.Period)
-		}
+			// And it must not repeat sooner, or the period constant is wrong.
+			for shorter := 1; shorter < pn.Period; shorter++ {
+				same := true
+				for i := range pn.Period {
+					if seq[i] != seq[i+shorter] {
+						same = false
+						break
+					}
+				}
+				if same {
+					t.Fatalf("the sequence repeats every %d octets, not %d", shorter, pn.Period)
+				}
+			}
+		})
 	}
 }
 
-// TestTilingMatchesDirectGeneration guards the optimisation: a long sequence
-// built by tiling the period must equal one generated straight through.
-func TestTilingMatchesDirectGeneration(t *testing.T) {
-	const length = pn.Period*4 + 37
-	tiled := pn.Sequence(length)
-
-	// Regenerate the long way, without the cache.
-	direct := make([]byte, length)
+// lfsr regenerates a sequence the long way, straight from the polynomial
+// recurrence b(n+8) = sum of the tapped earlier bits, with no cache and no
+// tiling. taps names the register bit positions of a Fibonacci-form register
+// whose output is the top bit.
+func lfsr(taps []uint, length int) []byte {
 	reg := uint8(0xFF)
-	for i := range direct {
+	out := make([]byte, length)
+	for i := range out {
 		var b uint8
 		for bit := 7; bit >= 0; bit-- {
 			b |= ((reg >> 7) & 1) << uint(bit)
-			feedback := ((reg >> 7) ^ (reg >> 4) ^ (reg >> 2) ^ reg) & 1
-			reg = ((reg << 1) | feedback) & 0xFF
-		}
-		direct[i] = b
-	}
 
-	if !bytes.Equal(tiled, direct) {
-		for i := range direct {
-			if tiled[i] != direct[i] {
-				t.Fatalf("first difference at octet %d: tiled %02X, direct %02X", i, tiled[i], direct[i])
+			var feedback uint8
+			for _, tap := range taps {
+				feedback ^= (reg >> tap) & 1
 			}
+			reg = (reg << 1) | (feedback & 1)
 		}
+		out[i] = b
+	}
+	return out
+}
+
+// TestTilingMatchesDirectGeneration guards the optimisation for both
+// generators: a long sequence built by tiling the cached period must equal one
+// generated straight through.
+func TestTilingMatchesDirectGeneration(t *testing.T) {
+	const length = pn.Period*4 + 37
+
+	for _, tc := range []struct {
+		name string
+		seq  func(int) []byte
+		taps []uint // h(x) = x^8 + x^7 + x^5 + x^3 + 1 / + x^6 + x^4 + x^3 + x^2 + x + 1
+	}{
+		{"TM", pn.TMSequence, []uint{7, 4, 2, 0}},
+		{"TC", pn.TCSequence, []uint{7, 6, 5, 4, 3, 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tiled := tc.seq(length)
+			direct := lfsr(tc.taps, length)
+
+			for i := range direct {
+				if tiled[i] != direct[i] {
+					t.Fatalf("first difference at octet %d: tiled %02X, direct %02X",
+						i, tiled[i], direct[i])
+				}
+			}
+		})
 	}
 }
 
 func TestApplyIsItsOwnInverse(t *testing.T) {
-	data := []byte("housekeeping telemetry, mostly unchanging")
-	once := pn.Apply(data)
-	twice := pn.Apply(once)
+	for _, tc := range []struct {
+		name  string
+		apply func([]byte) []byte
+	}{
+		{"TMApply", pn.TMApply},
+		{"TCApply", pn.TCApply},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := []byte("housekeeping telemetry, mostly unchanging")
+			once := tc.apply(data)
+			twice := tc.apply(once)
 
-	if !bytes.Equal(twice, data) {
-		t.Errorf("Apply twice gave %q, want %q", twice, data)
-	}
-	if bytes.Equal(once, data) {
-		t.Error("Apply left the data unchanged")
+			if !bytes.Equal(twice, data) {
+				t.Errorf("applied twice gave %q, want %q", twice, data)
+			}
+			if bytes.Equal(once, data) {
+				t.Error("apply left the data unchanged")
+			}
+		})
 	}
 }
 
+// TestApplyUsesItsOwnSequence checks that the two Apply functions are wired to
+// the generators their names promise. Randomizing with one and derandomizing
+// with the other must not recover the input — which is exactly the failure a
+// conformant peer sees when the wrong randomizer ships.
+func TestApplyUsesItsOwnSequence(t *testing.T) {
+	data := []byte("telecommand, uplinked once")
+
+	if got := pn.TMApply(pn.TCApply(data)); bytes.Equal(got, data) {
+		t.Error("TMApply and TCApply cancel each other; they share a sequence")
+	}
+
+	if got := pn.TMApply(data); !bytes.Equal(got, xor(data, pn.TMSequence(len(data)))) {
+		t.Error("TMApply does not apply TMSequence")
+	}
+	if got := pn.TCApply(data); !bytes.Equal(got, xor(data, pn.TCSequence(len(data)))) {
+		t.Error("TCApply does not apply TCSequence")
+	}
+}
+
+func xor(a, b []byte) []byte {
+	out := make([]byte, len(a))
+	for i := range a {
+		out[i] = a[i] ^ b[i]
+	}
+	return out
+}
+
 func TestApplyDoesNotAliasInput(t *testing.T) {
-	data := []byte{1, 2, 3, 4}
-	original := append([]byte(nil), data...)
+	for _, tc := range []struct {
+		name  string
+		apply func([]byte) []byte
+	}{
+		{"TMApply", pn.TMApply},
+		{"TCApply", pn.TCApply},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := []byte{1, 2, 3, 4}
+			original := append([]byte(nil), data...)
 
-	out := pn.Apply(data)
-	out[0] ^= 0xFF
+			out := tc.apply(data)
+			out[0] ^= 0xFF
 
-	if !bytes.Equal(data, original) {
-		t.Error("Apply wrote through to its input")
+			if !bytes.Equal(data, original) {
+				t.Error("apply wrote through to its input")
+			}
+		})
 	}
 }
 
 func TestSequenceEdgeCases(t *testing.T) {
-	if got := pn.Sequence(0); got != nil {
-		t.Errorf("Sequence(0) = %v, want nil", got)
-	}
-	if got := pn.Sequence(-1); got != nil {
-		t.Errorf("Sequence(-1) = %v, want nil", got)
-	}
-	if got := pn.Sequence(1); len(got) != 1 || got[0] != 0xFF {
-		t.Errorf("Sequence(1) = % X, want FF", got)
+	for _, tc := range []struct {
+		name string
+		seq  func(int) []byte
+	}{
+		{"TMSequence", pn.TMSequence},
+		{"TCSequence", pn.TCSequence},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.seq(0); got != nil {
+				t.Errorf("%s(0) = %v, want nil", tc.name, got)
+			}
+			if got := tc.seq(-1); got != nil {
+				t.Errorf("%s(-1) = %v, want nil", tc.name, got)
+			}
+			// Both registers are preset to all ones, so both open FF.
+			if got := tc.seq(1); len(got) != 1 || got[0] != 0xFF {
+				t.Errorf("%s(1) = % X, want FF", tc.name, got)
+			}
+		})
 	}
 }
 
 // TestOIDSequenceMatchesTheCCSDSVector pins the 32-cell OID generator to the
 // octets CCSDS publishes for it (132.0-B-3 §4.1.4.6.2.2 note, 732.1-B-3 annex
-// H). As with the 8-bit randomizer above, a permuted set of taps still yields
+// H). As with the 8-bit randomizers above, a permuted set of taps still yields
 // a plausible maximal-length sequence that no round-trip test can catch; only
 // the published digits distinguish right from wrong.
 func TestOIDSequenceMatchesTheCCSDSVector(t *testing.T) {

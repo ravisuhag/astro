@@ -81,16 +81,30 @@ func (s *Service) ReceivePacket() (*EncapsulationPacket, error) {
 	}
 
 	totalSize := int64(header.PacketLength)
-	if totalSize > s.maxPacketLen {
-		return nil, ErrPacketTooLarge
-	}
 
-	// Read the data zone
+	// The header is already consumed, so the data zone is what is left of the
+	// declared total. A packet that declares a length shorter than its own
+	// header is malformed; rejecting it here, before the size limit, also keeps
+	// a negative count away from the skip below.
 	dataSize := totalSize - int64(hdrSize)
 	if dataSize < 0 {
 		return nil, ErrPacketLengthMismatch
 	}
 
+	if totalSize > s.maxPacketLen {
+		// The header is already off the transport. Leaving its data zone behind
+		// would resynchronize the reader onto the middle of this packet, where
+		// it would read payload as a packet header and deliver packets that were
+		// never sent. Skip the data zone so the next read starts on a real
+		// packet boundary. The length is bounded by the 32-bit Packet Length
+		// field, so this cannot be made to skip more than 4294967295 octets.
+		if _, derr := io.CopyN(io.Discard, s.rw, dataSize); derr != nil {
+			return nil, derr
+		}
+		return nil, ErrPacketTooLarge
+	}
+
+	// Read the data zone
 	dataBuf := make([]byte, dataSize)
 	if dataSize > 0 {
 		if _, err := io.ReadFull(s.rw, dataBuf); err != nil {

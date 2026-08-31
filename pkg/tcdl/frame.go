@@ -198,6 +198,21 @@ type TCTransferFrame struct {
 	FrameErrorControl uint16         // 16-bit CRC-16-CCITT
 }
 
+// checkSegmentHeaderAllowed verifies that a control command frame carries no
+// Segment Header (4.1.3.2.2.1.3).
+func (tf *TCTransferFrame) checkSegmentHeaderAllowed() error {
+	// The data field of a Type-BC frame is the whole COP-1 control command,
+	// and a FARM reads it as such. A segment header octet in front of it
+	// shifts the command, so Unlock and Set V(R) are no longer recognised
+	// and the directive is dropped without an error at either end. The
+	// options refuse this combination, but SegmentHeader is exported and can
+	// be assigned past them, so the check belongs here too.
+	if tf.Header.ControlCommandFlag == 1 && tf.SegmentHeader != nil {
+		return ErrSegmentHeaderOnControlCommand
+	}
+	return nil
+}
+
 // FrameOption configures optional fields on a TCTransferFrame.
 type FrameOption func(*TCTransferFrame)
 
@@ -219,7 +234,9 @@ func WithControlCommand() FrameOption {
 	}
 }
 
-// WithSegmentHeader attaches a segment header to the frame.
+// WithSegmentHeader attaches a segment header to the frame. Combining it
+// with WithControlCommand is refused: CCSDS 232.0-B-4 4.1.3.2.2.1.3 bars a
+// segment header from a frame carrying a control command.
 func WithSegmentHeader(sh SegmentHeader) FrameOption {
 	return func(f *TCTransferFrame) {
 		f.SegmentHeader = &sh
@@ -247,6 +264,10 @@ func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOptio
 
 	for _, opt := range opts {
 		opt(frame)
+	}
+
+	if err := frame.checkSegmentHeaderAllowed(); err != nil {
+		return nil, err
 	}
 
 	// Per CCSDS 232.0-B-4 4.1.2.7, the Frame Sequence Number is all zeros
@@ -298,6 +319,10 @@ func (tf *TCTransferFrame) Encode() ([]byte, error) {
 
 // EncodeWithoutFEC converts the frame to bytes excluding the CRC field.
 func (tf *TCTransferFrame) EncodeWithoutFEC() ([]byte, error) {
+	if err := tf.checkSegmentHeaderAllowed(); err != nil {
+		return nil, err
+	}
+
 	header, err := tf.Header.Encode()
 	if err != nil {
 		return nil, err
@@ -330,6 +355,8 @@ func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
 // DecodeTCTransferFrameWithSegmentHeader parses a byte slice into a TC
 // Transfer Frame, treating the first byte of the data field as a MAP
 // Segment Header. Use this when the MAP sublayer is known to be in use.
+// Type-BC frames are excepted: they carry no segment header
+// (CCSDS 232.0-B-4 4.1.3.2.2.1.3) and their data field is returned whole.
 func DecodeTCTransferFrameWithSegmentHeader(data []byte) (*TCTransferFrame, error) {
 	return decodeTCFrame(data, true)
 }
@@ -373,8 +400,12 @@ func decodeTCFrame(data []byte, hasSegmentHeader bool) (*TCTransferFrame, error)
 		FrameErrorControl: receivedCRC,
 	}
 
-	// Parse segment header if expected
-	if hasSegmentHeader {
+	// Parse segment header if expected. A Type-BC frame never carries one
+	// (4.1.3.2.2.1.3), even on a virtual channel that otherwise uses the MAP
+	// sublayer, so its data field is handed back whole. Taking a segment
+	// header off it would shift the COP-1 control command and leave the
+	// caller with an Unlock or Set V(R) that no longer parses.
+	if hasSegmentHeader && header.ControlCommandFlag == 0 {
 		if dataStart >= dataEnd {
 			return nil, ErrDataTooShort
 		}

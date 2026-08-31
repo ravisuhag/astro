@@ -108,6 +108,108 @@ func TestNewSetVRFrame(t *testing.T) {
 	}
 }
 
+func TestBCFrame_RejectsSegmentHeaderAtConstruction(t *testing.T) {
+	// CCSDS 232.0-B-4 4.1.3.2.2.1.3: no segment header on a control command.
+	_, err := tcdl.NewTCTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
+		tcdl.WithControlCommand(),
+		tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}),
+	)
+	if !errors.Is(err, tcdl.ErrSegmentHeaderOnControlCommand) {
+		t.Errorf("expected ErrSegmentHeaderOnControlCommand, got %v", err)
+	}
+}
+
+func TestBCFrame_RejectsSegmentHeaderSetAfterConstruction(t *testing.T) {
+	// SegmentHeader is exported, so the options are not the only way in.
+	frame, err := tcdl.NewUnlockFrame(0x0AB, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame.SegmentHeader = &tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}
+
+	if _, err := frame.Encode(); !errors.Is(err, tcdl.ErrSegmentHeaderOnControlCommand) {
+		t.Errorf("Encode: expected ErrSegmentHeaderOnControlCommand, got %v", err)
+	}
+	if _, err := frame.EncodeWithoutFEC(); !errors.Is(err, tcdl.ErrSegmentHeaderOnControlCommand) {
+		t.Errorf("EncodeWithoutFEC: expected ErrSegmentHeaderOnControlCommand, got %v", err)
+	}
+}
+
+func TestBCFrame_UnlockWithoutSegmentHeaderStillEncodes(t *testing.T) {
+	frame, err := tcdl.NewTCTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
+		tcdl.WithControlCommand())
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ, _, err := tcdl.ParseControlCommand(decoded.DataField)
+	if err != nil {
+		t.Fatalf("ParseControlCommand: %v", err)
+	}
+	if typ != tcdl.ControlUnlock {
+		t.Errorf("parsed %v, want ControlUnlock", typ)
+	}
+}
+
+func TestFrame_SegmentHeaderStillAllowedOnDataFrames(t *testing.T) {
+	sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}
+
+	// Type-AD: sequence-controlled data.
+	adFrame, err := tcdl.NewTCTransferFrame(0x0AB, 1, []byte("data"),
+		tcdl.WithSegmentHeader(sh), tcdl.WithSequenceNumber(7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adFrame.Encode(); err != nil {
+		t.Errorf("Type-AD encode failed: %v", err)
+	}
+
+	// Type-BD: expedited data.
+	bdFrame, err := tcdl.NewTCTransferFrame(0x0AB, 1, []byte("data"),
+		tcdl.WithSegmentHeader(sh), tcdl.WithBypass())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bdFrame.Encode(); err != nil {
+		t.Errorf("Type-BD encode failed: %v", err)
+	}
+}
+
+func TestDecodeWithSegmentHeader_LeavesBCDataFieldWhole(t *testing.T) {
+	// A control command reaching a MAP virtual channel must survive decoding:
+	// no segment header is taken off it (4.1.3.2.2.1.3).
+	frame, err := tcdl.NewSetVRFrame(0x0AB, 1, 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := tcdl.DecodeTCTransferFrameWithSegmentHeader(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.SegmentHeader != nil {
+		t.Error("BC frame decoded with a segment header")
+	}
+	typ, vr, err := tcdl.ParseControlCommand(decoded.DataField)
+	if err != nil {
+		t.Fatalf("ParseControlCommand: %v", err)
+	}
+	if typ != tcdl.ControlSetVR || vr != 99 {
+		t.Errorf("parsed (%v, %d), want (ControlSetVR, 99)", typ, vr)
+	}
+}
+
 func TestDecode_RejectsInvalidFrameType(t *testing.T) {
 	// Hand-build a frame with Bypass=0, Control Command=1: byte 0 has the
 	// control command bit (bit 4) set and the bypass bit (bit 5) clear.

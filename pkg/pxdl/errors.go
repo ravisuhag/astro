@@ -24,6 +24,10 @@ var (
 	// ErrInvalidPortID indicates a port identifier beyond the 3-bit field.
 	ErrInvalidPortID = errors.New("invalid port ID: must fit 3 bits")
 
+	// ErrPortIDOnSupervisoryFrame indicates a P-frame carrying a non-zero
+	// Port ID, which CCSDS 211.0-B-6 §3.2.2.8.2 forbids.
+	ErrPortIDOnSupervisoryFrame = errors.New("port ID must be zero on a supervisory frame")
+
 	// ErrInvalidPCID indicates a physical channel identifier beyond one bit.
 	ErrInvalidPCID = errors.New("invalid physical channel ID: must be 0 or 1")
 

@@ -337,7 +337,7 @@ func TestUplinkSequence_PLOP1AndPLOP2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want1 := 2*(len(acq)+len(cltu))
+	want1 := 2 * (len(acq) + len(cltu))
 	if len(stream1) != want1 {
 		t.Errorf("PLOP-1 stream length = %d, want %d", len(stream1), want1)
 	}
@@ -414,20 +414,44 @@ func TestWrapCLTU_StartSequencePresent(t *testing.T) {
 }
 
 func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
-	// The same sequence and the same check as pkg/tmsc: CCSDS 231.0-B and
-	// CCSDS 131.0-B share the randomizer h(x) = x^8 + x^7 + x^5 + x^3 + 1
-	// with the register preset to all ones. CCSDS 142.0-B-1 §3.5.2.1
-	// publishes its first 40 digits:
+	// TC does not share the TM randomizer. CCSDS 231.0-B-4 §6.2 specifies
+	// h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1 with the register preset to
+	// all ones, and prints the first 40 digits of the sequence:
 	//
-	//   1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
+	//   1111 1111 0011 1001 1001 1110 0101 1010 0110 1000
 	//
-	// Testing against the published digits is what catches a wrong tap
-	// position. A randomize-then-derandomize round trip cannot, because XOR
-	// is self-inverse whatever the sequence.
-	want := []byte{0xFF, 0x48, 0x0E, 0xC0, 0x9A}
+	// The TM sequence of CCSDS 131.0-B-5 §10.4.2 opens FF 48 0E C0 9A
+	// instead. This package shipped that one for a while, and nothing caught
+	// it: a randomize-then-derandomize round trip cannot, because XOR is
+	// self-inverse whatever the sequence. Only the published digits can.
+	want := []byte{0xFF, 0x39, 0x9E, 0x5A, 0x68}
 
 	got := tcsc.GeneratePNSequence(len(want))
 	if !bytes.Equal(got, want) {
 		t.Errorf("PN sequence = % X, want % X", got, want)
+	}
+}
+
+// TestWrapCLTU_RandomizedOctetsOnTheWire pins what a conformant receiver
+// actually sees, end to end. The frame is exactly one codeblock's worth of
+// information octets, so nothing is padded and the randomized frame lands
+// whole in the codeblock, right after the 2-octet start sequence EB 90.
+//
+// The expected octets are 01..07 XOR the first seven octets of the
+// CCSDS 231.0-B-4 §6.2 sequence, FF 39 9E 5A 68 E9 06. Under the TM
+// randomizer this test would read FE 4A 0D C4 9F 0B 77 — self-consistent,
+// round-trippable, and unreadable on the far end.
+func TestWrapCLTU_RandomizedOctetsOnTheWire(t *testing.T) {
+	frameData := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
+
+	cltu, err := tcsc.WrapCLTU(frameData, nil, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []byte{0xFE, 0x3B, 0x9D, 0x5E, 0x6D, 0xEF, 0x01}
+	got := cltu[2 : 2+tcsc.InfoBytes]
+	if !bytes.Equal(got, want) {
+		t.Errorf("information octets on the wire = % X, want % X", got, want)
 	}
 }

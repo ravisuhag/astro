@@ -103,7 +103,15 @@ func (f *FARM) ReleaseBuffer() {
 	f.updateWait()
 }
 
-// updateWait recomputes the Wait flag from buffer availability.
+// updateWait recomputes the Wait flag from buffer availability. It models
+// the buffer signals only — E10 ("buffer release") and the buffer bookkeeping
+// behind E1/E2. The Type-BC directives E7 (Unlock) and E8 (Set V(R)) must NOT
+// use it: table 6-1 sends both to (S1) with Wait_Flag := 0 whatever the buffer
+// count says.
+//
+// Note that in Lockout the state is left alone: E10 in S3 clears the Wait
+// flag but keeps the machine in (S3).
+//
 // Caller must hold f.mu.
 func (f *FARM) updateWait() {
 	if f.unlimited || f.buffers > 0 {
@@ -212,24 +220,28 @@ func (f *FARM) processControlCommand(dataField []byte) (bool, error) {
 	switch {
 	case len(dataField) == 1 && dataField[0] == 0x00:
 		// Unlock (E7): clear Lockout, Wait, and Retransmit. V(R) is NOT
-		// touched — only Set V(R) changes it.
+		// touched — only Set V(R) changes it. Per table 6-1 the next state
+		// is (S1) unconditionally, so the Wait flag is cleared outright
+		// rather than re-derived from the buffer count: a directive must
+		// never leave the machine in S2.
 		f.lockout = false
 		f.retransmit = false
+		f.wait = false
 		f.farmBCounter = (f.farmBCounter + 1) & 0x03
 		f.state = FARMOpen
-		f.updateWait()
 		return true, nil
 
 	case len(dataField) == 3 && dataField[0] == 0x82 && dataField[1] == 0x00:
 		// Set V(R) (E8): in Lockout the directive is accepted (FARM-B
 		// still counts it) but has no other effect; otherwise V(R) is
-		// set from the directive payload and Retransmit cleared.
+		// set from the directive payload and Wait and Retransmit cleared,
+		// with (S1) as the next state — again unconditionally.
 		f.farmBCounter = (f.farmBCounter + 1) & 0x03
 		if !f.lockout {
 			f.vr = dataField[2]
 			f.retransmit = false
+			f.wait = false
 			f.state = FARMOpen
-			f.updateWait()
 		}
 		return true, nil
 

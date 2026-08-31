@@ -201,12 +201,21 @@ plcw := &pxdl.PLCW{
 }
 
 body, _ := pxdl.EncodeSPDUs([]pxdl.SPDU{{PLCW: plcw}})
-frame, _ := pxdl.NewSupervisoryFrame(scid, portID, body)
+frame, _ := pxdl.NewSupervisoryFrame(scid, 0, body)
 ```
 
-`NewSupervisoryFrame` applies two rules the protocol fixes, so you cannot build
-an invalid frame by accident: SPDUs travel only on the Expedited service
-(§3.2.4.1), and a P-frame's DFC ID is zero (§3.2.2.5.2).
+`NewSupervisoryFrame` applies three rules the protocol fixes, so you cannot
+build an invalid frame by accident: SPDUs travel only on the Expedited service
+(§3.2.4.1), a P-frame's DFC ID is zero (§3.2.2.5.2), and a P-frame's Port ID is
+zero (§3.2.2.8.2).
+
+The first two are set for you whatever you pass. The port is different: it is
+an argument, so a non-zero value is refused with `ErrPortIDOnSupervisoryFrame`
+rather than quietly zeroed. A port names the output the I/O Sublayer delivers a
+U-frame's data to (§3.2.2.8.3), and a P-frame reaches no port at all, so a port
+here means you wanted `NewTransferFrame`. The same check runs on `Encode`,
+because `PDUType` and `PortID` are exported and can be set past the
+constructor.
 
 ## What is not here yet
 

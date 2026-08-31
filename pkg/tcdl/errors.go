@@ -79,4 +79,8 @@ var (
 	// ErrInvalidControlCommand indicates a Type-BC frame data field that is
 	// neither Unlock (0x00) nor Set V(R) (0x82 0x00 <V(R)>).
 	ErrInvalidControlCommand = errors.New("invalid control command: expected Unlock (0x00) or Set V(R) (0x82 0x00 vr)")
+
+	// ErrSegmentHeaderOnControlCommand indicates a Type-BC frame carrying a
+	// Segment Header, which CCSDS 232.0-B-4 4.1.3.2.2.1.3 forbids.
+	ErrSegmentHeaderOnControlCommand = errors.New("segment header must not be present on a control command frame")
 )

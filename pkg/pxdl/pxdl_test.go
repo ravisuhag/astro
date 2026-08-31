@@ -156,6 +156,16 @@ func TestHeaderValidation(t *testing.T) {
 		{"U-frame with the reserved DFC ID", func(h *pxdl.Header) {
 			h.DFCID = pxdl.DFCReserved
 		}, pxdl.ErrInvalidDFCID},
+		// §3.2.2.8.2: a P-frame's Port ID is '0'.
+		{"P-frame with a port ID", func(h *pxdl.Header) {
+			h.PDUType = pxdl.SupervisoryData
+			h.QoS = pxdl.Expedited
+			h.PortID = 5
+		}, pxdl.ErrPortIDOnSupervisoryFrame},
+		// §3.2.2.8.3: a U-frame's Port ID is the routing target, untouched.
+		{"U-frame with a port ID", func(h *pxdl.Header) {
+			h.PortID = 5
+		}, nil},
 	}
 
 	for _, tt := range tests {
@@ -266,6 +276,84 @@ func TestSupervisoryFrameRejectsEmptySPDURun(t *testing.T) {
 	}
 	if _, err := pxdl.NewSupervisoryFrame(42, 0, []byte{}); !errors.Is(err, pxdl.ErrInvalidSPDU) {
 		t.Errorf("error = %v, want ErrInvalidSPDU", err)
+	}
+}
+
+func TestSupervisoryFrameRejectsPortID(t *testing.T) {
+	// §3.2.2.8.2: in a P-frame the Port ID is not used and is set to '0'.
+	// A port belongs to a U-frame, so the constructor refuses it instead of
+	// zeroing it and sending a frame the caller did not ask for.
+	for _, portID := range []uint8{1, 5, 7} {
+		_, err := pxdl.NewSupervisoryFrame(42, portID, []byte{0x80, 0x00})
+		if !errors.Is(err, pxdl.ErrPortIDOnSupervisoryFrame) {
+			t.Errorf("port ID %d: error = %v, want ErrPortIDOnSupervisoryFrame", portID, err)
+		}
+	}
+}
+
+func TestEncodeRejectsPortIDSetOnAPFrameAfterConstruction(t *testing.T) {
+	// PDUType and PortID are exported, so the illegal pair can be assembled
+	// past the constructor. Encode is the last place to stop it reaching the
+	// link (§3.2.2.8.2).
+	f, err := pxdl.NewSupervisoryFrame(42, 0, []byte{0x80, 0x00})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Header.PortID = 5
+	if _, err := f.Encode(); !errors.Is(err, pxdl.ErrPortIDOnSupervisoryFrame) {
+		t.Errorf("error = %v, want ErrPortIDOnSupervisoryFrame", err)
+	}
+
+	// The same pair reached from the other side: a U-frame with a port, then
+	// switched to supervisory.
+	u, err := pxdl.NewTransferFrame(42, 5, []byte("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Header.PDUType = pxdl.SupervisoryData
+	u.Header.QoS = pxdl.Expedited
+	u.Header.DFCID = 0
+	if _, err := u.Encode(); !errors.Is(err, pxdl.ErrPortIDOnSupervisoryFrame) {
+		t.Errorf("error = %v, want ErrPortIDOnSupervisoryFrame", err)
+	}
+}
+
+func TestPortIDBitsOnTheWire(t *testing.T) {
+	// §3.2.2.8.1 puts the Port ID in bits 17–19, which are bits 4–6 of octet
+	// 2. A P-frame must show '000' there; a U-frame must show what it was
+	// given, so the zeroing rule cannot quietly spread to user data.
+	p, err := pxdl.NewSupervisoryFrame(1, 0, []byte{0x80, 0x00})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := p.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encoded[0]>>4&1 != 1 {
+		t.Fatalf("octet 0 = %#02x, expected the PDU type bit set for a P-frame", encoded[0])
+	}
+	if got := encoded[2] >> 4 & 0x07; got != 0 {
+		t.Errorf("P-frame port ID bits = %03b, want 000", got)
+	}
+
+	u, err := pxdl.NewTransferFrame(1, 5, []byte("payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = u.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := encoded[2] >> 4 & 0x07; got != 5 {
+		t.Errorf("U-frame port ID bits = %03b, want 101", got)
+	}
+	got, err := pxdl.DecodeTransferFrame(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Header.PortID != 5 {
+		t.Errorf("decoded U-frame port ID = %d, want 5", got.Header.PortID)
 	}
 }
 

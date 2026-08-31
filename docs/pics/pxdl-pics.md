@@ -54,6 +54,7 @@
 | Spacecraft Identifier, 10 bits | §3.2.2.6 | M | Y |
 | Physical Channel Identifier | §3.2.2.7 | M | Y |
 | Port Identifier, 3 bits | §3.2.2.8 | M | Y |
+| Port ID zero in a P-frame | §3.2.2.8.2 | M | Y — enforced |
 | Source-or-Destination Identifier | §3.2.2.9 | M | Y — '0' = source, '1' = destination, per table 3-2 |
 | Frame Length as a count less one | §3.2.2.10.2 | M | Y — 5 to 2048 octets enforced |
 | Frame Sequence Number | §3.2.2.11 | M | Y — carried; COP-P is out of scope |
