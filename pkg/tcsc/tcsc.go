@@ -28,23 +28,33 @@ func DefaultTailSequence() []byte {
 	return []byte{0xC5, 0xC5, 0xC5, 0xC5, 0xC5, 0xC5, 0xC5, 0x79}
 }
 
-// Randomize applies CCSDS pseudo-randomization by XOR-ing data with
-// the standard PN (pseudo-noise) sequence. The same operation is used
-// for both randomization and de-randomization since XOR is self-inverse.
+// Randomize applies CCSDS pseudo-randomization by XOR-ing data with the TC
+// PN (pseudo-noise) sequence. The same operation is used for both
+// randomization and de-randomization since XOR is self-inverse.
 // Returns a new slice; the input is not modified.
+//
+// That self-inverse property is also why a wrap/unwrap round trip proves
+// nothing here: every sequence round-trips, including a wrong one. What pins
+// this to the standard is TestPNSequenceMatchesTheCCSDSVector.
 func Randomize(data []byte) []byte {
-	return pn.Apply(data)
+	return pn.TCApply(data)
 }
 
-// GeneratePNSequence produces the CCSDS pseudo-random sequence using an
-// 8-bit LFSR with polynomial h(x) = x^8 + x^7 + x^5 + x^3 + 1,
-// initialized to all 1s per CCSDS 231.0-B-4.
+// GeneratePNSequence produces the CCSDS 231.0-B-4 §6.2 pseudo-random sequence
+// using an 8-bit LFSR with polynomial
 //
-// The generator lives in internal/pn, shared with the other synchronization
-// and channel coding package: the two standards specify the same randomizer,
-// and one copy means one place for the feedback taps to be wrong.
+//	h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
+//
+// initialized to all 1s. Its first 40 digits are FF 39 9E 5A 68.
+//
+// The generator lives in internal/pn next to the TM one. The two standards do
+// NOT specify the same randomizer: CCSDS 131.0-B-5 §10.4.2 uses a different
+// polynomial and a sequence that opens FF 48 0E C0 9A. Calling the TM
+// generator here would put unintelligible octets on the uplink, so the
+// internal names are qualified by standard and this package uses only the TC
+// pair.
 func GeneratePNSequence(length int) []byte {
-	return pn.Sequence(length)
+	return pn.TCSequence(length)
 }
 
 // WrapCLTU produces a Command Link Transmission Unit from TC Transfer Frame

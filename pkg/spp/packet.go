@@ -95,6 +95,17 @@ func (sp *SpacePacket) secondaryHeaderOctets() int {
 func (sp *SpacePacket) checkSecondaryHeaderAgreement() error {
 	flagSet := sp.PrimaryHeader.SecondaryHeaderFlag == 1
 	switch {
+	// A parsed header and header octets already inside UserData are two
+	// representations of the one Packet Secondary Header of 4.1.4.2.
+	// Both would be counted in the Packet Data Length (4.1.3.5.3) and both
+	// would be written, so the packet would declare and carry the header
+	// twice. The length field would still match the octets sent, which is why
+	// nothing downstream catches it: the receiver hands its application the
+	// duplicated octets as data. The options refuse this combination, but
+	// SecondaryHeader is exported and can be assigned past them, so the check
+	// belongs here too.
+	case sp.SecondaryHeader != nil && sp.shInUserData:
+		return ErrSecondaryHeaderTwice
 	case sp.SecondaryHeader != nil && !flagSet:
 		return ErrSecondaryHeaderFlagClear
 	case sp.SecondaryHeader == nil && flagSet && !sp.shInUserData:

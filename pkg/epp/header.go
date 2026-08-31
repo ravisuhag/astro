@@ -61,6 +61,8 @@ const (
 	ProtocolIDIdle     uint8 = 0 // '000' Encapsulation Idle Packet (fill data)
 	ProtocolIDLTP      uint8 = 1 // '001' Licklider Transmission Protocol (CCSDS 734.1)
 	ProtocolIDIPE      uint8 = 2 // '010' Internet Protocol Extension
+	ProtocolIDCFDP     uint8 = 3 // '011' CCSDS File Delivery Protocol (CCSDS 727.0)
+	ProtocolIDBP       uint8 = 4 // '100' Bundle Protocol (CCSDS 734.2)
 	ProtocolIDExtended uint8 = 6 // '110' protocol identified by the Protocol ID Extension field
 	ProtocolIDMission  uint8 = 7 // '111' mission-specific, privately defined data
 )
@@ -295,6 +297,10 @@ func protocolIDName(pid uint8) string {
 		return "LTP"
 	case ProtocolIDIPE:
 		return "Internet Protocol Extension"
+	case ProtocolIDCFDP:
+		return "CFDP"
+	case ProtocolIDBP:
+		return "Bundle Protocol"
 	case ProtocolIDExtended:
 		return "Protocol ID Extension"
 	case ProtocolIDMission:
