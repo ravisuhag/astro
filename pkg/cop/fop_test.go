@@ -209,7 +209,11 @@ func TestFOP_AckPrunesWaitQueue(t *testing.T) {
 	}
 }
 
-func TestFOP_T1Expiry_RetransmitThenAlertLimit(t *testing.T) {
+// TestFOP_T1Expiry_RetransmitThenAlertT1 walks both halves of the T1
+// timer rule in CCSDS 232.1-B-2 5.1.9.1: an expiry below the transmission
+// limit starts recovery, and an expiry at the limit generates Alert[T1].
+// The state transitions are table 5-1 E16 and E17 in the ACTIVE column.
+func TestFOP_T1Expiry_RetransmitThenAlertT1(t *testing.T) {
 	fop := cop.NewFOP(42, 1, 10)
 	fop.Initialize(0)
 	if err := fop.SetT1Initial(5); err != nil {
@@ -228,12 +232,13 @@ func TestFOP_T1Expiry_RetransmitThenAlertLimit(t *testing.T) {
 		t.Fatal("frame not served")
 	}
 
-	// First expiry: transmission count 1 < limit 2 -> retransmission.
+	// First expiry: transmission count 1 < limit 2, so E16 retransmits.
+	// Its next state is (S1), so the machine stays Active.
 	if err := fop.Tick(5); err != nil {
 		t.Fatalf("first T1 expiry: %v", err)
 	}
-	if fop.State() != cop.FOPRetransmitWithoutWait {
-		t.Errorf("state = %d, want FOPRetransmitWithoutWait", fop.State())
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive (table 5-1 E16 keeps S1)", fop.State())
 	}
 	data, seq, ok := fop.GetNextFrame()
 	if !ok || seq != 0 || !bytes.Equal(data, []byte("frame-0")) {
@@ -243,16 +248,17 @@ func TestFOP_T1Expiry_RetransmitThenAlertLimit(t *testing.T) {
 		t.Fatal("T1 must restart after a timer-driven retransmission")
 	}
 
-	// Second expiry: limit reached -> Alert(LIMIT), purge, Initial.
+	// Second expiry: the limit is reached, so E17 gives Alert[T1] — not
+	// Alert[Limit], which 5.1.9.1 reserves for no timer case at all.
 	err := fop.Tick(5)
-	if !errors.Is(err, cop.ErrFOPLimit) {
-		t.Fatalf("expected ErrFOPLimit, got %v", err)
+	if !errors.Is(err, cop.ErrFOPTimeout) {
+		t.Fatalf("expected ErrFOPTimeout, got %v", err)
 	}
 	if fop.State() != cop.FOPInitial {
 		t.Errorf("state = %d, want FOPInitial", fop.State())
 	}
-	if fop.LastAlert() != cop.AlertLimit {
-		t.Errorf("alert = %d, want AlertLimit", fop.LastAlert())
+	if fop.LastAlert() != cop.AlertT1 {
+		t.Errorf("alert = %d, want AlertT1", fop.LastAlert())
 	}
 	if fop.PendingCount() != 0 {
 		t.Errorf("queues must be purged on alert, %d frames left", fop.PendingCount())
@@ -496,5 +502,310 @@ func TestFOP_RetransmitDoesNotDuplicateUnpulledFrames(t *testing.T) {
 	}
 	if count != 2 {
 		t.Errorf("served %d frames, want 2 (no duplicates)", count)
+	}
+}
+
+// toRetransmitWithoutWait drives a fresh FOP into S2 with two frames sent
+// and none acknowledged.
+func toRetransmitWithoutWait(t *testing.T) *cop.FOP {
+	t.Helper()
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	for _, f := range [][]byte{[]byte("frame-0"), []byte("frame-1")} {
+		if err := fop.TransmitFrame(f); err != nil {
+			t.Fatalf("TransmitFrame(%q): %v", f, err)
+		}
+	}
+	for i := range 2 {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			t.Fatalf("frame %d not served", i)
+		}
+	}
+
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+	if fop.State() != cop.FOPRetransmitWithoutWait {
+		t.Fatalf("state = %d, want FOPRetransmitWithoutWait", fop.State())
+	}
+	// Drop the queued retransmissions so later assertions see only what the
+	// event under test queues.
+	for {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			break
+		}
+	}
+	return fop
+}
+
+func TestFOP_E16_S3_TimerExpiryIsIgnored(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(10); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+	for i := range 2 {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			t.Fatalf("frame %d not served", i)
+		}
+	}
+
+	// Retransmission asked for while the FARM has no buffer: S3.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true, WaitFlag: true}); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPRetransmitWithWait {
+		t.Fatalf("state = %d, want FOPRetransmitWithWait", fop.State())
+	}
+
+	// E16 in S3 is Ignore: the Wait flag still stands, so a T1 expiry may
+	// not turn into a retransmission.
+	if err := fop.Tick(5); err != nil {
+		t.Fatalf("T1 expiry in S3: %v", err)
+	}
+	if fop.State() != cop.FOPRetransmitWithWait {
+		t.Errorf("state = %d, want still FOPRetransmitWithWait", fop.State())
+	}
+	if data, seq, ok := fop.GetNextFrame(); ok {
+		t.Errorf("T1 expiry in S3 queued %q (N(S)=%d); nothing may be sent while Wait is set", data, seq)
+	}
+}
+
+func TestFOP_E5_S2_NoNewAcknowledgementsAlertsSynch(t *testing.T) {
+	fop := toRetransmitWithoutWait(t)
+
+	// N(R)=0 acknowledges nothing new and the Retransmit flag has cleared.
+	err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0})
+	if !errors.Is(err, cop.ErrFOPSynch) {
+		t.Fatalf("expected ErrFOPSynch, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertSynch {
+		t.Errorf("alert = %d, want AlertSynch", fop.LastAlert())
+	}
+}
+
+func TestFOP_E6_S2_NewAcknowledgementsReturnToActive(t *testing.T) {
+	fop := toRetransmitWithoutWait(t)
+
+	// The contrast to E5: N(R)=1 acknowledges frame-0, so the retransmission
+	// did make progress and the machine goes back to S1.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 1}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertNone {
+		t.Errorf("alert = %d, want AlertNone", fop.LastAlert())
+	}
+	if fop.PendingCount() != 1 {
+		t.Errorf("PendingCount = %d, want 1 (frame-1 still outstanding)", fop.PendingCount())
+	}
+}
+
+func TestFOP_E1_S1_NothingOutstandingIsIgnored(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+
+	// E1 in S1 is Ignore, not an alert: this is the ordinary steady-state
+	// CLCW with nothing to report.
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertNone {
+		t.Errorf("alert = %d, want AlertNone", fop.LastAlert())
+	}
+}
+
+func TestFOP_E16_S4_FirstExpiryAlertsT1(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(10); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.InitiateADWithCLCWCheck(); err != nil {
+		t.Fatal(err)
+	}
+	if fop.State() != cop.FOPInitialisingWithoutBC {
+		t.Fatalf("state = %d, want FOPInitialisingWithoutBC", fop.State())
+	}
+
+	// E16 in S4: nothing can be retransmitted there, so the first expiry
+	// ends the initialisation even with the budget untouched.
+	err := fop.Tick(5)
+	if !errors.Is(err, cop.ErrFOPTimeout) {
+		t.Fatalf("expected ErrFOPTimeout, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertT1 {
+		t.Errorf("alert = %d, want AlertT1", fop.LastAlert())
+	}
+}
+
+func TestFOP_E104_S4_FirstExpirySuspends(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(10); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTimeoutType(cop.TT1); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.InitiateADWithCLCWCheck(); err != nil {
+		t.Fatal(err)
+	}
+
+	// E104 in S4: the same terminal expiry, but timeout type 1 keeps the
+	// service resumable from S4.
+	err := fop.Tick(5)
+	if !errors.Is(err, cop.ErrFOPSuspended) {
+		t.Fatalf("expected ErrFOPSuspended, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.SuspendState() != 4 {
+		t.Errorf("SS = %d, want 4", fop.SuspendState())
+	}
+}
+
+func TestFOP_E101_LimitOneWithNewAcknowledgements(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetTransmissionLimit(1); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+	for i := range 2 {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			t.Fatalf("frame %d not served", i)
+		}
+	}
+
+	// E101: N(R)=1 acknowledges frame-0, but a limit of 1 forbids sending
+	// frame-1 a second time.
+	err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 1, RetransmitFlag: true})
+	if !errors.Is(err, cop.ErrFOPLimit) {
+		t.Fatalf("expected ErrFOPLimit, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertLimit {
+		t.Errorf("alert = %d, want AlertLimit", fop.LastAlert())
+	}
+}
+
+func TestFOP_E102_LimitOneWithoutNewAcknowledgements(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetTransmissionLimit(1); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	_ = fop.TransmitFrame([]byte("frame-1"))
+	for i := range 2 {
+		if _, _, ok := fop.GetNextFrame(); !ok {
+			t.Fatalf("frame %d not served", i)
+		}
+	}
+
+	// E102: N(R)=0 acknowledges nothing, and the limit is still 1.
+	//
+	// This row already held before E101 was added: the general E10 guard
+	// ("budget spent with nothing new acknowledged") catches it, because
+	// Transmission_Count starts at 1 and so already equals a limit of 1.
+	// Only E101, where the CLCW does acknowledge something, was missing.
+	err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 0, RetransmitFlag: true})
+	if !errors.Is(err, cop.ErrFOPLimit) {
+		t.Fatalf("expected ErrFOPLimit, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertLimit {
+		t.Errorf("alert = %d, want AlertLimit", fop.LastAlert())
+	}
+}
+
+func TestFOP_E17_S1_TimerExhaustionAlertsT1(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(1); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	if _, _, ok := fop.GetNextFrame(); !ok {
+		t.Fatal("frame not served")
+	}
+
+	// E17 in S1: a timer-driven exhaustion reports T1, never Limit.
+	err := fop.Tick(5)
+	if !errors.Is(err, cop.ErrFOPTimeout) {
+		t.Fatalf("expected ErrFOPTimeout, got %v", err)
+	}
+	if fop.State() != cop.FOPInitial {
+		t.Errorf("state = %d, want FOPInitial", fop.State())
+	}
+	if fop.LastAlert() != cop.AlertT1 {
+		t.Errorf("alert = %d, want AlertT1 (Alert[Limit] belongs to the CLCW-driven E101/E102)", fop.LastAlert())
+	}
+}
+
+func TestFOP_E16_S1_RetransmitsAndStaysActive(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 10)
+	fop.Initialize(0)
+	if err := fop.SetT1Initial(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := fop.SetTransmissionLimit(10); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = fop.TransmitFrame([]byte("frame-0"))
+	if _, _, ok := fop.GetNextFrame(); !ok {
+		t.Fatal("frame not served")
+	}
+
+	// E16 in S1 retransmits but leaves the state at S1, because E1 and E5
+	// are classified differently in S1 than in S2.
+	if err := fop.Tick(5); err != nil {
+		t.Fatalf("T1 expiry in S1: %v", err)
+	}
+	if fop.State() != cop.FOPActive {
+		t.Errorf("state = %d, want FOPActive", fop.State())
+	}
+	data, seq, ok := fop.GetNextFrame()
+	if !ok || seq != 0 || !bytes.Equal(data, []byte("frame-0")) {
+		t.Fatalf("expected retransmission of frame-0, got %q (N(S)=%d, ok=%v)", data, seq, ok)
+	}
+	if !fop.TimerRunning() {
+		t.Error("T1 must restart after a timer-driven retransmission")
 	}
 }
