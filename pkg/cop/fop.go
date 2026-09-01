@@ -468,15 +468,24 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	if allAcked {
 		switch {
 		case clcw.RetransmitFlag:
-			// E3: retransmit requested with nothing outstanding.
+			// E4: a retransmission is asked for with nothing outstanding,
+			// so the two ends disagree about what has been sent.
 			f.alert(AlertSynch)
 			return ErrFOPSynch
 		case clcw.WaitFlag:
-			// E2: Wait flag with nothing outstanding.
+			// E3: the Wait flag only means something while frames are
+			// outstanding.
 			f.alert(AlertCLCW)
 			return ErrFOPInvalidCLCW
+		case ackCount == 0 && f.retransmitting():
+			// E1 in S2/S3: this machine believes a retransmission is under
+			// way, yet the CLCW acknowledges nothing new and no longer asks
+			// for one. The two ends are out of step.
+			f.alert(AlertSynch)
+			return ErrFOPSynch
 		default:
-			// E1: everything acknowledged.
+			// E1 in S1 (Ignore) and E2 in S1/S2/S3: everything is
+			// acknowledged, so nothing is left to time out.
 			f.stopTimer()
 			f.txCount = 1
 			f.state = FOPActive
@@ -487,27 +496,46 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	// Frames remain outstanding.
 	if !clcw.RetransmitFlag {
 		if clcw.WaitFlag {
-			// E6: Wait without Retransmit is invalid.
+			// E7: Wait without Retransmit is invalid.
 			f.alert(AlertCLCW)
 			return ErrFOPInvalidCLCW
 		}
-		// E5: outstanding frames, no complaint. Stay/return to Active.
+		if ackCount == 0 && f.retransmitting() {
+			// E5 in S2/S3: the receiver has stopped asking for a
+			// retransmission without acknowledging anything new, which
+			// leaves the retransmission this machine is running unexplained.
+			f.alert(AlertSynch)
+			return ErrFOPSynch
+		}
+		// E5 in S1 (Ignore) and E6 in S1/S2/S3: frames are outstanding but
+		// the receiver has no complaint.
 		f.state = FOPActive
 		return nil
 	}
 
-	// Retransmit flag set (E8-E12).
+	// Retransmit flag set (E8-E12, E101, E102).
+
+	if f.txLimit == 1 {
+		// E101/E102: a limit of 1 forbids sending any frame twice, so a
+		// retransmission request ends the AD service whatever the Wait flag
+		// says. Frames this CLCW acknowledges have already left the sent
+		// queue above, which is all that separates E101 from E102.
+		f.alert(AlertLimit)
+		return ErrFOPLimit
+	}
+
 	if clcw.WaitFlag {
-		// E10/E12: retransmission required, but the FARM has no buffer.
+		// E11/E12: retransmission required, but the FARM has no buffer.
 		// Hold retransmissions until the Wait flag clears.
 		f.waitQueue = nil
 		f.state = FOPRetransmitWithWait
 		return nil
 	}
 
-	// Retransmission required and possible (E8/E9/E11).
+	// Retransmission required and possible (E8/E9).
 	if f.txCount >= f.txLimit && ackCount == 0 {
-		// Transmission limit exhausted without progress.
+		// E10: the retransmission budget is spent with nothing new
+		// acknowledged.
 		f.alert(AlertLimit)
 		return ErrFOPLimit
 	}
@@ -519,6 +547,13 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	f.startTimer()
 	f.state = FOPRetransmitWithoutWait
 	return nil
+}
+
+// retransmitting reports whether the machine is in S2 or S3, the two
+// states it only reaches because a retransmission is under way.
+// Caller must hold f.mu.
+func (f *FOP) retransmitting() bool {
+	return f.state == FOPRetransmitWithoutWait || f.state == FOPRetransmitWithWait
 }
 
 // pruneAcked removes every frame acknowledged by N(R) from q.
@@ -537,11 +572,11 @@ func pruneAcked(q []SentFrame, nr uint8) []SentFrame {
 // --- T1 timer (caller-driven clock) ---
 
 // Tick advances the caller-driven clock by n units. When the T1 timer is
-// running and reaches zero, the timer-expiry events fire (E16-E18):
-// retransmission while the transmission limit allows it, then either an
-// Alert(LIMIT) (timeout type TT0) or a suspension of the AD service
-// (timeout type TT1). Returns the error corresponding to a raised alert,
-// or nil.
+// running and reaches zero, the timer-expiry events fire (E16-E18 and
+// E104): retransmission while the transmission limit allows it, then
+// either an Alert(T1) (timeout type TT0) or a suspension of the AD
+// service (timeout type TT1). Returns the error corresponding to a raised
+// alert, or nil.
 func (f *FOP) Tick(n int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -556,22 +591,51 @@ func (f *FOP) Tick(n int) error {
 
 	// T1 expired.
 	if f.txCount < f.txLimit {
-		// E16: retransmit and keep going.
-		f.txCount++
+		// E16 (timeout type TT0) and E104 (TT1): the retransmission budget
+		// still allows another attempt.
 		switch f.state {
-		case FOPActive, FOPRetransmitWithoutWait, FOPRetransmitWithWait:
+		case FOPActive, FOPRetransmitWithoutWait:
+			// The state is left as it was: S1 stays S1 and S2 stays S2,
+			// because the next CLCW is classified differently in each.
+			f.txCount++
 			f.waitQueue = append([]SentFrame(nil), f.sentQueue...)
-			f.state = FOPRetransmitWithoutWait
+			f.startTimer()
+
+		case FOPRetransmitWithWait:
+			// Ignore in S3. The receiver has said it has no buffer, so
+			// retransmitting now would only be discarded there.
+			//
+			// The timer is deliberately left expired rather than restarted:
+			// 5.2.18 defines Ignore as no processing at all, and 5.1.9.1
+			// ties the timer to an actual transmission, which S3 does not
+			// make. That is not a dead end, because every exit from S3 is
+			// driven by an arriving CLCW — new acknowledgements (E2/E6),
+			// the Wait flag clearing (E8/E10), or an alert (E3/E7/E13/E14)
+			// — and the receiver keeps reporting.
+
+		case FOPInitialisingWithoutBC:
+			// Nothing has been transmitted that could be retransmitted, so
+			// the first expiry in S4 already ends the initialisation.
+			if f.timeoutType == TT1 {
+				f.ss = 4
+				f.stopTimer()
+				f.state = FOPInitial
+				return ErrFOPSuspended
+			}
+			f.alert(AlertT1)
+			return ErrFOPTimeout
+
 		case FOPInitialisingWithBC:
+			f.txCount++
 			f.bcOut = true // retransmit the BC frame
+			f.startTimer()
 		}
-		f.startTimer()
 		return nil
 	}
 
 	// Transmission limit reached.
 	if f.timeoutType == TT1 && f.state != FOPInitialisingWithBC {
-		// E18: suspend the AD service.
+		// E18: suspend the AD service, recording the state to resume into.
 		switch f.state {
 		case FOPActive:
 			f.ss = 1
@@ -587,15 +651,10 @@ func (f *FOP) Tick(n int) error {
 		return ErrFOPSuspended
 	}
 
-	// E17: alert.
-	switch f.state {
-	case FOPInitialisingWithoutBC, FOPInitialisingWithBC:
-		f.alert(AlertT1)
-		return ErrFOPTimeout
-	default:
-		f.alert(AlertLimit)
-		return ErrFOPLimit
-	}
+	// E17 in any state, and E18 in S5: every timer-driven exhaustion is
+	// Alert[T1]. Alert[Limit] belongs to the CLCW-driven E10/E101/E102.
+	f.alert(AlertT1)
+	return ErrFOPTimeout
 }
 
 // TimerRunning reports whether the T1 timer is currently running.
