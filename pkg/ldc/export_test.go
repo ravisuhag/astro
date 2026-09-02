@@ -41,9 +41,22 @@ func DecodeSplitSampleForTest(data []byte, count, k int, resolution uint) ([]uin
 // SplitSampleLengthForTest exposes the length calculation.
 func SplitSampleLengthForTest(block []uint32, k int) int { return splitSampleLength(block, k) }
 
-// SecondExtensionSymbolsForTest exposes the pairing transform.
+// SecondExtensionSymbolsForTest exposes the pairing transform, collecting the
+// visited symbols so a test can compare them against the worked values.
+//
+// The transform itself visits rather than collects, because neither caller in
+// the coder keeps the symbols and the slice was 95% of a compression's
+// allocations. Gathering them here costs nothing that matters.
 func SecondExtensionSymbolsForTest(block []uint32) ([]uint64, bool) {
-	return secondExtensionSymbols(block)
+	var symbols []uint64
+	ok := eachSecondExtensionSymbol(block, func(gamma uint64) bool {
+		symbols = append(symbols, gamma)
+		return true
+	})
+	if !ok {
+		return nil, false
+	}
+	return symbols, true
 }
 
 // EncodeSecondExtensionForTest codes one block.

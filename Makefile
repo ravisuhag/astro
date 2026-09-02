@@ -22,7 +22,7 @@ vet:
 # -count 3 because a laptop's clock speed is not constant and one sample of a
 # few-microsecond operation says very little; compare medians, not single runs.
 BENCHTIME ?= 2s
-BENCHPKGS ?= ./pkg/crc/ ./pkg/spp/ ./pkg/tmdl/ ./pkg/aos/ ./pkg/usdl/ ./pkg/tmsc/ ./pkg/tcsc/ ./pkg/ldc/
+BENCHPKGS ?= ./pkg/crc/ ./pkg/spp/ ./pkg/tmdl/ ./pkg/tcdl/ ./pkg/aos/ ./pkg/usdl/ ./pkg/tmsc/ ./pkg/tcsc/ ./pkg/ldc/ ./pkg/rhc/
 bench:
 	go test -bench . -benchmem -benchtime $(BENCHTIME) -count 3 $(BENCHPKGS)
 

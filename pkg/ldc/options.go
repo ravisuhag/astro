@@ -193,24 +193,30 @@ func fsLimit(resolution uint, k int) uint64 {
 	return (uint64(1) << resolution) >> uint(k)
 }
 
-// secondExtensionSymbols transforms a block into the paired symbols of §3.4.1:
+// eachSecondExtensionSymbol transforms a block into the paired symbols of
+// §3.4.1 and hands each one to visit:
 //
 //	gamma_j = (d_{2j-1} + d_{2j})(d_{2j-1} + d_{2j} + 1)/2 + d_{2j}
 //
 // The product of two consecutive integers is always even, so the division is
 // exact and the whole thing stays in integers.
 //
-// It reports false when the arithmetic would overflow. That is not a
-// theoretical worry: at 32-bit resolution a pair of large samples gives a sum
-// near 2^33 and a product near 2^66, which does not fit. §3.4.2 notes the
-// option "is only designed to be a useful option when all of the transformed
-// symbols are small", so an overflowing block simply cannot use it.
-func secondExtensionSymbols(block []uint32) ([]uint64, bool) {
+// It reports false when the arithmetic would overflow, or when visit asks it
+// to stop. Overflow is not a theoretical worry: at 32-bit resolution a pair of
+// large samples gives a sum near 2^33 and a product near 2^66, which does not
+// fit. §3.4.2 notes the option "is only designed to be a useful option when
+// all of the transformed symbols are small", so an overflowing block simply
+// cannot use it.
+//
+// The symbols are visited rather than returned in a slice because neither
+// caller keeps them: pricing sums their lengths and writing emits them in
+// order. Returning a slice allocated once per block, and blocks are the unit
+// this coder works in — it was 95% of the allocations in a compression.
+func eachSecondExtensionSymbol(block []uint32, visit func(gamma uint64) bool) bool {
 	if len(block)%2 != 0 {
-		return nil, false
+		return false
 	}
 
-	symbols := make([]uint64, 0, len(block)/2)
 	for i := 0; i < len(block); i += 2 {
 		first := uint64(block[i])
 		second := uint64(block[i+1])
@@ -219,46 +225,43 @@ func secondExtensionSymbols(block []uint32) ([]uint64, bool) {
 		// (sum)(sum+1)/2 overflows a uint64 once sum passes about 2^32. Check
 		// before multiplying rather than after.
 		if sum >= 1<<32 {
-			return nil, false
+			return false
 		}
 		gamma := sum*(sum+1)/2 + second
-		symbols = append(symbols, gamma)
+
+		if !visit(gamma) {
+			return false
+		}
 	}
-	return symbols, true
+	return true
 }
 
 // secondExtensionLength returns the coded length in bits, excluding the option
 // identifier and any reference sample.
 func secondExtensionLength(block []uint32) int {
-	symbols, ok := secondExtensionSymbols(block)
-	if !ok {
-		return unusable
-	}
-
 	total := 0
-	for _, gamma := range symbols {
+
+	ok := eachSecondExtensionSymbol(block, func(gamma uint64) bool {
 		if gamma >= uint64(unusable) {
-			return unusable
+			total = unusable
+			return false
 		}
 		total += int(gamma) + 1
-		if total >= unusable {
-			return unusable
-		}
+		return total < unusable
+	})
+	if !ok {
+		return unusable
 	}
 	return total
 }
 
 // writeSecondExtension emits one block under the second-extension option.
 func writeSecondExtension(w *BitWriter, block []uint32) bool {
-	symbols, ok := secondExtensionSymbols(block)
-	if !ok {
-		return false
-	}
-	for _, gamma := range symbols {
+	return eachSecondExtensionSymbol(block, func(gamma uint64) bool {
 		w.WriteZeros(gamma)
 		w.WriteOne()
-	}
-	return true
+		return true
+	})
 }
 
 // readSecondExtension reads count samples coded with the second-extension
