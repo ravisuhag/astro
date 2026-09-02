@@ -344,7 +344,7 @@ func TestLocationInContainerPlacesEntries(t *testing.T) {
 	}
 
 	// A at 0..8. B skips 16 bits past the cursor, so 24. C is 8 bits from the
-	// container's start, so 8 — entries may point backwards.
+	// container's start, so 8, entries may point backwards.
 	want := []uint{0, 24, 8}
 	for i, offset := range want {
 		if layout.Fields[i].BitOffset != offset {

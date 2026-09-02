@@ -77,7 +77,7 @@ func FuzzDecodeTMLMessage(f *testing.F) {
 
 		// A context message body that fails to parse is a legitimate error,
 		// not a bug: TML framing validates the message shape, and ISP1
-		// semantics — the protocol ID and version — are a layer above it.
+		// semantics (the protocol ID and version) are a layer above it.
 		// What matters here is that parsing never panics.
 		if m.Type == sle.MessageContext {
 			_, _ = sle.DecodeContextMessage(m.Body)

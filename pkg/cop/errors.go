@@ -48,7 +48,7 @@ var (
 	ErrFOPNotSuspended = errors.New("FOP-1: AD service is not suspended")
 
 	// ErrFOPInvalidNR indicates a CLCW whose N(R) is outside
-	// NN(R)..V(S) — the ground and spacecraft have lost synchronization.
+	// NN(R)..V(S). The ground and spacecraft have lost synchronization.
 	ErrFOPInvalidNR = errors.New("FOP-1: invalid N(R) in CLCW (alert NNR)")
 
 	// ErrFOPSynch indicates a CLCW inconsistent with the FOP state

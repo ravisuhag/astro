@@ -5,7 +5,7 @@ package ldc
 // The coding options are unexported because they are not an API: a caller
 // compresses and decompresses, and the choice of option is the coder's. But
 // each option is pinned to a spec table, and those tests are worth writing
-// against the option itself rather than through the whole encoder — a failure
+// against the option itself rather than through the whole encoder, a failure
 // then names the option instead of saying "the output changed".
 //
 // This file exists only in tests, so the shims cost nothing at build time.

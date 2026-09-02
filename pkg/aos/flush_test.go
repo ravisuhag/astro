@@ -7,7 +7,7 @@ import (
 )
 
 // TestFlushSmallPacketZoneDoesNotPanic covers a packet zone too small to hold
-// a whole idle packet in one frame — and too small for one extra frame to be
+// a whole idle packet in one frame, and too small for one extra frame to be
 // enough either. Growing the idle packet by a single capacity used to leave it
 // under the seven-octet minimum, and building it then allocated a negative
 // length and panicked.

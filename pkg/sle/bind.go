@@ -262,9 +262,9 @@ func parseDottedOID(s string) ([]uint32, bool) {
 // identifier.
 type ServiceInstanceAttribute struct {
 	// Identifier names the attribute. On the wire it is an OBJECT IDENTIFIER
-	// from the SLE-SERVICE-INSTANCE-ID module; here it is the operator name —
+	// from the SLE-SERVICE-INSTANCE-ID module; here it is the operator name (
 	// "sagr", "spack", "rsl-fg", "fsl-fg", "raf", "rcf", "rocf", "cltu" or
-	// "antenna" — or a dotted OID string for an identifier this package does
+	// "antenna") or a dotted OID string for an identifier this package does
 	// not know by name.
 	Identifier string
 	// Value is the attribute value.
@@ -686,14 +686,14 @@ type PeerAbort struct {
 // octets of the diagnostic.
 //
 // The SLE modules are DEFINITIONS IMPLICIT TAGS, and the PDU CHOICE makes the
-// operation [104] IMPLICIT SlePeerAbort — so [104] replaces the INTEGER tag
+// operation [104] IMPLICIT SlePeerAbort, so [104] replaces the INTEGER tag
 // rather than wrapping it. On the wire the whole PDU is a primitive
 // context-specific element, 9F 68 01 xx, with no nested INTEGER TLV.
 func (p *PeerAbort) Encode() []byte {
 	return encodeIntegerContent(int64(p.Diagnostic))
 }
 
-// UrgentData returns the diagnostic as the single octet CCSDS 913.1-B-2 §3.4
+// UrgentData returns the diagnostic as the single octet CCSDS 913.1-B-2 clause 3.4
 // maps onto TCP urgent data. The aborting end sends this octet out of band
 // (MSG_OOB) before closing the connection, so the peer can tell an abort from
 // a failure; this package owns no socket, so sending it is the caller's job.
@@ -704,8 +704,8 @@ func (p *PeerAbort) UrgentData() byte {
 // DecodePeerAbort parses a PEER-ABORT's content: the bare diagnostic octets
 // found under the primitive [104] tag.
 //
-// The legacy shape this package once emitted — a complete INTEGER TLV nested
-// under a constructed [104] — is still recognized, so an old peer's abort is
+// The legacy shape this package once emitted (a complete INTEGER TLV nested
+// under a constructed [104]) is still recognized, so an old peer's abort is
 // read rather than mistaken for a huge diagnostic.
 func DecodePeerAbort(data []byte) (*PeerAbort, error) {
 	if len(data) >= 3 && data[0] == TagInteger && int(data[1]) == len(data)-2 {

@@ -234,7 +234,7 @@ func TestDataFieldHeader_EncodeDecode(t *testing.T) {
 }
 
 func TestConstructionRuleValues(t *testing.T) {
-	// Spec values per CCSDS 732.1-B-3 §4.1.4.2.2.2 / table 4-3.
+	// Spec values per CCSDS 732.1-B-3 clause 4.1.4.2.2.2 / table 4-3.
 	want := map[uint8]uint8{
 		usdl.RulePacketsSpanning:   0b000,
 		usdl.RuleStartOfSDU:        0b001,
@@ -409,7 +409,7 @@ func TestNewTruncatedFrame_RejectsTrailers(t *testing.T) {
 }
 
 func TestNewTruncatedFrame_LengthBounds(t *testing.T) {
-	// Annex D1.3.2 note 2: minimum 6 octets — headers plus one TFDZ octet.
+	// Annex D1.3.2 note 2: minimum 6 octets, headers plus one TFDZ octet.
 	if _, err := usdl.NewTruncatedFrame(1, 1, 0, nil); err != usdl.ErrTruncatedFrameTooShort {
 		t.Errorf("empty TFDZ: expected ErrTruncatedFrameTooShort, got %v", err)
 	}
@@ -450,10 +450,10 @@ func TestNewIdleFrame(t *testing.T) {
 		t.Errorf("VCID = %d, want %d (OID frames use VCID 63)", frame.Header.VCID, usdl.OIDVCID)
 	}
 	if frame.Header.MAPID != 0 {
-		t.Errorf("MAPID = %d, want 0 (§4.1.4.1.8)", frame.Header.MAPID)
+		t.Errorf("MAPID = %d, want 0 (clause 4.1.4.1.8)", frame.Header.MAPID)
 	}
 	if frame.DataFieldHeader.ConstructionRule != usdl.RuleStartOfSDU {
-		t.Errorf("ConstructionRule = %d, want %d ('001', §4.1.4.1.9)",
+		t.Errorf("ConstructionRule = %d, want %d ('001', clause 4.1.4.1.9)",
 			frame.DataFieldHeader.ConstructionRule, usdl.RuleStartOfSDU)
 	}
 	if frame.DataFieldHeader.UPID != usdl.UPIDIdle {
@@ -476,7 +476,7 @@ func TestNewIdleFrame(t *testing.T) {
 	}
 }
 
-// The OID TFDZ carries the mandatory PN sequence (§4.1.4.1.10), drawn
+// The OID TFDZ carries the mandatory PN sequence (clause 4.1.4.1.10), drawn
 // from a persistent generator that is never restarted across frames.
 func TestNewIdleFrame_PNFillContinues(t *testing.T) {
 	// FrameLength 22 gives a 10-octet TFDZ (22 - 7 header - 3 TFDF - 2

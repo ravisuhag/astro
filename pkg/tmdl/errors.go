@@ -97,7 +97,7 @@ var (
 	ErrOCFNotPresent = errors.New("operational control field service configured but frames carry no OCF")
 
 	// ErrFSHSizeMismatch indicates an FSH_SDU whose length differs from the
-	// channel's fixed ChannelConfig.FSHDataLength. CCSDS 132.0-B-3 §4.1.3.1.6
+	// channel's fixed ChannelConfig.FSHDataLength. CCSDS 132.0-B-3 clause 4.1.3.1.6
 	// fixes the secondary header length for the channel, so a differently
 	// sized SDU cannot be carried.
 	ErrFSHSizeMismatch = errors.New("FSH_SDU length does not match the channel's fixed secondary header length")

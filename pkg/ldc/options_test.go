@@ -155,7 +155,7 @@ func TestMaxKMatchesTable5_1(t *testing.T) {
 	}
 }
 
-// TestFundamentalSequenceOption pins §3.2 and table 3-1: the FS option is the
+// TestFundamentalSequenceOption pins clause 3.2 and table 3-1: the FS option is the
 // split-sample option with k=0, and a sample of value m is m zeros then a one.
 func TestFundamentalSequenceOption(t *testing.T) {
 	block := []uint32{0, 1, 2, 3}
@@ -184,8 +184,8 @@ func TestFundamentalSequenceOption(t *testing.T) {
 	}
 }
 
-// TestSplitSampleOption pins §3.3: the top n-k bits become FS codewords for
-// the whole block first, and only then do the k low bits follow — §3.3.3 is
+// TestSplitSampleOption pins clause 3.3: the top n-k bits become FS codewords for
+// the whole block first, and only then do the k low bits follow, clause 3.3.3 is
 // explicit that they are not interleaved.
 func TestSplitSampleOption(t *testing.T) {
 	// Four 8-bit samples, k=2. Top six bits and low two bits:
@@ -216,7 +216,7 @@ func TestSplitSampleOption(t *testing.T) {
 	}
 }
 
-// TestSecondExtensionTransform pins the equation of §3.4.1:
+// TestSecondExtensionTransform pins the equation of clause 3.4.1:
 //
 //	gamma_j = (d_{2j-1} + d_{2j})(d_{2j-1} + d_{2j} + 1)/2 + d_{2j}
 func TestSecondExtensionTransform(t *testing.T) {
@@ -264,7 +264,7 @@ func TestSecondExtensionRoundTrip(t *testing.T) {
 	}
 }
 
-// TestSecondExtensionRefusesOverflow guards the trap in §3.4: at high
+// TestSecondExtensionRefusesOverflow guards the trap in clause 3.4: at high
 // resolution the transform can exceed what a uint64 holds, and the option must
 // report itself unusable rather than wrap.
 func TestSecondExtensionRefusesOverflow(t *testing.T) {
@@ -336,8 +336,8 @@ func TestTriangularRootAtBoundary(t *testing.T) {
 }
 
 // TestSecondExtensionAtMaxResolution decodes second-extension blocks at n=31
-// and n=32, where the limit arithmetic used to wrap. The samples are small —
-// large ones make the option unusable by design — but the decode path computes
+// and n=32, where the limit arithmetic used to wrap. The samples are small (
+// large ones make the option unusable by design) but the decode path computes
 // the limit from the resolution before reading a single bit, so a wrapped
 // limit would corrupt even these.
 func TestSecondExtensionAtMaxResolution(t *testing.T) {
@@ -356,7 +356,7 @@ func TestSecondExtensionAtMaxResolution(t *testing.T) {
 	}
 }
 
-// TestNoCompressionOption pins §3.6: the block goes out unaltered.
+// TestNoCompressionOption pins clause 3.6: the block goes out unaltered.
 func TestNoCompressionOption(t *testing.T) {
 	block := []uint32{0, 1, 254, 255}
 	const want = "00000000" + "00000001" + "11111110" + "11111111"
@@ -381,7 +381,7 @@ func TestNoCompressionOption(t *testing.T) {
 }
 
 // TestZeroBlockCodewords transcribes table 3-2 in full, including the
-// remainder-of-segment codeword displaced between four and five — the one
+// remainder-of-segment codeword displaced between four and five. The one
 // place the standard's coding is not a plain FS code over the count.
 func TestZeroBlockCodewords(t *testing.T) {
 	tests := []struct {

@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 30
 ---
 
-## Conformance Statement for `pkg/cfdp` — CCSDS 727.0-B-5
+## Conformance Statement for `pkg/cfdp`, CCSDS 727.0-B-5
 
 ---
 
@@ -33,7 +33,7 @@ order: 30
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/cfdp (Go package) |
 | System Name(s) | Astro |
 
@@ -42,7 +42,7 @@ order: 30
 | Field | Value |
 |---|---|
 | Specification | CCSDS 727.0-B-5 (CCSDS File Delivery Protocol, Blue Book, Issue 5, July 2020) |
-| Have any exceptions been required? | Yes [X] No [ ] — see A1.6 |
+| Have any exceptions been required? | Yes [X] No [ ], see A1.6 |
 
 ---
 
@@ -51,17 +51,17 @@ order: 30
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | Fixed PDU header | clause 5.1.2, table 5-1 | M | Y |
-| Version '001' | table 5-1 | M | Y — other versions rejected on decode |
+| Version '001' | table 5-1 | M | Y: other versions rejected on decode |
 | PDU type: File Directive / File Data | clause 5.1.6 | M | Y |
 | Direction flag | table 5-1 | M | Y |
-| Transmission mode flag | table 5-1 | M | Y — '0' acknowledged, '1' unacknowledged |
+| Transmission mode flag | table 5-1 | M | Y: '0' acknowledged, '1' unacknowledged |
 | CRC flag | table 5-1 | M | Y |
-| Large File flag | table 5-1 | M | Y — widens every FSS field to 64 bits |
-| PDU data field length | table 5-1 | M | Y — includes the CRC when present |
+| Large File flag | table 5-1 | M | Y: widens every FSS field to 64 bits |
+| PDU data field length | table 5-1 | M | Y: includes the CRC when present |
 | Segmentation control | table 5-1 | M | Y |
-| Length of entity IDs | table 5-1 | M | Y — 1 to 8 octets, encoded as width less one |
+| Length of entity IDs | table 5-1 | M | Y: 1 to 8 octets, encoded as width less one |
 | Segment metadata flag | table 5-1 | M | Y |
-| Length of transaction sequence number | table 5-1 | M | Y — 1 to 8 octets |
+| Length of transaction sequence number | table 5-1 | M | Y: 1 to 8 octets |
 | Variable-width entity IDs | clause 5.1.4 | M | Y |
 | LV objects | clause 5.1.8, table 5-2 | M | Y |
 | TLV objects | clause 5.1.9, table 5-3 | M | Y |
@@ -73,22 +73,22 @@ order: 30
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Directive codes | clause 5.2.1.2, table 5-4 | M | Y — reserved codes rejected |
-| Condition codes | clause 5.2.1.3, table 5-5 | M | Y — all fourteen the table defines |
-| EOF PDU | clause 5.2.2, table 5-6 | M | Y — condition, checksum, file size, fault location |
+| Directive codes | clause 5.2.1.2, table 5-4 | M | Y: reserved codes rejected |
+| Condition codes | clause 5.2.1.3, table 5-5 | M | Y: all fourteen the table defines |
+| EOF PDU | clause 5.2.2, table 5-6 | M | Y: condition, checksum, file size, fault location |
 | Fault location omitted for 'no error' | table 5-6 | M | Y |
-| Finished PDU | clause 5.2.3, table 5-7 | M | Y — condition, delivery code, file status, responses |
+| Finished PDU | clause 5.2.3, table 5-7 | M | Y: condition, delivery code, file status, responses |
 | Fault location omitted for 'no error' and 'unsupported checksum type' | table 5-7 | M | Y |
-| ACK PDU | clause 5.2.4, table 5-8 | M | Y — EOF and Finished only |
-| ACK directive subtype rules | table 5-8 | M | Y — '0001' for Finished, '0000' otherwise |
-| Transaction status | clause 5.2.4 | M | Y — all four values |
+| ACK PDU | clause 5.2.4, table 5-8 | M | Y: EOF and Finished only |
+| ACK directive subtype rules | table 5-8 | M | Y: '0001' for Finished, '0000' otherwise |
+| Transaction status | clause 5.2.4 | M | Y: all four values |
 | Metadata PDU | clause 5.2.5, table 5-9 | M | Y |
 | Closure requested | table 5-9 | M | Y |
 | Checksum type field | table 5-9 | M | Y |
 | Empty filenames for fileless transactions | table 5-9 | M | Y |
 | NAK PDU | clause 5.2.6, table 5-10 | O | Y |
-| Segment requests | clause 5.2.6.2, table 5-11 | O | Y — including the 0..0 metadata request |
-| Prompt PDU | clause 5.2.7, table 5-12 | O | Y — answered with NAK or Keep Alive |
+| Segment requests | clause 5.2.6.2, table 5-11 | O | Y: including the 0..0 metadata request |
+| Prompt PDU | clause 5.2.7, table 5-12 | O | Y: answered with NAK or Keep Alive |
 | Keep Alive PDU | clause 5.2.8, table 5-13 | O | Y |
 
 ---
@@ -98,9 +98,9 @@ order: 30
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | File Data PDU | clause 5.3, table 5-14 | M | Y |
-| Offset field | table 5-14 | M | Y — FSS |
-| Record continuation state | clause 5.3 | O | Y — all four states, decoded when present |
-| Segment metadata | table 5-14 | O | Y — up to 63 octets |
+| Offset field | table 5-14 | M | Y: FSS |
+| Record continuation state | clause 5.3 | O | Y: all four states, decoded when present |
+| Segment metadata | table 5-14 | O | Y: up to 63 octets |
 
 ---
 
@@ -109,25 +109,25 @@ order: 30
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | CRC at transmitting entity | clause 4.1.1 | O | Y |
-| CRC at receiving entity | clause 4.1.2 | O | Y — failing PDUs are discarded |
-| CRC algorithm: CCSDS Telecommand CRC | clause 4.1.3.1 | M | Y — reuses `pkg/crc` |
-| CRC placement and coverage | clause 4.1.3.2 | M | Y — final octets, counted in the data field length |
+| CRC at receiving entity | clause 4.1.2 | O | Y: failing PDUs are discarded |
+| CRC algorithm: CCSDS Telecommand CRC | clause 4.1.3.1 | M | Y: reuses `pkg/crc` |
+| CRC placement and coverage | clause 4.1.3.2 | M | Y: final octets, counted in the data field length |
 | Checksum 32 bits | clause 4.2.1.2 | M | Y |
-| Modular checksum | clause 4.2.2.3 | M | Y — verified against the Annex F worked example |
+| Modular checksum | clause 4.2.2.3 | M | Y: verified against the Annex F worked example |
 | Null checksum | clause 4.2.2.4 | M | Y |
-| Additional checksum algorithms | clause 4.2.2.5 | O | Y — CRC-32C (type 2), CRC-32 (type 3) |
-| Class 1 unacknowledged transfer | clause 4.6 | M | Y — file data arriving before Metadata is buffered and replayed |
-| Class 2 acknowledged transfer | clause 4.6 | O | Y — NAK-driven gap recovery; the last recovered segment triggers the Finished PDU |
-| Check limit | clause 4.6.3.3 | O | Y — caller-driven via `ExpireCheckLimit`; closes out Class 1 with closure |
-| Fault handlers: cancel, suspend, ignore, abandon | clause 4.8, table 4-1 | M | Y — every condition defaults to cancel; per-condition config overrides |
-| Suspend and resume | clause 4.11 | O | Y — state flags; the caller owns the clock |
-| Cancel | clause 4.11 | O | Y — sender EOF (cancel) carries progress; receiver `Cancel()` and inbound EOF (cancel) close out with Finished (incomplete) |
-| Filestore requests | clause 5.4.1, table 5-16 | O | P — see A1.6 |
-| Filestore responses | clause 5.4.2, table 5-17 | O | Y — one per request |
-| Messages to user | clause 5.4.3 | O | Y — carried, not interpreted |
-| Fault handler override TLV | clause 5.4.4 | O | Y — sent from `SenderConfig`, applied by the receiver on arrival |
-| Flow label TLV | clause 5.4.5 | O | Y — carried, not interpreted |
-| Entity ID TLV | clause 5.4.6 | M | Y — used for fault location |
+| Additional checksum algorithms | clause 4.2.2.5 | O | Y: CRC-32C (type 2), CRC-32 (type 3) |
+| Class 1 unacknowledged transfer | clause 4.6 | M | Y: file data arriving before Metadata is buffered and replayed |
+| Class 2 acknowledged transfer | clause 4.6 | O | Y: NAK-driven gap recovery; the last recovered segment triggers the Finished PDU |
+| Check limit | clause 4.6.3.3 | O | Y: caller-driven via `ExpireCheckLimit`; closes out Class 1 with closure |
+| Fault handlers: cancel, suspend, ignore, abandon | clause 4.8, table 4-1 | M | Y: every condition defaults to cancel; per-condition config overrides |
+| Suspend and resume | clause 4.11 | O | Y: state flags; the caller owns the clock |
+| Cancel | clause 4.11 | O | Y: sender EOF (cancel) carries progress; receiver `Cancel()` and inbound EOF (cancel) close out with Finished (incomplete) |
+| Filestore requests | clause 5.4.1, table 5-16 | O | P: see A1.6 |
+| Filestore responses | clause 5.4.2, table 5-17 | O | Y: one per request |
+| Messages to user | clause 5.4.3 | O | Y: carried, not interpreted |
+| Fault handler override TLV | clause 5.4.4 | O | Y: sent from `SenderConfig`, applied by the receiver on arrival |
+| Flow label TLV | clause 5.4.5 | O | Y: carried, not interpreted |
+| Entity ID TLV | clause 5.4.6 | M | Y: used for fault location |
 
 ---
 
@@ -161,8 +161,8 @@ order: 30
 
 Section 6 carries every User Operation as a Reserved CFDP Message inside a
 Message to User TLV in an ordinary transaction's metadata (clause 6.1.1), so Part 2
-adds no PDU of its own. The message identifier — the ASCII characters `cfdp`
-(table 6-1) — is what separates a protocol message from an application one,
+adds no PDU of its own. The message identifier (the ASCII characters `cfdp`
+(table 6-1)) is what separates a protocol message from an application one,
 and `UserMessagesFrom` uses it to sift a metadata TLV run.
 
 All 20 message types of tables 6-3, 6-14, 6-17, 6-20 and 6-23 are named, and
@@ -179,14 +179,14 @@ every content table is encoded and decoded.
 | Proxy Transmission Mode | table 6-8 | Yes | Table 5-1 makes '0' acknowledged, so the flag is inverted on the wire. |
 | Proxy Flow Label | table 6-9 | Yes | |
 | Proxy Segmentation Control | table 6-10 | Yes | '0' means record boundaries respected. |
-| Proxy Put Response | table 6-12 | Yes | Condition code, spare bit, delivery code, file status — the Finished PDU's packing. |
+| Proxy Put Response | table 6-12 | Yes | Condition code, spare bit, delivery code, file status, the Finished PDU's packing. |
 | Proxy Filestore Response | table 6-13 | Yes | |
 | Proxy Put Cancel | clause 6.2.6.2 | Yes | Has no content, and is encoded with none. |
 | Proxy Closure Request | table 6-11 | Yes | |
 | Directory Listing Request | table 6-15 | Yes | |
 | Directory Listing Response | table 6-16 | Yes | Success is **'0'** here. |
 | Remote Status Report Request | table 6-18 | Yes | |
-| Remote Status Report Response | table 6-19 | Yes | Success is **'1'** here — the opposite polarity from table 6-16, and in the low bit rather than the high one. |
+| Remote Status Report Response | table 6-19 | Yes | Success is **'1'** here, the opposite polarity from table 6-16, and in the low bit rather than the high one. |
 | Remote Suspend Request | table 6-21 | Yes | clause 6.5.3.1.2 requires the carrying transaction to be Acknowledged; that is the caller's to arrange. |
 | Remote Suspend Response | table 6-22 | Yes | Carries the transaction ID, which is easy to miss because the field list runs onto a second page. |
 | Remote Resume Request | table 6-24 | Yes | |

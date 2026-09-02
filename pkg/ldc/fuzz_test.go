@@ -23,7 +23,7 @@ var fuzzParams = []ldc.Params{
 // through BitReader, which reports exhaustion, and every FS codeword is read
 // with a limit so a run of zero octets cannot be taken for an enormous
 // sample. Both Decompress and DecompressFile are exercised, because they
-// reach the decoder by different routes — one is told the parameters, the
+// reach the decoder by different routes. One is told the parameters, the
 // other reads them from a header it must not trust.
 func FuzzDecompress(f *testing.F) {
 	// Seed with real output from every parameter set.

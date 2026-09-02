@@ -154,7 +154,7 @@ func TestProcessSecurityReplayDetection(t *testing.T) {
 		t.Fatalf("first frame rejected: %v", err)
 	}
 
-	// §2.3.2.3.2: a counter at or below the stored one is discarded.
+	// Clause 2.3.2.3.2: a counter at or below the stored one is discarded.
 	_, data, err := sdls.ProcessSecurity(first, frameHeader, lookup)
 	if !errors.Is(err, sdls.ErrReplayDetected) {
 		t.Errorf("replayed frame: error = %v, want ErrReplayDetected", err)
@@ -176,7 +176,7 @@ func TestProcessSecurityReplayDetection(t *testing.T) {
 func TestProcessSecurityBeyondSequenceWindow(t *testing.T) {
 	tx := newTestSA(t, sdls.AuthenticatedEncryption)
 	rx := newTestSA(t, sdls.AuthenticatedEncryption)
-	rx.SeqWindow = 4 // §2.3.2.3.3
+	rx.SeqWindow = 4 // clause 2.3.2.3.3
 	frameHeader := []byte{0x01}
 	lookup := sdls.StaticLookup(rx)
 
@@ -208,7 +208,7 @@ func TestProcessSecurityBeyondSequenceWindow(t *testing.T) {
 
 func TestForgedFrameDoesNotAdvanceReplayWindow(t *testing.T) {
 	// A failed MAC must leave the receiver's window untouched, or an attacker
-	// could lock out the real sender (§4.2.4.4).
+	// could lock out the real sender (clause 4.2.4.4).
 	tx := newTestSA(t, sdls.AuthenticatedEncryption)
 	rx := newTestSA(t, sdls.AuthenticatedEncryption)
 	frameHeader := []byte{0x01}
@@ -259,7 +259,7 @@ func TestMaskTooShort(t *testing.T) {
 func TestAuthMaskExcludesMaskedHeaderBits(t *testing.T) {
 	// A mask of zeros over the frame header means those octets are not
 	// authenticated, so changing them must not break verification
-	// (§4.2.2.6.2 j allows exactly this for unspecified fields).
+	// (clause 4.2.2.6.2 j allows exactly this for unspecified fields).
 	frameHeader := []byte{0x11, 0x22, 0x33, 0x44}
 	mask := make([]byte, len(frameHeader)+baselineLengths.HeaderSize())
 	for i := len(frameHeader); i < len(mask); i++ {
@@ -283,7 +283,7 @@ func TestAuthMaskExcludesMaskedHeaderBits(t *testing.T) {
 }
 
 func TestIVIsExcludedFromMACRegardlessOfMask(t *testing.T) {
-	// §4.2.2.6.2 h) excludes the IV from the authenticated data. Verify the
+	// Clause 4.2.2.6.2 h) excludes the IV from the authenticated data. Verify the
 	// implementation enforces that even when the mask is all ones: the frame
 	// must still verify, which it only can if both sides zero the IV.
 	sa := newTestSA(t, sdls.AuthenticatedEncryption)

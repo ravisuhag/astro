@@ -96,7 +96,7 @@ func TestVCPService_Flush_ZeroConfig(t *testing.T) {
 // --- VCP Packing Tests (with ChannelConfig) ---
 
 func TestVCPService_Packing_SinglePacket(t *testing.T) {
-	// capacity = 40, packet = 8 bytes (6 hdr + 2 payload) → fits in one frame
+	// capacity = 40, packet = 8 bytes (6 hdr + 2 payload) -> fits in one frame
 	config := tmdl.ChannelConfig{FrameLength: 48, HasFEC: true}
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -124,7 +124,7 @@ func TestVCPService_Packing_SinglePacket(t *testing.T) {
 }
 
 func TestVCPService_Packing_LargePacket(t *testing.T) {
-	// capacity = 10, packet = 16 bytes (6 hdr + 10 payload) → spans 2 frames
+	// capacity = 10, packet = 16 bytes (6 hdr + 10 payload) -> spans 2 frames
 	config := tmdl.ChannelConfig{FrameLength: 18, HasFEC: true}
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -138,7 +138,7 @@ func TestVCPService_Packing_LargePacket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 16 packet bytes leave 4 spare octets in frame 2 — too few for the
+	// 16 packet bytes leave 4 spare octets in frame 2, too few for the
 	// 7-octet minimum idle packet, so the fill spans one extra frame: 3 total.
 	if vc.Len() != 3 {
 		t.Fatalf("Expected 3 frames, got %d", vc.Len())
@@ -154,7 +154,7 @@ func TestVCPService_Packing_LargePacket(t *testing.T) {
 }
 
 func TestVCPService_Packing_TwoSmallPackets(t *testing.T) {
-	// capacity = 20, two packets of 8 bytes each = 16 bytes → fit in one frame
+	// capacity = 20, two packets of 8 bytes each = 16 bytes -> fit in one frame
 	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelPacketService(933, 1, vc, config, nil)
@@ -212,7 +212,7 @@ func TestVCPService_Packing_TwoSmallPackets(t *testing.T) {
 }
 
 func TestVCPService_Packing_SpanningPackets(t *testing.T) {
-	// capacity = 12, pkt1=8 bytes, pkt2=8 bytes → total 16 bytes
+	// capacity = 12, pkt1=8 bytes, pkt2=8 bytes -> total 16 bytes
 	// Frame 1: [pkt1(8) + pkt2_start(4)] FHP=0
 	// Frame 2: [pkt2_end(4) + idle packet(8)] FHP=4 (idle packet header)
 	config := tmdl.ChannelConfig{FrameLength: 20, HasFEC: true}
@@ -273,11 +273,11 @@ func TestVCPService_Packing_FHPValues(t *testing.T) {
 }
 
 func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
-	// capacity = 10, pkt1=7 bytes → Frame 1: [pkt1(7)|pkt2_start(3)] FHP=0
-	// pkt2=7 bytes → pkt2 starts at offset 7 in frame 1
+	// capacity = 10, pkt1=7 bytes -> Frame 1: [pkt1(7)|pkt2_start(3)] FHP=0
+	// pkt2=7 bytes -> pkt2 starts at offset 7 in frame 1
 	// But actually: frame 1 has capacity 10. After pkt1 (7 bytes), pkt2 starts at offset 7.
 	// If total < capacity (14 bytes > 10), frame 1 = first 10 bytes, with pkt2 at offset 7.
-	// Flush leaves 4 octets of pkt2 and 6 spare — under the 7-octet minimum,
+	// Flush leaves 4 octets of pkt2 and 6 spare, under the 7-octet minimum,
 	// so the idle fill packet starting at offset 4 spans into a third frame.
 	config := tmdl.ChannelConfig{FrameLength: 18, HasFEC: true} // capacity = 10
 	vc := tmdl.NewVirtualChannel(1, 100)
@@ -288,7 +288,7 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 	pkt2 := makeTestPacket([]byte{0xBB}) // 7 bytes
 
 	_ = svc.Send(pkt1) // buffer: 7 bytes, offsets: [0]
-	_ = svc.Send(pkt2) // buffer: 14 bytes, offsets: [0, 7] → generates 1 full frame (10 bytes)
+	_ = svc.Send(pkt2) // buffer: 14 bytes, offsets: [0, 7] -> generates 1 full frame (10 bytes)
 	_ = svc.Flush()    // flushes remaining 4 bytes
 
 	// Frame 1 should have FHP=0 (pkt1 at offset 0, pkt2 at offset 7)
@@ -304,7 +304,7 @@ func TestVCPService_Packing_FHP_MidFrame(t *testing.T) {
 	}
 
 	// Frame 3 is pure idle packet continuation: no packet starts in it,
-	// so FHP is the 0x07FF "no packet starts" sentinel (§4.1.2.7.6).
+	// so FHP is the 0x07FF "no packet starts" sentinel (clause 4.1.2.7.6).
 	f3, _ := vc.Next()
 	if f3.Header.FirstHeaderPtr != tmdl.FHPNoPacketStart {
 		t.Errorf("Frame 3 FHP = 0x%04X, want 0x%04X (no packet starts)",
@@ -360,7 +360,7 @@ func TestVCPService_Packing_LossResync(t *testing.T) {
 	// Remove the first frame (simulate loss)
 	_, _ = vc.Next() // discard pkt1's frame
 
-	// pkt2's frame remains — it has FHP=0x07FF (no packet starts) or FHP with offset
+	// pkt2's frame remains. It has FHP=0x07FF (no packet starts) or FHP with offset
 	// After gap detection, receiver should resync and eventually extract pkt2
 	// if pkt2 starts in the remaining frame
 
@@ -886,7 +886,7 @@ func TestIdleFrameDoesNotAffectPacketState(t *testing.T) {
 	}
 }
 
-// --- Idle-packet fill tests (CCSDS 132.0-B-3 §4.2.2, ECSS 5.4.3.3b/5.4.3.4g) ---
+// --- Idle-packet fill tests (CCSDS 132.0-B-3 clause 4.2.2, ECSS 5.4.3.3b/5.4.3.4g) ---
 
 // drainDataFields concatenates the data fields of all frames in the channel.
 func drainDataFields(t *testing.T, vc *tmdl.VirtualChannel) []byte {
@@ -1016,7 +1016,7 @@ func TestVCPService_ReceiveDiscardsIdlePackets(t *testing.T) {
 	}
 }
 
-// --- Idle-frame counter continuity (CCSDS 132.0-B-3 §4.1.2.5) ---
+// --- Idle-frame counter continuity (CCSDS 132.0-B-3 clause 4.1.2.5) ---
 
 func TestMasterChannel_IdleFrameCounterContinuity(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
@@ -1053,9 +1053,9 @@ func TestMasterChannel_IdleFrameCounterContinuity(t *testing.T) {
 	if idle1.Header.MCFrameCount != 1 {
 		t.Errorf("Idle 1: MC count = %d, want 1", idle1.Header.MCFrameCount)
 	}
-	// CCSDS 132.0-B-3 §4.1.4.6.3: an OID frame's VCID is one of those used
+	// CCSDS 132.0-B-3 clause 4.1.4.6.3: an OID frame's VCID is one of those used
 	// for transferring packets. VC 1 is the only registered channel, so the
-	// idle frame joins its sequence — the data frame above took VC count 0,
+	// idle frame joins its sequence, the data frame above took VC count 0,
 	// making this one 1.
 	if idle1.Header.VirtualChannelID != 1 {
 		t.Errorf("Idle VCID = %d, want 1 (a packet-carrying VCID)",
@@ -1116,7 +1116,7 @@ func TestPhysicalChannel_IdleFrame_DeterministicSCIDAndCounter(t *testing.T) {
 	}
 }
 
-// --- Frame length enforcement (CCSDS 132.0-B-3 §2.1.3) ---
+// --- Frame length enforcement (CCSDS 132.0-B-3 clause 2.1.3) ---
 
 func TestFrameLengthEnforcedOnEncodeAndDecode(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true}
@@ -1152,7 +1152,7 @@ func TestFrameLengthEnforcedOnEncodeAndDecode(t *testing.T) {
 	}
 }
 
-// --- VCA SDU size validation (CCSDS 132.0-B-3 §3.4.2.2) ---
+// --- VCA SDU size validation (CCSDS 132.0-B-3 clause 3.4.2.2) ---
 
 func TestVCAService_FixedLength_SizeValidated(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 28, HasFEC: true} // capacity 20
@@ -1172,7 +1172,7 @@ func TestVCAService_FixedLength_SizeValidated(t *testing.T) {
 	}
 }
 
-// --- OCF supplier hook (CCSDS 132.0-B-3 §4.1.5) ---
+// --- OCF supplier hook (CCSDS 132.0-B-3 clause 4.1.5) ---
 
 func TestVCPService_OCFSupplier(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 28, HasOCF: true, HasFEC: true}
@@ -1228,10 +1228,10 @@ func TestOCFSupplier_BadLengthRejected(t *testing.T) {
 	}
 }
 
-// --- OID frame conformance (CCSDS 132.0-B-3 §4.1.4.6) ---
+// --- OID frame conformance (CCSDS 132.0-B-3 clause 4.1.4.6) ---
 
 // TestOIDSequenceMatchesTheStandardPattern checks the PN generator against the
-// octets the note under §4.1.4.6.2.2 publishes, which is the only published
+// octets the note under clause 4.1.4.6.2.2 publishes, which is the only published
 // check value for the D0+D1+D2+D22+D32 LFSR.
 func TestOIDSequenceMatchesTheStandardPattern(t *testing.T) {
 	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
@@ -1242,11 +1242,11 @@ func TestOIDSequenceMatchesTheStandardPattern(t *testing.T) {
 	}
 }
 
-// TestIdleFramesDoNotRestartThePNSequence checks §4.1.4.6.2.1: the generator
+// TestIdleFramesDoNotRestartThePNSequence checks clause 4.1.4.6.2.1: the generator
 // is initialized once at start-up and never restarted, so two consecutive
 // idle frames must carry different octets. Restarting it per frame would
 // repeat the same pattern forever, which is exactly the insufficient
-// randomization note 5 of §4.1.4.6.3 warns about.
+// randomization note 5 of clause 4.1.4.6.3 warns about.
 func TestIdleFramesDoNotRestartThePNSequence(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
 	mc := tmdl.NewMasterChannel(933, config)
@@ -1276,7 +1276,7 @@ func TestIdleFramesDoNotRestartThePNSequence(t *testing.T) {
 	}
 }
 
-// TestIdleFrameUsesAPacketCarryingVCID checks §4.1.4.6.3: the VCID of an OID
+// TestIdleFrameUsesAPacketCarryingVCID checks clause 4.1.4.6.3: the VCID of an OID
 // frame is one of the VCIDs used for transferring packets, not an arbitrary
 // channel the receiver has no reception function for.
 func TestIdleFrameUsesAPacketCarryingVCID(t *testing.T) {
@@ -1295,7 +1295,7 @@ func TestIdleFrameUsesAPacketCarryingVCID(t *testing.T) {
 	}
 
 	// An explicit choice wins, so a mission with a dedicated OID channel can
-	// say so (note 2 under §4.1.4.6.3 prefers a separate one).
+	// say so (note 2 under clause 4.1.4.6.3 prefers a separate one).
 	mc.SetIdleVCID(5)
 	idle, err = mc.GetNextFrameOrIdle()
 	if err != nil {
@@ -1307,7 +1307,7 @@ func TestIdleFrameUsesAPacketCarryingVCID(t *testing.T) {
 	}
 }
 
-// --- MC_FSH / MC_OCF services (CCSDS 132.0-B-3 §3.8, §3.9, §4.2.5) ---
+// --- MC_FSH / MC_OCF services (CCSDS 132.0-B-3 clause 3.8, clause 3.9, clause 4.2.5) ---
 
 func TestMasterChannelFSHAndOCFServices(t *testing.T) {
 	config := tmdl.ChannelConfig{
@@ -1350,7 +1350,7 @@ func TestMasterChannelFSHAndOCFServices(t *testing.T) {
 			frame.OperationalControl, ocfSDU)
 	}
 
-	// So does an idle frame: §4.1.4.6.3 note 1 says only the data field of an
+	// So does an idle frame: Clause 4.1.4.6.3 note 1 says only the data field of an
 	// OID frame is idle, its secondary header and OCF can carry valid data.
 	idle, err := mc.GetNextFrameOrIdle()
 	if err != nil {
@@ -1415,7 +1415,7 @@ func TestMasterChannelFSHRejectsMisconfiguration(t *testing.T) {
 	}
 }
 
-// --- VC_FSH service (CCSDS 132.0-B-3 §3.5) ---
+// --- VC_FSH service (CCSDS 132.0-B-3 clause 3.5) ---
 
 func TestVCPSecondaryHeaderRoundTrip(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 40, FSHDataLength: 3, HasFEC: true}
@@ -1448,7 +1448,7 @@ func TestVCPSecondaryHeaderRoundTrip(t *testing.T) {
 
 	// The frame must still be exactly the channel's fixed length: the
 	// secondary header takes its octets out of the data field, not out of
-	// thin air (§4.1.4.2).
+	// thin air (clause 4.1.4.2).
 	encoded, err := frame.EncodeWithConfig(config)
 	if err != nil {
 		t.Fatalf("frame with secondary header is not the fixed length: %v", err)
@@ -1478,11 +1478,11 @@ func TestVCPSecondaryHeaderRoundTrip(t *testing.T) {
 	}
 }
 
-// --- VCA Status Fields (CCSDS 132.0-B-3 §3.4.2.3) ---
+// --- VCA Status Fields (CCSDS 132.0-B-3 clause 3.4.2.3) ---
 
 // TestVCAStatusFieldsRoundTrip checks that the Packet Order Flag, Segment
 // Length ID, and First Header Pointer a VCA user sets are carried to the
-// receiving user unchanged. Providing the field is mandatory (§3.4.2.3) and
+// receiving user unchanged. Providing the field is mandatory (clause 3.4.2.3) and
 // the semantics are the user's, so the protocol must not overwrite them.
 func TestVCAStatusFieldsRoundTrip(t *testing.T) {
 	config := tmdl.ChannelConfig{FrameLength: 32, HasFEC: true}
@@ -1506,7 +1506,7 @@ func TestVCAStatusFieldsRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !frame.Header.SyncFlag {
-		t.Error("SyncFlag = false; §4.1.2.7.3.2 requires '1' for a VCA_SDU")
+		t.Error("SyncFlag = false; clause 4.1.2.7.3.2 requires '1' for a VCA_SDU")
 	}
 	if frame.Header.PacketOrderFlag != want.PacketOrderFlag ||
 		frame.Header.SegmentLengthID != want.SegmentLengthID ||

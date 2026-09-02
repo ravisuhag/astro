@@ -109,9 +109,9 @@ func TestPrimaryHeader_Validate(t *testing.T) {
 		{
 			// With the Synchronization Flag set, the First Header Pointer,
 			// Packet Order Flag, and Segment Length ID are undefined by
-			// CCSDS 132.0-B-3 (notes under §4.1.2.7.4 to §4.1.2.7.6) and are
+			// CCSDS 132.0-B-3 (notes under clause 4.1.2.7.4 to clause 4.1.2.7.6) and are
 			// handed to the VCA service user as the VCA Status Fields of
-			// §3.4.2.3, so any value is legal.
+			// Clause 3.4.2.3, so any value is legal.
 			name: "VCA status fields with sync flag",
 			header: tmdl.PrimaryHeader{
 				SyncFlag:        true,
@@ -195,7 +195,7 @@ func TestSecondaryHeader_EncodeDecode(t *testing.T) {
 
 func TestSecondaryHeader_MaxLength63(t *testing.T) {
 	// 63 data octets plus the identification octet is the 64-octet maximum of
-	// CCSDS 132.0-B-3 §4.1.3.2 and ECSS-E-ST-50-03C 5.3.1c.
+	// CCSDS 132.0-B-3 clause 4.1.3.2 and ECSS-E-ST-50-03C 5.3.1c.
 	sh := tmdl.SecondaryHeader{
 		VersionNumber: 0,
 		HeaderLength:  63,
@@ -468,14 +468,14 @@ func TestMalformedFrame(t *testing.T) {
 // TestSecondaryHeaderLength_CCSDS pins the length field to the value that goes
 // on the wire, not to a round trip.
 //
-// CCSDS 132.0-B-3 §4.1.3.2.2.3 and ECSS-E-ST-50-03C 5.3.2.3c both define the
+// CCSDS 132.0-B-3 clause 4.1.3.2.2.3 and ECSS-E-ST-50-03C 5.3.2.3c both define the
 // field as the TOTAL secondary header length in octets minus one, where the
 // total counts the identification octet. Three data octets make a four-octet
 // header, so the field reads 3.
 //
 // This test previously asserted 2 and so locked in an off-by-one. Encoder and
 // decoder agreed with each other, which is exactly why a round-trip test could
-// never have caught it — the same shape as the PN randomizer defect in
+// never have caught it, the same shape as the PN randomizer defect in
 // pkg/tmsc. Assert the octet, not the symmetry.
 func TestSecondaryHeaderLength_CCSDS(t *testing.T) {
 	shData := []byte{0xAA, 0xBB, 0xCC}
@@ -577,7 +577,7 @@ func TestOCFInsufficientData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2 bytes of data field — not enough for the 4-byte OCF the flag promises
+	// 2 bytes of data field, not enough for the 4-byte OCF the flag promises
 	withoutCRC := append(hBytes, 0x01, 0x02)
 	crc := ccsdscrc.ComputeCRC16(withoutCRC)
 	frame := binary.BigEndian.AppendUint16(withoutCRC, crc)
@@ -606,7 +606,7 @@ func TestFirstHeaderPtr_WithSecondaryHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Per CCSDS 132.0-B-3 §4.1.2.7.3, FirstHeaderPtr is relative to the
+	// Per CCSDS 132.0-B-3 clause 4.1.2.7.3, FirstHeaderPtr is relative to the
 	// Transfer Frame Data Field (after secondary header), not the frame payload.
 	// When the first packet starts at byte 0 of the Data Field, FirstHeaderPtr = 0.
 	if frame.Header.FirstHeaderPtr != 0 {
@@ -629,7 +629,7 @@ func TestDecodedFrameDoesNotAliasInput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Zero out the encoded buffer — decoded fields should be unaffected
+	// Zero out the encoded buffer, decoded fields should be unaffected
 	for i := range encoded {
 		encoded[i] = 0
 	}
@@ -651,7 +651,7 @@ func TestNewIdleFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// CCSDS 132.0-B-3 §4.1.2.7.6.5: a data field of only idle data takes the
+	// CCSDS 132.0-B-3 clause 4.1.2.7.6.5: a data field of only idle data takes the
 	// OID pointer 0x7FE, not the 0x7FF that means "no packet starts here".
 	if frame.Header.FirstHeaderPtr != tmdl.FHPOnlyIdleData {
 		t.Errorf("FirstHeaderPtr = 0x%04X, want 0x%04X (OID)",
@@ -664,9 +664,9 @@ func TestNewIdleFrame(t *testing.T) {
 		t.Errorf("DataField len = %d, want %d", len(frame.DataField), capacity)
 	}
 
-	// §4.1.4.6.2: the data field carries the mandatory PN sequence, whose
-	// first octets the note under §4.1.4.6.2.2 gives as FF FF FF FF 6D B6 D8
-	// 61 45 1F. Constant fill is what this replaced — it defeats the
+	// Clause 4.1.4.6.2: the data field carries the mandatory PN sequence, whose
+	// first octets the note under clause 4.1.4.6.2.2 gives as FF FF FF FF 6D B6 D8
+	// 61 45 1F. Constant fill is what this replaced. It defeats the
 	// randomization the sequence exists to provide.
 	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
 	if n := min(len(want), len(frame.DataField)); !bytes.Equal(frame.DataField[:n], want[:n]) {
@@ -861,7 +861,7 @@ func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 // TestFECFOptionalUnderReedSolomon covers ECSS-E-ST-50-03C 5.6.1b and its
 // NOTE: the Frame Error Control Field is mandatory when the frame is not
 // Reed-Solomon encoded, and optional when it travels inside a code block,
-// which already protects it. §5.6.1c then requires the choice to hold for the
+// which already protects it. Clause 5.6.1c then requires the choice to hold for the
 // whole physical channel.
 //
 // Before this, Encode always appended the field and DecodeTMTransferFrame
@@ -956,11 +956,11 @@ func TestChannelConfigValidate(t *testing.T) {
 	}
 }
 
-// --- SyncFlag=1 First Header Pointer (CCSDS 132.0-B-3 §4.1.2.7.6.2) ---
+// --- SyncFlag=1 First Header Pointer (CCSDS 132.0-B-3 clause 4.1.2.7.6.2) ---
 
 // TestDecodeLenientFHPWithSyncFlag checks that a First Header Pointer carried
 // under a set Synchronization Flag survives a decode/encode round trip
-// untouched. The field is undefined for such frames and §3.4.2.3 gives those
+// untouched. The field is undefined for such frames and clause 3.4.2.3 gives those
 // bits to the VCA service user as status, so neither side may rewrite them.
 func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	// Build a valid VCA-style frame (SyncFlag=1, FHP=0x7FF) and encode it.
@@ -994,7 +994,7 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	}
 
 	// Re-encoding must keep the value: with the Synchronization Flag set the
-	// pointer is a VCA Status Field belonging to the service user (§3.4.2.3),
+	// pointer is a VCA Status Field belonging to the service user (clause 3.4.2.3),
 	// so a relay that rewrote it to all ones would destroy user data.
 	if err := back.Header.Validate(); err != nil {
 		t.Errorf("Validate rejected a VCA status field value: %v", err)

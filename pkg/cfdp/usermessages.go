@@ -9,23 +9,23 @@ import "fmt"
 // entity, list a directory, report on a transaction, suspend or resume one.
 //
 // None of it is a new PDU. Every operation travels as a Reserved CFDP Message
-// inside a Message to User TLV in an ordinary transaction's metadata (§6.1.1),
+// inside a Message to User TLV in an ordinary transaction's metadata (clause 6.1.1),
 // so the wire format underneath is what Part 1 already built. What Part 2 adds
 // is the content of those messages.
 //
 // A Reserved CFDP Message is the four ASCII characters "cfdp", a one-octet
-// message type, then content whose shape the type decides (§6.1.2, table 6-1).
+// message type, then content whose shape the type decides (clause 6.1.2, table 6-1).
 // That header is what tells a receiver a Message to User is a protocol
 // message rather than something for the application.
 //
 // What is here is the message formats: building them and reading them back.
-// What is not is the user behaviour around them — which primitive to call on
-// receipt, how to queue concurrent suspension orders (§6.5.4.1.2) — because
+// What is not is the user behaviour around them (which primitive to call on
+// receipt, how to queue concurrent suspension orders (clause 6.5.4.1.2)) because
 // the standard makes that the CFDP user's job and says so: "the manner in
 // which this is accomplished is an implementation matter".
 
 // MessageMagic is the message identifier every Reserved CFDP Message opens
-// with: the ASCII characters "cfdp" (§6.1.2, table 6-1).
+// with: the ASCII characters "cfdp" (clause 6.1.2, table 6-1).
 //
 // It is what distinguishes a protocol message from an application one, since
 // both travel in a Message to User TLV.
@@ -57,7 +57,7 @@ const (
 	MsgProxyFilestoreResponse    UserMessageType = 0x08
 	MsgProxyPutCancel            UserMessageType = 0x09
 
-	// MsgOriginatingTransactionID is common to all User operations (§6.1.5),
+	// MsgOriginatingTransactionID is common to all User operations (clause 6.1.5),
 	// which is why it sits inside the proxy range rather than after it.
 	MsgOriginatingTransactionID UserMessageType = 0x0A
 
@@ -123,7 +123,7 @@ func (t UserMessageType) Valid() bool {
 type UserMessage struct {
 	Type UserMessageType
 	// Content is the message body, whose shape the type decides. It is empty
-	// for Proxy Put Cancel, which §6.2.6.2 says has no content.
+	// for Proxy Put Cancel, which clause 6.2.6.2 says has no content.
 	Content []byte
 }
 
@@ -265,7 +265,7 @@ func (t TransactionID) Humanize() string {
 	return fmt.Sprintf("entity %d, sequence %d", t.Source.Value, t.Sequence.Value)
 }
 
-// --- Originating Transaction ID, §6.1.5 and table 6-2 ---
+// --- Originating Transaction ID, clause 6.1.5 and table 6-2 ---
 
 // OriginatingTransactionID is the message every User operation carries
 // alongside its own, naming the transaction the operation refers to.
@@ -302,7 +302,7 @@ func (m *OriginatingTransactionID) Humanize() string {
 //
 // The remote user is the respondent, and the entity named here is the
 // beneficiary. When the beneficiary is the originator the operation works as
-// a Get (§6.2, note).
+// a Get (clause 6.2, note).
 type ProxyPutRequest struct {
 	// Destination is the beneficiary's entity ID.
 	Destination EntityID
@@ -379,7 +379,7 @@ type ProxyPutResponse struct {
 // Encode builds the message.
 //
 // The layout is condition code (4 bits), one spare bit, delivery code
-// (1 bit), file status (2 bits) — the same packing the Finished PDU uses,
+// (1 bit), file status (2 bits). The same packing the Finished PDU uses,
 // which is why the codes are the shared types.
 func (m ProxyPutResponse) Encode() (UserMessage, error) {
 	octet := byte(m.Condition&0x0F)<<4 |
@@ -629,7 +629,7 @@ func DecodeProxyFlowLabel(content []byte) (*ProxyFlowLabel, error) {
 // transaction (table 6-7).
 //
 // Its content is one octet holding the same condition code and handler code
-// pairing §5.4.4 defines for the fault handler override TLV.
+// pairing clause 5.4.4 defines for the fault handler override TLV.
 type ProxyFaultHandlerOverride struct {
 	Condition ConditionCode
 	Handler   FaultHandler
@@ -694,7 +694,7 @@ func (m *DirectoryListingRequest) Humanize() string {
 // (table 6-16).
 type DirectoryListingResponse struct {
 	// Successful is the listing response code. Table 6-16 encodes success as
-	// '0' — the opposite polarity from the Remote Status Report Response,
+	// '0'. The opposite polarity from the Remote Status Report Response,
 	// where table 6-19 encodes success as '1'. The flag here reads the same
 	// way in both, and each encoder writes what its own table says.
 	Successful bool
@@ -813,7 +813,7 @@ type RemoteStatusReportResponse struct {
 // Encode builds the message.
 //
 // The first octet packs transaction status (2 bits), five spare bits, then
-// the response code in the low bit — an unusual order, with the flag last
+// the response code in the low bit, an unusual order, with the flag last
 // rather than first as in table 6-16.
 func (m RemoteStatusReportResponse) Encode() (UserMessage, error) {
 	octet := byte(m.Status&0x03) << 6
@@ -868,7 +868,7 @@ func (m *RemoteStatusReportResponse) Humanize() string {
 // RemoteSuspendRequest asks a remote user to suspend one transaction
 // (table 6-21).
 //
-// §6.5.3.1.2 requires the carrying transaction to be Acknowledged.
+// Clause 6.5.3.1.2 requires the carrying transaction to be Acknowledged.
 type RemoteSuspendRequest struct {
 	Transaction TransactionID
 }
@@ -892,7 +892,7 @@ func DecodeRemoteSuspendRequest(content []byte) (*RemoteSuspendRequest, error) {
 }
 
 // RemoteResumeRequest asks a remote user to resume one transaction
-// (table 6-24). §6.6.3.1.2 requires the carrying transaction to be
+// (table 6-24). Clause 6.6.3.1.2 requires the carrying transaction to be
 // Acknowledged.
 type RemoteResumeRequest struct {
 	Transaction TransactionID
@@ -920,9 +920,9 @@ func DecodeRemoteResumeRequest(content []byte) (*RemoteResumeRequest, error) {
 // share: whether the transaction is now suspended, its status, and which
 // transaction it was (tables 6-22 and 6-25).
 //
-// §6.6.4.2 notes that a successful resume may not change the suspension
+// Clause 6.6.4.2 notes that a successful resume may not change the suspension
 // status at all, because several motivations for suspending can be valid at
-// once — so the indicator reports the state, not the outcome of the request.
+// once, so the indicator reports the state, not the outcome of the request.
 type SuspensionResponse struct {
 	Suspended bool
 	Status    TransactionStatus
@@ -1020,7 +1020,7 @@ func DecodeRemoteResumeResponse(content []byte) (*RemoteResumeResponse, error) {
 
 // ProxyPutCancel asks the respondent to cancel the proxied transaction.
 //
-// §6.2.6.2: "A Proxy Put Cancel message is mandatory. It has no content."
+// Clause 6.2.6.2: "A Proxy Put Cancel message is mandatory. It has no content."
 func ProxyPutCancel() UserMessage {
 	return UserMessage{Type: MsgProxyPutCancel}
 }

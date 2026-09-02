@@ -2,17 +2,17 @@
 //
 // This example demonstrates a complete CCSDS telemetry chain:
 //
-//   Spacecraft Side:
-//     1. Generate telemetry data as Space Packets (SPP)
-//     2. Frame packets into TM Transfer Frames (TMDL)
-//     3. Wrap frames as CADUs (ASM + optional randomization)
-//     4. Transmit over a simulated RF link
+//	Spacecraft Side:
+//	  1. Generate telemetry data as Space Packets (SPP)
+//	  2. Frame packets into TM Transfer Frames (TMDL)
+//	  3. Wrap frames as CADUs (ASM + optional randomization)
+//	  4. Transmit over a simulated RF link
 //
-//   Ground Station Side:
-//     1. Receive CADUs from the RF link
-//     2. Unwrap to extract TM Transfer Frames
-//     3. Demultiplex virtual channels
-//     4. Extract original Space Packets from frames
+//	Ground Station Side:
+//	  1. Receive CADUs from the RF link
+//	  2. Unwrap to extract TM Transfer Frames
+//	  3. Demultiplex virtual channels
+//	  4. Extract original Space Packets from frames
 //
 // The spacecraft uses two virtual channels:
 //   - VC0 (priority 3): Housekeeping telemetry (APID 100)
@@ -33,22 +33,22 @@ import (
 )
 
 const (
-	spacecraftID = 42   // 10-bit Spacecraft Identifier
-	frameLength  = 256  // Fixed TM frame length in octets
-	apidHK       = 100  // APID for housekeeping telemetry
-	apidScience  = 200  // APID for science data
-	vcidHK       = 0    // Virtual Channel for housekeeping
-	vcidScience  = 1    // Virtual Channel for science
+	spacecraftID = 42  // 10-bit Spacecraft Identifier
+	frameLength  = 256 // Fixed TM frame length in octets
+	apidHK       = 100 // APID for housekeeping telemetry
+	apidScience  = 200 // APID for science data
+	vcidHK       = 0   // Virtual Channel for housekeeping
+	vcidScience  = 1   // Virtual Channel for science
 )
 
 // housekeepingTelemetry represents a simple HK packet payload.
 type housekeepingTelemetry struct {
-	Timestamp   uint32  // Mission elapsed time (seconds)
-	BatteryV    float32 // Battery voltage
-	TempC       float32 // Temperature in Celsius
-	CPUPercent  uint8   // CPU usage percentage
-	MemPercent  uint8   // Memory usage percentage
-	ModeFlag    uint8   // Spacecraft mode (0=safe, 1=nominal, 2=science)
+	Timestamp  uint32  // Mission elapsed time (seconds)
+	BatteryV   float32 // Battery voltage
+	TempC      float32 // Temperature in Celsius
+	CPUPercent uint8   // CPU usage percentage
+	MemPercent uint8   // Memory usage percentage
+	ModeFlag   uint8   // Spacecraft mode (0=safe, 1=nominal, 2=science)
 }
 
 func (hk housekeepingTelemetry) encode() []byte {
@@ -126,8 +126,8 @@ func main() {
 	// Create virtual channels with buffering.
 	vcHK := tmdl.NewVirtualChannel(vcidHK, 32)
 	vcSci := tmdl.NewVirtualChannel(vcidScience, 32)
-	scMaster.AddVirtualChannel(vcHK, 3)   // housekeeping = higher priority
-	scMaster.AddVirtualChannel(vcSci, 1)  // science = lower priority
+	scMaster.AddVirtualChannel(vcHK, 3)  // housekeeping = higher priority
+	scMaster.AddVirtualChannel(vcSci, 1) // science = lower priority
 
 	// Create frame counter for sequence numbering.
 	counter := tmdl.NewFrameCounter()
@@ -217,7 +217,7 @@ func main() {
 			log.Fatalf("Failed to get frame: %v", err)
 		}
 
-		// Wrap the frame as CADU: prepend ASM (CCSDS 131.0-B-4).
+		// Wrap the frame as CADU: prepend ASM (CCSDS 131.0-B-5).
 		encoded, err := frame.Encode()
 		if err != nil {
 			log.Fatalf("Failed to encode frame: %v", err)
@@ -264,7 +264,7 @@ func main() {
 			break
 		}
 
-		// Unwrap CADU: strip ASM (CCSDS 131.0-B-4), then decode frame.
+		// Unwrap CADU: strip ASM (CCSDS 131.0-B-5), then decode frame.
 		frameData, err := tmsc.UnwrapCADU(cadu, nil, false)
 		if err != nil {
 			log.Printf("Warning: failed to unwrap CADU: %v", err)

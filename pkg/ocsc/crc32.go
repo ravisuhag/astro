@@ -1,24 +1,24 @@
 package ocsc
 
-// CRC-32 attachment, per CCSDS 142.0-B-1 §3.6.
+// CRC-32 attachment, per CCSDS 142.0-B-1 clause 3.6.
 //
 // Thirty-two check digits are appended to each pseudo-randomized information
 // block, so the receiver can tell a correctly decoded codeword from one the
 // SCPPM decoder got wrong.
 //
-// The generator (§3.6.2.2) is:
+// The generator (clause 3.6.2.2) is:
 //
 //	h(X) = X^32 + X^29 + X^18 + X^14 + X^3 + 1
 //
-// which is 0x20044009. That is yet another CRC-32 — the fourth polynomial in
+// which is 0x20044009. That is yet another CRC-32, the fourth polynomial in
 // this library, after IEEE, Castagnoli, and the Proximity-1 one in pkg/pxsc.
 // They are all different and none is interchangeable.
 //
-// The formula in §3.6.2.2 adds Σ X^(k+j) for j = 0 to 31 before the modulo.
+// The formula in clause 3.6.2.2 adds Σ X^(k+j) for j = 0 to 31 before the modulo.
 // That term is the standard way of writing "initialize the register to all
 // ones", which is what the implementation below does.
 
-// CRC32Polynomial is the generator of §3.6.2.2, MSB-first, with the implicit
+// CRC32Polynomial is the generator of clause 3.6.2.2, MSB-first, with the implicit
 // X^32 term dropped.
 const CRC32Polynomial uint32 = 0x20044009
 
@@ -44,7 +44,7 @@ func buildCRC32Table() [256]uint32 {
 
 // ComputeCRC32 returns the optical CRC-32 over a bit string.
 //
-// The register starts at all ones, matching the Σ X^(k+j) term of §3.6.2.2.
+// The register starts at all ones, matching the Σ X^(k+j) term of clause 3.6.2.2.
 // Because a block length need not be a multiple of eight, this walks bits
 // rather than octets whenever the tail is partial.
 func ComputeCRC32(block *BitString) uint32 {
@@ -73,7 +73,7 @@ func ComputeCRC32(block *BitString) uint32 {
 	return reg
 }
 
-// AttachCRC appends the 32 check digits to a block, per §3.6.1.1, returning a
+// AttachCRC appends the 32 check digits to a block, per clause 3.6.1.1, returning a
 // block of k + 32 digits.
 func AttachCRC(block *BitString) *BitString {
 	sum := ComputeCRC32(block)

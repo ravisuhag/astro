@@ -451,8 +451,8 @@ func (f *OSFilestore) Exists(name string) bool {
 // ExecuteFilestoreRequest runs one filestore action and returns the response
 // TLV value that belongs in the Finished PDU.
 //
-// Actions this package does not execute — append, replace, and the directory
-// actions — come back with status "not performed" rather than an error, which
+// Actions this package does not execute (append, replace, and the directory
+// actions) come back with status "not performed" rather than an error, which
 // is what table 5-18 provides for.
 func ExecuteFilestoreRequest(fs Filestore, req *FilestoreRequest) FilestoreResponse {
 	resp := FilestoreResponse{
@@ -473,7 +473,7 @@ func ExecuteFilestoreRequest(fs Filestore, req *FilestoreRequest) FilestoreRespo
 	case ActionRenameFile:
 		err = fs.Rename(name, req.SecondFileName.String())
 	case ActionDenyFile:
-		// "Delete if present" — absence is not a failure.
+		// "Delete if present", absence is not a failure.
 		if fs.Exists(name) {
 			err = fs.Delete(name)
 		}

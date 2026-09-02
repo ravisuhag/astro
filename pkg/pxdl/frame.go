@@ -4,8 +4,8 @@
 // Proximity-1 is the short-range link protocol: orbiter to lander, orbiter to
 // rover, spacecraft to spacecraft. It is what the Mars relay network runs on.
 //
-// It differs from the long-haul data link protocols this library also ships —
-// TM, TC, AOS, USLP — in ways that follow from the short range. Frames are
+// It differs from the long-haul data link protocols this library also ships (
+// TM, TC, AOS, USLP) in ways that follow from the short range. Frames are
 // small, at most 2048 octets. The header is five octets with no error control
 // field, because the coding layer below handles that. And a single frame type
 // carries both user data and the protocol's own supervisory traffic,
@@ -25,13 +25,13 @@ import (
 )
 
 // Version is the Transfer Frame Version Number for a Version-3 frame: binary
-// '10', per CCSDS 211.0-B-6 §3.2.2.2.2.
+// '10', per CCSDS 211.0-B-6 clause 3.2.2.2.2.
 const Version = 2
 
-// HeaderSize is the width of the Transfer Frame Header in octets (§3.2.1 a).
+// HeaderSize is the width of the Transfer Frame Header in octets (clause 3.2.1 a).
 const HeaderSize = 5
 
-// Frame size bounds, per §3.2.1 and §3.2.2.10.2.
+// Frame size bounds, per clause 3.2.1 and clause 3.2.2.10.2.
 const (
 	// MaxDataFieldSize is the largest Transfer Frame Data field.
 	MaxDataFieldSize = 2043
@@ -41,7 +41,7 @@ const (
 	MaxFrameSize = 2048
 )
 
-// QoS is the Quality of Service Indicator of §3.2.2.3.
+// QoS is the Quality of Service Indicator of clause 3.2.2.3.
 type QoS uint8
 
 const (
@@ -49,7 +49,7 @@ const (
 	// sequence number of every frame on it.
 	SequenceControlled QoS = 0
 	// Expedited bypasses the sequence number check. Supervisory PDUs travel
-	// only on this service (§3.2.4.1).
+	// only on this service (clause 3.2.4.1).
 	Expedited QoS = 1
 )
 
@@ -61,7 +61,7 @@ func (q QoS) String() string {
 	return "sequence controlled"
 }
 
-// PDUType is the PDU Type ID of §3.2.2.4: whether the data field carries user
+// PDUType is the PDU Type ID of clause 3.2.2.4: whether the data field carries user
 // data or the protocol's own supervisory traffic.
 type PDUType uint8
 
@@ -80,7 +80,7 @@ func (p PDUType) String() string {
 	return "user data (U-frame)"
 }
 
-// DFCID is the Data Field Construction ID of §3.2.2.5, saying how a U-frame's
+// DFCID is the Data Field Construction ID of clause 3.2.2.5, saying how a U-frame's
 // data field is arranged. Table 3-1 gives the four values.
 type DFCID uint8
 
@@ -109,11 +109,11 @@ func (d DFCID) String() string {
 	}
 }
 
-// SourceOrDest is the Source-or-Destination Identifier of §3.2.2.9, saying
+// SourceOrDest is the Source-or-Destination Identifier of clause 3.2.2.9, saying
 // whether the SCID names the sender or the receiver.
 type SourceOrDest uint8
 
-// Polarity per §3.2.2.9.2, table 3-2: '0' means the SCID field carries the
+// Polarity per clause 3.2.2.9.2, table 3-2: '0' means the SCID field carries the
 // SCID of the spacecraft sending the frame over this link (the MIB parameter
 // Local_Spacecraft_ID), '1' means it carries the SCID of the spacecraft
 // intended to receive it (Remote_Spacecraft_ID).
@@ -133,7 +133,7 @@ func (s SourceOrDest) String() string {
 	return "destination"
 }
 
-// Header is the Transfer Frame Header of §3.2.2, figure 3-3.
+// Header is the Transfer Frame Header of clause 3.2.2, figure 3-3.
 //
 // Five octets, ten fields:
 //
@@ -147,26 +147,26 @@ type Header struct {
 	QoS QoS
 	// PDUType distinguishes a U-frame from a P-frame.
 	PDUType PDUType
-	// DFCID says how a U-frame's data field is arranged. §3.2.2.5.2 requires
+	// DFCID says how a U-frame's data field is arranged. Clause 3.2.2.5.2 requires
 	// zero on a P-frame.
 	DFCID DFCID
 	// SCID identifies the spacecraft, 10 bits.
 	SCID uint16
 	// PCID selects one of two physical channels, 1 bit.
 	PCID uint8
-	// PortID identifies the port, 3 bits. §3.2.2.8.2 requires zero on a
+	// PortID identifies the port, 3 bits. Clause 3.2.2.8.2 requires zero on a
 	// P-frame.
 	PortID uint8
 	// SourceOrDest says whether SCID names the source or the destination.
 	SourceOrDest SourceOrDest
 	// FrameLength is the total frame length in octets. It travels as a count
-	// one less than this value (§3.2.2.10.2).
+	// one less than this value (clause 3.2.2.10.2).
 	FrameLength uint16
-	// FrameSequenceNumber counts frames per PCID and service (§3.2.2.11).
+	// FrameSequenceNumber counts frames per PCID and service (clause 3.2.2.11).
 	FrameSequenceNumber uint8
 }
 
-// Validate checks the header against §3.2.2.
+// Validate checks the header against clause 3.2.2.
 func (h *Header) Validate() error {
 	if h.SCID > 0x03FF {
 		return ErrInvalidSCID
@@ -180,7 +180,7 @@ func (h *Header) Validate() error {
 	if h.FrameLength < MinFrameSize || h.FrameLength > MaxFrameSize {
 		return ErrInvalidFrameLength
 	}
-	// §3.2.2.5.2: in a P-frame the DFC ID is not used and is set to '00'.
+	// Clause 3.2.2.5.2: in a P-frame the DFC ID is not used and is set to '00'.
 	if h.PDUType == SupervisoryData && h.DFCID != 0 {
 		return ErrInvalidDFCID
 	}
@@ -189,7 +189,7 @@ func (h *Header) Validate() error {
 	if h.PDUType == UserData && h.DFCID == DFCReserved {
 		return ErrInvalidDFCID
 	}
-	// §3.2.4.1: SPDUs travel only on the Expedited service.
+	// Clause 3.2.4.1: SPDUs travel only on the Expedited service.
 	if h.PDUType == SupervisoryData && h.QoS != Expedited {
 		return ErrInvalidQoS
 	}
@@ -199,10 +199,10 @@ func (h *Header) Validate() error {
 	return nil
 }
 
-// checkPortIDAllowed verifies that a P-frame carries no Port ID (§3.2.2.8.2).
+// checkPortIDAllowed verifies that a P-frame carries no Port ID (clause 3.2.2.8.2).
 func (h *Header) checkPortIDAllowed() error {
 	// A Port ID names the output port the I/O Sublayer delivers a U-frame's
-	// SDUs to (§3.2.2.8.3). A P-frame's data field is the protocol talking to
+	// SDUs to (clause 3.2.2.8.3). A P-frame's data field is the protocol talking to
 	// itself and reaches no port at all, so a port on one is a caller who
 	// meant to send user data. Zeroing it quietly would carry that mistake
 	// onto the link, and PortID is exported and assignable past the
@@ -231,7 +231,7 @@ func (h *Header) Encode() ([]byte, error) {
 	// Octet 1: the low 8 bits of the SCID.
 	out[1] = byte(h.SCID)
 
-	// §3.2.2.10.2: the field carries one fewer than the total octet count.
+	// Clause 3.2.2.10.2: the field carries one fewer than the total octet count.
 	count := h.FrameLength - 1
 
 	// Octet 2: PCID(1) | Port ID(3) | source-or-dest(1) | length high 3 bits.
@@ -290,7 +290,7 @@ func (h *Header) Humanize() string {
 }
 
 // TransferFrame is a Version-3 Transfer Frame: a five-octet header and a data
-// field of up to 2043 octets (§3.2.1).
+// field of up to 2043 octets (clause 3.2.1).
 //
 // There is no frame error control field. Proximity-1 leaves error detection to
 // the coding layer below, CCSDS 211.2-B-3.
@@ -361,17 +361,17 @@ func NewTransferFrame(scid uint16, portID uint8, data []byte, opts ...FrameOptio
 
 // NewSupervisoryFrame builds a P-frame carrying supervisory PDUs.
 //
-// §3.2.4.1 restricts SPDUs to the Expedited service and §3.2.2.5.2 requires a
+// Clause 3.2.4.1 restricts SPDUs to the Expedited service and clause 3.2.2.5.2 requires a
 // zero DFC ID, so both are set here rather than left to the caller.
 //
-// portID must be zero: §3.2.2.8.2 leaves the Port ID unused in a P-frame. It
+// portID must be zero: Clause 3.2.2.8.2 leaves the Port ID unused in a P-frame. It
 // is refused rather than forced, because a caller with a port in hand wanted
 // NewTransferFrame.
 func NewSupervisoryFrame(scid uint16, portID uint8, spdus []byte, opts ...FrameOption) (*TransferFrame, error) {
 	if len(spdus) > MaxDataFieldSize {
 		return nil, ErrDataTooLarge
 	}
-	// §3.2.4.1: a P-frame exists to carry SPDUs; an empty run is malformed.
+	// Clause 3.2.4.1: a P-frame exists to carry SPDUs; an empty run is malformed.
 	if len(spdus) == 0 {
 		return nil, ErrInvalidSPDU
 	}

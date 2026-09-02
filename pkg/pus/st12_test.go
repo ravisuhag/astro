@@ -470,7 +470,7 @@ func TestCheckCriteriaMustMatchItsType(t *testing.T) {
 
 // TestModifyCarriesNeitherValidityNorInterval checks the difference between
 // Figures 8-114 and 8-119. Clause 6.12.3.9.4 modifies a check rather than
-// replacing a definition, so the modify request drops both fields — and it
+// replacing a definition, so the modify request drops both fields, and it
 // drops them even when the profile declares the capabilities.
 func TestModifyCarriesNeitherValidityNorInterval(t *testing.T) {
 	p := monProfile()

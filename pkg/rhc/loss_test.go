@@ -39,7 +39,7 @@ func compressStream(t *testing.T, config rhc.Config, packets [][]byte) []codedVe
 // TestLossRecovery is the test this package exists to pass.
 //
 // A stream is compressed, some outputs are thrown away, and the survivors are
-// fed to a decompressor that is told about the gaps — which §2.2 says is the
+// fed to a decompressor that is told about the gaps, which clause 2.2 says is the
 // mission's job, since the standard "does not provide a mechanism for
 // identifying the number of sequential output binary vectors that were lost".
 //
@@ -119,13 +119,13 @@ func TestLossRecovery(t *testing.T) {
 // itoa is strconv.Itoa under a shorter name, for building subtest names.
 func itoa(i int) string { return strconv.Itoa(i) }
 
-// TestLossWithinRobustnessRecoversImmediately pins the guarantee of §2.1: "the
+// TestLossWithinRobustnessRecoversImmediately pins the guarantee of clause 2.1: "the
 // mask can be synchronized even if the number of consecutive output binary
 // vectors lost immediately before this output bit vector is equal to, or less
 // than, the effective robustness level."
 //
 // With robustness 3 and a gap of 3, the next output must decode. The stream
-// must also be one where the previous input is still tracked — so the test
+// must also be one where the previous input is still tracked, so the test
 // drops nothing that carries an uncompressed vector.
 func TestLossWithinRobustnessRecoversImmediately(t *testing.T) {
 	config := rhc.Config{
@@ -162,7 +162,7 @@ func TestLossWithinRobustnessRecoversImmediately(t *testing.T) {
 
 // TestStrictModeWaitsForUncompressed checks Config.Strict: after a reported
 // loss, a strict decompressor refuses even outputs whose effective robustness
-// level covers the gap — because V_t is the output's own claim about itself —
+// level covers the gap (because V_t is the output's own claim about itself)
 // and resumes only on the next uncompressed output.
 func TestStrictModeWaitsForUncompressed(t *testing.T) {
 	config := rhc.Config{
@@ -186,7 +186,7 @@ func TestStrictModeWaitsForUncompressed(t *testing.T) {
 	}
 
 	// Drop one. Robustness 3 covers that, and a non-strict decompressor
-	// accepts the next compressed output — TestLossWithinRobustnessRecovers-
+	// accepts the next compressed output, TestLossWithinRobustnessRecovers-
 	// Immediately pins exactly that. Strict must refuse it.
 	decompressor.NotifyLoss(1)
 	if _, err := decompressor.Decompress(stream[11].data, stream[11].bitLen); !errors.Is(err, rhc.ErrNotSynchronized) {
@@ -328,7 +328,7 @@ func TestFreshDecompressorRefusesUntilSynchronized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first output at robustness 0 carries everything, per §3.3.2c and d
+	// The first output at robustness 0 carries everything, per clause 3.3.2c and d
 	// forcing both flags while t <= R_t. Skip it and the next one cannot be
 	// decoded.
 	if _, _, err := compressor.Compress(packets[0]); err != nil {

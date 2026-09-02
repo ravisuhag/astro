@@ -1,7 +1,7 @@
 ---
 title: Licklider Transmission Protocol
 short: LTP
-description: CCSDS 734.1-B-1 — reliable block transfer over long, one-way-ish links.
+description: CCSDS 734.1-B-1, reliable block transfer over long, one-way-ish links.
 order: 13
 ---
 
@@ -43,7 +43,7 @@ red data above a green one, is a **miscolored** block and cancels the session.
 ┌─────────────────────────────────────────────┐
 │  Bundle Protocol / CFDP / application       │
 ├─────────────────────────────────────────────┤
-│  LTP — reliable block delivery              │  <- this package
+│  LTP, reliable block delivery              │  <- this package
 ├─────────────────────────────────────────────┤
 │  Link layer (frames, or UDP on the ground)  │
 └─────────────────────────────────────────────┘
@@ -56,15 +56,15 @@ of it; CFDP solves a similar problem a different way.
 
 **Implemented.** Segment encode and decode, the sender and receiver state machines, reception claims and reports, cancellation, and the shared SDNV codec.
 
-The library owns no clock. You drive every timer yourself — see below.
+The library owns no clock. You drive every timer yourself, see below.
 
 **Not here yet.**
 
-- **Session multiplexing** — one `Sender` and one `Receiver` handle one
+- **Session multiplexing**: one `Sender` and one `Receiver` handle one
   session each. Managing many is the caller's job for now.
-- **The authentication and cookie extensions** — the TLVs encode and decode,
+- **The authentication and cookie extensions**: the TLVs encode and decode,
   but nothing acts on them.
-- **CLI subcommands** — a follow-up once the API settles.
+- **CLI subcommands**: a follow-up once the API settles.
 
 ## Segments
 
@@ -91,7 +91,7 @@ Codes 5, 6, 10 and 11 are undefined and decode to an error.
 
 Nearly every field is a **Self-Delimiting Numeric Value**, which is why this
 package builds on `pkg/sdnv`. An SDNV packs an integer into as few octets as
-it needs — small values cost one octet, and there is no fixed ceiling.
+it needs, small values cost one octet, and there is no fixed ceiling.
 
 ## Sending a block
 
@@ -122,7 +122,7 @@ for {
 }
 ```
 
-`NextSegment` returning `false` does not mean the session is over — a red-part
+`NextSegment` returning `false` does not mean the session is over. A red-part
 sender will have more to do once a report arrives. Check `Done()`.
 
 **You pick the first checkpoint serial.** clause 3.2.1 says it must be chosen
@@ -170,7 +170,7 @@ corrupt or hostile segment claiming a huge offset would make a naive receiver
 try to allocate that much memory.
 
 `MaxBlockSize` caps it. The default is 64 MiB; set it to what your mission
-actually sends. This cap is not in RFC 5326 — the protocol states no ceiling —
+actually sends. This cap is not in RFC 5326 (the protocol states no ceiling)
 but no real implementation can go without one.
 
 ## Reports and reception claims
@@ -189,7 +189,7 @@ addition is done for you.
 
 The sender folds the claims in, works out what is still missing, and queues
 those ranges for retransmission. The last segment of each retransmission
-cycle is a checkpoint — wherever it sits in the block — and carries the
+cycle is a checkpoint (wherever it sits in the block) and carries the
 serial of the report that prompted it, so the receiver answers with a fresh
 report and the loop converges. The sender also acknowledges every report,
 because clause 3.2.3 requires it, including the final one after the session has
@@ -209,7 +209,7 @@ when to send an asynchronous report, when to give up. **None of them live in
 this package.** No goroutines, no `time.Timer`.
 
 On a link with a forty-minute round trip, only the mission knows what a
-sensible timeout is — and it changes with range. So your scheduler drives it:
+sensible timeout is, and it changes with range. So your scheduler drives it:
 
 ```go
 // Your timer fired and no report came back.
@@ -236,7 +236,7 @@ Either end can cancel, with a reason code from clause 3.2.4:
 
 Codes 6 to 255 are reserved and rejected. A cancel is acknowledged by the far
 end, which is why there are separate types for cancels from the sender and
-from the receiver — it lets a loopback mode work without ambiguity.
+from the receiver. It lets a loopback mode work without ambiguity.
 
 ## Self-Delimiting Numeric Values
 
@@ -261,7 +261,7 @@ octets is refused with `ErrTooLong` even when the value itself is small.
 
 ## Reference
 
-- [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326.txt) — LTP specification, the wire format
-- [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) — the CCSDS profile for space links
-- [RFC 5050 clause 4.1](https://www.rfc-editor.org/rfc/rfc5050.txt) — where SDNV is defined
+- [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326.txt), LTP specification, the wire format
+- [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf), the CCSDS profile for space links
+- [RFC 5050 clause 4.1](https://www.rfc-editor.org/rfc/rfc5050.txt), where SDNV is defined
 - [CLI](/cli/ltp) | [Conformance](/conformance/ltp) | [The stack](/docs/start/concepts)

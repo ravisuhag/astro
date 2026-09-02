@@ -5,12 +5,12 @@ import (
 	"math/bits"
 )
 
-// The counter and run-length encoding functions of CCSDS 124.0-B-1 §5.2.
+// The counter and run-length encoding functions of CCSDS 124.0-B-1 clause 5.2.
 
-// MaxCount is the largest integer COUNT accepts, per §5.2.2.
+// MaxCount is the largest integer COUNT accepts, per clause 5.2.2.
 const MaxCount = 1<<16 - 1
 
-// AppendCount writes COUNT(a), the counter encoding function of §5.2.2:
+// AppendCount writes COUNT(a), the counter encoding function of clause 5.2.2:
 //
 //	A = 1          '0'
 //	2 <= A <= 33   '110' || BIT5(A-2)
@@ -44,7 +44,7 @@ func AppendCount(w *BitWriter, a int) error {
 // The note under the equation explains what that buys: E is wider than the
 // minimum needed for A-2, and the extra width appears as leading zeros. Since
 // E = 2m - 6 where m is the minimal width, the number of leading zeros is
-// m - 6 — which grows one for one with the width. So the decoder counts
+// m - 6, which grows one for one with the width. So the decoder counts
 // leading zeros to learn the width, with no length field.
 func countWidth(a int) int {
 	value := a - 2
@@ -54,7 +54,7 @@ func countWidth(a int) int {
 
 // ReadCount reads one COUNT codeword.
 //
-// It also reports whether the codeword was the '10' that §5.2.3 uses to
+// It also reports whether the codeword was the '10' that clause 5.2.3 uses to
 // terminate a run-length encoding. That marker shares its first bit with the
 // long form, so the two can only be told apart here, one bit deeper.
 func ReadCount(r *BitReader) (a int, terminator bool, err error) {
@@ -71,7 +71,7 @@ func ReadCount(r *BitReader) (a int, terminator bool, err error) {
 		return 0, false, err
 	}
 	if !second {
-		// '10' is the run-length terminator of §5.2.3, not a counter value.
+		// '10' is the run-length terminator of clause 5.2.3, not a counter value.
 		return 0, true, nil
 	}
 
@@ -124,14 +124,14 @@ func ReadCount(r *BitReader) (a int, terminator bool, err error) {
 	return a, false, nil
 }
 
-// AppendRLE writes RLE(v), the run-length encoding of §5.2.3:
+// AppendRLE writes RLE(v), the run-length encoding of clause 5.2.3:
 //
 //	RLE(a) = COUNT(C0) || ... || COUNT(C_{H(a)-1}) || '10'
 //
 // where C_i is one more than the number of zeros before the ith one bit,
 // counting from the first transmitted bit.
 //
-// Trailing zeros are not encoded. Note 1 of §5.2.3 says why they need not be:
+// Trailing zeros are not encoded. Note 1 of clause 5.2.3 says why they need not be:
 // the decoder knows the vector's length, so whatever is left after the last
 // one bit must be zeros.
 func AppendRLE(w *BitWriter, v Vector) error {
@@ -145,7 +145,7 @@ func AppendRLE(w *BitWriter, v Vector) error {
 		}
 		previous = i
 	}
-	// §5.2.3 note 2: a vector with no one bits encodes as just the terminator.
+	// Clause 5.2.3 note 2: a vector with no one bits encodes as just the terminator.
 	w.WriteString("10")
 	return nil
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// CUC represents a CCSDS Unsegmented Time Code per CCSDS 301.0-B-4 §3.2.
+// CUC represents a CCSDS Unsegmented Time Code per CCSDS 301.0-B-4 clause 3.2.
 //
 // The T-field is a single binary counter split into coarse time (seconds
 // since epoch) and fine time (fractional seconds as binary fractions of a
@@ -56,7 +56,7 @@ type CUC struct {
 type CUCOption func(*CUC) error
 
 // WithCUCFineBytes sets the number of fine time octets (0-3 basic, up to 10
-// with extension, per §3.2.2).
+// with extension, per clause 3.2.2).
 func WithCUCFineBytes(n uint8) CUCOption {
 	return func(c *CUC) error {
 		if n > 10 {
@@ -245,13 +245,13 @@ func DecodeCUC(data []byte, epoch time.Time) (*CUC, error) {
 		return nil, ErrInvalidTimeCodeID
 	}
 
-	// Extract basic octet counts from P-field detail bits (§3.2.2)
-	// Bits 4-5: number of coarse octets minus one (0-3 → 1-4)
+	// Extract basic octet counts from P-field detail bits (clause 3.2.2)
+	// Bits 4-5: number of coarse octets minus one (0-3 -> 1-4)
 	// Bits 6-7: number of fine octets (0-3)
 	c.CoarseBytes = ((c.PField.Detail >> 2) & 0x03) + 1
 	c.FineBytes = c.PField.Detail & 0x03
 
-	// Handle extension octet (§3.2.2 Octet 2)
+	// Handle extension octet (clause 3.2.2 Octet 2)
 	// Bits 1-2: additional coarse octets
 	// Bits 3-5: additional fine octets
 	// Bits 6-7: reserved, must be zero
@@ -283,7 +283,7 @@ func DecodeCUC(data []byte, epoch time.Time) (*CUC, error) {
 }
 
 // DecodeCUCTField parses a T-field-only (implicit P-field) CUC time code.
-// The format parameters — coarse and fine octet counts and the epoch — must
+// The format parameters (coarse and fine octet counts and the epoch) must
 // be supplied by the caller, as they are in contexts like Space Packet
 // secondary headers where no P-field is transmitted.
 //
@@ -463,7 +463,7 @@ func (c *CUC) buildPField() error {
 			addFine = basicFine - 3
 			basicFine = 3
 		}
-		// Octet 2 (§3.2.2): bits 1-2 = additional coarse, bits 3-5 = additional fine, bits 6-7 = reserved
+		// Octet 2 (clause 3.2.2): bits 1-2 = additional coarse, bits 3-5 = additional fine, bits 6-7 = reserved
 		c.PField = PField{
 			Extension:  true,
 			TimeCodeID: id,

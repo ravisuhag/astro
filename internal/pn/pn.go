@@ -5,17 +5,17 @@
 // registers preset to all ones, and both repeat after 255 bits, but the
 // polynomials differ:
 //
-//	CCSDS 131.0-B-5 §10.4.2 (TM)  h(x) = x^8 + x^7 + x^5 + x^3 + 1
-//	CCSDS 231.0-B-4 §6.2   (TC)   h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
+//	CCSDS 131.0-B-5 clause 10.4.2 (TM)  h(x) = x^8 + x^7 + x^5 + x^3 + 1
+//	CCSDS 231.0-B-4 clause 6.2   (TC)   h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
 //
-// The two sequences diverge at the second octet — TM opens FF 48 0E C0 9A and
-// TC opens FF 39 9E 5A 68 — so equipment fed the wrong one recovers noise. The
+// The two sequences diverge at the second octet (TM opens FF 48 0E C0 9A and
+// TC opens FF 39 9E 5A 68) so equipment fed the wrong one recovers noise. The
 // generators are therefore named for the standard they belong to, and neither
 // name is available unqualified: TMSequence and TMApply are for pkg/tmsc,
 // TCSequence and TCApply are for pkg/tcsc.
 //
 // Nothing about a randomizer can be checked by round-tripping it. XOR is its
-// own inverse, so any sequence at all — right taps, wrong taps, or a constant —
+// own inverse, so any sequence at all (right taps, wrong taps, or a constant)
 // randomizes and derandomizes back to the input. Correctness here rests
 // entirely on the vectors CCSDS publishes; see the tests.
 //
@@ -50,12 +50,12 @@ const Period = 255
 // exist to check.
 const (
 	// tmTaps: bits 7, 4, 2, 0 give b(n+8) = b(n+7)+b(n+5)+b(n+3)+b(n),
-	// which is CCSDS 131.0-B-5 §10.4.2's h(x) = x^8 + x^7 + x^5 + x^3 + 1.
+	// which is CCSDS 131.0-B-5 clause 10.4.2's h(x) = x^8 + x^7 + x^5 + x^3 + 1.
 	tmTaps = 0b10010101
 
 	// tcTaps: bits 7, 6, 5, 4, 3, 1 give
 	// b(n+8) = b(n+6)+b(n+4)+b(n+3)+b(n+2)+b(n+1)+b(n), which is
-	// CCSDS 231.0-B-4 §6.2's h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1.
+	// CCSDS 231.0-B-4 clause 6.2's h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1.
 	tcTaps = 0b11111010
 )
 
@@ -112,7 +112,7 @@ func (g *generator) apply(data []byte) []byte {
 }
 
 // TMSequence returns the first length octets of the TM randomizer sequence of
-// CCSDS 131.0-B-5 §10.4.2. It opens FF 48 0E C0 9A.
+// CCSDS 131.0-B-5 clause 10.4.2. It opens FF 48 0E C0 9A.
 //
 // The period is computed once and tiled, so a caller randomizing every frame
 // on a channel is not re-running the register each time.
@@ -124,8 +124,8 @@ func TMSequence(length int) []byte { return tm.sequence(length) }
 func TMApply(data []byte) []byte { return tm.apply(data) }
 
 // TCSequence returns the first length octets of the TC randomizer sequence of
-// CCSDS 231.0-B-4 §6.2. It opens FF 39 9E 5A 68, which is a different sequence
-// from TMSequence — see the package comment.
+// CCSDS 231.0-B-4 clause 6.2. It opens FF 39 9E 5A 68, which is a different sequence
+// from TMSequence, see the package comment.
 //
 // It is cached and tiled exactly like the TM sequence.
 func TCSequence(length int) []byte { return tc.sequence(length) }
@@ -136,8 +136,8 @@ func TCSequence(length int) []byte { return tc.sequence(length) }
 func TCApply(data []byte) []byte { return tc.apply(data) }
 
 // OIDSequence generates the Pseudo Noise sequence that fills the data field of
-// Only Idle Data transfer frames. CCSDS 132.0-B-3 §4.1.4.6.2 (TM, annex D) and
-// CCSDS 732.1-B-3 §4.1.4.1.10 (USLP, annex H) mandate the same generator: a
+// Only Idle Data transfer frames. CCSDS 132.0-B-3 clause 4.1.4.6.2 (TM, annex D) and
+// CCSDS 732.1-B-3 clause 4.1.4.1.10 (USLP, annex H) mandate the same generator: a
 // 32-cell Fibonacci-form linear feedback shift register realising
 //
 //	D^0 + D^1 + D^2 + D^22 + D^32
@@ -145,7 +145,7 @@ func TCApply(data []byte) []byte { return tc.apply(data) }
 // seeded to all ones at device start-up and never restarted between frames.
 // Both standards publish the same opening octets, FF FF FF FF 6D B6 D8 61 45
 // 1F, which is the only way to tell correct taps from a plausible-looking
-// permutation of them — the same trap the 8-bit randomizer above fell into.
+// permutation of them, the same trap the 8-bit randomizer above fell into.
 //
 // This is neither of the randomizers above: those are 8-bit registers applied
 // by the channel coding layer to every frame, while this one is a 32-bit

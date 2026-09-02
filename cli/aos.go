@@ -426,9 +426,9 @@ func aosDemuxCmd() *cobra.Command {
 
 // aosProtocol describes AOS Transfer Frames to the receive loop.
 //
-// The VC frame count is twenty-four bits (CCSDS 732.0-B-4 §4.1.2.3), and
+// The VC frame count is twenty-four bits (CCSDS 732.0-B-4 clause 4.1.2.3), and
 // where the VC Frame Count Usage Flag is set the signalling field carries a
-// four-bit cycle that increments on each wrap (§4.1.2.5.5.3). There is no
+// four-bit cycle that increments on each wrap (clause 4.1.2.5.5.3). There is no
 // master channel frame count in an AOS header, so mcMask stays zero and no
 // master channel gaps are reported.
 func aosProtocol(insertZoneLen int, hasOCF, hasFECF bool) frameProtocol {
@@ -532,7 +532,7 @@ func printAOSInspect(f *aos.TransferFrame, raw []byte) {
 		fmt.Print(hexDump(f.DataField, "  "))
 	}
 	if aos.IsIdleFrame(f) {
-		fmt.Println("  [OID FRAME — VCID 63]")
+		fmt.Println("  [OID FRAME, VCID 63]")
 	}
 
 	if len(f.OCF) > 0 {

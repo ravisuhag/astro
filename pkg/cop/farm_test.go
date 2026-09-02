@@ -71,7 +71,7 @@ func TestFARM_TypeA_OutsideWindow_Lockout(t *testing.T) {
 
 func TestFARM_NegativeWindow_DuplicateDiscardedSilently(t *testing.T) {
 	// A duplicate of the frame just accepted lands in the negative half
-	// of the window (E4): it must be discarded silently — no lockout, no
+	// of the window (E4): it must be discarded silently, no lockout, no
 	// retransmit request, no error.
 	farm := cop.NewFARM(1, 10) // W=10 -> PW=NW=5
 	if _, err := farm.ProcessFrame(0, 0, 0, nil); err != nil {
@@ -313,7 +313,7 @@ func farmInWaitState(t *testing.T) *cop.FARM {
 func TestFARM_Unlock_LeavesWaitStateWithNoBufferFree(t *testing.T) {
 	// CCSDS 232.1-B-2 table 6-1, E7 (valid Unlock Type-BC frame) in S2:
 	// "Increment FARM-B_Counter, Retransmit_Flag := 0, Wait_Flag := 0",
-	// next state (S1) — unconditionally. Clause 6.1.4 defines the Wait flag
+	// next state (S1), unconditionally. Clause 6.1.4 defines the Wait flag
 	// as a property of the state machine ("set to '1' whenever the state
 	// machine is in 'Wait' State; otherwise, it is '0'"), not of buffer
 	// availability, so Unlock must reach S1 even with no buffer free.
@@ -342,7 +342,7 @@ func TestFARM_Unlock_LeavesWaitStateWithNoBufferFree(t *testing.T) {
 func TestFARM_SetVR_LeavesWaitStateWithNoBufferFree(t *testing.T) {
 	// CCSDS 232.1-B-2 table 6-1, E8 (valid Set V(R) Type-BC frame) in S2:
 	// "Increment FARM-B_Counter, Retransmit_Flag := 0, Wait_Flag := 0,
-	// V(R) := V*(R)", next state (S1) — unconditionally, as for E7.
+	// V(R) := V*(R)", next state (S1), unconditionally, as for E7.
 	farm := farmInWaitState(t)
 
 	accepted, err := farm.ProcessFrame(1, 1, 0, []byte{0x82, 0x00, 42})
@@ -368,7 +368,7 @@ func TestFARM_SetVR_LeavesWaitStateWithNoBufferFree(t *testing.T) {
 func TestFARM_AfterUnlock_BufferShortageReentersWaitViaE2(t *testing.T) {
 	// The buffer condition is not lost by E7, only deferred to the event
 	// that CCSDS 232.1-B-2 table 6-1 gives for entering S2: E2 (in-sequence
-	// Type-AD frame, no buffer available) in S1 — "Discard,
+	// Type-AD frame, no buffer available) in S1, "Discard,
 	// Retransmit_Flag := 1, Wait_Flag := 1", next state (S2).
 	farm := farmInWaitState(t)
 
@@ -403,7 +403,7 @@ func TestFARM_AfterUnlock_BufferShortageReentersWaitViaE2(t *testing.T) {
 func TestFARM_BufferRelease_InLockoutClearsWaitButStaysLocked(t *testing.T) {
 	// CCSDS 232.1-B-2 table 6-1, E10 ("buffer release" signal from the
 	// higher procedures) in S3: "Wait_Flag := 0", next state (S3). Freeing
-	// a buffer clears the Wait flag but must not lift the Lockout — only
+	// a buffer clears the Wait flag but must not lift the Lockout, only
 	// E7 (Unlock) does that.
 	farm := farmInWaitState(t)
 

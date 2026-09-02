@@ -5,11 +5,11 @@ order: 0
 ---
 
 22 standards. If you are not sure which one you need, read
-[the stack](/docs/start/concepts) first — it explains how a sensor reading
+[the stack](/docs/start/concepts) first. It explains how a sensor reading
 becomes radio symbols and which package does each step.
 
 Every protocol page opens the same way: what Astro implements and what it
-leaves to you. From there the shape follows the standard — a wire format gets
+leaves to you. From there the shape follows the standard. A wire format gets
 a field map from wire fields to Go fields and a list of the rules that bite,
 while a coding or compression standard gets a walkthrough of the chain
 instead. The Go API is on the same page, and each has a
@@ -34,7 +34,7 @@ Not protocols, but packages you may end up importing.
 |---|---|
 | `pkg/crc` | CRC checksums used across the standards. CRC-16-CCITT and friends. |
 | `pkg/sdnv` | Self-Delimiting Numeric Values, shared by LTP and BP. |
-| `pkg/sdl` | Shared data link primitives — channels, multiplexers, gap detection — used by TM, TC, AOS, and USLP. |
+| `pkg/sdl` | Shared data link primitives — channels, multiplexers, gap detection: used by TM, TC, AOS, and USLP. |
 | `pkg/stack` | Builds both ends of a downlink or uplink from one configuration, so they cannot drift apart. See [compose a link](/docs/guides/composed-downlink). |
 
 ## Not implemented yet

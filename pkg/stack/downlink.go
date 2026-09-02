@@ -9,7 +9,7 @@ import (
 )
 
 // MaxVCID is the largest virtual channel identifier a TM frame can carry.
-// The field is three bits (CCSDS 132.0-B-3 §4.1.2.3).
+// The field is three bits (CCSDS 132.0-B-3 clause 4.1.2.3).
 const MaxVCID = 7
 
 // VC is one virtual channel on the downlink.
@@ -38,27 +38,27 @@ const DefaultBuffer = 32
 // prevent.
 type Downlink struct {
 	// SpacecraftID is the 10-bit identifier both ends expect
-	// (CCSDS 132.0-B-3 §4.1.2.2).
+	// (CCSDS 132.0-B-3 clause 4.1.2.2).
 	SpacecraftID uint16
 
 	// FrameLength is the total octets in a frame, including the header and
 	// any error control field. It is fixed for the whole physical channel
-	// (§2.1.3), which is why it lives here and not on a frame.
+	// (clause 2.1.3), which is why it lives here and not on a frame.
 	FrameLength int
 
-	// FECF appends the two-octet frame error control field (§4.1.6).
+	// FECF appends the two-octet frame error control field (clause 4.1.6).
 	FECF bool
 
 	// OCF carries the four-octet operational control field, which is where
-	// the CLCW travels on a mission that uses COP-1 (§4.1.5).
+	// the CLCW travels on a mission that uses COP-1 (clause 4.1.5).
 	OCF bool
 
 	// Randomize applies the CCSDS pseudo-randomizer to the frame before the
-	// sync marker (131.0-B-5 §7). Both ends must agree, and they do here.
+	// sync marker (131.0-B-5 clause 7). Both ends must agree, and they do here.
 	Randomize bool
 
 	// ASM overrides the attached sync marker. Nil takes the standard
-	// 0x1ACFFC1D of 131.0-B-5 §9.
+	// 0x1ACFFC1D of 131.0-B-5 clause 9.
 	ASM []byte
 
 	// Channels are the virtual channels, in any order. At least one is
@@ -148,7 +148,7 @@ func newEndpoint(config Downlink, name string) (*endpoint, error) {
 
 	// One counter for the whole master channel. The master channel frame
 	// count is per channel, not per virtual channel (CCSDS 132.0-B-3
-	// §4.1.2.4), so the services have to share it or the count would restart
+	// Clause 4.1.2.4), so the services have to share it or the count would restart
 	// on every stream.
 	counter := tmdl.NewFrameCounter()
 

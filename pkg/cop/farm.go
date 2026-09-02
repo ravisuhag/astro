@@ -24,10 +24,10 @@ const (
 //     buffer is available, in which case the frame is discarded and the
 //     Wait and Retransmit flags are set (E2).
 //   - V(R) < N(S) <= V(R)+PW-1: inside the positive window but out of
-//     sequence — discarded, Retransmit flag set (E3).
-//   - V(R)-NW <= N(S) < V(R): inside the negative window — a duplicate of
+//     sequence, discarded, Retransmit flag set (E3).
+//   - V(R)-NW <= N(S) < V(R): inside the negative window, a duplicate of
 //     an already-accepted frame. Discarded silently, no flags change (E4).
-//   - Otherwise: outside both windows — Lockout is entered (E5). The
+//   - Otherwise: outside both windows, Lockout is entered (E5). The
 //     Retransmit flag is left untouched.
 type FARM struct {
 	mu           sync.Mutex
@@ -104,7 +104,7 @@ func (f *FARM) ReleaseBuffer() {
 }
 
 // updateWait recomputes the Wait flag from buffer availability. It models
-// the buffer signals only — E10 ("buffer release") and the buffer bookkeeping
+// the buffer signals only, E10 ("buffer release") and the buffer bookkeeping
 // behind E1/E2. The Type-BC directives E7 (Unlock) and E8 (Set V(R)) must NOT
 // use it: table 6-1 sends both to (S1) with Wait_Flag := 0 whatever the buffer
 // count says.
@@ -178,7 +178,7 @@ func (f *FARM) ProcessFrame(bypassFlag, controlCommandFlag uint8, frameSeqNum ui
 	switch {
 	case diff == 0:
 		// In sequence. E1: accept if a buffer is available; E2: no
-		// buffer — discard, set Wait and Retransmit.
+		// buffer, discard, set Wait and Retransmit.
 		if !f.unlimited && f.buffers <= 0 {
 			f.wait = true
 			f.retransmit = true
@@ -195,7 +195,7 @@ func (f *FARM) ProcessFrame(bypassFlag, controlCommandFlag uint8, frameSeqNum ui
 
 	case diff < uint8(f.pw):
 		// Inside the positive window but not next in sequence (E3):
-		// a frame was lost — discard, request retransmission.
+		// a frame was lost, discard, request retransmission.
 		f.retransmit = true
 		return false, ErrFARMReject
 
@@ -220,7 +220,7 @@ func (f *FARM) processControlCommand(dataField []byte) (bool, error) {
 	switch {
 	case len(dataField) == 1 && dataField[0] == 0x00:
 		// Unlock (E7): clear Lockout, Wait, and Retransmit. V(R) is NOT
-		// touched — only Set V(R) changes it. Per table 6-1 the next state
+		// touched, only Set V(R) changes it. Per table 6-1 the next state
 		// is (S1) unconditionally, so the Wait flag is cleared outright
 		// rather than re-derived from the buffer count: a directive must
 		// never leave the machine in S2.
@@ -235,7 +235,7 @@ func (f *FARM) processControlCommand(dataField []byte) (bool, error) {
 		// Set V(R) (E8): in Lockout the directive is accepted (FARM-B
 		// still counts it) but has no other effect; otherwise V(R) is
 		// set from the directive payload and Wait and Retransmit cleared,
-		// with (S1) as the next state — again unconditionally.
+		// with (S1) as the next state, again unconditionally.
 		f.farmBCounter = (f.farmBCounter + 1) & 0x03
 		if !f.lockout {
 			f.vr = dataField[2]

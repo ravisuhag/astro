@@ -11,7 +11,7 @@ type segment struct {
 type ReceiverConfig struct {
 	// Source, Destination and TransactionSeq identify the transaction. They
 	// come from the first PDU received. Inbound PDUs whose source entity ID or
-	// transaction sequence number differ are ignored (§5.1), so one Receiver
+	// transaction sequence number differ are ignored (clause 5.1), so one Receiver
 	// never applies a foreign transaction's PDUs.
 	Source         EntityID
 	Destination    EntityID
@@ -30,7 +30,7 @@ type ReceiverConfig struct {
 	// FaultHandlers overrides the default disposition for the given fault
 	// conditions at this entity. Table 4-1 defaults every condition to a
 	// Notice of Cancellation; fault handler override TLVs arriving in the
-	// Metadata PDU take precedence over both (§4.8).
+	// Metadata PDU take precedence over both (clause 4.8).
 	FaultHandlers map[ConditionCode]FaultHandler
 }
 
@@ -77,11 +77,11 @@ type Receiver struct {
 	condition    ConditionCode
 
 	// faultOverrides holds the dispositions the Metadata PDU's fault handler
-	// override TLVs installed (§5.4.4).
+	// override TLVs installed (clause 5.4.4).
 	faultOverrides map[ConditionCode]FaultHandler
 
 	// faultLocation names the entity where the fault occurred, when that is
-	// not this one — a sender-side cancel, for instance.
+	// not this one, a sender-side cancel, for instance.
 	faultLocation *EntityID
 
 	// filename is where the file is being written.
@@ -122,7 +122,7 @@ func (r *Receiver) header(dataLen int) *PDUHeader {
 		LargeFile:    r.largeFile,
 		DataLength:   uint16(dataLen),
 		// The transaction is still named by its originator, so the source
-		// entity ID stays the sender's even on the return path (§5.1 note).
+		// entity ID stays the sender's even on the return path (clause 5.1 note).
 		Source:         r.config.Source,
 		TransactionSeq: r.config.TransactionSeq,
 		Destination:    r.config.Destination,
@@ -130,8 +130,8 @@ func (r *Receiver) header(dataLen int) *PDUHeader {
 }
 
 // matchesTransaction reports whether a PDU belongs to this transaction:
-// same source entity ID and transaction sequence number (§5.1). Values are
-// compared numerically, since §5.1.7 note 3 zero-pads differing widths. An
+// same source entity ID and transaction sequence number (clause 5.1). Values are
+// compared numerically, since clause 5.1.7 note 3 zero-pads differing widths. An
 // unconfigured Receiver (zero-width IDs) accepts everything, for callers that
 // demultiplex upstream.
 func (r *Receiver) matchesTransaction(h *PDUHeader) bool {
@@ -184,7 +184,7 @@ func (r *Receiver) recordSegment(start, end uint64) {
 
 // missingWithin returns the sub-ranges of [start, end) not yet received, so a
 // retransmission that overlaps data already delivered touches the file and
-// the checksum only where it brings something new (§4.2.1).
+// the checksum only where it brings something new (clause 4.2.1).
 func (r *Receiver) missingWithin(start, end uint64) []segment {
 	if end <= start {
 		return nil
@@ -263,8 +263,8 @@ func (r *Receiver) handlerFor(cond ConditionCode) FaultHandler {
 	return DefaultFaultHandler(cond)
 }
 
-// fault applies the configured handler for a fault condition (§4.8). It
-// returns nil when the handler ignores the fault — processing continues — and
+// fault applies the configured handler for a fault condition (clause 4.8). It
+// returns nil when the handler ignores the fault (processing continues) and
 // the condition's sentinel error otherwise.
 func (r *Receiver) fault(cond ConditionCode) error {
 	switch r.handlerFor(cond) {
@@ -274,7 +274,7 @@ func (r *Receiver) fault(cond ConditionCode) error {
 		r.condition = cond
 		r.suspended = true
 	case FaultHandlerAbandon:
-		// §4.11.4: abandonment ends the transaction with no further protocol
+		// Clause 4.11.4: abandonment ends the transaction with no further protocol
 		// activity, not even the PDUs already queued.
 		r.condition = cond
 		r.cancelled = true
@@ -286,7 +286,7 @@ func (r *Receiver) fault(cond ConditionCode) error {
 	return faultError(cond)
 }
 
-// cancelReceive runs the receiver's Notice of Cancellation (§4.11.1.2): stop
+// cancelReceive runs the receiver's Notice of Cancellation (clause 4.11.1.2): stop
 // NAKing, discard the partial file, and close out with a Finished PDU
 // carrying the fault's condition code.
 func (r *Receiver) cancelReceive(cond ConditionCode) {
@@ -331,7 +331,7 @@ func (r *Receiver) HandlePDU(pdu *PDU) error {
 	if pdu == nil || pdu.Header == nil {
 		return ErrDataTooShort
 	}
-	// §5.1: a PDU for another transaction is not ours to act on.
+	// Clause 5.1: a PDU for another transaction is not ours to act on.
 	if !r.matchesTransaction(pdu.Header) {
 		return nil
 	}
@@ -391,7 +391,7 @@ func (r *Receiver) handleMetadata(pdu *PDU) error {
 		r.declaredSize = meta.FileSize
 	}
 
-	// §5.4.4: fault handler overrides apply from the moment they arrive, so
+	// Clause 5.4.4: fault handler overrides apply from the moment they arrive, so
 	// they are installed before anything below can raise a fault.
 	for _, opt := range meta.Options {
 		if opt.Type != TLVFaultHandlerOverride {
@@ -414,7 +414,7 @@ func (r *Receiver) handleMetadata(pdu *PDU) error {
 
 	sum, err := NewChecksum(meta.ChecksumType)
 	if err != nil {
-		// §4.2.2: fall back to the null checksum and raise the fault. When
+		// Clause 4.2.2: fall back to the null checksum and raise the fault. When
 		// the handler ignores it, the transfer proceeds unverified and the
 		// Finished PDU still reports the condition, as table 5-7 anticipates.
 		r.checksum, _ = NewChecksum(ChecksumNull)
@@ -467,9 +467,9 @@ func (r *Receiver) handleFileData(pdu *PDU) error {
 		return nil
 	}
 
-	// §4.6.1: without metadata there is no filename and no checksum
+	// Clause 4.6.1: without metadata there is no filename and no checksum
 	// algorithm, so the data cannot be delivered yet. It must not be counted
-	// as received either — that would silently drop it from the file. Buffer
+	// as received either. That would silently drop it from the file. Buffer
 	// it and replay once metadata arrives.
 	if r.metadata == nil {
 		r.early = append(r.early, fd)
@@ -480,7 +480,7 @@ func (r *Receiver) handleFileData(pdu *PDU) error {
 		return err
 	}
 
-	// §4.6.4: the transaction may just have become complete — the last
+	// Clause 4.6.4: the transaction may just have become complete. The last
 	// NAK-recovered segment must trigger the Finished PDU, not wait for
 	// another EOF.
 	if r.eofSeen && r.complete() {
@@ -491,9 +491,9 @@ func (r *Receiver) handleFileData(pdu *PDU) error {
 
 // storeFileData writes one segment, folding into the file and the checksum
 // only the sub-ranges not already received, so overlapping retransmissions
-// never count twice (§4.2.1).
+// never count twice (clause 4.2.1).
 func (r *Receiver) storeFileData(fd *FileDataPDU) error {
-	// §4.6.1.2: file data past the size the EOF PDU declared is a file size
+	// Clause 4.6.1.2: file data past the size the EOF PDU declared is a file size
 	// error.
 	if r.eofSeen && fd.End() > r.declaredSize {
 		if err := r.fault(CondFileSizeError); err != nil {
@@ -533,7 +533,7 @@ func (r *Receiver) handleEOF(pdu *PDU) error {
 	r.eofChecksum = eof.FileChecksum
 	r.declaredSize = eof.FileSize
 
-	// §5.2.4: a Class 2 receiver acknowledges the EOF, cancelled or not.
+	// Clause 5.2.4: a Class 2 receiver acknowledges the EOF, cancelled or not.
 	if r.config.Acknowledged {
 		ack, err := NewACK(DirectiveEOF, eof.ConditionCode, StatusActive)
 		if err != nil {
@@ -546,8 +546,8 @@ func (r *Receiver) handleEOF(pdu *PDU) error {
 		r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
 	}
 
-	// §4.11.2: an EOF with a fault condition code is an EOF (cancel). The
-	// transaction ends here — Finished (delivery incomplete) goes back and no
+	// Clause 4.11.2: an EOF with a fault condition code is an EOF (cancel). The
+	// transaction ends here, Finished (delivery incomplete) goes back and no
 	// more NAKs go out.
 	if eof.ConditionCode != CondNoError {
 		loc := r.config.Source // the fault happened at the sender
@@ -568,7 +568,7 @@ func (r *Receiver) handleEOF(pdu *PDU) error {
 	return nil
 }
 
-// handlePrompt answers a Prompt PDU with what it asked for (§5.2.7).
+// handlePrompt answers a Prompt PDU with what it asked for (clause 5.2.7).
 func (r *Receiver) handlePrompt(p *PromptPDU) error {
 	if p.Response == PromptKeepAlive {
 		ka := &KeepAlivePDU{Progress: r.progress()}
@@ -590,7 +590,7 @@ func (r *Receiver) progress() uint64 {
 	return 0
 }
 
-// queueNAK builds a NAK naming everything still missing (§5.2.6). A cancelled
+// queueNAK builds a NAK naming everything still missing (clause 5.2.6). A cancelled
 // transaction NAKs nothing.
 func (r *Receiver) queueNAK() error {
 	if r.cancelled {
@@ -635,7 +635,7 @@ func (r *Receiver) evaluateCompletion() {
 		return
 	}
 
-	// §4.2: verify the checksum before declaring the file delivered. A
+	// Clause 4.2: verify the checksum before declaring the file delivered. A
 	// condition already recorded (an ignored unsupported checksum type, a
 	// suspend that was resumed) means the sum is not comparable.
 	if r.checksum != nil && r.condition == CondNoError && r.checksum.Sum() != r.eofChecksum {
@@ -683,7 +683,7 @@ func (r *Receiver) queueFinished(delivery DeliveryCode, status FileStatus) {
 	if r.finishedSent {
 		return
 	}
-	// §5.2.5: a Class 1 transaction sends Finished only when asked.
+	// Clause 5.2.5: a Class 1 transaction sends Finished only when asked.
 	if !r.config.Acknowledged && (r.metadata == nil || !r.metadata.ClosureRequested) {
 		r.state = r.terminalState()
 		return
@@ -757,7 +757,7 @@ func (r *Receiver) ResendFinished() {
 }
 
 // ExpireCheckLimit reports that the caller's transaction check timer has
-// expired for the last time (§4.6.3.3). The caller drives this from its own
+// expired for the last time (clause 4.6.3.3). The caller drives this from its own
 // clock, like RequestNAK and ResendEOF. Under the table 4-1 default the
 // transaction cancels with condition code "check limit reached", which forces
 // the Finished PDU a Class 1 closure-requested transaction still owes.
@@ -767,8 +767,8 @@ func (r *Receiver) ExpireCheckLimit() {
 	_ = r.fault(CondCheckLimitReached)
 }
 
-// DeclareFault raises a fault the caller's own timers detected — a NAK limit,
-// a keep-alive limit, a positive-ACK limit, or inactivity (table 5-5) — and
+// DeclareFault raises a fault the caller's own timers detected (a NAK limit,
+// a keep-alive limit, a positive-ACK limit, or inactivity (table 5-5)) and
 // applies the fault handler configured for it, defaulting to the table 4-1
 // disposition. The library owns no clock, so counting those limits is the
 // caller's job.
@@ -778,7 +778,7 @@ func (r *Receiver) DeclareFault(cond ConditionCode) {
 	_ = r.fault(cond)
 }
 
-// Cancel abandons the receive (§4.11.1): the partial file is discarded and,
+// Cancel abandons the receive (clause 4.11.1): the partial file is discarded and,
 // when the class calls for one, a Finished PDU with condition code "cancel
 // request received" closes the transaction out.
 func (r *Receiver) Cancel() {

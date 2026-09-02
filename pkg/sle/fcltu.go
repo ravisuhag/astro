@@ -16,14 +16,14 @@ import (
 // acknowledgement. Every CLTU carries an identification number, the user must
 // send them in ascending order, and the provider answers each one saying
 // whether it was accepted and how much buffer is left. Radiation happens
-// later, so a second message — ASYNC-NOTIFY — reports what became of a CLTU
+// later, so a second message (ASYNC-NOTIFY) reports what became of a CLTU
 // once the antenna got to it.
 //
 // The operations, from the PDU CHOICEs of annex A2.4 and A2.5:
 //
-//	user → provider    BIND, UNBIND, START, STOP, SCHEDULE-STATUS-REPORT,
+//	user -> provider    BIND, UNBIND, START, STOP, SCHEDULE-STATUS-REPORT,
 //	                   GET-PARAMETER, THROW-EVENT, TRANSFER-DATA, PEER-ABORT
-//	provider → user    the returns for those, plus ASYNC-NOTIFY and
+//	provider -> user    the returns for those, plus ASYNC-NOTIFY and
 //	                   STATUS-REPORT
 
 // FCLTU PDU tags, from the CltuUserToProviderPdu and CltuProviderToUserPdu
@@ -765,7 +765,7 @@ func (t *FCLTUTransferDataReturn) Humanize() string {
 //
 // THROW-EVENT is the odd operation of this service. It does not carry data to
 // the spacecraft; it asks the provider's own equipment to do something the
-// service agreement defines — switch an antenna, change a modulation setting,
+// service agreement defines, switch an antenna, change a modulation setting,
 // start a ranging measurement. The library cannot know what the events mean,
 // so it carries the identifier and qualifier through untouched.
 type FCLTUThrowEventInvocation struct {
@@ -1382,20 +1382,20 @@ func (s *FCLTUStatusReportInvocation) Humanize() string {
 // FCLTUUser is the user half of a Forward CLTU instance.
 //
 // It carries one piece of state the return services have no equivalent for:
-// the next CLTU identification. CCSDS 912.1-B-5 §3.6.2.5.1 makes the number
-// the user's to keep — it starts at the START invocation's
+// the next CLTU identification. CCSDS 912.1-B-5 clause 3.6.2.5.1 makes the number
+// the user's to keep. It starts at the START invocation's
 // firstCltuIdentification and goes up by one for every CLTU the provider
 // accepts. Get it wrong and the provider answers 'out of sequence' and
 // discards the CLTU, so the machine keeps the count rather than trusting the
 // caller to.
 //
-// The number advances as each CLTU is sent, not as each return arrives —
-// §3.1.6 expects the user to pipeline CLTUs without waiting for returns, and
+// The number advances as each CLTU is sent, not as each return arrives,
+// Clause 3.1.6 expects the user to pipeline CLTUs without waiting for returns, and
 // each one it sends must carry the next number. A refusal is where the count
-// corrects itself: §3.6.2.5.2b makes the provider quote the number it
+// corrects itself: Clause 3.6.2.5.2b makes the provider quote the number it
 // expected, so a user that fell out of step resynchronises from the refusal.
 //
-// THROW-EVENT identifications work the same way (§3.9): the machine numbers
+// THROW-EVENT identifications work the same way (clause 3.9): the machine numbers
 // each invocation, and a refusal quotes the identification the provider
 // expected, which resynchronises the count.
 type FCLTUUser struct {
@@ -1408,7 +1408,7 @@ type FCLTUUser struct {
 	// inFlight maps an invoke identifier to the CLTU number it carried, so a
 	// return can be matched to its CLTU.
 	inFlight map[InvokeId]CltuIdentification
-	// nextEventID numbers the next THROW-EVENT invocation (§3.9.2.4).
+	// nextEventID numbers the next THROW-EVENT invocation (clause 3.9.2.4).
 	nextEventID EventInvocationId
 }
 
@@ -1434,7 +1434,7 @@ func (u *FCLTUUser) NextCltuIdentification() (CltuIdentification, bool) {
 }
 
 // Start opens the CLTU stream, fixing the first CLTU's number. State 2 only,
-// per §3.4.1.4.
+// per clause 3.4.1.4.
 func (u *FCLTUUser) Start(
 	now time.Time, randomNumber int32, first CltuIdentification,
 ) (InvokeId, error) {
@@ -1471,11 +1471,11 @@ func (u *FCLTUUser) HandleStartReturn(r *FCLTUStartReturn) error {
 	return nil
 }
 
-// TransferData queues one CLTU for radiation. State 3 only, per §3.6.1.
+// TransferData queues one CLTU for radiation. State 3 only, per clause 3.6.1.
 //
 // The CLTU's identification is taken from the machine's counter, not from the
-// caller: §3.6.2.5.1 defines it as a sequence the user must keep unbroken.
-// The data is a CLTU as pkg/tcsc.WrapCLTU builds one — acquisition sequence,
+// caller: Clause 3.6.2.5.1 defines it as a sequence the user must keep unbroken.
+// The data is a CLTU as pkg/tcsc.WrapCLTU builds one, acquisition sequence,
 // start sequence, codeblocks and tail sequence.
 func (u *FCLTUUser) TransferData(
 	now time.Time, randomNumber int32,
@@ -1509,7 +1509,7 @@ func (u *FCLTUUser) TransferData(
 
 	u.mu.Lock()
 	u.inFlight[invokeID] = cltuID
-	// §3.1.6: the count advances as the CLTU is sent, so the next one can go
+	// Clause 3.1.6: the count advances as the CLTU is sent, so the next one can go
 	// out before this one's return arrives (pipelining).
 	u.nextCltuID = cltuID + 1
 	u.mu.Unlock()
@@ -1518,9 +1518,9 @@ func (u *FCLTUUser) TransferData(
 
 // HandleTransferDataReturn takes the answer to one CLTU.
 //
-// On acceptance the counter has already moved — it advanced when the CLTU
-// was sent — so the return changes nothing. On refusal the counter is set to
-// the number the provider says it expects, which §3.6.2.5.2b guarantees is
+// On acceptance the counter has already moved (it advanced when the CLTU
+// was sent) so the return changes nothing. On refusal the counter is set to
+// the number the provider says it expects, which clause 3.6.2.5.2b guarantees is
 // in the return: a user that lost its place recovers without another START.
 func (u *FCLTUUser) HandleTransferDataReturn(r *FCLTUTransferDataReturn) error {
 	u.mu.Lock()
@@ -1539,10 +1539,10 @@ func (u *FCLTUUser) HandleTransferDataReturn(r *FCLTUTransferDataReturn) error {
 }
 
 // ThrowEvent asks the provider's equipment to do something the service
-// agreement defines. Valid in states 2 and 3, per §3.9.1.
+// agreement defines. Valid in states 2 and 3, per clause 3.9.1.
 //
 // The event invocation identification comes from the machine's counter, not
-// from the caller: §3.9.2.4 makes it a sequence the user must keep, exactly
+// from the caller: Clause 3.9.2.4 makes it a sequence the user must keep, exactly
 // like the CLTU numbers. The identification used is returned, and it
 // advances as the invocation is sent.
 func (u *FCLTUUser) ThrowEvent(
@@ -1590,7 +1590,7 @@ func (u *FCLTUUser) NextEventInvocationId() EventInvocationId {
 // carrying actionListCompleted or actionListNotCompleted.
 //
 // A refusal echoes the event invocation identification the provider
-// expected (§3.9.2.5), so the machine resynchronises its counter from it,
+// expected (clause 3.9.2.5), so the machine resynchronises its counter from it,
 // the same recovery the CLTU numbers get.
 func (u *FCLTUUser) HandleThrowEventReturn(r *FCLTUThrowEventReturn) error {
 	u.mu.Lock()
@@ -1826,11 +1826,11 @@ func (p *FCLTUProvider) HandleStartInvocation(
 
 // HandleTransferDataInvocation answers one CLTU.
 //
-// It applies the sequence rule of §3.6.2.5 itself, because that rule is the
+// It applies the sequence rule of clause 3.6.2.5 itself, because that rule is the
 // protocol rather than a policy: a CLTU whose number is not the expected one
 // is refused with 'out of sequence', and the return carries the number the
-// provider still wants. Everything else — whether there is buffer space,
-// whether the time window is sane — is the caller's decision, passed in
+// provider still wants. Everything else (whether there is buffer space,
+// whether the time window is sane) is the caller's decision, passed in
 // through accept.
 //
 // bufferAvailable is the free buffer to report, in octets.
@@ -1853,7 +1853,7 @@ func (p *FCLTUProvider) HandleTransferDataInvocation(
 		diagnostic = FCLTUDataOutOfSequence
 	}
 
-	// §3.6.2.5.2: accepted means one greater than the CLTU just taken;
+	// Clause 3.6.2.5.2: accepted means one greater than the CLTU just taken;
 	// refused means the number still expected.
 	reported := expected
 	if accept {

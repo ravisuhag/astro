@@ -14,7 +14,7 @@ package pus
 // The limits, delta thresholds, expected values and masks are all typed
 // "deduced" in the figures, and the notes say what they are deduced from: the
 // monitored parameter identified by the monitored parameter ID field. That is
-// mission configuration — an on-board parameter's type — and this package does
+// mission configuration (an on-board parameter's type) and this package does
 // not hold it. Unlike ST[03]'s parameter values or ST[08]'s function
 // arguments, these fields are not at the end of the message: they sit in the
 // middle of a repeated group, so without their widths there is no way to find
@@ -95,8 +95,8 @@ func (c CheckType) valid() bool { return c <= CheckDelta }
 //
 // Its raw values mean different things depending on the check type: clause
 // 8.12.3.1b gives three tables, 8-7 for expected-value-checking, 8-8 for
-// limit-checking and 8-9 for delta-checking. Values 0, 1 and 2 line up — the
-// nominal status, "unchecked" and "invalid" — but 3 and 4 do not. So a raw
+// limit-checking and 8-9 for delta-checking. Values 0, 1 and 2 line up (the
+// nominal status, "unchecked" and "invalid") but 3 and 4 do not. So a raw
 // value on its own does not name a status, and NameFor takes the check type.
 type PMONCheckingStatus uint64
 
@@ -274,7 +274,7 @@ func (s FMONCheckingStatus) String() string {
 // of a bit mask over it, both in octets.
 //
 // The two are separate because the standard never says they are equal. It says
-// only that each is "specific to" or "derived from" the parameter — Figure
+// only that each is "specific to" or "derived from" the parameter, Figure
 // 8-114 note 2, Figure 8-115 note 1 and their siblings. A mask over a value is
 // normally the same width, but a mission that declares otherwise is not
 // contradicting the standard, so this type does not decide for it.
@@ -290,8 +290,8 @@ type ParameterLayout struct {
 //
 // It is the mission's parameter definition, and there is no way for this
 // package to supply it. Without one, the seven ST[12] message types that carry
-// deduced fields cannot be decoded at all — see the package comment on
-// st12.go — so a registry built without a resolver refuses them rather than
+// deduced fields cannot be decoded at all (see the package comment on
+// st12.go) so a registry built without a resolver refuses them rather than
 // guessing.
 type ParameterResolver func(parameterID uint64) (ParameterLayout, error)
 
@@ -304,7 +304,7 @@ type ParameterResolver func(parameterID uint64) (ParameterLayout, error)
 // the result equals the expected value.
 //
 // The whole group is present only when the subservice supports conditional
-// checking — clause 6.12.3.3c for parameter monitoring, 6.12.4.2.1c for
+// checking, clause 6.12.3.3c for parameter monitoring, 6.12.4.2.1c for
 // functional monitoring. The profile declares each separately.
 type ValidityCondition struct {
 	// ParameterID names the validity parameter, whose layout gives the widths

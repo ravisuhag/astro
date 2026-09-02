@@ -164,7 +164,7 @@ func BCHDecodeWithMode(cb [CodeblockBytes]byte, mode DecodeMode) ([]byte, int, e
 		bitIdx := 7 - (errPos % 8)
 		corrected[byteIdx] ^= 1 << uint(bitIdx)
 	} else {
-		// Error is in the parity bits — doesn't affect info.
+		// Error is in the parity bits, doesn't affect info.
 		parityBitIdx := errPos - 56
 		bitIdx := 7 - parityBitIdx
 		corrected[InfoBytes] ^= 1 << uint(bitIdx)

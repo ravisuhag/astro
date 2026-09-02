@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Supervisory PDUs, per CCSDS 211.0-B-6 §3.2.4.
+// Supervisory PDUs, per CCSDS 211.0-B-6 clause 3.2.4.
 //
 // SPDUs are the protocol talking to itself: link control words reporting what
 // arrived, and directives changing how the link runs. They travel in P-frames,
@@ -16,7 +16,7 @@ import (
 //	fixed:     format ID '1' │ type ID (1 bit) │ data (14 bits)
 //	variable:  format ID '0' │ type ID (3 bits) │ length (4 bits) │ data
 
-// SPDU format identifiers, per §3.2.4.2.
+// SPDU format identifiers, per clause 3.2.4.2.
 const (
 	// SPDUFormatVariable marks a variable-length SPDU ('0').
 	SPDUFormatVariable uint8 = 0
@@ -24,7 +24,7 @@ const (
 	SPDUFormatFixed uint8 = 1
 )
 
-// FixedSPDUSize is the width of a fixed-length SPDU in octets (§3.2.4.2.1).
+// FixedSPDUSize is the width of a fixed-length SPDU in octets (clause 3.2.4.2.1).
 const FixedSPDUSize = 2
 
 // Fixed-length SPDU type identifiers, per table 3-5.
@@ -36,11 +36,11 @@ const (
 )
 
 // MaxVariableSPDUData is the largest variable-length SPDU data field, bounded
-// by its 4-bit length field (§3.2.4.2.2).
+// by its 4-bit length field (clause 3.2.4.2.2).
 const MaxVariableSPDUData = 15
 
 // PLCW is the Proximity Link Control Word, the Type F1 fixed-length SPDU of
-// §3.2.4.3.2.
+// Clause 3.2.4.3.2.
 //
 // It is Proximity-1's acknowledgement: the receiver reports which frame it
 // expects next, so the sender knows what got through. The same job COP-1's
@@ -51,10 +51,10 @@ const MaxVariableSPDUData = 15
 //	format ID(1) │ type ID(1) │ retransmit(1) │ PCID(1) │ spare(1) │
 //	expedited frame counter(3) │ report value(8)
 //
-// This order is verified against CCSDS 211.0-B-6 §3.2.4.3.2.1.1, which lists
-// the seven fields from bit 15 up — Report Value, Expedited Frame Counter,
+// This order is verified against CCSDS 211.0-B-6 clause 3.2.4.3.2.1.1, which lists
+// the seven fields from bit 15 up (Report Value, Expedited Frame Counter,
 // Reserved Spare, PCID, Retransmit Flag, SPDU Type Identifier, SPDU Format
-// ID — and §3.2.4.3.2.2.1, which puts the Report Value in bits 8–15.
+// ID) and clause 3.2.4.3.2.2.1, which puts the Report Value in bits 8-15.
 type PLCW struct {
 	// RetransmitFlag says the receiver is missing frames and wants them again.
 	RetransmitFlag bool
@@ -64,7 +64,7 @@ type PLCW struct {
 	// 3 bits.
 	ExpeditedFrameCounter uint8
 	// ReportValue is V(R): the sequence number the receiver expects next
-	// (§3.2.4.3.2.2.2).
+	// (clause 3.2.4.3.2.2.2).
 	ReportValue uint8
 }
 
@@ -131,9 +131,9 @@ func (p *PLCW) Humanize() string {
 		p.ReportValue, p.RetransmitFlag, p.PCID, p.ExpeditedFrameCounter)
 }
 
-// VariableSPDU is a variable-length supervisory PDU, per §3.2.4.2.2.
+// VariableSPDU is a variable-length supervisory PDU, per clause 3.2.4.2.2.
 //
-// One octet of header — a zero format bit, a 3-bit type, and a 4-bit length —
+// One octet of header (a zero format bit, a 3-bit type, and a 4-bit length)
 // then up to 15 octets of directives or status reports, all of the same type.
 //
 // Note the length field is the actual octet count, not a count-less-one. The
@@ -219,7 +219,7 @@ func (s *SPDU) Encode() ([]byte, error) {
 
 // DecodeSPDUs parses the run of supervisory PDUs in a P-frame's data field.
 //
-// §3.2.4.1: SPDUs are self-identifying and self-delimiting, so a decoder can
+// Clause 3.2.4.1: SPDUs are self-identifying and self-delimiting, so a decoder can
 // walk them without being told how many there are.
 func DecodeSPDUs(data []byte) ([]SPDU, error) {
 	var out []SPDU

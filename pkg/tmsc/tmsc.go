@@ -74,7 +74,7 @@ func UnwrapCADU(cadu, asm []byte, randomize bool) ([]byte, error) {
 // 131.0-B-5 10.4.2; the 131071-bit sequence of 10.4.1 is not implemented.
 //
 // The generator lives in internal/pn next to the TC one. The two are different
-// sequences from different polynomials (CCSDS 231.0-B-4 §6.2 for TC), so the
+// sequences from different polynomials (CCSDS 231.0-B-4 clause 6.2 for TC), so the
 // internal names are qualified by standard and this package uses only the TM
 // pair.
 func GeneratePNSequence(length int) []byte {

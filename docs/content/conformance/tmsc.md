@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 130
 ---
 
-## Conformance Statement for `pkg/tmsc` — CCSDS 131.0-B-5
+## Conformance Statement for `pkg/tmsc`, CCSDS 131.0-B-5
 
 ---
 
@@ -33,7 +33,7 @@ order: 130
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/tmsc (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 130
 | Specification | CCSDS 131.0-B-5 (TM Synchronization and Channel Coding, Blue Book, Issue 5, September 2023) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Of the coding methods, only Reed-Solomon is implemented. Convolutional (section 3), concatenated (section 5), turbo (section 6), and LDPC (sections 7 and 8) coding are not implemented. Of the two pseudo-randomizer sequences, only the 255-bit legacy sequence (10.4.2) is implemented; the 131071-bit sequence (10.4.1) is not. Non-supported capabilities are identified in section A2.2.
+NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (section 3), concatenated (section 5), turbo (section 6), and LDPC (sections 7 and 8) coding are not implemented. Of the two pseudo-randomizer sequences, only the 255-bit legacy sequence (10.4.2) is implemented; the 131071-bit sequence (10.4.1) is not. Non-supported capabilities are identified in section A2.2.
 
 ### Status Notation
 
@@ -78,14 +78,14 @@ NOTE — Of the coding methods, only Reed-Solomon is implemented. Convolutional 
 | TMSC-8 | Synchronization and application: sequence starts at the first bit after the ASM; generator reinitialized for each codeblock/frame; ASM itself never randomized | 10.3, 10.4.3 | M | Yes | `WrapCADU()` randomizes before prepending the ASM; `UnwrapCADU()` de-randomizes after stripping it. The generator restarts on every call. |
 | TMSC-9 | 131071-bit pseudo-random sequence, h(x) = x^17 + x^14 + 1 | 10.4.1 | O.2 | No | Not implemented. This is the preferred sequence in Issue 5 for obviating spectral spikes on high-data-rate links. |
 | TMSC-10 | 255-bit legacy pseudo-random sequence, h(x) = x^8 + x^7 + x^5 + x^3 + 1, initialized to all ones | 10.4.2, 10.4.3 | O.2 | Yes | `GeneratePNSequence(length)` implements the 8-bit LFSR; `Randomize()` applies it. Kept in Issue 5 for backward compatibility with legacy systems. |
-| TMSC-11 | De-randomization (receive) using the same sequence | 10.3.3, 10.3.4 | M | Yes | Same `Randomize()` function — XOR is self-inverse. Integrated into `UnwrapCADU()` when randomize=true. |
+| TMSC-11 | De-randomization (receive) using the same sequence | 10.3.3, 10.3.4 | M | Yes | Same `Randomize()` function, XOR is self-inverse. Integrated into `UnwrapCADU()` when randomize=true. |
 
 ### Table A-3: Reed-Solomon Coding (section 4)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TMSC-12 | Parameters: J = 8 bits per symbol; E = 16 (255,223) | 4.3.1 | M | Yes | `NewRS255_223()` — 32 check symbols, corrects up to 16 symbol errors per codeword. |
-| TMSC-13 | Parameters: J = 8 bits per symbol; E = 8 (255,239) | 4.3.1 | M | Yes | `NewRS255_239()` — 16 check symbols, corrects up to 8 symbol errors per codeword. E is a mission-selected managed parameter (12.5, table 12-3). |
+| TMSC-12 | Parameters: J = 8 bits per symbol; E = 16 (255,223) | 4.3.1 | M | Yes | `NewRS255_223()`, 32 check symbols, corrects up to 16 symbol errors per codeword. |
+| TMSC-13 | Parameters: J = 8 bits per symbol; E = 8 (255,239) | 4.3.1 | M | Yes | `NewRS255_239()`, 16 check symbols, corrects up to 8 symbol errors per codeword. E is a mission-selected managed parameter (12.5, table 12-3). |
 | TMSC-14 | General characteristics: n = 255 symbols per codeword, 2E check symbols, k = n - 2E information symbols | 4.3.2 | M | Yes | `DataLen()` = 223 or 239; `NRoots()` = 32 or 16. |
 | TMSC-15 | Field generator polynomial F(x) = x^8 + x^7 + x^2 + x + 1 over GF(2) | 4.3.3 | M | Yes | 0x187; lookup tables (`gfExp[512]`, `gfLog[256]`) precomputed in `init()`. |
 | TMSC-16 | Code generator polynomial g(x) = ∏(x - α^11j) for j = 128-E ... 127+E; equivalently roots β^(112+j), j = 0 ... 2E-1, with β = α^11 | 4.3.4 | M | Yes | Generator built from roots β^112 ... β^(111+2E) with β = α^11 (`rsFCR` = 112, `rsPrim` = 11 in `rs.go`). |
@@ -126,11 +126,11 @@ NOTE — Of the coding methods, only Reed-Solomon is implemented. Convolutional 
 | Other optional (O) | 1 | 0 | 1 |
 | **Total** | **30** | **21** | **9** |
 
-NOTE — TMSC-5 is counted with the coding methods it belongs to.
+NOTE, TMSC-5 is counted with the coding methods it belongs to.
 
 ### Non-Conformances (Mandatory Items Not Supported)
 
-None. Every mandatory requirement of the supported options — Reed-Solomon coding with the 255-bit randomizer — is implemented, including the dual basis representation (4.3.9) and the virtual fill rules (4.3.8.2).
+None. Every mandatory requirement of the supported options (Reed-Solomon coding with the 255-bit randomizer) is implemented, including the dual basis representation (4.3.9) and the virtual fill rules (4.3.8.2).
 
 ### Non-Supported Optional Items
 

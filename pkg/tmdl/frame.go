@@ -103,8 +103,8 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 //
 // With the Synchronization Flag set, the Packet Order Flag, Segment Length
 // Identifier, and First Header Pointer are undefined by CCSDS 132.0-B-3
-// (notes under §4.1.2.7.4 through §4.1.2.7.6), and §3.4.2.3 hands those bits
-// to the VCA service user as the VCA Status Fields — so any value passes
+// (notes under clause 4.1.2.7.4 through clause 4.1.2.7.6), and clause 3.4.2.3 hands those bits
+// to the VCA service user as the VCA Status Fields, so any value passes
 // here. With the flag clear, the Packet Order Flag must be '0' and the
 // Segment Length Identifier '11'.
 func (h *PrimaryHeader) Validate() error {
@@ -147,16 +147,16 @@ func (h *PrimaryHeader) Humanize() string {
 }
 
 // MaxSecondaryHeaderSize is the largest Transfer Frame Secondary Header,
-// counting the identification octet: CCSDS 132.0-B-3 §4.1.3.2 and
+// counting the identification octet: CCSDS 132.0-B-3 clause 4.1.3.2 and
 // ECSS-E-ST-50-03C 5.3.1c both cap it at 64 octets.
 const MaxSecondaryHeaderSize = 64
 
 // SecondaryHeader represents the Transfer Frame Secondary Header as per CCSDS 132.0-B-3.
 type SecondaryHeader struct {
 	VersionNumber uint8 // 2 bits (0-1) - Always `00` for Version 1
-	// HeaderLength is the field of bits 2-7. CCSDS 132.0-B-3 §4.1.3.2.2.3 and
+	// HeaderLength is the field of bits 2-7. CCSDS 132.0-B-3 clause 4.1.3.2.2.3 and
 	// ECSS-E-ST-50-03C 5.3.2.3c define it as the TOTAL secondary header length
-	// in octets minus one — the total being this identification octet plus the
+	// in octets minus one, the total being this identification octet plus the
 	// data field. So for an N-octet data field the value is N, not N-1.
 	HeaderLength uint8
 	DataField    []byte // Transfer Frame Secondary Header Data
@@ -198,7 +198,7 @@ func (sh *SecondaryHeader) Decode(data []byte) error {
 	sh.VersionNumber = data[0] >> 6
 	sh.HeaderLength = data[0] & 0x3F
 
-	// §4.1.3.2.2.3: the field is the total length minus one, and the total
+	// Clause 4.1.3.2.2.3: the field is the total length minus one, and the total
 	// includes the identification octet just read. So the data field is
 	// HeaderLength octets, not HeaderLength+1.
 	dataFieldLen := int(sh.HeaderLength)
@@ -223,7 +223,7 @@ func (sh *SecondaryHeader) Validate() error {
 	if sh.HeaderLength > 0x3F {
 		return ErrInvalidHeaderLength
 	}
-	// §4.1.3.2.2.3: the field carries the total length minus one, so it must
+	// Clause 4.1.3.2.2.3: the field carries the total length minus one, so it must
 	// equal the data field length exactly.
 	if len(sh.DataField) > 0 && sh.HeaderLength != uint8(len(sh.DataField)) {
 		return ErrInvalidHeaderLength
@@ -263,7 +263,7 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 		DataField: secondaryHeaderData,
 	}
 	if len(secondaryHeaderData) > 0 {
-		// §4.1.3.2.2.3: the field is the total secondary header length minus
+		// Clause 4.1.3.2.2.3: the field is the total secondary header length minus
 		// one, and the total counts the identification octet, so it equals the
 		// data field length.
 		secondaryHeader.HeaderLength = uint8(len(secondaryHeaderData))
@@ -288,7 +288,7 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 		OperationalControl: ocf,
 	}
 	// FirstHeaderPtr defaults to 0: first packet starts at byte 0 of Data Field.
-	// Per CCSDS 132.0-B-3 §4.1.2.7.3, FirstHeaderPtr is relative to the
+	// Per CCSDS 132.0-B-3 clause 4.1.2.7.3, FirstHeaderPtr is relative to the
 	// Transfer Frame Data Field (after the Secondary Header), not the frame payload.
 	// VCA service sets SyncFlag=true and FirstHeaderPtr=0x07FF separately.
 
@@ -315,15 +315,15 @@ func (tf *TMTransferFrame) Encode() ([]byte, error) {
 // EncodeWithConfig converts the frame to bytes, appending the Frame Error
 // Control Field only when the channel carries one.
 //
-// CCSDS 132.0-B-3 §4.1.6 and ECSS-E-ST-50-03C 5.6.1b make the field mandatory
+// CCSDS 132.0-B-3 clause 4.1.6 and ECSS-E-ST-50-03C 5.6.1b make the field mandatory
 // when the frame is not Reed-Solomon encoded, and optional when it travels
-// inside a code block — the code block already protects it. §5.6.1c then
+// inside a code block, the code block already protects it. Clause 5.6.1c then
 // requires the choice to hold for the whole physical channel, which is why it
 // belongs to ChannelConfig rather than to a single frame.
 //
 // When config.FrameLength is set, the encoded frame must come out exactly
-// that long — CCSDS 132.0-B-3 §2.1.3 fixes the frame length per physical
-// channel — and any other size returns ErrFrameLengthMismatch.
+// that long (CCSDS 132.0-B-3 clause 2.1.3 fixes the frame length per physical
+// channel) and any other size returns ErrFrameLengthMismatch.
 func (tf *TMTransferFrame) EncodeWithConfig(config ChannelConfig) ([]byte, error) {
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
@@ -389,7 +389,7 @@ func padDataField(data []byte, capacity int) []byte {
 }
 
 // FirstHeaderPtr values with a meaning of their own, from CCSDS 132.0-B-3
-// §4.1.2.7.6 and ECSS-E-ST-50-03C 5.2.7.6f and g.
+// Clause 4.1.2.7.6 and ECSS-E-ST-50-03C 5.2.7.6f and g.
 //
 // The two are not interchangeable. A frame whose data field simply continues a
 // packet started earlier says NoPacketStart; a frame that is nothing but fill
@@ -403,7 +403,7 @@ const (
 )
 
 // IdleFrameVCID is the fallback virtual channel for idle frames when the
-// caller knows no better. CCSDS 132.0-B-3 §4.1.4.6.3 requires the VCID of an
+// caller knows no better. CCSDS 132.0-B-3 clause 4.1.4.6.3 requires the VCID of an
 // OID frame to be one of the VCIDs used for transferring packets, so
 // MasterChannel picks a registered packet VCID instead; this constant is used
 // only when no virtual channel is registered at all, where no conformant
@@ -411,24 +411,24 @@ const (
 const IdleFrameVCID uint8 = 7
 
 // OIDSequence generates the mandatory Pseudo Noise (PN) sequence that fills
-// the data field of OID Transfer Frames (CCSDS 132.0-B-3 §4.1.4.6.2, annex D):
+// the data field of OID Transfer Frames (CCSDS 132.0-B-3 clause 4.1.4.6.2, annex D):
 // a 32-cell Fibonacci-form Linear Feedback Shift Register with polynomial
 // D0 + D1 + D2 + D22 + D32, initialized to the 'all ones' state at device
 // start-up and never restarted for subsequent frames. The first octets of the
 // stream are FF FF FF FF 6D B6 D8 61 45 1F. It is safe for concurrent use.
 //
-// USLP mandates the same generator (CCSDS 732.1-B-3 §4.1.4.1.10), so the
+// USLP mandates the same generator (CCSDS 732.1-B-3 clause 4.1.4.1.10), so the
 // implementation is shared with pkg/usdl rather than copied.
 type OIDSequence = pn.OIDSequence
 
 // NewOIDSequence returns a PN generator in the 'all ones' start-up state.
-// Keep one generator per channel for the life of the device; §4.1.4.6.2.1
+// Keep one generator per channel for the life of the device; clause 4.1.4.6.2.1
 // forbids restarting the sequence across OID frames.
 func NewOIDSequence() *OIDSequence { return pn.NewOIDSequence() }
 
 // NewIdleFrame creates an idle (OID) TM Transfer Frame: a PN-filled data
 // field with the First Header Pointer set to FHPOnlyIdleData, per CCSDS
-// 132.0-B-3 §4.1.2.7.6.5 and §4.1.4.6.
+// 132.0-B-3 clause 4.1.2.7.6.5 and clause 4.1.4.6.
 //
 // The frame's MC and VC counts are zero and its PN sequence starts fresh. Use
 // NewIdleFrameWithCounter so idle frames continue the master channel sequence
@@ -442,19 +442,19 @@ func NewIdleFrame(scid uint16, vcid uint8, config ChannelConfig) (*TMTransferFra
 // from the given PN generator.
 //
 // Pass the same FrameCounter the channel's services use: CCSDS 132.0-B-3
-// §4.1.2.5 counts every frame of the master channel, idle frames included, so
+// Clause 4.1.2.5 counts every frame of the master channel, idle frames included, so
 // an unstamped idle frame breaks the MC sequence at any conformant receiver.
 // A nil counter leaves both counts zero.
 //
-// Pass the channel's persistent OIDSequence: §4.1.4.6.2 mandates the PN fill
+// Pass the channel's persistent OIDSequence: Clause 4.1.4.6.2 mandates the PN fill
 // and forbids restarting the generator between frames. A nil fill starts a
 // fresh sequence for this frame only, which is fine for a single frame but
-// repeats the same octets on every frame of a long-lived sender —
+// repeats the same octets on every frame of a long-lived sender,
 // MasterChannel keeps one generator for exactly this reason.
 //
 // When the channel carries a secondary header (config.FSHDataLength > 0) the
-// idle frame includes a zero-filled one: §4.1.2.7.2.3 keeps the Secondary
-// Header Flag static across the channel, and the OID notes under §4.1.4.6
+// idle frame includes a zero-filled one: Clause 4.1.2.7.2.3 keeps the Secondary
+// Header Flag static across the channel, and the OID notes under clause 4.1.4.6
 // expect the header to stay usable on idle frames. MasterChannel overwrites
 // it from the MC_FSH supplier when one is installed. The same applies to the
 // Operational Control Field under config.HasOCF.
@@ -508,7 +508,7 @@ func IsIdleFrame(frame *TMTransferFrame) bool {
 // the last two octets as a Frame Error Control Field and verifying them.
 //
 // Use DecodeTMTransferFrameWithConfig for a channel that carries no such
-// field, which §5.6.1b permits under Reed-Solomon coding.
+// field, which clause 5.6.1b permits under Reed-Solomon coding.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 	return DecodeTMTransferFrameWithConfig(data, ChannelConfig{HasFEC: true})
 }
@@ -516,8 +516,8 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 // DecodeTMTransferFrameWithConfig parses a frame, verifying the Frame Error
 // Control Field only when the channel carries one.
 //
-// When config.FrameLength is set, the input must be exactly that long —
-// frames on a physical channel are fixed-length per CCSDS 132.0-B-3 §2.1.3 —
+// When config.FrameLength is set, the input must be exactly that long (
+// frames on a physical channel are fixed-length per CCSDS 132.0-B-3 clause 2.1.3)
 // and any other size returns ErrFrameLengthMismatch.
 func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
 	// A frame needs its six-octet primary header, and two more for the error
@@ -542,7 +542,7 @@ func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTran
 	dataEnd := len(data)
 	var receivedCRC uint16
 	if config.HasFEC {
-		// §5.6.3: verify the field over everything preceding it.
+		// Clause 5.6.3: verify the field over everything preceding it.
 		dataEnd = len(data) - 2
 		receivedCRC = binary.BigEndian.Uint16(data[dataEnd:])
 		if computed := crc.ComputeCRC16(data[:dataEnd]); receivedCRC != computed {

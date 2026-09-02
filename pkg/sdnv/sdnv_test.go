@@ -10,7 +10,7 @@ import (
 )
 
 func TestKnownVectors(t *testing.T) {
-	// The worked examples from RFC 5050 §4.1, which RFC 5326 §1.6 item 20
+	// The worked examples from RFC 5050 clause 4.1, which RFC 5326 clause 1.6 item 20
 	// adopts by reference.
 	tests := []struct {
 		value   uint64
@@ -119,7 +119,7 @@ func TestDecodeRejectsOverflow(t *testing.T) {
 }
 
 func TestDecodeRejectsOverlongPaddedEncoding(t *testing.T) {
-	// RFC 6256 §3.2: leading 0x80 octets pad a value without changing it.
+	// RFC 6256 clause 3.2: leading 0x80 octets pad a value without changing it.
 	// Eleven octets can still describe a small value, but this package caps
 	// what it reads at ten and refuses with ErrTooLong, not ErrOverflow.
 	padded := append(bytes.Repeat([]byte{0x80}, 10), 0x01)

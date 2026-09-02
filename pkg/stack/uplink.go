@@ -32,11 +32,11 @@ import (
 // The two services are both here because a mission needs both. Sequence
 // controlled (type AD) is for commands that must arrive exactly once and in
 // order. Expedited (type BD) bypasses the sequence check entirely, which is
-// what you use when the sequence machinery is what is broken — an unlock
+// what you use when the sequence machinery is what is broken. An unlock
 // after a lockout, say.
 
 // MaxUplinkVCID is the largest virtual channel identifier a TC frame can
-// carry. The field is six bits (CCSDS 232.0-B-4 §4.1.2.4).
+// carry. The field is six bits (CCSDS 232.0-B-4 clause 4.1.2.4).
 const MaxUplinkVCID = 63
 
 // UplinkVC is one virtual channel on the uplink.
@@ -71,7 +71,7 @@ const DefaultWindow = 10
 // As with Downlink, the same value configures both ends.
 type Uplink struct {
 	// SpacecraftID is the 10-bit identifier both ends expect
-	// (CCSDS 232.0-B-4 §4.1.2.3).
+	// (CCSDS 232.0-B-4 clause 4.1.2.3).
 	SpacecraftID uint16
 
 	// Randomize applies the CCSDS pseudo-randomiser to each codeblock before
@@ -142,7 +142,7 @@ type Commander struct {
 	// stamped into the frame header at construction and not chosen at
 	// transmission. A frame built by the sequenced service says type AD and
 	// one built by the expedited service says type BD, and FARM-1 reads the
-	// header — so offering an AD-shaped frame through FOP-1's BD path gets it
+	// header, so offering an AD-shaped frame through FOP-1's BD path gets it
 	// rejected on arrival, which is what an earlier draft of this did.
 	sequenced map[uint8]*channelService
 	expedited map[uint8]*channelService
@@ -153,7 +153,7 @@ type Commander struct {
 	//
 	// FOP-1 refuses a frame once its sliding window is full, because that is
 	// what sequence control means. But a caller offering a command wants it
-	// queued, not refused — the window is a transmission constraint, not a
+	// queued, not refused. The window is a transmission constraint, not a
 	// limit on how much a pass may hold. So the frames wait here and are
 	// offered again whenever the window might have moved.
 	backlog map[uint8][]pendingFrame
@@ -394,8 +394,8 @@ func (c *Commander) AcceptCLCW(encoded []byte) error {
 	_, fop, err := c.channel(clcw.VirtualChannelID, false)
 	if err != nil {
 		// A CLCW for a channel this commander does not drive is not an
-		// error in itself — a spacecraft reports on channels the ground may
-		// not be commanding — but it cannot be acted on either.
+		// error in itself (a spacecraft reports on channels the ground may
+		// not be commanding) but it cannot be acted on either.
 		return err
 	}
 	if err := fop.ProcessCLCW(&clcw); err != nil {

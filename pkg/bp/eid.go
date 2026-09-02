@@ -2,7 +2,7 @@
 // per RFC 5050, profiled for space missions by CCSDS 734.2-B-1.
 //
 // Bundle Protocol is the network layer of Delay-Tolerant Networking. It moves
-// application data units — bundles — hop by hop across links that are never
+// application data units (bundles) hop by hop across links that are never
 // all up at once, storing them at intermediate nodes rather than holding an
 // end-to-end session open.
 //
@@ -33,11 +33,11 @@ import (
 )
 
 // Version is the bundle protocol version this package implements, per
-// RFC 5050 §4.5.1.
+// RFC 5050 clause 4.5.1.
 const Version = 6
 
-// IPNScheme is the naming scheme CCSDS 734.2-B-1 §3.2.1 requires, defined by
-// RFC 6260 §2.1.
+// IPNScheme is the naming scheme CCSDS 734.2-B-1 clause 3.2.1 requires, defined by
+// RFC 6260 clause 2.1.
 const IPNScheme = "ipn"
 
 // DTNScheme is the scheme of the null endpoint "dtn:none".
@@ -53,7 +53,7 @@ type EndpointID struct {
 	SSP    string
 }
 
-// NullEndpoint is "dtn:none", the endpoint that names nobody. RFC 5050 §4.4
+// NullEndpoint is "dtn:none", the endpoint that names nobody. RFC 5050 clause 4.4
 // uses it for a bundle with no identifiable source.
 var NullEndpoint = EndpointID{Scheme: DTNScheme, SSP: "none"}
 
@@ -73,7 +73,7 @@ func (e EndpointID) String() string {
 // IPNEndpoint builds an endpoint in the IPN scheme that CCSDS mandates.
 //
 // The scheme-specific part is a node number and a service number separated by
-// a period, per CCSDS 734.2-B-1 §3.2.1. Node numbers run 1 to 2^64-1 and are
+// a period, per CCSDS 734.2-B-1 clause 3.2.1. Node numbers run 1 to 2^64-1 and are
 // assigned by SANA; service numbers run 0 to 2^64-1.
 func IPNEndpoint(node, service uint64) EndpointID {
 	return EndpointID{
@@ -99,7 +99,7 @@ func (e EndpointID) IPNParts() (node, service uint64, err error) {
 	if err != nil {
 		return 0, 0, ErrInvalidEndpointID
 	}
-	// §3.2.1: a node number is at least 1.
+	// Clause 3.2.1: a node number is at least 1.
 	if node == 0 {
 		return 0, 0, ErrInvalidEndpointID
 	}
@@ -115,7 +115,7 @@ func ParseEndpointID(uri string) (EndpointID, error) {
 	return EndpointID{Scheme: uri[:colon], SSP: uri[colon+1:]}, nil
 }
 
-// cbheParts returns the (node, service) pair RFC 6260 §2.1 assigns this
+// cbheParts returns the (node, service) pair RFC 6260 clause 2.1 assigns this
 // endpoint in a CBHE-encoded primary block: an ipn endpoint contributes its
 // node and service numbers, and the null endpoint dtn:none travels as (0, 0).
 // ok is false when the endpoint fits neither form, which makes the whole
@@ -132,7 +132,7 @@ func (e EndpointID) cbheParts() (node, service uint64, ok bool) {
 }
 
 // cbheEndpoint rebuilds an endpoint from a CBHE (node, service) pair, per
-// RFC 6260 §2.2: (0, 0) is the null endpoint, and node 0 with a nonzero
+// RFC 6260 clause 2.2: (0, 0) is the null endpoint, and node 0 with a nonzero
 // service number names nothing.
 func cbheEndpoint(node, service uint64) (EndpointID, error) {
 	if node == 0 {
@@ -146,7 +146,7 @@ func cbheEndpoint(node, service uint64) (EndpointID, error) {
 
 // dictionary builds the primary block's dictionary and the offsets into it.
 //
-// RFC 5050 §4.4: the dictionary is a byte array of null-terminated strings,
+// RFC 5050 clause 4.4: the dictionary is a byte array of null-terminated strings,
 // and each endpoint is a pair of offsets naming its scheme and its
 // scheme-specific part. Identical strings are stored once, which is the whole
 // point of the arrangement.

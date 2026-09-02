@@ -125,7 +125,7 @@ func TestHeaderDecodeInvalidPVN(t *testing.T) {
 }
 
 func TestHeaderDecodeNonIdleOneOctet(t *testing.T) {
-	// PVN='111', PID='001' (LTP), LoL='00' — forbidden by 4.1.2.4.4.
+	// PVN='111', PID='001' (LTP), LoL='00', forbidden by 4.1.2.4.4.
 	var h epp.Header
 	if err := h.Decode([]byte{0xE4}); !errors.Is(err, epp.ErrNonIdleOneOctetHeader) {
 		t.Errorf("Decode(0xE4) = %v, want ErrNonIdleOneOctetHeader", err)

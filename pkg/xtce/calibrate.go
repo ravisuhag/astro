@@ -31,7 +31,7 @@ func (c *Calibrator) Calibrate(raw float64) (float64, error) {
 	default:
 		// A Calibrator element with nothing in it. The schema requires one of
 		// the three, so this is a malformed database rather than a plain
-		// uncalibrated parameter — but the identity is the harmless reading.
+		// uncalibrated parameter, but the identity is the harmless reading.
 		return raw, nil
 	}
 }

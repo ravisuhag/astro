@@ -60,7 +60,7 @@ func TestModularChecksumWholeFileMatchesSegmented(t *testing.T) {
 }
 
 func TestNullChecksumIsAlwaysZero(t *testing.T) {
-	// §4.2.2.4.
+	// Clause 4.2.2.4.
 	c, err := cfdp.NewChecksum(cfdp.ChecksumNull)
 	if err != nil {
 		t.Fatal(err)

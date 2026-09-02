@@ -6,9 +6,9 @@
 // and this algorithm exists to send only the ones that are not.
 //
 // It keeps a mask, one bit per position, saying whether that position is
-// predictable — unchanged since the last packet — or not. Predictable
+// predictable (unchanged since the last packet) or not. Predictable
 // positions are not sent at all; the decompressor already knows them. Each
-// output vector carries three things (§5.3.1):
+// output vector carries three things (clause 5.3.1):
 //
 //	h_t  what changed in the mask lately, and how far back that reaches
 //	q_t  the whole mask, when asked for
@@ -36,10 +36,10 @@
 //
 // The algorithm is built for a lossy link, and it is worth being precise about
 // what that buys. Each output says how many outputs may have been lost
-// immediately before it without stopping it being decoded — its effective
+// immediately before it without stopping it being decoded. Its effective
 // robustness level. Set Robustness to the floor you want.
 //
-// But the decompressor cannot tell that anything was lost. §2.2 says so
+// But the decompressor cannot tell that anything was lost. Clause 2.2 says so
 // outright: the standard "does not provide a mechanism for identifying the
 // number of sequential output binary vectors that were lost", and suggests
 // packet sequence counters as the mission's answer. So the caller must notice
@@ -57,10 +57,10 @@
 // # What is here
 //
 // The compressor is the whole of the standard's normative content: inputs
-// (§3), mask update (§4) and encoder (§5). The standard specifies nothing
-// else — there is no decoder section and the conformance list in annex A has
-// only encoder items — so the decompressor here is the encoder run backwards,
-// which §2.1 lays out the requirements for. See
+// (clause 3), mask update (clause 4) and encoder (clause 5). The standard specifies nothing
+// else (there is no decoder section and the conformance list in annex A has
+// only encoder items) so the decompressor here is the encoder run backwards,
+// which clause 2.1 lays out the requirements for. See
 // docs/content/conformance/rhc.md.
 package rhc
 
@@ -69,7 +69,7 @@ import "fmt"
 // The compressor of CCSDS 124.0-B-1, sections 3 to 5.
 //
 // One cycle per input vector, and each cycle is two stages: update the mask
-// (§4), then encode (§5). The output is three concatenated binary vectors:
+// (clause 4), then encode (clause 5). The output is three concatenated binary vectors:
 //
 //	h_t  what changed in the mask recently, and how far back that covers
 //	q_t  the whole mask, when asked for
@@ -81,30 +81,30 @@ import "fmt"
 
 // maxHistory is how many past cycles the encoder must remember.
 //
-// §5.3.2.2 bounds C_t by min(t,15) - R_t, so the change vectors of the last
+// Clause 5.3.2.2 bounds C_t by min(t,15) - R_t, so the change vectors of the last
 // fifteen cycles plus the current one are the most that can ever be needed.
 // The same bound holds for the new-mask flags, since V_t <= 15.
 const maxHistory = 16
 
-// MaxRobustness is the largest robustness level §3.3.2a allows.
+// MaxRobustness is the largest robustness level clause 3.3.2a allows.
 const MaxRobustness = 7
 
-// MaxVectorLength is the longest input vector §3.2 allows.
+// MaxVectorLength is the longest input vector clause 3.2 allows.
 const MaxVectorLength = 1<<16 - 1
 
 // Config fixes what does not change from cycle to cycle.
 type Config struct {
-	// VectorLength is F, the length of every input vector in bits. §3.2
+	// VectorLength is F, the length of every input vector in bits. Clause 3.2
 	// allows 1 to 65535.
 	VectorLength int
 
-	// InitialMask is M_0, the mask the compressor starts from (§3.3.1). A nil
-	// value means all zeros, which the note under §3.3.1 calls "often a
+	// InitialMask is M_0, the mask the compressor starts from (clause 3.3.1). A nil
+	// value means all zeros, which the note under clause 3.3.1 calls "often a
 	// reasonable default": every position starts out predictable.
 	InitialMask Vector
 
 	// Robustness is R_t, the minimum required effective robustness level
-	// (§3.3.2a), 0 to 7. It is how many consecutive output vectors may be
+	// (clause 3.3.2a), 0 to 7. It is how many consecutive output vectors may be
 	// lost before this one and still leave the mask recoverable.
 	//
 	// Higher costs bits: the change information in h_t is ORed over R_t+1
@@ -114,7 +114,7 @@ type Config struct {
 	// NewMaskInterval is how often to set the new mask flag, in cycles. Zero
 	// never sets it.
 	//
-	// This is policy, not protocol. §3.3.2b makes the flag user-specified at
+	// This is policy, not protocol. Clause 3.3.2b makes the flag user-specified at
 	// every cycle and says nothing about when to set it. Setting it lets
 	// positions go back to being predictable, which is what stops the mask
 	// filling up with ones over a long run; how often to pay for that is a
@@ -122,14 +122,14 @@ type Config struct {
 	NewMaskInterval int
 
 	// SendMaskInterval is how often to set the send mask flag, in cycles.
-	// Zero never sets it beyond what §3.3.2c forces.
+	// Zero never sets it beyond what clause 3.3.2c forces.
 	//
 	// Also policy. Sending the whole mask lets a decompressor that has lost
 	// its place recover the mask without waiting for changes to describe it.
 	SendMaskInterval int
 
 	// UncompressedInterval is how often to set the uncompressed flag, in
-	// cycles. Zero never sets it beyond what §3.3.2d forces.
+	// cycles. Zero never sets it beyond what clause 3.3.2d forces.
 	//
 	// Also policy, and the one that matters most for recovery: an
 	// uncompressed output carries the whole input vector, which is the only
@@ -137,12 +137,12 @@ type Config struct {
 	UncompressedInterval int
 
 	// Strict makes the decompressor accept nothing but an uncompressed
-	// output after a reported loss — NotifyLoss, or an output that failed to
-	// parse — even when a later output's effective robustness level claims to
+	// output after a reported loss (NotifyLoss, or an output that failed to
+	// parse) even when a later output's effective robustness level claims to
 	// reach back across the gap.
 	//
 	// The point is trust. The standard's recovery gate compares the gap
-	// against V_t (§5.3.2.2), a field the output vector declares about
+	// against V_t (clause 5.3.2.2), a field the output vector declares about
 	// itself; nothing in the format lets a decompressor verify it, so a
 	// corrupt or hostile vector arriving right after a gap can claim any
 	// reach up to 15 and be believed. Strict mode drops that trust and waits
@@ -175,21 +175,21 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// CycleParams are the per-cycle parameters of §3.3.2.
+// CycleParams are the per-cycle parameters of clause 3.3.2.
 //
 // Compress derives these from the Config. CompressWith takes them directly,
-// for a caller driving the flags from its own logic — which §2.1 explicitly
+// for a caller driving the flags from its own logic, which clause 2.1 explicitly
 // allows: "the decompressor is not required to actively change user defined
 // parameters as all the information required for decompression is contained
 // in the output bit vectors".
 type CycleParams struct {
-	// Robustness is R_t (§3.3.2a).
+	// Robustness is R_t (clause 3.3.2a).
 	Robustness int
-	// NewMask is the new mask flag, p-dot_t (§3.3.2b).
+	// NewMask is the new mask flag, p-dot_t (clause 3.3.2b).
 	NewMask bool
-	// SendMask is the send mask flag, f-dot_t (§3.3.2c).
+	// SendMask is the send mask flag, f-dot_t (clause 3.3.2c).
 	SendMask bool
-	// Uncompressed is the uncompressed flag, r-dot_t (§3.3.2d).
+	// Uncompressed is the uncompressed flag, r-dot_t (clause 3.3.2d).
 	Uncompressed bool
 }
 
@@ -212,10 +212,10 @@ type Compressor struct {
 	hasPrevious bool
 
 	// changes holds recent change vectors D, most recent last, capped at
-	// maxHistory. Needed for X_t (§5.3.3.1) and C_t (§5.3.2.2).
+	// maxHistory. Needed for X_t (clause 5.3.3.1) and C_t (clause 5.3.2.2).
 	changes []Vector
 	// newMaskFlags holds recent values of the new mask flag, most recent
-	// last, capped at maxHistory. Needed for c_t (§5.3.3.1 equation 20).
+	// last, capped at maxHistory. Needed for c_t (clause 5.3.3.1 equation 20).
 	newMaskFlags []bool
 
 	// forceNewMask, forceSendMask and forceUncompressed make the next cycle
@@ -236,7 +236,7 @@ func NewCompressor(config Config) (*Compressor, error) {
 }
 
 // Reset returns the compressor to its initial state: t = 0, the mask back to
-// M_0, the build to zero (§4.1), and no history.
+// M_0, the build to zero (clause 4.1), and no history.
 func (c *Compressor) Reset() {
 	c.t = 0
 	if c.config.InitialMask.Len() == c.config.VectorLength {
@@ -244,7 +244,7 @@ func (c *Compressor) Reset() {
 	} else {
 		c.mask = NewVector(c.config.VectorLength)
 	}
-	// §4.1: "build is initialized to a zero vector, that is, B_0 = 0".
+	// Clause 4.1: "build is initialized to a zero vector, that is, B_0 = 0".
 	c.build = NewVector(c.config.VectorLength)
 	c.previous = NewVector(c.config.VectorLength)
 	c.hasPrevious = false
@@ -297,7 +297,7 @@ func interval(every, t int) bool {
 // Compress consumes one input vector and returns the output vector, with its
 // length in bits.
 //
-// The octet slice is padded with zeros to the next octet; §2.2 leaves framing
+// The octet slice is padded with zeros to the next octet; clause 2.2 leaves framing
 // to the mission, so the bit length is what the caller must carry alongside if
 // it is packing several outputs together.
 func (c *Compressor) Compress(input []byte) (out []byte, bitLen int, err error) {
@@ -314,7 +314,7 @@ func (c *Compressor) CompressWith(input []byte, params CycleParams) (out []byte,
 		return nil, 0, fmt.Errorf("%w: got %d", ErrInvalidRobustness, params.Robustness)
 	}
 
-	// §3.3.2c and d: both flags are forced while t <= R_t. That is what makes
+	// Clause 3.3.2c and d: both flags are forced while t <= R_t. That is what makes
 	// the first output self-describing, and it is not optional.
 	if c.t <= params.Robustness {
 		params.SendMask = true
@@ -342,13 +342,13 @@ func (c *Compressor) CompressWith(input []byte, params CycleParams) (out []byte,
 	return writer.Bytes(), writer.BitLen(), nil
 }
 
-// updateMask runs the mask update stage of §4.2 and returns the change vector
-// D_t of §4.2.3.
+// updateMask runs the mask update stage of clause 4.2 and returns the change vector
+// D_t of clause 4.2.3.
 func (c *Compressor) updateMask(current Vector, newMask bool) Vector {
 	previousMask := c.mask
 
 	if !c.hasPrevious {
-		// t = 0. §3.3.1 gives the mask; §4.1 gives the build. Equation 8 makes
+		// t = 0. Clause 3.3.1 gives the mask; clause 4.1 gives the build. Equation 8 makes
 		// D_0 = 0.
 		c.build = NewVector(c.config.VectorLength)
 		return NewVector(c.config.VectorLength)
@@ -413,11 +413,11 @@ func (c *Compressor) newMaskAt(i int) bool {
 	return c.newMaskFlags[i-oldest]
 }
 
-// effectiveRobustness computes V_t, per §5.3.2.2 equation 14.
+// effectiveRobustness computes V_t, per clause 5.3.2.2 equation 14.
 //
 // V_t is R_t plus C_t, the run of cycles just before the window in which the
-// mask did not change at all. Those cycles cost nothing to cover — a change
-// vector of zero adds nothing to the OR — so the coder reports the larger
+// mask did not change at all. Those cycles cost nothing to cover (a change
+// vector of zero adds nothing to the OR) so the coder reports the larger
 // reach it happens to have.
 func (c *Compressor) effectiveRobustness(robustness int) int {
 	if c.t-robustness <= 0 {
@@ -441,7 +441,7 @@ func (c *Compressor) effectiveRobustness(robustness int) int {
 	return robustness + extra
 }
 
-// changeWindow computes X_t, per §5.3.3.1 equation 16: the recent change
+// changeWindow computes X_t, per clause 5.3.3.1 equation 16: the recent change
 // vectors ORed together, then reversed.
 //
 // The OR is the robustness mechanism. A decompressor that missed the last R_t
@@ -486,9 +486,9 @@ func (c *Compressor) newMaskSetTwice(effective int, currentNewMask bool) bool {
 	return count > 1
 }
 
-// encode builds the output vector, per §5.3.
+// encode builds the output vector, per clause 5.3.
 func (c *Compressor) encode(current, change Vector, params CycleParams) (*BitWriter, error) {
-	// §5.3.2.1 equation 13.
+	// Clause 5.3.2.1 equation 13.
 	dFlag := !params.SendMask && !params.Uncompressed
 
 	effective := c.effectiveRobustness(params.Robustness)
@@ -524,7 +524,7 @@ func (c *Compressor) encode(current, change Vector, params CycleParams) (*BitWri
 		w.WriteBit(eBit)
 	}
 	if hasK {
-		// y is already in equation 11's emission order — last selected
+		// y is already in equation 11's emission order, last selected
 		// position first; see Vector.Extract.
 		for _, bit := range y {
 			w.WriteBit(bit)

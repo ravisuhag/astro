@@ -3,7 +3,7 @@ package bp
 import "fmt"
 
 // Bundle is a complete Bundle Protocol data unit: a primary block followed by
-// one or more canonical blocks, per RFC 5050 §4.1.
+// one or more canonical blocks, per RFC 5050 clause 4.1.
 //
 // The last block must carry the last-block flag, and exactly one block must be
 // the payload.
@@ -103,7 +103,7 @@ func (b *Bundle) ECOS() (*ECOS, bool) {
 	return nil, false
 }
 
-// Validate checks the bundle's structure against §4.1 and §4.5.2.
+// Validate checks the bundle's structure against clause 4.1 and clause 4.5.2.
 func (b *Bundle) Validate() error {
 	if b.Primary == nil {
 		return ErrDataTooShort
@@ -254,7 +254,7 @@ func DecodeBundleN(data []byte, opts DecodeOptions) (*Bundle, int, error) {
 		b.Blocks = append(b.Blocks, block)
 		offset += n
 
-		// §4.5.2: the last-block flag ends the bundle.
+		// Clause 4.5.2: the last-block flag ends the bundle.
 		if block.IsLast() {
 			break
 		}

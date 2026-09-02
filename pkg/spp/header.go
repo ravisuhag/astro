@@ -31,7 +31,7 @@ const APIDIdle uint16 = 0x7FF
 // mission-defined, but the layout is not a free-for-all. Per 4.1.4.2.1.5 a
 // Packet Secondary Header consists of either a Time Code Field alone, an
 // Ancillary Data Field alone, or a Time Code Field followed by an Ancillary
-// Data Field — in that order — and 4.1.4.2.1.6 requires the chosen option to
+// Data Field (in that order) and 4.1.4.2.1.6 requires the chosen option to
 // stay the same for a managed data path through every mission phase.
 //
 // This interface cannot check that: it sees only octets, so which of the

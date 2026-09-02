@@ -6,19 +6,19 @@ import "fmt"
 type DirectiveCode uint8
 
 const (
-	// DirectiveEOF closes out the file data stream (§5.2.2).
+	// DirectiveEOF closes out the file data stream (clause 5.2.2).
 	DirectiveEOF DirectiveCode = 0x04
-	// DirectiveFinished reports delivery at the receiver (§5.2.3).
+	// DirectiveFinished reports delivery at the receiver (clause 5.2.3).
 	DirectiveFinished DirectiveCode = 0x05
-	// DirectiveACK acknowledges an EOF or Finished PDU (§5.2.4).
+	// DirectiveACK acknowledges an EOF or Finished PDU (clause 5.2.4).
 	DirectiveACK DirectiveCode = 0x06
-	// DirectiveMetadata opens a transaction (§5.2.5).
+	// DirectiveMetadata opens a transaction (clause 5.2.5).
 	DirectiveMetadata DirectiveCode = 0x07
-	// DirectiveNAK names the file segments still missing (§5.2.6).
+	// DirectiveNAK names the file segments still missing (clause 5.2.6).
 	DirectiveNAK DirectiveCode = 0x08
-	// DirectivePrompt asks the far end for a NAK or Keep Alive (§5.2.7).
+	// DirectivePrompt asks the far end for a NAK or Keep Alive (clause 5.2.7).
 	DirectivePrompt DirectiveCode = 0x09
-	// DirectiveKeepAlive reports the receiver's progress (§5.2.8).
+	// DirectiveKeepAlive reports the receiver's progress (clause 5.2.8).
 	DirectiveKeepAlive DirectiveCode = 0x0C
 )
 
@@ -113,7 +113,7 @@ func (c ConditionCode) String() string {
 }
 
 // directiveBody strips the directive code octet off a File Directive PDU data
-// field and checks it is the one expected (§5.2.1.1).
+// field and checks it is the one expected (clause 5.2.1.1).
 func directiveBody(data []byte, want DirectiveCode) ([]byte, error) {
 	if len(data) < 1 {
 		return nil, ErrDataTooShort
@@ -210,7 +210,7 @@ func (p *EOFPDU) Humanize() string {
 
 // --- Finished PDU, table 5-7 ---
 
-// DeliveryCode says whether the receiver got everything (§5.2.3).
+// DeliveryCode says whether the receiver got everything (clause 5.2.3).
 type DeliveryCode uint8
 
 const (
@@ -229,7 +229,7 @@ func (d DeliveryCode) String() string {
 	return "data incomplete"
 }
 
-// FileStatus reports what became of the delivered file (§5.2.3).
+// FileStatus reports what became of the delivered file (clause 5.2.3).
 type FileStatus uint8
 
 const (
@@ -277,7 +277,7 @@ func (p *FinishedPDU) Encode() ([]byte, error) {
 	}
 	out = append(out, responses...)
 
-	// §5.2.3: omitted for "no error" and for "unsupported checksum type".
+	// Clause 5.2.3: omitted for "no error" and for "unsupported checksum type".
 	if p.ConditionCode != CondNoError && p.ConditionCode != CondUnsupportedChecksumType && p.FaultLocation != nil {
 		fl, err := p.FaultLocation.Encode()
 		if err != nil {
@@ -335,7 +335,7 @@ func (p *FinishedPDU) Humanize() string {
 
 // --- ACK PDU, table 5-8 ---
 
-// TransactionStatus is the acknowledging entity's view of the transaction (§5.2.4).
+// TransactionStatus is the acknowledging entity's view of the transaction (clause 5.2.4).
 type TransactionStatus uint8
 
 const (
@@ -364,7 +364,7 @@ type ACKPDU struct {
 	// AckedDirective is the directive being acknowledged: EOF or Finished.
 	AckedDirective DirectiveCode
 	// DirectiveSubtype is binary '0001' when acknowledging a Finished PDU and
-	// '0000' for everything else (§5.2.4).
+	// '0000' for everything else (clause 5.2.4).
 	DirectiveSubtype uint8
 	// ConditionCode is the condition code of the acknowledged PDU.
 	ConditionCode     ConditionCode
@@ -615,7 +615,7 @@ func (p *NAKPDU) Humanize() string {
 
 // --- Prompt PDU, table 5-12 ---
 
-// PromptResponse selects what the far end should send back (§5.2.7).
+// PromptResponse selects what the far end should send back (clause 5.2.7).
 type PromptResponse uint8
 
 const (

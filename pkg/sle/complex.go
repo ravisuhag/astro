@@ -14,15 +14,15 @@ import (
 //
 // A BIND arrives naming the instance it wants, and the station has to route
 // it. That is what this does: hold the configured instances, hand an inbound
-// BIND to the right one, and refuse the ones that should be refused —
+// BIND to the right one, and refuse the ones that should be refused,
 // unknown instance, already bound, wrong version.
 //
-// The name follows the standard's. CCSDS 910.4-B-2 §4.4.2.1b defines an SLE
+// The name follows the standard's. CCSDS 910.4-B-2 clause 4.4.2.1b defines an SLE
 // Complex as "a set of SLE-FGs under a single management authority", and its
-// transfer ports (§4.4.2.4, §4.4.2.5) are where a user's BIND lands. So the
+// transfer ports (clause 4.4.2.4, clause 4.4.2.5) are where a user's BIND lands. So the
 // Complex, not any one instance, is what decides whether a BIND is
 // acceptable. The set of instances provided to one user is a Service Package
-// (§4.4.1.2.2), which is negotiated rather than configured, so that is not
+// (clause 4.4.1.2.2), which is negotiated rather than configured, so that is not
 // what this type is.
 //
 // 910.4-B-2 was retired by CMC resolution CMC-R-2023-12-001 on 29 December
@@ -172,9 +172,9 @@ func (c *Complex) Len() int {
 //   - one already bound is 'already bound'
 //   - a version the instance was not configured for is 'version not supported'
 //
-// A caller that wants to refuse for a reason outside the instance set — the
+// A caller that wants to refuse for a reason outside the instance set (the
 // initiator not being the one the agreement names, or the request arriving
-// outside a provision period — checks that itself and answers with the
+// outside a provision period) checks that itself and answers with the
 // diagnostic that fits. Those are service-agreement matters, and the complex
 // does not hold an agreement.
 func (c *Complex) Route(bind *BindInvocation) (*Instance, BindDiagnostic, error) {
@@ -212,7 +212,7 @@ func (c *Complex) Route(bind *BindInvocation) (*Instance, BindDiagnostic, error)
 // Abort clears every instance's transfer buffer, for a complex whose
 // underlying connection has gone.
 //
-// §3.1.9.1.12 requires an aborted association to clear its buffer. An abort
+// Clause 3.1.9.1.12 requires an aborted association to clear its buffer. An abort
 // usually takes one association, so a caller with a live complex aborts the
 // instance rather than the whole thing; this is for shutdown.
 func (c *Complex) Abort() {

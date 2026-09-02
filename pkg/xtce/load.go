@@ -11,7 +11,7 @@ import (
 
 // MaxDocumentSize is the largest document Load will read, 64 MiB.
 //
-// XTCE sets no limit — a mission database is as big as the mission — so this
+// XTCE sets no limit (a mission database is as big as the mission) so this
 // is a resource bound, not a conformance rule. Real databases run to a few
 // megabytes; 64 MiB leaves room for the large ones while keeping a hostile
 // file from being read into memory unbounded. LoadWithLimit overrides it.
@@ -29,7 +29,7 @@ const MaxDepth = 100
 //
 // It parses and checks the shape of the document: well-formed XML, an XTCE 1.2
 // SpaceSystem at the root, within the size and depth limits. It does not check
-// that references resolve — call Validate for that. The two are separate
+// that references resolve, call Validate for that. The two are separate
 // because a database under construction usually has references that do not
 // resolve yet, and refusing to read those would make the loader useless during
 // authoring.
@@ -75,7 +75,7 @@ func LoadWithLimit(r io.Reader, maxSize int64) (*SpaceSystem, error) {
 			}
 			// checkRoot already proved the root element is a SpaceSystem in
 			// the right namespace, so what remains is a value somewhere in
-			// the document that its schema type cannot hold — an attribute
+			// the document that its schema type cannot hold. An attribute
 			// that should be a number and is not, say. Before the root check
 			// this case was misreported as ErrNotSpaceSystem.
 			return nil, fmt.Errorf("%w: %s", ErrInvalidValue, err)
@@ -178,12 +178,12 @@ func checkRoot(data []byte) error {
 // linkParents fills in the parent pointers the XML cannot carry.
 //
 // Name references resolve by searching towards the root, so every SpaceSystem
-// has to know its parent. Nothing in the document says so — the nesting is the
-// only evidence — which is why this runs once after decoding.
+// has to know its parent. Nothing in the document says so (the nesting is the
+// only evidence) which is why this runs once after decoding.
 //
 // Containers get the same treatment, for the same reason. A reference written
 // inside a container resolves relative to the SpaceSystem that defines the
-// container, not the one doing the lookup — which matters the moment a
+// container, not the one doing the lookup, which matters the moment a
 // container inherits from one in another system.
 func linkParents(system *SpaceSystem, parent *SpaceSystem) {
 	system.parent = parent

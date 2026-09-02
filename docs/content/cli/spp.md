@@ -1,11 +1,11 @@
 ---
 title: astro spp
 short: SPP
-description: Space Packets — encode, decode, inspect, validate, stream.
+description: Space Packets, encode, decode, inspect, validate, stream.
 order: 10
 ---
 
-Space Packet Protocol operations — encode, decode, inspect, validate, and stream CCSDS Space Packets ([CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf)).
+Space Packet Protocol operations: encode, decode, inspect, validate, and stream CCSDS Space Packets ([CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf)).
 
 ## Subcommands
 
@@ -160,7 +160,7 @@ Raw Packet (10 bytes)
 
 ## astro spp validate
 
-Validate a Space Packet for CCSDS conformance — checks version, field ranges, packet length consistency, and optionally verifies the CRC-16-CCITT error control field.
+Validate a Space Packet for CCSDS conformance: checks version, field ranges, packet length consistency, and optionally verifies the CRC-16-CCITT error control field.
 
 ```
 astro spp validate [file] [flags]
@@ -273,4 +273,4 @@ astro spp encode --apid 42 --type tm --data 0102030405 | astro spp decode --inpu
 
 ---
 
-**See also** — [the protocol page](/protocols/transport/spp) for the standard and the Go API, and the [conformance statement](/conformance/spp) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/transport/spp) for the standard and the Go API, and the [conformance statement](/conformance/spp) for what is and is not implemented.

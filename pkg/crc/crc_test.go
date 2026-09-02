@@ -95,7 +95,7 @@ func TestComputeCRC32(t *testing.T) {
 
 // TestComputeCRC32Syndrome ties ComputeCRC32 to its CRC-appended-codeword
 // use (CCSDS 211.2-B-3 annex C: the Proximity-1 CRC-32 attached after the
-// message it covers). Current USLP has no 32-bit FECF — the option existed
+// message it covers). Current USLP has no 32-bit FECF, the option existed
 // only in the retired 732.1-B-1.
 func TestComputeCRC32Syndrome(t *testing.T) {
 	// An arbitrary message; the point is the append-and-check procedure

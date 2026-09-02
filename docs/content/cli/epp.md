@@ -1,11 +1,11 @@
 ---
 title: astro epp
 short: EPP
-description: Encapsulation Packets — encode, decode, inspect, validate, stream.
+description: Encapsulation Packets, encode, decode, inspect, validate, stream.
 order: 20
 ---
 
-Encapsulation Packet Protocol operations — encode, decode, inspect, validate, and stream CCSDS Encapsulation Packets ([CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf)).
+Encapsulation Packet Protocol operations: encode, decode, inspect, validate, and stream CCSDS Encapsulation Packets ([CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf)).
 
 ## Subcommands
 
@@ -156,7 +156,7 @@ Raw Packet (6 bytes)
 
 ## astro epp validate
 
-Validate an Encapsulation Packet for CCSDS conformance — checks PVN, Protocol ID, header format, and packet length consistency.
+Validate an Encapsulation Packet for CCSDS conformance: checks PVN, Protocol ID, header format, and packet length consistency.
 
 ```
 astro epp validate [file] [flags]
@@ -274,4 +274,4 @@ astro epp encode --pid 7 --data $SPP
 
 ---
 
-**See also** — [the protocol page](/protocols/transport/epp) for the standard and the Go API, and the [conformance statement](/conformance/epp) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/transport/epp) for the standard and the Go API, and the [conformance statement](/conformance/epp) for what is and is not implemented.

@@ -18,8 +18,8 @@
 // builds on pkg/sdnv.
 //
 // The session machines here own no goroutines and no clock, the same contract
-// as pkg/cop's FOP-1. LTP's timers — checkpoint retransmission, report
-// retransmission, cancel retransmission — are the caller's to run, because on
+// as pkg/cop's FOP-1. LTP's timers (checkpoint retransmission, report
+// retransmission, cancel retransmission) are the caller's to run, because on
 // a light-minutes link only the mission knows what a sensible timeout is.
 package ltp
 
@@ -29,15 +29,15 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-// Version is the LTP segment version number, per RFC 5326 §3.1. Only 0 is
+// Version is the LTP segment version number, per RFC 5326 clause 3.1. Only 0 is
 // defined.
 const Version = 0
 
-// SegmentType is the 4-bit type code of RFC 5326 §3.1.2, built from the CTRL,
+// SegmentType is the 4-bit type code of RFC 5326 clause 3.1.2, built from the CTRL,
 // EXC, Flag 1 and Flag 0 bits.
 type SegmentType uint8
 
-// Segment type codes, per table §3.1.2.
+// Segment type codes, per table clause 3.1.2.
 const (
 	// TypeRedData is red data that is neither checkpoint, end of red part,
 	// nor end of block.
@@ -103,7 +103,7 @@ func (t SegmentType) String() string {
 	}
 }
 
-// Defined reports whether the type code is one RFC 5326 §3.1.2 assigns a
+// Defined reports whether the type code is one RFC 5326 clause 3.1.2 assigns a
 // meaning. Codes 5, 6, 10 and 11 are listed as undefined.
 func (t SegmentType) Defined() bool {
 	switch t {
@@ -115,7 +115,7 @@ func (t SegmentType) Defined() bool {
 }
 
 // IsData reports whether this is a data segment, red or green.
-// §3.1.1: the CTRL flag, bit 3, is clear for data.
+// Clause 3.1.1: the CTRL flag, bit 3, is clear for data.
 func (t SegmentType) IsData() bool { return t&0x08 == 0 }
 
 // IsRedData reports whether this carries red-part data. Red data has both the
@@ -126,19 +126,19 @@ func (t SegmentType) IsRedData() bool { return t&0x0C == 0 }
 // set.
 func (t SegmentType) IsGreenData() bool { return t&0x0C == 0x04 }
 
-// IsCheckpoint reports whether this data segment is a checkpoint. §3.1.1: any
+// IsCheckpoint reports whether this data segment is a checkpoint. Clause 3.1.1: any
 // red-part data segment with either low flag set is a checkpoint.
 func (t SegmentType) IsCheckpoint() bool {
 	return t.IsRedData() && t&0x03 != 0
 }
 
-// IsEORP reports whether this segment ends the red part. §3.1.3: red data
+// IsEORP reports whether this segment ends the red part. Clause 3.1.3: red data
 // with Flag 1 set.
 func (t SegmentType) IsEORP() bool {
 	return t.IsRedData() && t&0x02 != 0
 }
 
-// IsEOB reports whether this segment ends the block. §3.1.3: a data segment
+// IsEOB reports whether this segment ends the block. Clause 3.1.3: a data segment
 // with both low flags set.
 func (t SegmentType) IsEOB() bool {
 	return t.IsData() && t&0x03 == 0x03
@@ -154,7 +154,7 @@ func (t SegmentType) IsCancelAck() bool {
 	return t == TypeCancelAckToSender || t == TypeCancelAckToReceiver
 }
 
-// SessionID names a transmission session, per RFC 5326 §3.1.
+// SessionID names a transmission session, per RFC 5326 clause 3.1.
 //
 // The engine ID identifies the sender, and the session number distinguishes
 // this session from that engine's others. Together they are unique.
@@ -168,14 +168,14 @@ func (s SessionID) String() string {
 	return fmt.Sprintf("%d:%d", s.EngineID, s.SessionNumber)
 }
 
-// Extension is one header or trailer extension TLV, per §3.1.4: a one-octet
+// Extension is one header or trailer extension TLV, per clause 3.1.4: a one-octet
 // tag, an SDNV length, then the value.
 type Extension struct {
 	Tag   uint8
 	Value []byte
 }
 
-// Extension tags from the IANA LTP Extension Tag registry (§3.1.4).
+// Extension tags from the IANA LTP Extension Tag registry (clause 3.1.4).
 const (
 	// ExtensionAuth is the LTP authentication extension.
 	ExtensionAuth uint8 = 0x00
@@ -215,7 +215,7 @@ func decodeExtension(data []byte) (Extension, int, error) {
 	return e, offset + int(length), nil
 }
 
-// Header is the part every LTP segment shares, per §3.1: a control octet
+// Header is the part every LTP segment shares, per clause 3.1: a control octet
 // carrying version and type, the session ID, an extension-counts octet, and
 // the header extensions themselves.
 type Header struct {
@@ -229,7 +229,7 @@ type Header struct {
 	TrailerExtensions []Extension
 }
 
-// Validate checks the header against §3.1.
+// Validate checks the header against clause 3.1.
 func (h *Header) Validate() error {
 	if !h.Type.Defined() {
 		return ErrUndefinedSegmentType

@@ -8,7 +8,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/ldc"
 )
 
-// TestBitWriterPacksMSBFirst pins the bit order to CCSDS 121.0-B-3 §1.5.2:
+// TestBitWriterPacksMSBFirst pins the bit order to CCSDS 121.0-B-3 clause 1.5.2:
 // the first bit transmitted is the most significant.
 func TestBitWriterPacksMSBFirst(t *testing.T) {
 	var w ldc.BitWriter
@@ -24,7 +24,7 @@ func TestBitWriterPacksMSBFirst(t *testing.T) {
 	}
 }
 
-// TestBitWriterFillsWithZeros covers §7.2.3.2: fill bits are zeros.
+// TestBitWriterFillsWithZeros covers clause 7.2.3.2: fill bits are zeros.
 func TestBitWriterFillsWithZeros(t *testing.T) {
 	var w ldc.BitWriter
 	w.WriteBits(0b111, 3)

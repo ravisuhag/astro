@@ -61,7 +61,7 @@ func TestSynchronizerFindsPLTUsInAStream(t *testing.T) {
 }
 
 func TestSynchronizerSkipsCorruptPLTU(t *testing.T) {
-	// A PLTU whose CRC fails must not be delivered (§3.6), but a good one
+	// A PLTU whose CRC fails must not be delivered (clause 3.6), but a good one
 	// after it must still be found.
 	good := buildFrame(t, 30, "intact frame")
 	bad := buildFrame(t, 40, "corrupt frame")
@@ -240,8 +240,8 @@ func TestConvolutionalKnownAnswers(t *testing.T) {
 	// register LSB, taps 0x4F and 0x6D, G2 output inverted. They pin the code
 	// to the convention every deployed CCSDS receiver uses.
 	//
-	// A reciprocal (mirror-image) encoder — the unreversed vectors on this
-	// shift direction — decodes its own output but no one else's. It emits
+	// A reciprocal (mirror-image) encoder (the unreversed vectors on this
+	// shift direction) decodes its own output but no one else's. It emits
 	// 86B9 for the 0x80 input, which is how that bug is caught here.
 	tests := []struct {
 		name string
@@ -276,7 +276,7 @@ func TestConvolutionalEncoderIsDeterministic(t *testing.T) {
 }
 
 func TestConvolutionalEncoderCarriesStateAcrossCalls(t *testing.T) {
-	// §3.4.3.2 encodes everything as one continuous stream, so the register
+	// Clause 3.4.3.2 encodes everything as one continuous stream, so the register
 	// must not reset between calls.
 	data := []byte{0xA5, 0x5A, 0x3C, 0xC3}
 
@@ -291,7 +291,7 @@ func TestConvolutionalEncoderCarriesStateAcrossCalls(t *testing.T) {
 }
 
 func TestConvolutionalG2IsInverted(t *testing.T) {
-	// §3.4.3.1 note 1: the G2 output path is inverted. With a cleared
+	// Clause 3.4.3.1 note 1: the G2 output path is inverted. With a cleared
 	// register and a zero input bit, G1 gives 0 and G2 gives 1.
 	e := pxsc.NewConvolutionalEncoder()
 	c1, c2 := e.EncodeBit(0)

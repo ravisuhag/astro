@@ -11,8 +11,8 @@ import (
 // channel, RCF delivers only those on one master or virtual channel, named by
 // a global virtual channel identifier.
 //
-// The operation set and its tags are the same as RAF's — the return services
-// share them — so this file adds only what differs: the START invocation
+// The operation set and its tags are the same as RAF's (the return services
+// share them) so this file adds only what differs: the START invocation
 // carries a GVCID instead of a frame quality, and TRANSFER-DATA has no
 // quality field, because RCF delivers only frames that passed error control.
 
@@ -327,8 +327,8 @@ func (s *RCFStartReturn) Humanize() string {
 
 // RCFStatusReportInvocation is the RcfStatusReportInvocation of annex A2.7.
 //
-// It is RAF's status report with one field missing. RAF counts frames twice —
-// delivered, and of those, error free — because RAF can deliver bad frames.
+// It is RAF's status report with one field missing. RAF counts frames twice (
+// delivered, and of those, error free) because RAF can deliver bad frames.
 // RCF only ever delivers good ones, so the error-free count would say nothing
 // and the spec leaves it out.
 type RCFStatusReportInvocation struct {

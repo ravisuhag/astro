@@ -40,7 +40,7 @@ func Randomize(data []byte) []byte {
 	return pn.TCApply(data)
 }
 
-// GeneratePNSequence produces the CCSDS 231.0-B-4 §6.2 pseudo-random sequence
+// GeneratePNSequence produces the CCSDS 231.0-B-4 clause 6.2 pseudo-random sequence
 // using an 8-bit LFSR with polynomial
 //
 //	h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
@@ -48,7 +48,7 @@ func Randomize(data []byte) []byte {
 // initialized to all 1s. Its first 40 digits are FF 39 9E 5A 68.
 //
 // The generator lives in internal/pn next to the TM one. The two standards do
-// NOT specify the same randomizer: CCSDS 131.0-B-5 §10.4.2 uses a different
+// NOT specify the same randomizer: CCSDS 131.0-B-5 clause 10.4.2 uses a different
 // polynomial and a sequence that opens FF 48 0E C0 9A. Calling the TM
 // generator here would put unintelligible octets on the uplink, so the
 // internal names are qualified by standard and this package uses only the TC

@@ -9,8 +9,8 @@ const NoMAP = -1
 // Channel ID), optionally extended to a Global MAP ID with the MAP ID of a
 // TC or USLP frame.
 //
-// §4.2.2.2 requires a Security Association to apply to an agreed set of
-// GVCIDs or GMAP_IDs, and §4.2.4.3 requires the receiving end to verify that
+// Clause 4.2.2.2 requires a Security Association to apply to an agreed set of
+// GVCIDs or GMAP_IDs, and clause 4.2.4.3 requires the receiving end to verify that
 // the SA named by the SPI is in fact the one for the channel the frame
 // arrived on. List the agreed channels in SecurityAssociation.Channels and
 // call ProcessSecurityForChannel to have that check enforced.

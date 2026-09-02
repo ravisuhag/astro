@@ -1,7 +1,7 @@
 ---
 title: Packet Utilization Standard
 short: PUS
-description: ECSS-E-ST-70-41C — what goes inside a telemetry or telecommand packet.
+description: ECSS-E-ST-70-41C, what goes inside a telemetry or telecommand packet.
 order: 70
 ---
 
@@ -38,7 +38,7 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 ┌─────────────────────────────────────────────┐
 │  Mission operations (commanding, telemetry) │
 ├─────────────────────────────────────────────┤
-│  PUS — services, requests, reports          │  <- this package
+│  PUS, services, requests, reports          │  <- this package
 │  secondary header │ application data        │
 ├─────────────────────────────────────────────┤
 │  Space Packet Protocol (pkg/spp)            │  <- carries it
@@ -49,7 +49,7 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 
 ## Scope
 
-**Implemented.** Seven services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, ST[12] on-board monitoring, and ST[17] test — plus the PUS secondary headers, mission profiles, and both time fields.
+**Implemented.** Seven services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, ST[12] on-board monitoring, and ST[17] test: plus the PUS secondary headers, mission profiles, and both time fields.
 
 **Not here yet.**
 
@@ -108,7 +108,7 @@ whole number of words, so a wrong spare-byte count fails at setup rather
 than on the wire. Zero skips the check.
 
 `pus.DefaultProfile()` returns the widths most European missions pick. It is a
-convenience for tooling and tests — **not** a standard-mandated default. The
+convenience for tooling and tests, **not** a standard-mandated default. The
 standard states none.
 
 ### What is *not* tailorable
@@ -117,9 +117,9 @@ Worth knowing, because plenty of documentation gets this wrong. Figures 7-7 and
 7-9 give these explicit bit counts, so they are constants here, not profile
 fields:
 
-- TC source ID — **16 bits**
-- TM message type counter — **16 bits**
-- TM destination ID — **16 bits**
+- TC source ID, **16 bits**
+- TM message type counter, **16 bits**
+- TM destination ID, **16 bits**
 
 ## Building a telecommand
 
@@ -183,7 +183,7 @@ case *pus.VerificationReport:
 ```
 
 The registry maps message types to codecs. Anything unregistered returns
-`ErrUnknownMessageType` rather than being guessed at — which matters, because
+`ErrUnknownMessageType` rather than being guessed at, which matters, because
 PUS lets missions define their own services in the ranges the standard leaves
 open.
 
@@ -211,7 +211,7 @@ profile.TimeFormat = pus.TimeRaw       // opaque, mission-defined elsewhere
 profile.TimeFormat = pus.TimeNone      // no time field at all
 ```
 
-An agency-defined epoch works too — set `CUCEpoch`, and the CUC time code level
+An agency-defined epoch works too, set `CUCEpoch`, and the CUC time code level
 follows automatically.
 
 ## Request verification, ST[01]
@@ -229,7 +229,7 @@ Note what it does *not* contain: the source of the request. As the standard
 points out, that comes from the destination ID of the report's own secondary
 header.
 
-The odd subtypes are successes, the even ones failures — TM[1,10] included,
+The odd subtypes are successes, the even ones failures, TM[1,10] included,
 whose body is a request ID and a failure notice like TM[1,2]. Only subtypes 5
 and 6, the progress reports, carry a step ID. There is no TM[1,9]; the decoder
 rejects it.
@@ -253,20 +253,20 @@ carries an event definition ID and optional auxiliary data whose shape that ID
 implies.
 
 `TC[5,5]` and `TC[5,6]` enable and disable generation for a list of events.
-`TC[5,7]` — an empty-bodied request — asks which events are disabled, and
+`TC[5,7]`: an empty-bodied request: asks which events are disabled, and
 `TM[5,8]` answers with the list.
 
 One decoding rule worth knowing: messages whose size is fully determined by
 their structure are checked exactly. A body with octets left over decodes to
 `ErrTrailingBytes` rather than being silently truncated, matching the PUS
-acceptance checks. Bodies that end in caller-interpreted data — failure data,
-auxiliary data, parameter values — carry those octets verbatim by design.
+acceptance checks. Bodies that end in caller-interpreted data (failure data,
+auxiliary data, parameter values) carry those octets verbatim by design.
 
 ## Function management, ST[08]
 
 One message type: `TC[8,1]` tells an application process to run one of the
-functions it declares. Everything interesting is outside the standard — which
-functions exist, what their arguments mean, what running one does — so the
+functions it declares. Everything interesting is outside the standard (which
+functions exist, what their arguments mean, what running one does) so the
 envelope is all there is.
 
 The argument group is optional, and nothing in the message flags it. Clause
@@ -343,7 +343,7 @@ The window has four types, and which time tags travel depends on the type:
 | `WindowTo` | before and at the to tag | **to only** |
 
 That last row is the one to get right. `WindowTo` carries its tag in the *to*
-slot with the from slot absent — clause 6.11.10.3c item (c) — not a single tag
+slot with the from slot absent (clause 6.11.10.3c item (c)) not a single tag
 in the first slot. A codec that put it first would encode a `WindowFrom`
 message's bytes under a `WindowTo` type.
 
@@ -368,7 +368,7 @@ because using one where the other belongs produces wrong bytes and no error.
 
 ### Time offsets
 
-A shift carries a relative time, which clause 7.3.11 makes signed — a negative
+A shift carries a relative time, which clause 7.3.11 makes signed. A negative
 offset is the two's complement of the positive one, over the whole
 coarse-and-fine field.
 
@@ -379,8 +379,8 @@ bits and re-encode different octets. `Duration()` is there for arithmetic, not
 for storage.
 
 The same caution applies to the absolute time field, and there the loss is not
-avoidable here. `pkg/tcf` truncates in both directions by design — rounding to
-nearest can carry the fine field past its width — so a CUC field of two or
+avoidable here. `pkg/tcf` truncates in both directions by design (rounding to
+nearest can carry the fine field past its width) so a CUC field of two or
 three fine octets can come back one tick lower than it went out. It matters if
 you decode a scheduled release time and re-encode it: compare the octets, not
 the `time.Time`.
@@ -418,7 +418,7 @@ registry, err := pus.NewDefaultRegistry(profile,
 ```
 
 `ValueBytes` and `MaskBytes` are separate because the standard never says they
-are equal — only that each derives from the parameter. A mask over a value is
+are equal, only that each derives from the parameter. A mask over a value is
 normally the same width, but this type does not decide that for you.
 
 A registry built without a resolver decodes twenty-one of the twenty-eight
@@ -429,7 +429,7 @@ definition list silently.
 
 ### The same raw status means three different things
 
-Clause 8.12.3.1b gives the PMON checking status three tables — 8-7 for
+Clause 8.12.3.1b gives the PMON checking status three tables, 8-7 for
 expected-value checks, 8-8 for limit checks, 8-9 for delta checks. Raw values
 0, 1 and 2 line up. Raw 3 does not:
 
@@ -439,7 +439,7 @@ expected-value checks, 8-8 for limit checks, 8-9 for delta checks. Raw values
 | 1 | unchecked | unchecked | unchecked |
 | 2 | invalid | invalid | invalid |
 | 3 | unexpected value | below low limit | below low threshold |
-| 4 | — | above high limit | above high threshold |
+| 4 | - | above high limit | above high threshold |
 
 So a raw value on its own does not name a status. `NameFor` takes the check
 type:
@@ -480,7 +480,7 @@ because they differ only in which fields they carry:
 The modify request drops both, and it drops them even when the profile
 declares the capabilities: clause 6.12.3.9.4 modifies a check rather than
 replacing a definition. Clause 8.12.2.7c also requires the check type to match
-the definition's original one, which only flight software can verify — it holds
+the definition's original one, which only flight software can verify. It holds
 the original.
 
 The repetition number is always there. Clause 6.12.3.3j item 1 makes it part
@@ -488,6 +488,6 @@ of every check definition, whatever Figure 8-114's bracket suggests.
 
 ## Reference
 
-- [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) — Telemetry and telecommand packet utilization
-- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) — Time Code Formats, for the CUC time field
+- [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/), Telemetry and telecommand packet utilization
+- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf), Time Code Formats, for the CUC time field
 - [CLI](/cli/pus) | [Conformance](/conformance/pus) | [The stack](/docs/start/concepts)

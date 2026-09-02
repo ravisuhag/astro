@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 180
 ---
 
-## Conformance Statement for `pkg/ldc` — CCSDS 121.0-B-3
+## Conformance Statement for `pkg/ldc`, CCSDS 121.0-B-3
 
 ---
 
@@ -26,14 +26,14 @@ order: 180
 | Implementation Name | astro/pkg/ldc |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing the Rice adaptive entropy coder and its preprocessor, encoder and decoder both. Integer arithmetic throughout; no floating point appears anywhere in the package. Byte-slice in, byte-slice out — packetization is the caller's. |
+| Other Information | Go library implementing the Rice adaptive entropy coder and its preprocessor, encoder and decoder both. Integer arithmetic throughout; no floating point appears anywhere in the package. Byte-slice in, byte-slice out, packetization is the caller's. |
 
 ### A2.1.3 Identification of Supplier
 
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/ldc (Go package) |
 | System Name(s) | Astro |
 
@@ -45,14 +45,14 @@ order: 180
 | Companion report | CCSDS 120.0-G-4 (Lossless Data Compression, Green Book, Issue 4, November 2021) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Non-supported capabilities are identified in section A2.3. All of them
+NOTE, Non-supported capabilities are identified in section A2.3. All of them
 are options the standard leaves to the application or defines for transport
 layers this package does not touch.
 
-NOTE — This implementation is validated against the official CCSDS 121.0-B-2
+NOTE. This implementation is validated against the official CCSDS 121.0-B-2
 test vectors published by the SLS Data Compression working group (as mirrored
 in libaec's `data/121B2TestData`). All 72 AllOptions and LowEntropyOptions
-vectors — 36 in each set, covering resolutions 1 through 32 — encode
+vectors (36 in each set, covering resolutions 1 through 32) encode
 byte-identically and decode back to the exact samples; they are vendored in
 `pkg/ldc/testdata/` and every one runs as `TestVectors_*` in
 `vectors_test.go`. The ExtendedParameters set is excluded for the reason given
@@ -62,15 +62,15 @@ in section A2.3.
 
 ## A2.2 REQUIREMENTS LIST
 
-### Table A-1: Adaptive entropy coder — parameters
+### Table A-1: Adaptive entropy coder, parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | LDC-1 | Block size J | 3.1.6 | M | 8, 16, 32, 64 | Yes | `Params.BlockSize`. Any other value is `ErrInvalidBlockSize`. |
 | LDC-2 | Sample resolution n | 3.1.6 | M | 1 to 32 bits | Yes | `Params.Resolution`. |
 | LDC-3 | Unsigned sample range | 3.1.6, 4.4 | M | 0 to 2^n-1 | Yes | |
-| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | -2^(n-1) to 2^(n-1)-1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. Requires the unit-delay predictor — see the interpretation note in A2.3. |
-| LDC-5 | Option identifier attached to every coded data set | 3.1.1, 5.2.1.3 | M | — | Yes | Always written, even when a subset of options is in use. |
+| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | -2^(n-1) to 2^(n-1)-1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. Requires the unit-delay predictor, see the interpretation note in A2.3. |
+| LDC-5 | Option identifier attached to every coded data set | 3.1.1, 5.2.1.3 | M | - | Yes | Always written, even when a subset of options is in use. |
 
 ### Table A-2: Code options
 
@@ -78,8 +78,8 @@ in section A2.3.
 |------|-------------|-----------|--------|---------|-------|
 | LDC-6 | Fundamental sequence option | 3.2 | M | Yes | Table 3-1 transcribed as a test. Implemented as the split-sample option with k=0, which clause 3.3.2 says it is. |
 | LDC-7 | Split-sample options | 3.3 | M | Yes | Every k the resolution allows: up to 5, 13 or 29 in the three basic columns of table 5-1. |
-| LDC-8 | Split-sample field order | 3.3.3 | M | Yes | All FS codewords for the block first, then all split bits. Not interleaved — the spec is explicit and the obvious implementation is wrong. |
-| LDC-9 | Second-extension option | 3.4 | M | Yes | The transform of clause 3.4.1, with δ₁ = 0 substituted on a reference block. |
+| LDC-8 | Split-sample field order | 3.3.3 | M | Yes | All FS codewords for the block first, then all split bits. Not interleaved. The spec is explicit and the obvious implementation is wrong. |
+| LDC-9 | Second-extension option | 3.4 | M | Yes | The transform of clause 3.4.1, with δ_1 = 0 substituted on a reference block. |
 | LDC-10 | Second-extension overflow | 3.4.2 | M | Yes | At 32-bit resolution the transform can exceed a 64-bit integer. The option reports itself unusable rather than wrapping. Clause 3.4.2's note that it "is only designed to be a useful option when all of the transformed symbols are small" is why this can never lose data. |
 | LDC-11 | Zero-block option | 3.5 | M | Yes | Including the ROS codeword and the 64-block segments of clause 3.5.2. |
 | LDC-12 | Zero-block run codewords | 3.5.3, table 3-2 | M | Yes | Table transcribed in full, including the ROS codeword displaced between four and five. |
@@ -93,7 +93,7 @@ in section A2.3.
 |------|-------------|-----------|--------|---------|-------|
 | LDC-16 | Select the option minimizing encoded bits, identifier included | 3.7.1, 3.7.3 | M | Yes | Every option is priced without being emitted, which matters: an FS codeword at 32-bit resolution can be four billion bits long. |
 | LDC-17 | Zero-block always selected for all-zeros runs | 3.7.2 | M | Yes | Not priced against the others; imposed. |
-| LDC-18 | Tie-breaking order | 3.7.4 | M | Yes | No compression, then second extension, then smallest k. Pinned by test — this is not the order an implementer would guess. |
+| LDC-18 | Tie-breaking order | 3.7.4 | M | Yes | No compression, then second extension, then smallest k. Pinned by test, because it is not the order an implementer would guess. |
 
 ### Table A-4: Preprocessor
 
@@ -154,7 +154,7 @@ in section A2.3.
 | LDC-41 | Application-specific mapper | Same reasoning, from table 7-1. |
 | LDC-44 | Insertion into space packets | The caller composes coded data sets into packets. Keeping the two apart is what lets this package be used with the file format, with packets, or with neither. |
 | LDC-45 | Compression identification packet | Section 6 is optional and duplicates what the file header carries. |
-| — | Reference-interval byte alignment | Some encoders pad the coded stream to a byte boundary at the end of each reference sample interval, an application framing choice the standard leaves open rather than a numbered requirement (libaec exposes it as its `-p` option). This decoder reads the coded data set as one continuous bit stream and cannot consume such streams. Seen in the official 121.0-B-2 `ExtendedParameters/sar32bit.j16.r256.rz` vector, which is why that set is not in `testdata/`. |
+| - | Reference-interval byte alignment | Some encoders pad the coded stream to a byte boundary at the end of each reference sample interval, an application framing choice the standard leaves open rather than a numbered requirement (libaec exposes it as its `-p` option). This decoder reads the coded data set as one continuous bit stream and cannot consume such streams. Seen in the official 121.0-B-2 `ExtendedParameters/sar32bit.j16.r256.rz` vector, which is why that set is not in `testdata/`. |
 
 ### Interpretations
 
@@ -163,7 +163,7 @@ reading taken here:
 
 | Where | Reading taken |
 |---|---|
-| Signed samples and the predictor (table 7-1, Data Sense) | Table 7-1 makes the positive Data Sense "mandatory if preprocessor is bypassed or preprocessor absent". Read narrowly, that constrains only a section-7 file header field; read broadly, it says signed samples are meaningful only under the unit-delay predictor. This implementation takes the broad, conservative reading and enforces it in `Params.Validate` everywhere, not just in the file path: `Signed` with any predictor other than unit delay is refused with `ErrUnsupportedPredictor`. The narrow reading would let signed samples through with the bypass predictor outside the file format — and would then produce parameter sets a section-7 header cannot describe. Refusing keeps every compressible stream expressible as a file. |
+| Signed samples and the predictor (table 7-1, Data Sense) | Table 7-1 makes the positive Data Sense "mandatory if preprocessor is bypassed or preprocessor absent". Read narrowly, that constrains only a section-7 file header field; read broadly, it says signed samples are meaningful only under the unit-delay predictor. This implementation takes the broad, conservative reading and enforces it in `Params.Validate` everywhere, not just in the file path: `Signed` with any predictor other than unit delay is refused with `ErrUnsupportedPredictor`. The narrow reading would let signed samples through with the bypass predictor outside the file format, and would then produce parameter sets a section-7 header cannot describe. Refusing keeps every compressible stream expressible as a file. |
 | Second-extension CDS symbol count (clause 5.2.6) | The prose says "2J transformed pairs", which contradicts clause 3.4.1 and figure 5-4 (J/2 symbols). Read as a typo; J/2 is implemented. Also recorded at LDC-35. |
 
 ### Implementation-Defined Limits
@@ -175,9 +175,9 @@ count.
 
 | Limit | Value | Why |
 |---|---|---|
-| Decodable sample count | 2^28 samples | The header's Number of Samples field is 48 bits, so a twelve-octet file can claim 2^48 samples — a terabyte of output — and the decoder would size a slice from it before reading a coded bit. |
+| Decodable sample count | 2^28 samples | The header's Number of Samples field is 48 bits, so a twelve-octet file can claim 2^48 samples, a terabyte of output, and the decoder would size a slice from it before reading a coded bit. |
 | FS codeword length | Bounded by the resolution | A run of zero octets in a corrupt stream would otherwise be read as an enormous sample value. `ReadFS` takes a limit and refuses past it. |
-| Fill skipped by the unbounded `Decompress` | 7 bits | `Decompress` (no sample count) treats a trailing all-zero run of fewer than eight bits as clause 7.2.3.2 fill, which covers a B=1 file body exactly. A file written with an output word size B > 1 octet can carry up to 8B-1 fill bits, and without the count that tail cannot be told from a truncated coded data set — so `Decompress` fails with an error rather than guessing. `DecompressCount` and `DecompressFile` know the count and skip any fill. Pinned by `TestDecompressRefusesLongWordFill`. |
+| Fill skipped by the unbounded `Decompress` | 7 bits | `Decompress` (no sample count) treats a trailing all-zero run of fewer than eight bits as clause 7.2.3.2 fill, which covers a B=1 file body exactly. A file written with an output word size B > 1 octet can carry up to 8B-1 fill bits, and without the count that tail cannot be told from a truncated coded data set, so `Decompress` fails with an error rather than guessing. `DecompressCount` and `DecompressFile` know the count and skip any fill. Pinned by `TestDecompressRefusesLongWordFill`. |
 
 ### Fully Supported Mandatory Items
 

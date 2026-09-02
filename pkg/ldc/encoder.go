@@ -13,7 +13,7 @@ import "fmt"
 // Two things complicate the walk, and both come from the zero-block option.
 // It is the only option that spans blocks, so a run of all-zero blocks is
 // found before anything is priced. And its runs are bounded by segments of 64
-// blocks inside each reference interval (§3.5.2), so the walk has to know
+// blocks inside each reference interval (clause 3.5.2), so the walk has to know
 // where those boundaries fall.
 
 // blockPlan is one block's coding decision.
@@ -33,7 +33,7 @@ type blockPlan struct {
 // Compress codes samples into a coded data set stream.
 //
 // The output is the concatenation of coded data sets with zero fill to the
-// next octet, which is the file body of §7.2.3. It does not carry the
+// next octet, which is the file body of clause 7.2.3. It does not carry the
 // parameters: Decompress needs the same Params, and CompressFile is the
 // self-describing form.
 func Compress(samples []uint32, p Params) ([]byte, error) {
@@ -86,7 +86,7 @@ func checkSampleRange(samples []uint32, p Params) error {
 // blockSamples returns the mapped samples of one block, and separately the
 // samples the entropy coder actually codes.
 //
-// They differ when the block carries a reference sample: §4.2.6 sends that
+// They differ when the block carries a reference sample: Clause 4.2.6 sends that
 // sample uncoded at the front of the coded data set, so the coder handles the
 // remaining J-1.
 func (p Params) blockSamples(mapped []uint32, block int) (coded []uint32, hasReference bool) {
@@ -106,7 +106,7 @@ func (p Params) blockSamples(mapped []uint32, block int) (coded []uint32, hasRef
 // segmentEnd returns the block index one past the end of the segment holding
 // the given block.
 //
-// §3.5.2: the r blocks of a reference interval are partitioned into segments
+// Clause 3.5.2: the r blocks of a reference interval are partitioned into segments
 // of 64 blocks, the last possibly shorter. A zero run may not cross either
 // boundary.
 func (p Params) segmentEnd(block, totalBlocks int) int {
@@ -133,7 +133,7 @@ func (p Params) planBlock(mapped []uint32, block, totalBlocks int) blockPlan {
 		referenceBits = int(p.Resolution)
 	}
 
-	// §3.7.2: a run of all-zero blocks always takes the zero-block option,
+	// Clause 3.7.2: a run of all-zero blocks always takes the zero-block option,
 	// whatever any other option would cost.
 	if isAllZeros(coded) {
 		run, isROS := p.zeroRun(mapped, block, totalBlocks)
@@ -145,14 +145,14 @@ func (p Params) planBlock(mapped []uint32, block, totalBlocks int) blockPlan {
 		}
 	}
 
-	// §3.7.3: otherwise price every single-block option and take the shortest,
+	// Clause 3.7.3: otherwise price every single-block option and take the shortest,
 	// counting the identifier bits.
 	best := blockPlan{
 		option: OptionNoCompression,
 		bits:   p.optionIDBits(OptionNoCompression) + referenceBits + noCompressionLength(coded, p.Resolution),
 	}
 
-	// §3.7.4 fixes the order to try ties in: no compression wins a tie, then
+	// Clause 3.7.4 fixes the order to try ties in: no compression wins a tie, then
 	// second extension, then the smallest k. Working from that order and
 	// keeping a strict improvement gives exactly that preference.
 	if secondBits := p.secondExtensionBits(coded, hasReference); secondBits < best.bits {
@@ -176,10 +176,10 @@ func (p Params) planBlock(mapped []uint32, block, totalBlocks int) blockPlan {
 // secondExtensionBits prices the second-extension option, or reports it
 // unusable.
 //
-// §5.2.6: when the block carries a reference sample, a zero is inserted in
+// Clause 5.2.6: when the block carries a reference sample, a zero is inserted in
 // front of the J-1 coded samples so the transform still sees J of them. That
-// inserted zero is why the option stays available on reference blocks at all —
-// an odd count could not be paired.
+// inserted zero is why the option stays available on reference blocks at all.
+// An odd count could not be paired.
 func (p Params) secondExtensionBits(coded []uint32, hasReference bool) int {
 	samples := coded
 	if hasReference {
@@ -200,7 +200,7 @@ func (p Params) secondExtensionBits(coded []uint32, hasReference bool) int {
 // zeroRun counts how many consecutive all-zero blocks start at the given
 // block, and whether the run reaches the end of its segment.
 //
-// §3.5.3: a run that consumes the remainder of a segment is written with the
+// Clause 3.5.3: a run that consumes the remainder of a segment is written with the
 // remainder-of-segment codeword. The note there records that not using ROS
 // still produces a decodable stream, but ROS is shorter for runs of five or
 // more, so this uses it wherever the standard allows.
@@ -217,7 +217,7 @@ func (p Params) zeroRun(mapped []uint32, block, totalBlocks int) (run int, isROS
 		run++
 	}
 
-	// ROS says "the rest of this segment is zeros", and §3.5.3 restricts it to
+	// ROS says "the rest of this segment is zeros", and clause 3.5.3 restricts it to
 	// runs of five or more. It is checked before the length cap, not after:
 	// a segment is 64 blocks and table 3-2 counts only to 63, so a wholly
 	// zero segment can be written no other way.
@@ -240,7 +240,7 @@ func (p Params) writeBlock(w *BitWriter, samples, mapped []uint32, block int, pl
 	p.writeOptionID(w, plan.option, plan.k)
 
 	if hasReference {
-		// §5.2.2: the uncoded reference sample follows the identifier.
+		// Clause 5.2.2: the uncoded reference sample follows the identifier.
 		w.WriteBits(uint64(samples[block*p.BlockSize]), int(p.Resolution))
 	}
 

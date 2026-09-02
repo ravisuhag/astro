@@ -213,7 +213,7 @@ func TestPDUCRCRoundTrip(t *testing.T) {
 	if !bytes.Equal(got.Data, pdu.Data) {
 		t.Errorf("data = %x, want %x", got.Data, pdu.Data)
 	}
-	// §4.1.3.2: the CRC length counts toward the data field length.
+	// Clause 4.1.3.2: the CRC length counts toward the data field length.
 	if int(got.Header.DataLength) != len(pdu.Data)+cfdp.CRCSize {
 		t.Errorf("DataLength = %d, want %d", got.Header.DataLength, len(pdu.Data)+cfdp.CRCSize)
 	}

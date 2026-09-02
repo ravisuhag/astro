@@ -133,7 +133,7 @@ func TestReassembleRejectsMismatchedFragments(t *testing.T) {
 }
 
 func TestFragmentRespectsNoFragmentFlag(t *testing.T) {
-	// §4.2: the flag forbids it.
+	// Clause 4.2: the flag forbids it.
 	primary := testPrimary()
 	primary.Flags |= bp.FlagNoFragment
 
@@ -147,7 +147,7 @@ func TestFragmentRespectsNoFragmentFlag(t *testing.T) {
 }
 
 func TestFragmentReplicatesFlaggedBlocks(t *testing.T) {
-	// §5.8: only blocks flagged for replication go in every fragment.
+	// Clause 5.8: only blocks flagged for replication go in every fragment.
 	replicated := &bp.CanonicalBlock{
 		Type: 200, Flags: bp.BlockReplicate, Data: []byte("everywhere"),
 	}
@@ -192,8 +192,8 @@ func TestFragmentReplicatesFlaggedBlocks(t *testing.T) {
 }
 
 func TestFragmentPostPayloadBlocksRideTheLastFragment(t *testing.T) {
-	// §5.8: blocks preceding the payload go with the first fragment; blocks
-	// following it go with the last, in place — not all with the first.
+	// Clause 5.8: blocks preceding the payload go with the first fragment; blocks
+	// following it go with the last, in place, not all with the first.
 	payload := make([]byte, 300)
 	b := &bp.Bundle{
 		Primary: testPrimary(),

@@ -1,7 +1,7 @@
 ---
 title: Build a downlink
 short: Downlink
-description: Telemetry from a spacecraft to the ground — packets, frames, CADUs, and back.
+description: Telemetry from a spacecraft to the ground, packets, frames, CADUs, and back.
 order: 1
 ---
 
@@ -31,7 +31,7 @@ Two applications, two virtual channels, one physical link. Housekeeping gets the
 
 ## One config, both ends
 
-The frame length and what the frame carries are fixed for the whole physical channel. Both ends must agree, and nothing on the wire tells them — so this struct is shared:
+The frame length and what the frame carries are fixed for the whole physical channel. Both ends must agree, and nothing on the wire tells them, so this struct is shared:
 
 ```go
 config := tmdl.ChannelConfig{
@@ -41,7 +41,7 @@ config := tmdl.ChannelConfig{
 }
 ```
 
-`HasFEC: true` puts a 2-byte CRC at the end of every frame. `HasOCF: false` means no [CLCW](/protocols/data-link/cop) riding home — this is a telemetry-only example.
+`HasFEC: true` puts a 2-byte CRC at the end of every frame. `HasOCF: false` means no [CLCW](/protocols/data-link/cop) riding home. This is a telemetry-only example.
 
 ## The spacecraft side
 
@@ -56,8 +56,8 @@ scPhysical.AddMasterChannel(scMaster, 1)
 vcHK  := tmdl.NewVirtualChannel(vcidHK, 32)   // 32-frame buffer
 vcSci := tmdl.NewVirtualChannel(vcidScience, 32)
 
-scMaster.AddVirtualChannel(vcHK, 3)   // priority 3 — housekeeping wins
-scMaster.AddVirtualChannel(vcSci, 1)  // priority 1 — science yields
+scMaster.AddVirtualChannel(vcHK, 3)   // priority 3 (housekeeping wins
+scMaster.AddVirtualChannel(vcSci, 1)  // priority 1) science yields
 ```
 
 Then one **frame counter shared by everything**, and a VCP service per virtual channel:
@@ -106,7 +106,7 @@ if err := vpcHK.Flush(); err != nil {
 
 ## Off the spacecraft
 
-Frames become CADUs — sync marker plus randomization:
+Frames become CADUs, sync marker plus randomization:
 
 ```go
 cadu := tmsc.WrapCADU(frameBytes, tmsc.DefaultASM(), true)
@@ -149,16 +149,16 @@ Five packets in, five out. Note the arithmetic: two 408-byte science packets do 
 
 ## Things that will bite you
 
-**The config must be identical on both ends.** Frame length, OCF, and FEC are not signaled. A mismatch does not produce a clear error — it produces garbage that sometimes passes CRC.
+**The config must be identical on both ends.** Frame length, OCF, and FEC are not signaled. A mismatch does not produce a clear error, it produces garbage that sometimes passes CRC.
 
 **Forgetting `Flush` loses your last packets.** They sit in a partial frame forever. This is the single most common mistake with the service layer.
 
 **One `FrameCounter` per master channel, not per service.** See above.
 
-**A packet larger than the data field is fine.** It spans frames. A packet larger than 65,542 bytes is not — that is the Space Packet ceiling, and you need to segment above this layer.
+**A packet larger than the data field is fine.** It spans frames. A packet larger than 65,542 bytes is not. That is the Space Packet ceiling, and you need to segment above this layer.
 
 ## Next
 
-- [Handle a lossy link](/docs/guides/lossy-link) — what happens when frames get dropped
-- [Build an uplink](/docs/guides/uplink) — the other direction, with retransmission
+- [Handle a lossy link](/docs/guides/lossy-link), what happens when frames get dropped
+- [Build an uplink](/docs/guides/uplink), the other direction, with retransmission
 - [TM protocol page](/protocols/data-link/tmdl) | [TMSC](/protocols/coding/tmsc) | [SPP](/protocols/transport/spp)

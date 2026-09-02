@@ -368,7 +368,7 @@ func TestDetailReportCarriesSubScheduleIDPerActivity(t *testing.T) {
 		t.Fatalf("got %d activities, want 2", len(got.Activities))
 	}
 	if got.Activities[0].SubScheduleID != 1 || got.Activities[1].SubScheduleID != 2 {
-		t.Errorf("sub-schedules = %d, %d; want 1, 2 — the report spans them",
+		t.Errorf("sub-schedules = %d, %d; want 1, 2. The report spans them",
 			got.Activities[0].SubScheduleID, got.Activities[1].SubScheduleID)
 	}
 }
@@ -622,7 +622,7 @@ func TestRelativeTimeFineFieldRoundTripsExactly(t *testing.T) {
 			"lossless, RelativeTime could hold a Duration instead", viaDuration.Ticks)
 	}
 	if viaDuration.Ticks != 0 {
-		t.Errorf("via Duration = %d ticks, want 0 — 59 ns is less than one fine tick",
+		t.Errorf("via Duration = %d ticks, want 0, 59 ns is less than one fine tick",
 			viaDuration.Ticks)
 	}
 }

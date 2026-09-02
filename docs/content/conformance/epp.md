@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 20
 ---
 
-## Conformance Statement for `pkg/epp` — CCSDS 133.1-B-3
+## Conformance Statement for `pkg/epp`, CCSDS 133.1-B-3
 
 ---
 
@@ -33,7 +33,7 @@ order: 20
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/epp (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 20
 | Specification | CCSDS 133.1-B-3 (Encapsulation Packet Protocol, Blue Book, Issue 3, May 2020) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Non-supported optional capabilities are identified in section A2.2 with explanations.
+NOTE, Non-supported optional capabilities are identified in section A2.2 with explanations.
 
 ---
 
@@ -83,7 +83,7 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | EPP-17 | Internet Protocol Extension (PID 2) | SANA registry | O | Yes | `ProtocolIDIPE` constant; `NewIPEPacket()` constructor. |
 | EPP-18 | Protocol ID Extension (PID 6, '110') | 4.1.2.3 NOTE 2 | M | Yes | `ProtocolIDExtended` constant; `WithExtendedProtocolID()` sets the 4-bit extension. Extension values are carried opaquely; the SANA extended-protocol registry is not modeled. |
 | EPP-19 | Mission-specific data (PID 7, '111') | 4.1.2.3 NOTE 3 | O | Yes | `ProtocolIDMission` constant; `NewMissionPacket()` constructor. |
-| EPP-20 | Reserved Protocol IDs (3, 4, 5) | SANA registry | — | Partial | Packets with reserved PIDs can be constructed and decoded (identified as "Reserved" in `Humanize()`); no named constants. |
+| EPP-20 | Reserved Protocol IDs (3, 4, 5) | SANA registry | - | Partial | Packets with reserved PIDs can be constructed and decoded (identified as "Reserved" in `Humanize()`); no named constants. |
 
 ### Table A-4: Service Interface
 
@@ -91,14 +91,14 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 |------|-------------|-----------|--------|---------|-------|
 | EPP-21 | ENCAPSULATION.request | 3.3 | M | Yes | `Service.SendBytes(protocolID, data, opts...)` and `Service.SendPacket(packet)`. |
 | EPP-22 | ENCAPSULATION.indication | 3.3 | M | Yes | `Service.ReceiveBytes()` and `Service.ReceivePacket()` with header-size-aware streaming reads. |
-| EPP-23 | Packet Sizing | — | — | Yes | `PacketSizer(data)` implements `sdl.PacketSizer`: total length from the first octet's LoL field (1 for the idle byte). Compatible with `tmdl` and `tcdl` VCP services. |
+| EPP-23 | Packet Sizing | - | - | Yes | `PacketSizer(data)` implements `sdl.PacketSizer`: total length from the first octet's LoL field (1 for the idle byte). Compatible with `tmdl` and `tcdl` VCP services. |
 
 ### Table A-5: Management Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | EPP-24 | Maximum Packet Length | 5 | M | Integer | Yes | `ServiceConfig.MaxPacketLength`. Defaults to 4,294,967,295 (the protocol maximum) so no spec-valid packet is rejected unless a mission sets a lower limit. |
-| EPP-25 | Packet Multiplexing | — | O | Mission specific | No | No multiplexing or scheduling logic. Caller controls ordering of `SendPacket()` calls. |
+| EPP-25 | Packet Multiplexing | - | O | Mission specific | No | No multiplexing or scheduling logic. Caller controls ordering of `SendPacket()` calls. |
 
 ---
 
@@ -110,7 +110,7 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 |----------|-------------|-----------|---------|---------------|
 | Mandatory (M) | 17 | 17 | 0 | 0 |
 | Optional (O) | 4 | 3 | 0 | 1 |
-| Unclassified (—) | 2 | 1 | 1 | 0 |
+| Unclassified (, ) | 2 | 1 | 1 | 0 |
 | **Total** | **23** | **21** | **1** | **1** |
 
 ### Non-Conformances (Optional Items Not Supported)

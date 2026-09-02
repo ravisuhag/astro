@@ -7,7 +7,7 @@ type ReceiverConfig struct {
 	// SessionID names the session, taken from the first segment received.
 	SessionID SessionID
 
-	// FirstReportSerial seeds the report counter. §3.2.2 says the first
+	// FirstReportSerial seeds the report counter. Clause 3.2.2 says the first
 	// serial must be chosen randomly for security, and must never be zero.
 	// The caller picks it.
 	FirstReportSerial uint64
@@ -65,7 +65,7 @@ type Receiver struct {
 
 	// reportsByCheckpoint remembers the report sent for each checkpoint
 	// serial, so a retransmitted checkpoint gets the same report back
-	// (§6.11) instead of a fresh serial every time.
+	// (clause 6.11) instead of a fresh serial every time.
 	reportsByCheckpoint map[uint64]*ReportSegment
 
 	cancelReason *CancelReason
@@ -122,14 +122,14 @@ func (r *Receiver) HandleSegment(seg *Segment) error {
 		if seg.ReportAck != nil {
 			delete(r.awaitingAck, seg.ReportAck.ReportSerial)
 		}
-		// §6.11, §6.16: the session closes once the red part is complete
-		// AND every report has been acknowledged — not before, or the
+		// Clause 6.11, clause 6.16: the session closes once the red part is complete
+		// AND every report has been acknowledged, not before, or the
 		// closing report's retransmission machinery is torn down early.
 		r.maybeClose()
 
 	case t == TypeCancelFromSender:
 		r.state = StateCancelled
-		// §3.2.5: acknowledge the cancel.
+		// Clause 3.2.5: acknowledge the cancel.
 		r.pending = append(r.pending, &Segment{Header: r.header(TypeCancelAckToSender)})
 
 	case t == TypeCancelAckToReceiver:
@@ -150,7 +150,7 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 		return ErrBlockTooLarge
 	}
 
-	// §3.2.4 MISCOLORED: red data must not sit above any green offset, and
+	// Clause 3.2.4 MISCOLORED: red data must not sit above any green offset, and
 	// green data must not sit below any red offset.
 	if t.IsRedData() {
 		if r.greenSeen && start >= r.lowestGreenOffset {
@@ -181,7 +181,7 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 	copy(r.data[start:end], d.Data)
 	r.received.add(start, end)
 
-	// §3.1.3: these flags tell us the shape of the block.
+	// Clause 3.1.3: these flags tell us the shape of the block.
 	if t.IsEORP() {
 		r.redPartLength = end
 		r.redPartKnown = true
@@ -190,14 +190,14 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 		r.blockLength = end
 		r.blockKnown = true
 
-		// §6.16: a wholly green block involves no reports at all, so the
+		// Clause 6.16: a wholly green block involves no reports at all, so the
 		// green EOB is the only close signal the session will ever get.
 		if t.IsGreenData() && !r.redPartKnown && r.highestRedEnd == 0 && r.state == StateActive {
 			r.state = StateClosed
 		}
 	}
 
-	// §6.13: a checkpoint prompts a report.
+	// Clause 6.13: a checkpoint prompts a report.
 	if t.IsCheckpoint() {
 		r.queueReport(d.CheckpointSerial, end)
 	}
@@ -208,8 +208,8 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 // the end offset of the checkpoint segment that prompted it, or zero for an
 // asynchronous report.
 func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
-	// §6.11: a retransmitted checkpoint gets the same report again, not a
-	// fresh one — otherwise every timer expiry mints a new report serial and
+	// Clause 6.11: a retransmitted checkpoint gets the same report again, not a
+	// fresh one, otherwise every timer expiry mints a new report serial and
 	// the two engines chase each other's acknowledgments.
 	if checkpointSerial != 0 {
 		if prior, ok := r.reportsByCheckpoint[checkpointSerial]; ok {
@@ -221,8 +221,8 @@ func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
 
 	upper := r.redPartLength
 	if !r.redPartKnown {
-		// §6.13: without the EORP the red-part length is unknown, so the
-		// report covers everything seen so far — the highest claimed end or
+		// Clause 6.13: without the EORP the red-part length is unknown, so the
+		// report covers everything seen so far, the highest claimed end or
 		// the prompting checkpoint's own end, whichever is greater. The
 		// contiguous prefix alone would hide interior gaps from the sender
 		// and deadlock the session.
@@ -271,7 +271,7 @@ func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
 }
 
 // maybeClose closes the session once the red part is fully received and no
-// report is still waiting for its acknowledgment (§6.11, §6.16).
+// report is still waiting for its acknowledgment (clause 6.11, clause 6.16).
 func (r *Receiver) maybeClose() {
 	if r.state != StateActive {
 		return
@@ -309,7 +309,7 @@ func (r *Receiver) NextSegment() (*Segment, bool, error) {
 }
 
 // RequestReport queues an asynchronous report, one not prompted by a
-// checkpoint. §3.2.2 gives it a checkpoint serial of zero. The caller drives
+// checkpoint. Clause 3.2.2 gives it a checkpoint serial of zero. The caller drives
 // this from its own timer.
 func (r *Receiver) RequestReport() {
 	r.mu.Lock()

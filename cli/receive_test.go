@@ -142,7 +142,7 @@ func TestGapScannerFoldsTheCycleOnWrap(t *testing.T) {
 	}
 }
 
-// Without the cycle folded in, the same wrap would still be contiguous — but
+// Without the cycle folded in, the same wrap would still be contiguous, but
 // a count that repeats after the cycle steps must read as a full lap missing,
 // which is what proves the cycle is actually in the arithmetic.
 func TestGapScannerCycleWidensTheCounter(t *testing.T) {

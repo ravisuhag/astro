@@ -13,7 +13,7 @@ func testSession() ltp.SessionID {
 }
 
 func TestSegmentTypeClassification(t *testing.T) {
-	// RFC 5326 §3.1.2 and §3.1.3. Getting these predicates wrong changes
+	// RFC 5326 clause 3.1.2 and clause 3.1.3. Getting these predicates wrong changes
 	// which segments a receiver reports on.
 	tests := []struct {
 		code                                    ltp.SegmentType
@@ -54,7 +54,7 @@ func TestSegmentTypeClassification(t *testing.T) {
 }
 
 func TestUndefinedSegmentTypes(t *testing.T) {
-	// §3.1.2 marks codes 5, 6, 10 and 11 undefined.
+	// Clause 3.1.2 marks codes 5, 6, 10 and 11 undefined.
 	for _, code := range []ltp.SegmentType{5, 6, 10, 11} {
 		if code.Defined() {
 			t.Errorf("code %d should be undefined", code)
@@ -130,7 +130,7 @@ func TestDataSegmentRoundTrip(t *testing.T) {
 }
 
 func TestNonCheckpointCarriesNoSerials(t *testing.T) {
-	// §3.2.1: "Data segments that are not checkpoints MUST NOT have these two
+	// Clause 3.2.1: "Data segments that are not checkpoints MUST NOT have these two
 	// fields in the header and MUST continue on directly with the client
 	// service data." A plain segment must therefore be shorter.
 	d := &ltp.DataSegment{ClientServiceID: 1, Offset: 0, Data: []byte("abc")}
@@ -159,7 +159,7 @@ func TestNonCheckpointCarriesNoSerials(t *testing.T) {
 }
 
 func TestCheckpointSerialMustNotBeZero(t *testing.T) {
-	// §3.2.1.
+	// Clause 3.2.1.
 	d := &ltp.DataSegment{ClientServiceID: 1, Data: []byte("x"), CheckpointSerial: 0}
 	if _, err := d.Encode(true); !errors.Is(err, ltp.ErrInvalidSerialNumber) {
 		t.Errorf("error = %v, want ErrInvalidSerialNumber", err)
@@ -199,7 +199,7 @@ func TestReportSegmentRoundTrip(t *testing.T) {
 }
 
 func TestClaimOffsetsAreRelativeToLowerBound(t *testing.T) {
-	// §3.2.2: "The offset within the entire block can be calculated by
+	// Clause 3.2.2: "The offset within the entire block can be calculated by
 	// summing this offset with the lower bound of the RS." Treating claim
 	// offsets as absolute silently corrupts every gap calculation.
 	r := &ltp.ReportSegment{
@@ -218,7 +218,7 @@ func TestClaimOffsetsAreRelativeToLowerBound(t *testing.T) {
 }
 
 func TestReportValidationRules(t *testing.T) {
-	// §3.2.2's rules on serials, bounds, and claim lengths.
+	// Clause 3.2.2's rules on serials, bounds, and claim lengths.
 	tests := []struct {
 		name   string
 		report ltp.ReportSegment
@@ -273,7 +273,7 @@ func TestCancelSegmentRoundTrip(t *testing.T) {
 }
 
 func TestCancelRejectsReservedReason(t *testing.T) {
-	// §3.2.4 reserves 06 to FF.
+	// Clause 3.2.4 reserves 06 to FF.
 	c := &ltp.CancelSegment{Reason: ltp.CancelReason(6)}
 	if _, err := c.Encode(); !errors.Is(err, ltp.ErrInvalidReasonCode) {
 		t.Errorf("error = %v, want ErrInvalidReasonCode", err)
@@ -281,7 +281,7 @@ func TestCancelRejectsReservedReason(t *testing.T) {
 }
 
 func TestCancelAckHasNoContent(t *testing.T) {
-	// §3.2.5: "The Cancel-acknowledgments (CAx) have no content."
+	// Clause 3.2.5: "The Cancel-acknowledgments (CAx) have no content."
 	for _, typ := range []ltp.SegmentType{ltp.TypeCancelAckToSender, ltp.TypeCancelAckToReceiver} {
 		seg := &ltp.Segment{Header: &ltp.Header{Type: typ, SessionID: testSession()}}
 		encoded, err := seg.Encode()
@@ -299,7 +299,7 @@ func TestCancelAckHasNoContent(t *testing.T) {
 }
 
 func TestExtensionsRoundTrip(t *testing.T) {
-	// §3.1.4: up to 15 header and 15 trailer extensions, counted in one octet.
+	// Clause 3.1.4: up to 15 header and 15 trailer extensions, counted in one octet.
 	seg := &ltp.Segment{
 		Header: &ltp.Header{
 			Type:      ltp.TypeReportAck,
@@ -364,7 +364,7 @@ func TestDecodeRejectsWrongVersion(t *testing.T) {
 }
 
 func TestDecodeRejectsUndefinedType(t *testing.T) {
-	// Type code 5 is undefined per §3.1.2.
+	// Type code 5 is undefined per clause 3.1.2.
 	data := []byte{0x05, 0x2A, 0x07, 0x00}
 	if _, err := ltp.DecodeSegment(data); !errors.Is(err, ltp.ErrUndefinedSegmentType) {
 		t.Errorf("error = %v, want ErrUndefinedSegmentType", err)

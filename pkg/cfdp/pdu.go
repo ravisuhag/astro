@@ -33,7 +33,7 @@ const Version = 1
 // entity IDs and transaction sequence number.
 const FixedHeaderSize = 4
 
-// CRCSize is the width of the optional PDU CRC, in octets (§4.1.3).
+// CRCSize is the width of the optional PDU CRC, in octets (clause 4.1.3).
 const CRCSize = 2
 
 // MaxIDWidth is the widest entity ID or sequence number the 3-bit length
@@ -60,9 +60,9 @@ func (d Direction) String() string {
 }
 
 // EntityID is a CFDP entity identifier or transaction sequence number: an
-// unsigned integer whose octet width travels in the PDU header (§5.1.4).
+// unsigned integer whose octet width travels in the PDU header (clause 5.1.4).
 //
-// Width carries semantic weight on the wire but none in comparisons: §5.1.7
+// Width carries semantic weight on the wire but none in comparisons: Clause 5.1.7
 // note 3 says two IDs of different widths compare by zero-padding the shorter.
 type EntityID struct {
 	Value uint64
@@ -138,15 +138,15 @@ type PDUHeader struct {
 	// unacknowledged, so this field is the logical sense, not the bit.
 	Acknowledged bool
 
-	// CRCFlag marks a PDU carrying a trailing CRC (§4.1).
+	// CRCFlag marks a PDU carrying a trailing CRC (clause 4.1).
 	CRCFlag bool
 
 	// LargeFile widens every File-Size Sensitive field from 32 to 64 bits
-	// (§5.1.10).
+	// (clause 5.1.10).
 	LargeFile bool
 
 	// DataLength is the octet length of the PDU data field. When CRCFlag is
-	// set this includes the two CRC octets (§4.1.3.2).
+	// set this includes the two CRC octets (clause 4.1.3.2).
 	DataLength uint16
 
 	// SegmentationControl records whether record boundaries survive
@@ -175,7 +175,7 @@ func (h *PDUHeader) Validate() error {
 	if err := h.TransactionSeq.Validate(); err != nil {
 		return err
 	}
-	// §5.1: one entity ID length field covers every entity ID in the header.
+	// Clause 5.1: one entity ID length field covers every entity ID in the header.
 	if h.Source.Width != h.Destination.Width {
 		return ErrInvalidEntityIDWidth
 	}
@@ -315,7 +315,7 @@ type PDU struct {
 // Encode serializes the PDU, setting the data field length and appending the
 // CRC when the header asks for one.
 //
-// Per §4.1.3.2 the CRC occupies the final octets of the data field, its length
+// Per clause 4.1.3.2 the CRC occupies the final octets of the data field, its length
 // counts toward the data field length, and it covers everything from the first
 // octet of the header to the last octet before the CRC itself.
 func (p *PDU) Encode() ([]byte, error) {
@@ -342,7 +342,7 @@ func (p *PDU) Encode() ([]byte, error) {
 	out = append(out, p.Data...)
 
 	if p.Header.CRCFlag {
-		// §4.1.3.1: the standard CCSDS Telecommand CRC-16.
+		// Clause 4.1.3.1: the standard CCSDS Telecommand CRC-16.
 		sum := crc.ComputeCRC16(out)
 		out = append(out, byte(sum>>8), byte(sum))
 	}
@@ -351,7 +351,7 @@ func (p *PDU) Encode() ([]byte, error) {
 
 // DecodePDU parses one complete PDU, verifying the CRC when the header says
 // one is present. A CRC failure returns ErrCRCMismatch and the caller must
-// discard the PDU, per §4.1.2.
+// discard the PDU, per clause 4.1.2.
 func DecodePDU(data []byte) (*PDU, error) {
 	header, consumed, err := DecodePDUHeader(data)
 	if err != nil {
@@ -383,7 +383,7 @@ func DecodePDU(data []byte) (*PDU, error) {
 }
 
 // readFSS reads a File-Size Sensitive integer: 32 bits normally, 64 when the
-// large-file flag is set (§5.1.10). It returns the value and octets consumed.
+// large-file flag is set (clause 5.1.10). It returns the value and octets consumed.
 func readFSS(data []byte, largeFile bool) (uint64, int, error) {
 	width := 4
 	if largeFile {

@@ -227,7 +227,7 @@ func WithSecondaryHeader(header SecondaryHeader) PacketOption {
 // user signals that a secondary header leads the octets it is handing over,
 // and the Packet Assembly Function translates that signal into the flag
 // (3.4.2.3.3, 4.2.2.3, 4.2.2.4). No SecondaryHeader implementation is needed,
-// because nothing here has to interpret the octets — they are counted in the
+// because nothing here has to interpret the octets. They are counted in the
 // Packet Data Length as part of the user data and written verbatim.
 //
 // Passing false is the default and clears the flag.
@@ -587,7 +587,7 @@ func PacketSizer(data []byte) int {
 }
 
 // DeclaredPacketSize returns the total packet length declared by the primary
-// header at the front of data — 6 (primary header) + Packet Data Length + 1 —
+// header at the front of data (6 (primary header) + Packet Data Length + 1)
 // or -1 when data is shorter than the 6-octet primary header.
 //
 // The returned length may be longer than data: it is what the header claims,

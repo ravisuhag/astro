@@ -9,7 +9,7 @@ import (
 )
 
 // Every Reserved CFDP Message opens with the four ASCII characters "cfdp"
-// and its type octet (§6.1.2, table 6-1). That header is what tells a
+// and its type octet (clause 6.1.2, table 6-1). That header is what tells a
 // receiver a Message to User is a protocol message rather than an
 // application one.
 func TestUserMessageHeader(t *testing.T) {
@@ -37,7 +37,7 @@ func TestUserMessageHeader(t *testing.T) {
 		t.Errorf("decoded type %s, want Proxy Put Cancel", back.Type)
 	}
 	if len(back.Content) != 0 {
-		t.Errorf("Proxy Put Cancel decoded %d octets of content, want none — §6.2.6.2 gives it none",
+		t.Errorf("Proxy Put Cancel decoded %d octets of content, want none, clause 6.2.6.2 gives it none",
 			len(back.Content))
 	}
 }
@@ -155,7 +155,7 @@ func TestTransactionIDLengthEncoding(t *testing.T) {
 		t.Fatalf("got %d octets, want 3: one length octet and two values", len(encoded))
 	}
 	if encoded[0] != 0x00 {
-		t.Errorf("the length octet is 0x%02X, want 0x00 — the widths are stored less one", encoded[0])
+		t.Errorf("the length octet is 0x%02X, want 0x00. The widths are stored less one", encoded[0])
 	}
 
 	// Three octets each: lengths of two in both nibbles.

@@ -6,14 +6,14 @@ import (
 	"io"
 )
 
-// The Transport Mapping Layer, per CCSDS 913.1-B-2 §3.3.
+// The Transport Mapping Layer, per CCSDS 913.1-B-2 clause 3.3.
 //
 // TML is a thin framing over TCP. One SLE association maps to exactly one TCP
-// connection (§3.3.1), and everything on it is one of three message types:
+// connection (clause 3.3.1), and everything on it is one of three message types:
 // an SLE PDU, a context message opening the connection, or a heartbeat keeping
 // an idle one alive.
 
-// TMLHeaderSize is the width of a TML message header in octets (§3.3.2.2.1).
+// TMLHeaderSize is the width of a TML message header in octets (clause 3.3.2.2.1).
 const TMLHeaderSize = 8
 
 // MessageType is the TML message type identifier of table 3-1.
@@ -49,13 +49,13 @@ func (m MessageType) Valid() bool {
 }
 
 // ProtocolID is the identification field of a context message: the characters
-// 'I' 'S' 'P' '1' (§3.3.2.2.4 a).
+// 'I' 'S' 'P' '1' (clause 3.3.2.2.4 a).
 var ProtocolID = [4]byte{'I', 'S', 'P', '1'}
 
-// ProtocolVersion is the version a context message carries (§3.3.2.2.4 c).
+// ProtocolVersion is the version a context message carries (clause 3.3.2.2.4 c).
 const ProtocolVersion uint8 = 1
 
-// ContextBodySize is the width of a context message body (§3.3.2.2.4).
+// ContextBodySize is the width of a context message body (clause 3.3.2.2.4).
 const ContextBodySize = 12
 
 // DefaultMaxMessageSize bounds a TML message body when no limit is given:
@@ -74,7 +74,7 @@ type Message struct {
 // Encode serializes the message per figure 3-3: a one-octet type, three
 // reserved zero octets, a four-octet body length, then the body.
 //
-// §3.3.2.2.6: every integer is big-endian.
+// Clause 3.3.2.2.6: every integer is big-endian.
 func (m *Message) Encode() ([]byte, error) {
 	if !m.Type.Valid() {
 		return nil, ErrInvalidMessageType
@@ -121,7 +121,7 @@ func DecodeMessageWithLimit(data []byte, maxBody int) (*Message, int, error) {
 		return nil, 0, ErrDataTooShort
 	}
 
-	// §3.3.2.2.5: a heartbeat is a header with a zero length.
+	// Clause 3.3.2.2.5: a heartbeat is a header with a zero length.
 	if m.Type == MessageHeartbeat && length != 0 {
 		return nil, 0, ErrNonEmptyHeartbeat
 	}
@@ -191,13 +191,13 @@ func (m *Message) Humanize() string {
 	return fmt.Sprintf("TML Message\n  Type ... %s\n  Body ... %d octets", m.Type, len(m.Body))
 }
 
-// ContextMessage is the body of a TML context message (§3.3.2.2.4).
+// ContextMessage is the body of a TML context message (clause 3.3.2.2.4).
 //
 // It opens a connection, telling the peer how often to expect a heartbeat and
 // how many missed ones mean the link is dead.
 type ContextMessage struct {
 	// HeartbeatInterval is how many seconds pass between heartbeats. Zero
-	// disables the heartbeat entirely (§3.3.3).
+	// disables the heartbeat entirely (clause 3.3.3).
 	HeartbeatInterval uint16
 	// DeadFactor is how many intervals of silence mean the peer has gone.
 	DeadFactor uint16

@@ -42,7 +42,7 @@ func TestPLCWRoundTrip(t *testing.T) {
 }
 
 func TestPLCWFormatAndTypeBits(t *testing.T) {
-	// §3.2.4.3.1: format ID '1' identifies a fixed-length SPDU, and type ID
+	// Clause 3.2.4.3.1: format ID '1' identifies a fixed-length SPDU, and type ID
 	// '0' identifies it as a PLCW.
 	p := &pxdl.PLCW{ReportValue: 1}
 	encoded, err := p.Encode()
@@ -87,7 +87,7 @@ func TestVariableSPDURoundTrip(t *testing.T) {
 }
 
 func TestVariableSPDULengthIsNotMinusOne(t *testing.T) {
-	// §3.2.4.2.2 a) 3) calls this out: "Data Field Length is not a 'length
+	// Clause 3.2.4.2.2 a) 3) calls this out: "Data Field Length is not a 'length
 	// minus one' field." Everything else in CCSDS goes the other way, so it
 	// is worth pinning.
 	s := &pxdl.VariableSPDU{TypeID: 1, Data: []byte{0xAA, 0xBB, 0xCC}}
@@ -101,7 +101,7 @@ func TestVariableSPDULengthIsNotMinusOne(t *testing.T) {
 }
 
 func TestVariableSPDUEmptyData(t *testing.T) {
-	// §3.2.4.2.2 b): 0 to 15 octets, so empty is legal.
+	// Clause 3.2.4.2.2 b): 0 to 15 octets, so empty is legal.
 	s := &pxdl.VariableSPDU{TypeID: 2}
 	encoded, err := s.Encode()
 	if err != nil {
@@ -130,7 +130,7 @@ func TestVariableSPDUSizeLimit(t *testing.T) {
 }
 
 func TestSPDUsAreSelfDelimiting(t *testing.T) {
-	// §3.2.4.1: SPDUs are self-identifying and self-delimiting, so a run of
+	// Clause 3.2.4.1: SPDUs are self-identifying and self-delimiting, so a run of
 	// mixed fixed and variable ones decodes without a count.
 	spdus := []pxdl.SPDU{
 		{PLCW: &pxdl.PLCW{ReportValue: 10}},

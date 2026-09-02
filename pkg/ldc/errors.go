@@ -8,19 +8,19 @@ var (
 	ErrDataTooShort = errors.New("data too short: the coded bit stream ended early")
 
 	// ErrInvalidBlockSize indicates a block size outside the four CCSDS
-	// 121.0-B-3 §3.1.6 allows.
+	// 121.0-B-3 clause 3.1.6 allows.
 	ErrInvalidBlockSize = errors.New("invalid block size: must be 8, 16, 32 or 64 samples")
 
 	// ErrInvalidResolution indicates a sample resolution outside 1 to 32 bits,
-	// per CCSDS 121.0-B-3 §3.1.6.
+	// per CCSDS 121.0-B-3 clause 3.1.6.
 	ErrInvalidResolution = errors.New("invalid sample resolution: must be 1 to 32 bits")
 
 	// ErrInvalidReferenceInterval indicates a reference sample interval outside
-	// 1 to 4096 blocks, per CCSDS 121.0-B-3 §4.3.
+	// 1 to 4096 blocks, per CCSDS 121.0-B-3 clause 4.3.
 	ErrInvalidReferenceInterval = errors.New("invalid reference sample interval: must be 1 to 4096 blocks")
 
 	// ErrRestrictedNotAllowed indicates the restricted code option set at a
-	// resolution above 4 bits. CCSDS 121.0-B-3 §5.2.1.1 allows it only when
+	// resolution above 4 bits. CCSDS 121.0-B-3 clause 5.2.1.1 allows it only when
 	// n <= 4.
 	ErrRestrictedNotAllowed = errors.New("the restricted code option set requires a resolution of 4 bits or fewer")
 
@@ -29,11 +29,11 @@ var (
 	ErrSampleOutOfRange = errors.New("sample does not fit the configured resolution")
 
 	// ErrInvalidOptionID indicates an option identifier the code option table
-	// of CCSDS 121.0-B-3 §5.2 does not define at this resolution.
+	// of CCSDS 121.0-B-3 clause 5.2 does not define at this resolution.
 	ErrInvalidOptionID = errors.New("invalid code option identifier")
 
 	// ErrInvalidWordSize indicates an output word size outside 1 to 8 octets,
-	// per CCSDS 121.0-B-3 §7.2.1.2.
+	// per CCSDS 121.0-B-3 clause 7.2.1.2.
 	ErrInvalidWordSize = errors.New("invalid output word size: must be 1 to 8 octets")
 
 	// ErrTruncatedFile indicates a compressed file shorter than its 12-octet

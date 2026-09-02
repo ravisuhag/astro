@@ -36,7 +36,7 @@ var (
 	ErrNotFileData = errors.New("PDU is a file directive, not file data")
 
 	// ErrCRCMismatch indicates the optional PDU CRC failed validation, so the
-	// PDU must be discarded per §4.1.2.
+	// PDU must be discarded per clause 4.1.2.
 	ErrCRCMismatch = errors.New("PDU CRC mismatch: received CRC does not match computed CRC")
 
 	// ErrDataLengthMismatch indicates the header's PDU data field length does
@@ -81,7 +81,7 @@ var (
 	ErrSegmentTooLarge = errors.New("segment metadata exceeds 63 octets")
 
 	// ErrInvalidFaultHandler indicates a fault handler override TLV whose
-	// handler code is not one of the four defined by §5.4.4.
+	// handler code is not one of the four defined by clause 5.4.4.
 	ErrInvalidFaultHandler = errors.New("invalid fault handler code")
 
 	// ErrNotUserMessage indicates a Message to User TLV that does not open

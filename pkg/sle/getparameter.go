@@ -2,12 +2,12 @@ package sle
 
 import "fmt"
 
-// GET-PARAMETER, per §3.10 of CCSDS 911.1-B-5, 911.2-B-4, 911.5-B-4 and
+// GET-PARAMETER, per clause 3.10 of CCSDS 911.1-B-5, 911.2-B-4, 911.5-B-4 and
 // 912.1-B-5.
 //
 // The operation asks the provider for one configuration value. Its
-// invocation has the same three fields in all four services — credentials,
-// invoke identifier, and the parameter name INTEGER — so one Go type covers
+// invocation has the same three fields in all four services (credentials,
+// invoke identifier, and the parameter name INTEGER) so one Go type covers
 // them. The return's positive alternative differs: each service defines its
 // own parameter CHOICE, a large enumeration of provider configuration.
 //

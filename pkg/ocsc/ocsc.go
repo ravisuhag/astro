@@ -3,29 +3,29 @@
 // (August 2019).
 //
 // This is deep-space laser communication in the High Photon Efficiency regime.
-// The full standard specifies SCPPM — serially concatenated convolutional
-// coding with pulse-position modulation — and everything that surrounds it.
+// The full standard specifies SCPPM (serially concatenated convolutional
+// coding with pulse-position modulation) and everything that surrounds it.
 // This package implements the deterministic front half of that chain, the part
 // that is pure bit manipulation:
 //
 //	transfer frames
-//	  → attach sync marker      (§3.3)  ASM 1ACFFC1D
-//	  → slice into blocks       (§3.4)  k bits, zero-filled
-//	  → pseudo-randomize        (§3.5)  g(D) = D^8+D^7+D^5+D^3+1
-//	  → attach CRC-32           (§3.6)  h(X) = X^32+X^29+X^18+X^14+X^3+1
-//	  → attach termination bits (§3.7)  two zeros
-//	  → SCPPM encoder input block
+//	  -> attach sync marker      (clause 3.3)  ASM 1ACFFC1D
+//	  -> slice into blocks       (clause 3.4)  k bits, zero-filled
+//	  -> pseudo-randomize        (clause 3.5)  g(D) = D^8+D^7+D^5+D^3+1
+//	  -> attach CRC-32           (clause 3.6)  h(X) = X^32+X^29+X^18+X^14+X^3+1
+//	  -> attach termination bits (clause 3.7)  two zeros
+//	  -> SCPPM encoder input block
 //
-// What follows — the SCPPM encoder proper, the channel interleaver, the
-// codeword sync marker, the slot mapper — is coupled to the modulation and is
+// What follows (the SCPPM encoder proper, the channel interleaver, the
+// codeword sync marker, the slot mapper) is coupled to the modulation and is
 // not here. Neither is iterative SCPPM decoding: that is a research-grade job
 // and does not belong in a wire-format library. What is here on the receive
 // side is everything after the decoder: Recover synchronizes frames on their
-// sync markers (§3.14.1) and delivers each with the quality indicator of
-// §3.14.2 and the sequence indicator of §3.15.
+// sync markers (clause 3.14.1) and delivers each with the quality indicator of
+// Clause 3.14.2 and the sequence indicator of clause 3.15.
 //
 // Condition is the batch form of the send side; Conditioner is the streaming
-// form the NOTE under §3.2 permits, carrying partial blocks between pushes
+// form the NOTE under clause 3.2 permits, carrying partial blocks between pushes
 // and zero-filling only at explicit closure.
 //
 // # Everything is bits, not octets
@@ -35,7 +35,7 @@
 // converting to octets is something you do at the very end, if at all.
 package ocsc
 
-// CodeRate selects the SCPPM code rate, a managed parameter per §3.4.1.
+// CodeRate selects the SCPPM code rate, a managed parameter per clause 3.4.1.
 type CodeRate uint8
 
 const (
@@ -77,13 +77,13 @@ const (
 	// KTwoThirds is the information block size at code rate 2/3.
 	KTwoThirds = 10046
 
-	// CRCBits is the width of the attached CRC (§3.6.1.1).
+	// CRCBits is the width of the attached CRC (clause 3.6.1.1).
 	CRCBits = 32
-	// TerminationBits is how many zeros §3.7 appends.
+	// TerminationBits is how many zeros clause 3.7 appends.
 	TerminationBits = 2
 
 	// MaxFrameLength is the upper bound on the transfer frame length managed
-	// parameter, in octets (§5.2, table 5-1: "Integer (max 65536)").
+	// parameter, in octets (clause 5.2, table 5-1: "Integer (max 65536)").
 	MaxFrameLength = 65536
 )
 
@@ -103,7 +103,7 @@ func (r CodeRate) InformationBlockSize() int {
 }
 
 // EncoderInputSize returns k-hat, the SCPPM encoder input block length in
-// binary digits: k plus the CRC and termination digits (table 3-1, §3.7).
+// binary digits: k plus the CRC and termination digits (table 3-1, clause 3.7).
 func (r CodeRate) EncoderInputSize() int {
 	k := r.InformationBlockSize()
 	if k == 0 {
@@ -112,14 +112,14 @@ func (r CodeRate) EncoderInputSize() int {
 	return k + CRCBits + TerminationBits
 }
 
-// ASM is the Attached Synchronization Marker of §3.3.2: the 32-bit sequence
+// ASM is the Attached Synchronization Marker of clause 3.3.2: the 32-bit sequence
 // 1ACFFC1D.
 //
 // It is the same marker TM uses for a CADU, which is convenient: a ground
 // system that already hunts for 1ACFFC1D needs no new pattern.
 var ASM = [4]byte{0x1A, 0xCF, 0xFC, 0x1D}
 
-// ASMBits is the width of the sync marker in binary digits (§3.3.1).
+// ASMBits is the width of the sync marker in binary digits (clause 3.3.1).
 const ASMBits = 32
 
 // DefaultASM returns the sync marker as octets.
@@ -129,11 +129,11 @@ func DefaultASM() []byte {
 	return out
 }
 
-// AttachASM builds a Sync-Marked Transfer Frame, per §3.3.1: the marker
+// AttachASM builds a Sync-Marked Transfer Frame, per clause 3.3.1: the marker
 // followed by the transfer frame.
 //
 // The frame must fit the transfer frame length managed parameter: at most
-// 65536 octets (§5.2, table 5-1).
+// 65536 octets (clause 5.2, table 5-1).
 func AttachASM(frame []byte) (*BitString, error) {
 	if len(frame) == 0 {
 		return nil, ErrEmptyFrame

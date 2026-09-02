@@ -1,16 +1,16 @@
 package sdls
 
 // buildAuthPayloadPrefix produces the masked authenticated data that precedes
-// the frame data field, per CCSDS 355.0-B-2 §4.2.3.4 d).
+// the frame data field, per CCSDS 355.0-B-2 clause 4.2.3.4 d).
 //
-// The Authentication Payload is the partial frame — primary header through the
-// end of the data field — with the SA's authentication bit mask applied by a
-// bitwise AND. For an AEAD algorithm §4.2.3.2.2.3 a) splits that payload in
+// The Authentication Payload is the partial frame (primary header through the
+// end of the data field) with the SA's authentication bit mask applied by a
+// bitwise AND. For an AEAD algorithm clause 4.2.3.2.2.3 a) splits that payload in
 // two: everything up to the data field becomes the associated data, and the
 // data field itself becomes the plaintext. This returns the first part.
 //
 // The Initialization Vector is always zeroed here, whatever the mask says:
-// §4.2.2.6.2 h) covers the Security Header "except for the mask bits
+// Clause 4.2.2.6.2 h) covers the Security Header "except for the mask bits
 // corresponding to the Initialization Vector field".
 func (sa *SecurityAssociation) buildAuthPayloadPrefix(frameHeader, securityHeader []byte) ([]byte, error) {
 	prefix := make([]byte, 0, len(frameHeader)+len(securityHeader))
@@ -40,7 +40,7 @@ func (sa *SecurityAssociation) buildAuthPayloadPrefix(frameHeader, securityHeade
 }
 
 // ApplySecurity protects one frame data field and returns the bytes to place
-// in the carrier frame, per CCSDS 355.0-B-2 §4.2.3:
+// in the carrier frame, per CCSDS 355.0-B-2 clause 4.2.3:
 //
 //	Security Header || data (ciphertext or plaintext) || Security Trailer
 //
@@ -56,7 +56,7 @@ func (sa *SecurityAssociation) buildAuthPayloadPrefix(frameHeader, securityHeade
 // one, returning ErrIVExhausted when the counter space runs out.
 //
 // This package does not perform block padding: GCM is a stream mode and
-// §E1.2 note 2 records that it needs none. The Pad Length field, if the SA
+// Clause E1.2 note 2 records that it needs none. The Pad Length field, if the SA
 // declares one, is transmitted as zeros. ProcessSecurity still honors a
 // non-zero Pad Length on receive.
 func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]byte, error) {
@@ -64,7 +64,7 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 		return nil, err
 	}
 	if sa.Mode == Encryption {
-		// §2.3.3 permits it; this package deliberately does not.
+		// Clause 2.3.3 permits it; this package deliberately does not.
 		return nil, ErrUnsupportedMode
 	}
 
@@ -121,7 +121,7 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 
 	switch sa.Mode {
 	case AuthenticatedEncryption:
-		// §4.2.3.2.2.3: plaintext is the data field, associated data is the
+		// Clause 4.2.3.2.2.3: plaintext is the data field, associated data is the
 		// masked prefix. Seal appends the tag, which becomes the trailer.
 		sealed := gcm.Seal(nil, iv, plaintext, prefix)
 		split := len(sealed) - sa.FieldLengths.MAC
@@ -129,10 +129,10 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 		mac = sealed[split:]
 
 	case Authentication:
-		// §4.2.3.2.2.2: the data field travels unencrypted and the MAC covers
+		// Clause 4.2.3.2.2.2: the data field travels unencrypted and the MAC covers
 		// the whole Authentication Payload. Sealing an empty plaintext with
 		// prefix||plaintext as associated data is GMAC over exactly that.
-		// The CMAC alternative of §E2 returned above.
+		// The CMAC alternative of clause E2 returned above.
 		aad := make([]byte, 0, len(prefix)+len(plaintext))
 		aad = append(aad, prefix...)
 		aad = append(aad, plaintext...)
@@ -151,10 +151,10 @@ func (sa *SecurityAssociation) ApplySecurity(frameHeader, plaintext []byte) ([]b
 	return out, nil
 }
 
-// cmacTag computes the AES-CMAC over the Authentication Payload, per §E2.
+// cmacTag computes the AES-CMAC over the Authentication Payload, per clause E2.
 //
 // The payload is the same one GMAC covers: the masked frame header and
-// security header, then the data field. §E2c fixes the MAC at 128 bits, but
+// security header, then the data field. Clause E2c fixes the MAC at 128 bits, but
 // the SA's declared width is honoured so a mission that truncates still
 // interoperates with itself.
 func (sa *SecurityAssociation) cmacTag(prefix, plaintext []byte) ([]byte, error) {

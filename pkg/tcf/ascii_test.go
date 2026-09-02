@@ -124,7 +124,7 @@ func TestASCIIHighPrecision(t *testing.T) {
 }
 
 func TestASCIIOptionalZ(t *testing.T) {
-	// Per §3.5.1.1: Z terminator is optional
+	// Per clause 3.5.1.1: Z terminator is optional
 	a, _ := NewASCIITime(ASCIITypeA, WithASCIIPrecision(0))
 
 	// With Z

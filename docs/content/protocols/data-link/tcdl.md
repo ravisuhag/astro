@@ -1,7 +1,7 @@
 ---
 title: TC Space Data Link Protocol
 short: TCDL
-description: CCSDS 232.0-B-4 — variable-length command frames on the uplink.
+description: CCSDS 232.0-B-4, variable-length command frames on the uplink.
 order: 21
 ---
 
@@ -13,7 +13,7 @@ The design goal is different from [TM](/protocols/data-link/tmdl). A wrong or mi
 
 ## Scope
 
-**Implemented.** The transfer frame format, the MAP sublayer with segmentation, all three services — MAP Packet, MAP Access, and VC Frame — plus the Type-BC control command frames (Unlock and Set V(R)) that COP-1 needs.
+**Implemented.** The transfer frame format, the MAP sublayer with segmentation, all three services (MAP Packet, MAP Access, and VC Frame) plus the Type-BC control command frames (Unlock and Set V(R)) that COP-1 needs.
 
 **Somewhere else.** Retransmission logic is [`pkg/cop`](/protocols/data-link/cop). CLTU wrapping and BCH coding are [`pkg/tcsc`](/protocols/coding/tcsc). This package builds frames.
 
@@ -55,7 +55,7 @@ The segment header splits into 2 bits of sequence flags and a 6-bit MAP ID:
 
 **Frame Length is total octets minus one.** Not the data field length, and not the total. Astro handles it during encode and decode.
 
-**A control command frame must not carry a segment header.** Clause 4.1.3.2.2.1.3. The data field of a Type-BC frame *is* the COP-1 directive, and a FARM reads it as one. An extra octet in front shifts everything, so Unlock and Set V(R) stop being recognised — and nothing errors at either end, the directive just vanishes. Astro returns `ErrSegmentHeaderOnControlCommand`. The frame options refuse the combination too, but `SegmentHeader` is exported and can be assigned past them.
+**A control command frame must not carry a segment header.** Clause 4.1.3.2.2.1.3. The data field of a Type-BC frame *is* the COP-1 directive, and a FARM reads it as one. An extra octet in front shifts everything, so Unlock and Set V(R) stop being recognised, and nothing errors at either end, the directive just vanishes. Astro returns `ErrSegmentHeaderOnControlCommand`. The frame options refuse the combination too, but `SegmentHeader` is exported and can be assigned past them.
 
 **Bypass=0 with Control Command=1 is not a valid frame type.** A control command must bypass sequence control, because its whole job is fixing sequence control. You get `ErrInvalidFrameType`.
 
@@ -71,12 +71,12 @@ Every Type-A frame carries N(S) in its header, and that number drives the slidin
 
 1. FOP-1 on the ground sets N(S) = V(S), then increments V(S).
 2. FARM-1 on the spacecraft compares N(S) with V(R), the next it expects.
-3. Equal — accept the frame and increment V(R).
-4. Inside the window but not equal — reject, and ask for retransmission.
-5. Outside the window — lockout. The ground has to send an Unlock.
+3. Equal, accept the frame and increment V(R).
+4. Inside the window but not equal, reject, and ask for retransmission.
+5. Outside the window, lockout. The ground has to send an Unlock.
 6. FARM-1 reports its state in a CLCW, which rides home in the OCF of a [TM frame](/protocols/data-link/tmdl).
 
-Type-B frames skip all of it. That is the point of them — see the note below.
+Type-B frames skip all of it. That is the point of them, see the note below.
 
 ## Quick Start
 
@@ -179,7 +179,7 @@ gvcid := frame.Header.GVCID() // Global Virtual Channel ID (MCID + VCID)
 
 ## Virtual Channels
 
-A `VirtualChannel` is a buffered frame queue identified by a VCID (0-63). TC supports up to 64 Virtual Channels — significantly more than TM's 8.
+A `VirtualChannel` is a buffered frame queue identified by a VCID (0-63). TC supports up to 64 Virtual Channels, significantly more than TM's 8.
 
 ```go
 // Create with VCID=1 and buffer capacity of 100 frames
@@ -199,10 +199,10 @@ counter := tcdl.NewFrameCounter()
 vc := tcdl.NewVirtualChannel(1, 100)
 svc := tcdl.NewMAPPacketService(0x1A, 1, 0, false, vc, counter)
 
-// Send packets — automatically segmented if too large
+// Send packets, automatically segmented if too large
 err := svc.Send(packetData)
 
-// Receive — reassembles segments into complete packets
+// Receive, reassembles segments into complete packets
 svc.SetPacketSizer(spp.PacketSizer)
 pkt, err := svc.Receive()
 ```
@@ -215,7 +215,7 @@ pkt, err := svc.Receive()
 **Bypass mode:**
 
 ```go
-// Create a bypass (Type-B) MAP Packet Service — frames skip COP-1 sequencing
+// Create a bypass (Type-B) MAP Packet Service, frames skip COP-1 sequencing
 svc := tcdl.NewMAPPacketService(0x1A, 1, 0, true, vc, counter)
 ```
 
@@ -235,7 +235,7 @@ data, err := svc.Receive()
 
 ### VC Frame Service
 
-Pass-through service — sends and receives pre-encoded frames without modification.
+Pass-through service, sends and receives pre-encoded frames without modification.
 
 ```go
 vc := tcdl.NewVirtualChannel(2, 100)
@@ -437,9 +437,9 @@ Commentary, not sourced from the standard.
 
 **Why the MAP sublayer?** A Space Packet can be 65,542 bytes and a TC frame stops at 1,024. Something has to cut it up. The MAP sublayer does it in a standard way so upper layers do not have to.
 
-**Why two frame types?** In an emergency you need a command to land even when COP-1 is wedged — locked out, or window full. Type-B is the safety valve. It always gets through, and it gives up the guarantee that it arrived in order.
+**Why two frame types?** In an emergency you need a command to land even when COP-1 is wedged: locked out, or window full. Type-B is the safety valve. It always gets through, and it gives up the guarantee that it arrived in order.
 
 ## Reference
 
-- [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) — TC Space Data Link Protocol (Blue Book)
+- [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf), TC Space Data Link Protocol (Blue Book)
 - [CLI](/cli/tc) | [Conformance](/conformance/tcdl) | [The stack](/docs/start/concepts)

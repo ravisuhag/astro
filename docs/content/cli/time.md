@@ -1,11 +1,11 @@
 ---
 title: astro time
 short: TIME
-description: CCSDS time codes — encode, decode, inspect, now.
+description: CCSDS time codes, encode, decode, inspect, now.
 order: 140
 ---
 
-CCSDS Time Code Format operations — encode, decode, and inspect CCSDS time codes ([CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf)). Supports CUC, CDS, CCS, and ASCII formats.
+CCSDS Time Code Format operations: encode, decode, and inspect CCSDS time codes ([CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf)). Supports CUC, CDS, CCS, and ASCII formats.
 
 ## Subcommands
 
@@ -20,9 +20,9 @@ CCSDS Time Code Format operations — encode, decode, and inspect CCSDS time cod
 
 | Format | Codec Flag | Description |
 |--------|-----------|-------------|
-| CUC | `cuc` | CCSDS Unsegmented Time Code — coarse + fine seconds since epoch |
-| CDS | `cds` | CCSDS Day Segmented — day count + milliseconds of day |
-| CCS | `ccs` | CCSDS Calendar Segmented — calendar fields (year, day, hour, etc.) |
+| CUC | `cuc` | CCSDS Unsegmented Time Code, coarse + fine seconds since epoch |
+| CDS | `cds` | CCSDS Day Segmented, day count + milliseconds of day |
+| CCS | `ccs` | CCSDS Calendar Segmented, calendar fields (year, day, hour, etc.) |
 | ASCII Type A | `ascii-a` | ISO 8601 calendar date (`YYYY-MM-DDThh:mm:ss.dZ`) |
 | ASCII Type B | `ascii-b` | ISO 8601 ordinal date (`YYYY-DDDThh:mm:ss.dZ`) |
 
@@ -233,4 +233,4 @@ astro time encode --codec cds --time "2025-03-15T12:30:45Z" | astro time inspect
 
 ---
 
-**See also** — [the protocol page](/protocols/mission/tcf) for the standard and the Go API, and the [conformance statement](/conformance/tcf) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/mission/tcf) for the standard and the Go API, and the [conformance statement](/conformance/tcf) for what is and is not implemented.

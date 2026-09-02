@@ -1,6 +1,6 @@
 package aos
 
-// Frame Header Error Control (CCSDS 732.0-B-4 §4.1.2.6).
+// Frame Header Error Control (CCSDS 732.0-B-4 clause 4.1.2.6).
 //
 // The optional FHEC is a 16-bit field occupying bits 48-63 of the primary
 // header (octets 6-7, extending the header to 8 octets). It protects the
@@ -9,14 +9,14 @@ package aos
 //
 //   - J=4 bits per symbol, E=2 symbol error correction capability;
 //   - field generator polynomial F(x) = x^4 + x + 1;
-//   - code generator polynomial g(x) = x^4 + α^3·x^3 + α·x^2 + α^3·x + 1
+//   - code generator polynomial g(x) = x^4 + α^3|x^3 + α|x^2 + α^3|x + 1
 //     (roots α^6..α^9).
 //
-// Header bits map to symbols as (§4.1.2.6.5 f):
+// Header bits map to symbols as (clause 4.1.2.6.5 f):
 //
-//	bits  0-15  → symbols 0-3  (octets 0-1: TFVN, SCID, VCID)
-//	bits 40-47  → symbols 4-5  (octet 5: signaling field)
-//	bits 48-63  → symbols 6-9  (octets 6-7: the FHEC check symbols)
+//	bits  0-15  -> symbols 0-3  (octets 0-1: TFVN, SCID, VCID)
+//	bits 40-47  -> symbols 4-5  (octet 5: signaling field)
+//	bits 48-63  -> symbols 6-9  (octets 6-7: the FHEC check symbols)
 //
 // This implementation generates check symbols on encode and detects
 // errors on decode by recomputing them. Error correction (up to E=2
@@ -57,7 +57,7 @@ func gf16Mul(a, b uint8) uint8 {
 var fhecGenerator = [4]uint8{0x8, 0x2, 0x8, 0x1}
 
 // computeFHECParity returns the four RS(10,6) check symbols for the six
-// information symbols, computed as the remainder of x^4·m(x) mod g(x).
+// information symbols, computed as the remainder of x^4|m(x) mod g(x).
 func computeFHECParity(info [6]uint8) [4]uint8 {
 	var reg [4]uint8
 	for _, s := range info {

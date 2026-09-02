@@ -15,7 +15,7 @@ import "fmt"
 // a limitation of this package but of the format: the association carries the
 // service, and the octets do not.
 //
-// Every alternative has the same inner shape —
+// Every alternative has the same inner shape,
 //
 //	SEQUENCE { parameterName ParameterName, parameterValue <varies> }
 //
@@ -36,8 +36,8 @@ import "fmt"
 // ParameterName is the schema's ParameterName: the integer that names a
 // configuration parameter.
 //
-// The values are not contiguous and not ordered — acquisitionSequenceLength
-// is 201 while apidList is 2 — because the enumeration grew across issues and
+// The values are not contiguous and not ordered (acquisitionSequenceLength
+// is 201 while apidList is 2) because the enumeration grew across issues and
 // each service's additions were given their own range. They are transcribed
 // from the INTEGER definition in CCSDS 911.1-B-5 annex A.
 type ParameterName int32
@@ -187,7 +187,7 @@ type parameterShape struct {
 	// name is the parameterName the schema constrains this alternative to.
 	name ParameterName
 	// simple reports whether parameterValue is a single INTEGER. Where it is
-	// not — a set, a nested CHOICE — the value comes back as raw BER.
+	// not (a set, a nested CHOICE) the value comes back as raw BER.
 	simple bool
 }
 
@@ -305,7 +305,7 @@ type ServiceParameter struct {
 	HasValue bool
 
 	// Raw is the parameterValue element's content when the value is
-	// structured — a set of GVCIDs, the online/offline CHOICE of a latency
+	// structured. A set of GVCIDs, the online/offline CHOICE of a latency
 	// limit. Decoding it further needs the service's own ASN.1, and this
 	// package does not model those shapes rather than guess at them.
 	Raw []byte
@@ -398,7 +398,7 @@ func DecodeServiceParameter(content []byte, service ServiceKind) (*ServiceParame
 // DecodeParameter decodes this return's positive result against a service's
 // parameter set.
 //
-// It reports false when the return is negative — a provider answering
+// It reports false when the return is negative, a provider answering
 // 'unknown parameter', which the specs define for exactly the case where it
 // does not have the one asked for.
 func (g *GetParameterReturn) DecodeParameter(service ServiceKind) (*ServiceParameter, bool, error) {

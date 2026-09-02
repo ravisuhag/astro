@@ -10,8 +10,8 @@ import "time"
 // package implements the wire format of all of them.
 //
 // What it does not implement is the schedule itself. Clause 6.11 specifies a
-// stateful machine — sub-schedules and groups that can be enabled and
-// disabled, a release window, interlocks between activities — and running it
+// stateful machine (sub-schedules and groups that can be enabled and
+// disabled, a release window, interlocks between activities) and running it
 // is flight software's job, not a codec's. Every consistency check here is one
 // a message can fail on its own.
 //
@@ -144,7 +144,7 @@ func (t TimeWindowType) valid() bool { return t <= WindowTo }
 // mission-declared widths rather than bitfields. Encoding one with the other's
 // codec produces the wrong bytes and no error, so the two are separate types.
 type ScheduleRequestID struct {
-	// SourceID identifies where the request came from — the field ST[01]'s
+	// SourceID identifies where the request came from, the field ST[01]'s
 	// request ID lacks.
 	SourceID uint64
 	// APID is the application process the request was addressed to.

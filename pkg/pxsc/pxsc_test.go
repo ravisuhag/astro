@@ -9,7 +9,7 @@ import (
 )
 
 func TestASMIsThreeOctets(t *testing.T) {
-	// §3.2.3: 24 bits, pattern FAF320. Note this is three octets, not the
+	// Clause 3.2.3: 24 bits, pattern FAF320. Note this is three octets, not the
 	// four that TM and AOS use.
 	asm := pxsc.DefaultASM()
 	if len(asm) != 3 {
@@ -165,14 +165,14 @@ func TestWrapRejectsEmptyFrame(t *testing.T) {
 }
 
 func TestIdlePattern(t *testing.T) {
-	// §3.3.2.2: the PN sequence 352EF853, repeated as needed.
+	// Clause 3.3.2.2: the PN sequence 352EF853, repeated as needed.
 	idle := pxsc.IdleData(12)
 	want := []byte{0x35, 0x2E, 0xF8, 0x53, 0x35, 0x2E, 0xF8, 0x53, 0x35, 0x2E, 0xF8, 0x53}
 	if !bytes.Equal(idle, want) {
 		t.Errorf("idle data = %X, want %X", idle, want)
 	}
 
-	// §3.3.2.4: a partial repetition is fine; it just stops where it stops.
+	// Clause 3.3.2.4: a partial repetition is fine; it just stops where it stops.
 	partial := pxsc.IdleData(6)
 	if !bytes.Equal(partial, want[:6]) {
 		t.Errorf("partial idle = %X, want %X", partial, want[:6])
@@ -187,7 +187,7 @@ func TestIdlePattern(t *testing.T) {
 }
 
 func TestIdleSequencesShareThePattern(t *testing.T) {
-	// §3.3.3.2 and §3.3.5.2.1: the acquisition and tail sequences carry the
+	// Clause 3.3.3.2 and clause 3.3.5.2.1: the acquisition and tail sequences carry the
 	// same data as any other idle. Only when they are sent differs.
 	n := 16
 	if !bytes.Equal(pxsc.AcquisitionSequence(n), pxsc.IdleData(n)) {

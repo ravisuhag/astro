@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// CDS represents a CCSDS Day Segmented Time Code per CCSDS 301.0-B-4 §3.3.
+// CDS represents a CCSDS Day Segmented Time Code per CCSDS 301.0-B-4 clause 3.3.
 //
 // The T-field is segmented into a day count, milliseconds of day, and optional
 // sub-millisecond precision.
@@ -23,7 +23,7 @@ import (
 //	4 bytes: picoseconds within the millisecond (0-999999999)
 //
 // Time scale and leap seconds: CDS conversions are purely arithmetic in both
-// levels — the day count is elapsed 86400-second days since the epoch and no
+// levels. The day count is elapsed 86400-second days since the epoch and no
 // leap-second table is applied. The segmentation cannot represent the
 // inserted leap second itself: milliseconds-of-day is capped at 86399999, so
 // UTC 23:59:60 has no encoding, and on a leap-second day the code is
@@ -184,7 +184,7 @@ func (c *CDS) EncodeTField() ([]byte, error) {
 // DecodeCDS parses a byte slice into a CDS time code (P-field + T-field).
 // If epoch is zero-value, Level 1 (CCSDS epoch) is assumed.
 //
-// The reserved sub-millisecond code '11' (§3.3.2) is rejected with
+// The reserved sub-millisecond code '11' (clause 3.3.2) is rejected with
 // ErrReservedSubmsCode: its T-field length is undefined, so decoding cannot
 // proceed safely.
 func DecodeCDS(data []byte, epoch time.Time) (*CDS, error) {
@@ -202,13 +202,13 @@ func DecodeCDS(data []byte, epoch time.Time) (*CDS, error) {
 		return nil, ErrInvalidTimeCodeID
 	}
 
-	// The CDS P-field is a single octet (§3.3.2): the extension flag is
+	// The CDS P-field is a single octet (clause 3.3.2): the extension flag is
 	// always zero. A set flag would misalign the T-field.
 	if c.PField.Extension {
 		return nil, ErrInvalidPField
 	}
 
-	// Extract format from P-field detail bits (§3.3.2)
+	// Extract format from P-field detail bits (clause 3.3.2)
 	// Bit 4 (Detail bit 3): epoch identification (0=Level 1, 1=Level 2)
 	// Bit 5 (Detail bit 2): day segment length (0=16-bit, 1=24-bit)
 	// Bits 6-7 (Detail bits 1-0): sub-ms precision (00=none, 01=µs, 10=ps, 11=reserved)
@@ -248,8 +248,8 @@ func DecodeCDS(data []byte, epoch time.Time) (*CDS, error) {
 }
 
 // DecodeCDSTField parses a T-field-only (implicit P-field) CDS time code.
-// The format parameters — day segment width (2 or 3), sub-millisecond width
-// (0, 2, or 4) and the epoch — must be supplied by the caller, as they are
+// The format parameters (day segment width (2 or 3), sub-millisecond width
+// (0, 2, or 4) and the epoch) must be supplied by the caller, as they are
 // in contexts like Space Packet secondary headers where no P-field is
 // transmitted.
 //
@@ -405,7 +405,7 @@ func (c *CDS) Humanize() string {
 	return strings.Join(parts, "\n")
 }
 
-// buildPField constructs the P-field from the CDS configuration (§3.3.2).
+// buildPField constructs the P-field from the CDS configuration (clause 3.3.2).
 // Bit 4 = epoch (0=Level 1, 1=Level 2)
 // Bit 5 = day segment length (0=16-bit, 1=24-bit)
 // Bits 6-7 = sub-millisecond resolution

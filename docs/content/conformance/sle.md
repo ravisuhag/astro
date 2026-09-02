@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 170
 ---
 
-## Conformance Statement for `pkg/sle` — CCSDS 913.1-B-2, 911.1-B-5, 911.2-B-4, 911.5-B-4, 912.1-B-5
+## Conformance Statement for `pkg/sle`, CCSDS 913.1-B-2, 911.1-B-5, 911.2-B-4, 911.5-B-4, 912.1-B-5
 
 ---
 
@@ -33,7 +33,7 @@ order: 170
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/sle (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 170
 | Specification | CCSDS 913.1-B-2 (ISP1), 911.1-B-5 (RAF), 911.2-B-4 (RCF), 911.5-B-4 (ROCF), 912.1-B-5 (FCLTU) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Non-supported and partly supported capabilities are identified in
+NOTE, Non-supported and partly supported capabilities are identified in
 section A2.3 with explanations. What the provider does not hold is a service
 agreement, which is mission configuration rather than protocol; that is marked
 on every row it touches.
@@ -62,7 +62,7 @@ on every row it touches.
 | SLE-3 | Heartbeat message | 3.3.2.2.5 | M | Yes | `HeartbeatMessage()`. An empty body is required and enforced. |
 | SLE-4 | SLE PDU message | 3.3.2.2.3 | M | Yes | `MessageSLEPDU` carrying a BER-encoded PDU. |
 | SLE-5 | Heartbeat timing | 3.3.3 | M | Partial | `Association.HeartbeatDue`, `PeerDead` and `NextHeartbeat` report when a heartbeat is owed and when the peer has gone silent. The library runs no timer: the caller acts on the hint. |
-| SLE-6 | Message size limit | — | O | Yes | `DefaultMaxMessageSize` (16 MiB), overridable per read. Not a spec requirement; a bound on hostile length fields. |
+| SLE-6 | Message size limit | - | O | Yes | `DefaultMaxMessageSize` (16 MiB), overridable per read. Not a spec requirement; a bound on hostile length fields. |
 
 ### Table A-2: BER encoding (ITU-T X.690, as SLE uses it)
 
@@ -81,7 +81,7 @@ on every row it touches.
 | SLE-12 | SHA-256 digest | 3.1.2.3 | M | Yes | 32 octets. `DigestSizeSHA256`. Issue 2 replaced SHA-1; this implements Issue 2 only. A 20-octet legacy digest decodes but fails verification, because the superseded SHA-1 scheme is not implemented. |
 | SLE-13 | Credential time window | 3.1.2.2.1 | M | Yes | `AcceptableDelay` on `AssociationConfig`. Zero disables the check. |
 | SLE-14 | Unauthenticated associations | 3.1.2 | O | Yes | Leaving `Password` empty omits credentials. |
-| SLE-15 | Credentials on service PDUs | 3.1.2 | M | Yes | `Association.MakeCredentials` stamps every outgoing PDU. Inbound checking follows `AuthLevel` — none, bind (default), or all — and at 'all' every `HandlePDU` path runs `CheckPeerCredentials`, transfer-buffer entries included. |
+| SLE-15 | Credentials on service PDUs | 3.1.2 | M | Yes | `Association.MakeCredentials` stamps every outgoing PDU. Inbound checking follows `AuthLevel`, none, bind (default), or all, and at 'all' every `HandlePDU` path runs `CheckPeerCredentials`, transfer-buffer entries included. |
 
 ### Table A-4: Association operations (common PDUs module)
 
@@ -157,7 +157,7 @@ on every row it touches.
 | SLE-57 | CLTU-TRANSFER-DATA | 3.6 | M | Yes | `FCLTUTransferDataInvocation`: CLTU id, earliest and latest transmission time, delay, radiation notification request, the CLTU. |
 | SLE-58 | CLTU identification sequence | 3.6.2.5 | M | Yes | `FCLTUUser` keeps the count and advances it as each CLTU is sent, so CLTUs pipeline without waiting for returns (clause 3.1.6). A refusal resynchronises the count from the number the provider quotes. `FCLTUProvider` enforces the rule and quotes the expected number in a refusal. |
 | SLE-59 | Buffer available reporting | 3.6.2 | M | Yes | `CltuBufferAvailable` on every TRANSFER-DATA return. The library reports the figure the caller supplies; it manages no buffer of its own. |
-| SLE-60 | CLTU-ASYNC-NOTIFY | 3.7 | M | Yes | `FCLTUAsyncNotifyInvocation`, all nine notification alternatives, with `CltuLastProcessed` and `CltuLastOk` — whose fields sit directly under the implicit `[1]`, per the IMPLICIT TAGS module. |
+| SLE-60 | CLTU-ASYNC-NOTIFY | 3.7 | M | Yes | `FCLTUAsyncNotifyInvocation`, all nine notification alternatives, with `CltuLastProcessed` and `CltuLastOk`, whose fields sit directly under the implicit `[1]`, per the IMPLICIT TAGS module. |
 | SLE-61 | CLTU-THROW-EVENT | 3.9 | M | Yes | `FCLTUThrowEventInvocation` and its return. `FCLTUUser` numbers each invocation itself (clause 3.9.2.4) and resynchronises from a refusal's echoed identification. The event identifier and qualifier are carried through unread: their meaning is in the service agreement. |
 | SLE-62 | CLTU-STATUS-REPORT | 3.8 | M | Yes | `FCLTUStatusReportInvocation`: CLTUs received, processed and radiated, plus buffer and uplink status. |
 | SLE-63 | FCLTU production status | annex A | M | Yes | `FCLTUProductionStatus`, four values. Deliberately a separate Go type from the return services' three-value `ProductionStatus`: the numbers disagree. |
@@ -189,16 +189,16 @@ on every row it touches.
 
 | Item | Description | What is missing |
 |------|-------------|-----------------|
-| SLE-5, SLE-31 | Heartbeat and return timers | The library runs no clock. It reports when a heartbeat is due, when a peer looks dead and which invocations are outstanding; the caller's loop acts. This is deliberate — see the guide's "No goroutines, no timers". |
+| SLE-5, SLE-31 | Heartbeat and return timers | The library runs no clock. It reports when a heartbeat is due, when a peer looks dead and which invocations are outstanding; the caller's loop acts. This is deliberate, see the guide's "No goroutines, no timers". |
 | SLE-20 | Version negotiation | Version 5 PDU semantics only. The number is carried and checked, but there is no fallback to an earlier version's PDU set. |
-| SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | Complete. All 50 alternatives across the four services are named, `parameterName` is checked against its tag so decoding against the wrong service is caught rather than mis-reported, and values the schema makes a single integer are read. Structured values — sets, nested CHOICEs — are handed back as raw BER rather than as guessed-at Go types. |
+| SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | Complete. All 50 alternatives across the four services are named, `parameterName` is checked against its tag so decoding against the wrong service is caught rather than mis-reported, and values the schema makes a single integer are read. Structured values, sets, nested CHOICEs, are handed back as raw BER rather than as guessed-at Go types. |
 | SLE-66 to SLE-71 | Delivery modes | The mode is configuration and predicates. The buffering the modes imply is in `Production` for the provider side; a user that wants to buffer what it receives does that itself, since only it knows what it is doing with the data. |
-| The provider role, throughout | `ServiceProvider`, `Production`, `Complex` | The association, the states, the data operations, production and the transfer buffer of clause 3.1.9 and annex B, and routing a BIND across several service instances are all here. What is not is a **service agreement**: provision periods, permitted parameter ranges, which initiator may bind to what. Those are a mission's configuration rather than the protocol, so the four agreement-shaped BIND diagnostics — access denied, not accessible to this initiator, invalid time, out of service — are left for a caller to raise. See A2.4 and A2.5. |
+| The provider role, throughout | `ServiceProvider`, `Production`, `Complex` | The association, the states, the data operations, production and the transfer buffer of clause 3.1.9 and annex B, and routing a BIND across several service instances are all here. What is not is a **service agreement**: provision periods, permitted parameter ranges, which initiator may bind to what. Those are a mission's configuration rather than the protocol, so the four agreement-shaped BIND diagnostics, access denied, not accessible to this initiator, invalid time, out of service, are left for a caller to raise. See A2.4 and A2.5. |
 
 ### Fully Supported Mandatory Items
 
 The user role is complete for all four services: BIND, UNBIND, PEER-ABORT,
-START, STOP, SCHEDULE-STATUS-REPORT, and each service's data operations —
+START, STOP, SCHEDULE-STATUS-REPORT, and each service's data operations,
 TRANSFER-DATA and SYNC-NOTIFY and STATUS-REPORT for the return services,
 TRANSFER-DATA and THROW-EVENT and ASYNC-NOTIFY and STATUS-REPORT for FCLTU.
 GET-PARAMETER decodes and answers cleanly, and its per-service parameter
@@ -207,8 +207,8 @@ values read and structured ones left as raw BER.
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| Transport | SLE-1-6 | `tml.go` — framing, context, heartbeat. |
-| Encoding | SLE-7-10 | `ber.go` — the definite-length subset SLE uses. |
+| Transport | SLE-1-6 | `tml.go`, framing, context, heartbeat. |
+| Encoding | SLE-7-10 | `ber.go`, the definite-length subset SLE uses. |
 | Authentication | SLE-11-15 | `credentials.go`, `assoc.go`. |
 | Association | SLE-16-20 | `bind.go`, `assoc.go`. |
 | State machine | SLE-21-31 | `service.go`, shared by all four services. |
@@ -217,8 +217,8 @@ values read and structured ones left as raw BER.
 | ROCF | SLE-49-55 | `rocf.go`. |
 | FCLTU | SLE-56-65 | `fcltu.go`. |
 | Delivery modes | SLE-66-71 | `delivery.go`. |
-| Production | clause 3.1.9.1, annex B | `production.go` — the transfer buffer, the release timer, backpressure, the production status machine. |
-| Service instances | 910.4-B-2 clause 4.4.2 | `complex.go` — the instance set and BIND routing. |
+| Production | clause 3.1.9.1, annex B | `production.go`, the transfer buffer, the release timer, backpressure, the production status machine. |
+| Service instances | 910.4-B-2 clause 4.4.2 | `complex.go`, the instance set and BIND routing. |
 
 ---
 

@@ -8,7 +8,7 @@ import (
 )
 
 func TestStatusReportRoundTrip(t *testing.T) {
-	// §6.1.1: a time field rides only on its matching status flag.
+	// Clause 6.1.1: a time field rides only on its matching status flag.
 	s := &bp.StatusReport{
 		Flags:             bp.StatusReceived | bp.StatusDelivered,
 		Reason:            bp.ReasonNoInformation,
@@ -79,7 +79,7 @@ func TestStatusReportOnlyEncodesFlaggedTimes(t *testing.T) {
 }
 
 func TestStatusReportForFragment(t *testing.T) {
-	// §6.1, figure 9: the fragment flag brings the offset and length fields.
+	// Clause 6.1, figure 9: the fragment flag brings the offset and length fields.
 	s := &bp.StatusReport{
 		Flags:             bp.StatusReceived,
 		IsFragment:        true,
@@ -139,7 +139,7 @@ func TestCustodySignalRoundTrip(t *testing.T) {
 }
 
 func TestAdminRecordTypeAndFlagsNibbles(t *testing.T) {
-	// §6.1: a four-bit type code then four bits of flags.
+	// Clause 6.1: a four-bit type code then four bits of flags.
 	c := &bp.CustodySignal{
 		SignalTime:        bp.DTNTime{Seconds: 1},
 		CreationTimestamp: bp.CreationTimestamp{Time: 1, SequenceNumber: 1},

@@ -91,8 +91,8 @@ func (t TimeFormat) String() string {
 // MissionProfile pins every width that ECSS-E-ST-70-41C leaves to the mission.
 // It is a value type and must not be mutated once codecs are using it.
 //
-// Widths the standard fixes — TC source ID, TM message type counter, TM
-// destination ID, all 16 bits — are deliberately absent. They are constants.
+// Widths the standard fixes (TC source ID, TM message type counter, TM
+// destination ID, all 16 bits) are deliberately absent. They are constants.
 type MissionProfile struct {
 	// TCSpareBytes and TMSpareBytes pad each secondary header out to the
 	// mission's word size. Clauses 7.4.4.1g and 7.4.3.1l make their presence
@@ -138,7 +138,7 @@ type MissionProfile struct {
 	// RelativeTimeCoarseBytes and RelativeTimeFineBytes size a PTC 10
 	// relative time field: the time offsets of ST[11]. Table 7-11's PFC 3 to
 	// 18 allow 1 to 4 coarse octets and 0 to 3 fine, and the split is the
-	// PFC's, not the absolute time field's — a mission may declare a different
+	// PFC's, not the absolute time field's. A mission may declare a different
 	// width for the two. Zero selects 4 coarse and 0 fine, whole seconds,
 	// which is what a schedule shift usually needs.
 	RelativeTimeCoarseBytes int
@@ -307,7 +307,7 @@ func (p MissionProfile) RelativeCoarseSize() int {
 }
 
 // RelativeFineSize returns the fine octets of a relative time field. Zero is
-// a real answer here — whole seconds — so there is no default to substitute.
+// a real answer here (whole seconds) so there is no default to substitute.
 func (p MissionProfile) RelativeFineSize() int { return p.RelativeTimeFineBytes }
 
 // RelativeTimeSize returns the width of a PTC 10 relative time field in
@@ -467,7 +467,7 @@ func orDefault(width, fallback int) int {
 
 // FunctionIDSize returns the width of the ST[08] function ID field in octets:
 // FunctionIDBytes, or 8 when the profile leaves it zero. Eight is this
-// package's choice, not the standard's — figure 8-87 gives the field no width.
+// package's choice, not the standard's, figure 8-87 gives the field no width.
 func (p MissionProfile) FunctionIDSize() int {
 	if p.FunctionIDBytes == 0 {
 		return 8
@@ -537,7 +537,7 @@ func (p MissionProfile) TMHeaderSize() int {
 // Both header sizes must be at least 1 octet and no more than 63. Only the
 // lower bound comes from a standard: CCSDS 133.0-B-2 4.1.4.2.1.3 requires the
 // Packet Secondary Header to be a whole number of octets, and pkg/spp refuses
-// a zero-length one. The Blue Book sets no upper limit at all — the data field
+// a zero-length one. The Blue Book sets no upper limit at all. The data field
 // maximum is the only ceiling it gives. The 63-octet cap here is this
 // package's own sanity bound on a mission profile: a PUS secondary header of
 // that width already carries an 8-octet time code and 50-odd octets of spare,
@@ -654,7 +654,7 @@ func readUint(data []byte, width int) (uint64, error) {
 //
 // The count is untrusted input, so it is checked before anything is allocated:
 // a count the remaining octets cannot satisfy is refused, and a non-zero count
-// over a zero-width element is refused outright — otherwise a hostile count
+// over a zero-width element is refused outright, otherwise a hostile count
 // would drive an unbounded allocation that consumes no input at all.
 func readUintList(data []byte, countWidth, elemWidth int) ([]uint64, int, error) {
 	count, err := readUint(data, countWidth)

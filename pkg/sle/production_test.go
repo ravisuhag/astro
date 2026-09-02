@@ -40,7 +40,7 @@ func running(t *testing.T, size int, latency time.Duration) *sle.Production {
 	return production
 }
 
-// §B2.3: production starts halted, because it is not yet configured for the
+// Clause B2.3: production starts halted, because it is not yet configured for the
 // service instance. Starting it running would tell a user the channel was
 // live before anyone had pointed the antenna.
 func TestProductionStartsHalted(t *testing.T) {
@@ -126,7 +126,7 @@ func TestProductionNonTransitionYieldsNoNotification(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.7a: the buffer is released when it is full.
+// Clause 3.1.9.1.7a: the buffer is released when it is full.
 func TestBufferDueWhenFull(t *testing.T) {
 	production := running(t, 3, 0)
 
@@ -157,7 +157,7 @@ func TestBufferDueWhenFull(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.8: the records come out in the order they went in.
+// Clause 3.1.9.1.8: the records come out in the order they went in.
 func TestBufferPreservesOrder(t *testing.T) {
 	production := running(t, 4, 0)
 
@@ -187,7 +187,7 @@ func TestBufferPreservesOrder(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.4: the release timer starts when a record enters an *empty*
+// Clause 3.1.9.1.4: the release timer starts when a record enters an *empty*
 // buffer, so it measures how long the oldest record has waited. Restarting it
 // on every insert would hold data indefinitely on a busy channel.
 func TestReleaseTimerStartsOnEmptyBufferOnly(t *testing.T) {
@@ -220,7 +220,7 @@ func TestReleaseTimerStartsOnEmptyBufferOnly(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.7b: the timer expiring releases the buffer even when it is far
+// Clause 3.1.9.1.7b: the timer expiring releases the buffer even when it is far
 // from full.
 func TestBufferDueWhenTimerExpires(t *testing.T) {
 	production := running(t, 100, time.Second)
@@ -253,7 +253,7 @@ func TestEmptyBufferIsNeverDue(t *testing.T) {
 }
 
 // A configuration with no latency limit runs no timer, which is the offline
-// and complete-online case: §3.1.9.1 requires the timer only for timely
+// and complete-online case: Clause 3.1.9.1 requires the timer only for timely
 // online delivery, though the buffer is used in every mode.
 func TestNoLatencyLimitMeansNoTimer(t *testing.T) {
 	production := running(t, 4, 0)
@@ -272,7 +272,7 @@ func TestNoLatencyLimitMeansNoTimer(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.7c: an 'end of data' record releases the buffer at once, whether
+// Clause 3.1.9.1.7c: an 'end of data' record releases the buffer at once, whether
 // or not it is full.
 func TestEndOfDataReleasesImmediately(t *testing.T) {
 	production := running(t, 100, time.Hour)
@@ -303,7 +303,7 @@ func TestEndOfDataReleasesImmediately(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.9: on backpressure the whole buffer goes, not the one record that
+// Clause 3.1.9.1.9: on backpressure the whole buffer goes, not the one record that
 // would not fit, and a backlog notification takes its place.
 func TestBackpressureDiscardsTheWholeBuffer(t *testing.T) {
 	production := running(t, 10, time.Second)
@@ -337,7 +337,7 @@ func TestBackpressureDiscardsTheWholeBuffer(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.9 also restarts the release timer, measured from the moment of the
+// Clause 3.1.9.1.9 also restarts the release timer, measured from the moment of the
 // backpressure rather than from the discarded buffer's first record.
 func TestBackpressureRestartsTheReleaseTimer(t *testing.T) {
 	production := running(t, 10, 100*time.Millisecond)
@@ -354,11 +354,11 @@ func TestBackpressureRestartsTheReleaseTimer(t *testing.T) {
 		t.Fatal("the release timer is not running after backpressure")
 	}
 	if want := at.Add(100 * time.Millisecond); !deadline.Equal(want) {
-		t.Errorf("deadline = %s, want %s — the timer restarts from the backpressure", deadline, want)
+		t.Errorf("deadline = %s, want %s. The timer restarts from the backpressure", deadline, want)
 	}
 }
 
-// §3.1.9.1.10: while the backlog notification waits, the buffer's size is one
+// Clause 3.1.9.1.10: while the backlog notification waits, the buffer's size is one
 // larger. The NOTE says why: without it, a channel configured with a buffer
 // size of one would carry nothing but backlog notifications.
 func TestBackpressureIncrementsBufferSize(t *testing.T) {
@@ -382,7 +382,7 @@ func TestBackpressureIncrementsBufferSize(t *testing.T) {
 	production.Backpressure(epoch)
 
 	if got := production.Capacity(); got != 2 {
-		t.Errorf("capacity = %d after backpressure, want 2 — §3.1.9.1.10 increments it", got)
+		t.Errorf("capacity = %d after backpressure, want 2, clause 3.1.9.1.10 increments it", got)
 	}
 
 	due, err = production.Insert(frame("two"), epoch)
@@ -401,14 +401,14 @@ func TestBackpressureIncrementsBufferSize(t *testing.T) {
 		t.Error("the released buffer is not the notification followed by the frame")
 	}
 
-	// §3.1.9.1.10: the increment lasts until the contents are passed on.
+	// Clause 3.1.9.1.10: the increment lasts until the contents are passed on.
 	if got := production.Capacity(); got != 1 {
 		t.Errorf("capacity = %d after release, want the configured 1 back", got)
 	}
 }
 
 // A second backpressure before the next release does not stack the
-// increment: §3.1.9.1.10 makes it one, singular.
+// increment: Clause 3.1.9.1.10 makes it one, singular.
 func TestBackpressureIncrementDoesNotStack(t *testing.T) {
 	production := running(t, 2, 0)
 
@@ -420,7 +420,7 @@ func TestBackpressureIncrementDoesNotStack(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.11: an accepted STOP builds and passes the buffer at once, so a
+// Clause 3.1.9.1.11: an accepted STOP builds and passes the buffer at once, so a
 // user that stops a service gets what production had already recovered.
 func TestStopReleasesImmediately(t *testing.T) {
 	production := running(t, 100, time.Hour)
@@ -440,7 +440,7 @@ func TestStopReleasesImmediately(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.12: an aborted association has nowhere to deliver to, so the
+// Clause 3.1.9.1.12: an aborted association has nowhere to deliver to, so the
 // buffer is cleared rather than held for a connection that is not coming
 // back.
 func TestAbortClearsWithoutDelivering(t *testing.T) {
@@ -463,7 +463,7 @@ func TestAbortClearsWithoutDelivering(t *testing.T) {
 
 	released, _ := production.Counters()
 	if released != 0 {
-		t.Errorf("released count = %d, want 0 — an abort delivers nothing", released)
+		t.Errorf("released count = %d, want 0, an abort delivers nothing", released)
 	}
 }
 
@@ -489,7 +489,7 @@ func TestFramesRefusedUnlessRunning(t *testing.T) {
 }
 
 // Notifications are accepted whatever production is doing, because they are
-// how a user learns production stopped. §3.1.9.1.3 needs a status-change
+// how a user learns production stopped. Clause 3.1.9.1.3 needs a status-change
 // notification to sit in sequence between the frames before the event and
 // those after, which only works if it goes through the same buffer.
 func TestNotificationsAcceptedInEveryState(t *testing.T) {
@@ -516,7 +516,7 @@ func TestNotificationsAcceptedInEveryState(t *testing.T) {
 }
 
 // A status change lands between the frames before it and those after, which
-// is what §3.1.9.1.3 requires and the reason it is not sent out of band.
+// is what clause 3.1.9.1.3 requires and the reason it is not sent out of band.
 func TestStatusChangeSitsInSequence(t *testing.T) {
 	production := running(t, 100, 0)
 

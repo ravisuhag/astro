@@ -2,13 +2,13 @@ package pxdl
 
 import "fmt"
 
-// Packet segmentation, per CCSDS 211.0-B-6 §3.2.3.3.
+// Packet segmentation, per CCSDS 211.0-B-6 clause 3.2.3.3.
 //
 // A packet too big for one frame is cut into segments, each behind a one-octet
 // segment header. The header says where the segment sits in the packet and
 // carries a pseudo packet ID tying the pieces together.
 
-// SegmentHeaderSize is the width of a segment header in octets (§3.2.3.3.1).
+// SegmentHeaderSize is the width of a segment header in octets (clause 3.2.3.3.1).
 const SegmentHeaderSize = 1
 
 // SequenceFlags say where a segment sits relative to its packet, per table 3-4.
@@ -39,7 +39,7 @@ func (s SequenceFlags) String() string {
 	}
 }
 
-// SegmentHeader is the one-octet header of a segment data unit (§3.2.3.3.2).
+// SegmentHeader is the one-octet header of a segment data unit (clause 3.2.3.3.2).
 //
 //	bits 0-1: sequence flags
 //	bits 2-7: pseudo packet identifier
@@ -107,10 +107,10 @@ func DecodeSegment(data []byte) (*Segment, error) {
 	return s, nil
 }
 
-// RoutingID identifies the stream a segment belongs to, per §1.5.1.2: the
+// RoutingID identifies the stream a segment belongs to, per clause 1.5.1.2: the
 // physical channel, the port, and the pseudo packet ID together.
 //
-// §3.2.3.3.2 c) requires all segments of one packet to travel with the same
+// Clause 3.2.3.3.2 c) requires all segments of one packet to travel with the same
 // PCID and Port ID, which is what makes this triple sufficient.
 type RoutingID struct {
 	PCID           uint8
@@ -131,12 +131,12 @@ func (r RoutingID) String() string {
 const DefaultMaxPacketSize = 64 << 10
 
 // Reassembler rebuilds packets from the segments arriving on a link, per
-// §3.2.3.3.3.
+// Clause 3.2.3.3.3.
 //
 // Segments of different packets interleave freely as long as they differ in
 // PCID or Port ID, so the reassembler keeps one buffer per routing ID.
 //
-// §3.2.3.3.4 is strict: only complete packets are delivered. A stream that
+// Clause 3.2.3.3.4 is strict: only complete packets are delivered. A stream that
 // starts mid-packet, or grows past the limit, is discarded rather than
 // half-delivered.
 //
@@ -186,7 +186,7 @@ func (r *Reassembler) Accept(pcid, portID uint8, seg *Segment) ([]byte, error) {
 		return out, nil
 
 	case SegmentFirst:
-		// §3.2.3.3.5 b): a new first segment abandons whatever came before.
+		// Clause 3.2.3.3.5 b): a new first segment abandons whatever came before.
 		buf := make([]byte, len(seg.Data))
 		copy(buf, seg.Data)
 		if len(buf) > r.maxSize() {
@@ -199,7 +199,7 @@ func (r *Reassembler) Accept(pcid, portID uint8, seg *Segment) ([]byte, error) {
 	case SegmentContinuing, SegmentLast:
 		buf, started := r.partial[id]
 		if !started {
-			// §3.2.3.3.5 b): the first segment for a routing ID must be a
+			// Clause 3.2.3.3.5 b): the first segment for a routing ID must be a
 			// start segment. Discard rather than guess.
 			return nil, ErrSegmentOutOfOrder
 		}

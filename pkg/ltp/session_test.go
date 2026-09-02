@@ -276,7 +276,7 @@ func TestReceiverReportsGapsAfterLoss(t *testing.T) {
 }
 
 func TestMiscoloredBlockCancelled(t *testing.T) {
-	// §3.2.4: green data below a red offset is MISCOLORED.
+	// Clause 3.2.4: green data below a red offset is MISCOLORED.
 	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
 		SessionID: testSession(), FirstReportSerial: 1,
 	})
@@ -357,7 +357,7 @@ func TestSenderCancel(t *testing.T) {
 }
 
 func TestReceiverAcknowledgesCancel(t *testing.T) {
-	// §3.2.5: a cancel is acknowledged.
+	// Clause 3.2.5: a cancel is acknowledged.
 	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
 		SessionID: testSession(), FirstReportSerial: 1,
 	})
@@ -412,7 +412,7 @@ func TestSessionsIgnoreOtherSessionsTraffic(t *testing.T) {
 }
 
 func TestSerialNumbersMustNotBeZero(t *testing.T) {
-	// §3.2.1 and §3.2.2 both forbid zero, and this package refuses rather
+	// Clause 3.2.1 and clause 3.2.2 both forbid zero, and this package refuses rather
 	// than inventing randomness of its own.
 	if _, err := ltp.NewSender(nil, ltp.SenderConfig{FirstCheckpointSerial: 0}); !errors.Is(err, ltp.ErrInvalidSerialNumber) {
 		t.Errorf("sender: error = %v, want ErrInvalidSerialNumber", err)
@@ -453,8 +453,8 @@ func TestResendCheckpointRequeuesGaps(t *testing.T) {
 }
 
 func TestFinalReportIsAcknowledged(t *testing.T) {
-	// LTP-1, §6.13/§6.14: the report that completes the red part closes the
-	// session, but its acknowledgment must still go out — a conformant peer
+	// LTP-1, clause 6.13/clause 6.14: the report that completes the red part closes the
+	// session, but its acknowledgment must still go out. A conformant peer
 	// retransmits that report forever without it.
 	block := testBlock(100)
 	sender, err := ltp.NewSender(block, ltp.SenderConfig{
@@ -503,10 +503,10 @@ func TestFinalReportIsAcknowledged(t *testing.T) {
 }
 
 func TestInteriorGapRetransmissionEndsWithCheckpoint(t *testing.T) {
-	// LTP-2, §6.9: the last segment of a retransmission cycle is a checkpoint
-	// wherever it sits — an interior gap must not leave the sender wedged in
+	// LTP-2, clause 6.9: the last segment of a retransmission cycle is a checkpoint
+	// wherever it sits. An interior gap must not leave the sender wedged in
 	// StateWaitingReport with nothing prompting the next report.
-	// LTP-3, §3.2.1: that checkpoint carries the prompting report's serial.
+	// LTP-3, clause 3.2.1: that checkpoint carries the prompting report's serial.
 	block := testBlock(300)
 	sender, err := ltp.NewSender(block, ltp.SenderConfig{
 		SessionID:             testSession(),
@@ -565,7 +565,7 @@ func TestInteriorGapRetransmissionEndsWithCheckpoint(t *testing.T) {
 }
 
 func TestSenderAcknowledgesCancelFromReceiver(t *testing.T) {
-	// LTP-4, §6.17: a cancel from the receiver is acknowledged, or the
+	// LTP-4, clause 6.17: a cancel from the receiver is acknowledged, or the
 	// receiver's cancel timer retransmits it forever.
 	block := testBlock(100)
 	sender, err := ltp.NewSender(block, ltp.SenderConfig{
@@ -606,7 +606,7 @@ func TestSenderAcknowledgesCancelFromReceiver(t *testing.T) {
 }
 
 func TestRetransmittedCheckpointGetsSameReport(t *testing.T) {
-	// LTP-6, §6.11: a checkpoint the receiver has already answered is
+	// LTP-6, clause 6.11: a checkpoint the receiver has already answered is
 	// answered with the same report, not a fresh serial.
 	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
 		SessionID: testSession(), FirstReportSerial: 9,
@@ -644,7 +644,7 @@ func TestRetransmittedCheckpointGetsSameReport(t *testing.T) {
 }
 
 func TestReceiverClosureGatedOnReportAck(t *testing.T) {
-	// LTP-8, §6.11/§6.16: the receiver keeps the session open until its
+	// LTP-8, clause 6.11/clause 6.16: the receiver keeps the session open until its
 	// report is acknowledged, then closes. A green EOB closes an all-green
 	// session directly.
 	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
@@ -679,7 +679,7 @@ func TestReceiverClosureGatedOnReportAck(t *testing.T) {
 }
 
 func TestAllGreenSessionClosesOnGreenEOB(t *testing.T) {
-	// LTP-8, §6.16: an all-green session involves no reports, so the green
+	// LTP-8, clause 6.16: an all-green session involves no reports, so the green
 	// EOB is its only close signal.
 	receiver, err := ltp.NewReceiver(ltp.ReceiverConfig{
 		SessionID: testSession(), FirstReportSerial: 1,

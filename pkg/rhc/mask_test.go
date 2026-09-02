@@ -10,7 +10,7 @@ import (
 // loss, the decompressor's mask equals the compressor's after every cycle.
 //
 // It is worth checking separately from the round trip because a mask can drift
-// for a long time before it changes any reconstructed byte — the drift only
+// for a long time before it changes any reconstructed byte. The drift only
 // shows when a position it got wrong finally changes. This catches it at the
 // cycle it happens.
 func TestMaskTracksWithoutLoss(t *testing.T) {
@@ -49,7 +49,7 @@ func TestMaskTracksWithoutLoss(t *testing.T) {
 	}
 }
 
-// TestMaskUpdateEquations walks the equations of §4.2 by hand on a tiny
+// TestMaskUpdateEquations walks the equations of clause 4.2 by hand on a tiny
 // stream, so a failure names the equation rather than the stream.
 //
 // F = 8, M_0 = 0, no new mask flag. Inputs chosen so each step changes a
@@ -92,7 +92,7 @@ func TestMaskUpdateEquations(t *testing.T) {
 
 // TestNewMaskFlagReturnsPositionsToPredictable pins equations 6 and 7: the
 // mask only ever grows until the new mask flag fires, and then it is replaced
-// by the build — which holds only what changed since the last time it fired.
+// by the build, which holds only what changed since the last time it fired.
 func TestNewMaskFlagReturnsPositionsToPredictable(t *testing.T) {
 	config := rhc.Config{VectorLength: 8, Robustness: 0}
 	compressor, err := rhc.NewCompressor(config)
@@ -123,8 +123,8 @@ func TestNewMaskFlagReturnsPositionsToPredictable(t *testing.T) {
 	}
 
 	// Now the build is empty. Hold steady so it stays empty, then ask again:
-	// this time the mask really does clear. §2.1 describes the two-step
-	// nature of it — positions move to predictable "only on the cycle when
+	// this time the mask really does clear. Clause 2.1 describes the two-step
+	// nature of it, positions move to predictable "only on the cycle when
 	// the new mask is requested", and only if they have been quiet since the
 	// previous request.
 	for range 2 {
@@ -142,7 +142,7 @@ func TestNewMaskFlagReturnsPositionsToPredictable(t *testing.T) {
 	}
 }
 
-// TestVectorOperations pins the notation of §1.6.1, whose examples are given
+// TestVectorOperations pins the notation of clause 1.6.1, whose examples are given
 // in the text: for a = '10111', a<< = '01110', ~a = '01000', <a> = '11101'.
 func TestVectorOperations(t *testing.T) {
 	a := rhc.VectorFromString("10111")
@@ -161,11 +161,11 @@ func TestVectorOperations(t *testing.T) {
 	}
 }
 
-// TestBitExtraction pins §5.2.4: BE(a, b) is the bits of a at the positions
+// TestBitExtraction pins clause 5.2.4: BE(a, b) is the bits of a at the positions
 // where b has a one, emitted last selected position first. Equation 11 writes
 // BE(a, b) = ȧ_{g(H-1)} || ... || ȧ_{g0} with g_0 the first '1' of b from the
 // MSB, and equation 1's a« example fixes that the first term of such a
-// concatenation is the first transmitted bit — so the forward scan comes out
+// concatenation is the first transmitted bit, so the forward scan comes out
 // reversed.
 //
 // Here b selects a's first two positions, holding '1' then '0'; BE emits the

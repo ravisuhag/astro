@@ -1,7 +1,7 @@
 ---
 title: XTCE
 short: XTCE
-description: XML Telemetric and Command Exchange (XTCE 1.2) — reading the mission database that says what the octets mean.
+description: XML Telemetric and Command Exchange (XTCE 1.2), reading the mission database that says what the octets mean.
 order: 80
 ---
 
@@ -13,7 +13,7 @@ Every other package in this library moves bytes. This one moves none.
 
 A telemetry frame arrives and `pkg/tmdl` takes it apart. Inside is a packet,
 and `pkg/spp` takes that apart too. What comes out is a run of octets that
-means something — a bus voltage, a thruster state, a clock reading — and
+means something (a bus voltage, a thruster state, a clock reading) and
 nothing in the frame says which. That knowledge lives in the mission database,
 and XTCE is the format missions write it in.
 
@@ -31,13 +31,13 @@ and XTCE is the format missions write it in.
 ```
 
 XTCE is an XML schema published by the OMG. Ground systems exchange these
-files routinely — NASA, ESA, Yamcs and the commercial operators all read and
-write them — so being able to load one is what connects this library's
+files routinely (NASA, ESA, Yamcs and the commercial operators all read and
+write them) so being able to load one is what connects this library's
 decoders to a real mission.
 
 ## Scope
 
-**Implemented** — four things:
+**Implemented.** Four things:
 
 | | |
 |---|---|
@@ -50,7 +50,7 @@ There is no `Encode`. Writing XTCE back out is a decision made against, not an
 omission: this package reads databases, and databases are written by editors.
 A writer would mean committing to a round-trip fidelity nothing here needs.
 
-**Not modeled** — algorithms, alarms, streams, command semantics, and a few
+**Not modeled**: algorithms, alarms, streams, command semantics, and a few
 parameter types. The reasoning and the full list are in
 [what is deliberately not modeled](#what-is-deliberately-not-modeled) below,
 and the element-by-element detail is in the
@@ -74,11 +74,11 @@ the path down to it.
 
 Under each system sit three sets that matter:
 
-- **ParameterTypeSet** — the types. A type says what a value *is* and how it is
+- **ParameterTypeSet**: the types. A type says what a value *is* and how it is
   written on the wire.
-- **ParameterSet** — the parameters. A parameter is little more than a name and
+- **ParameterSet**: the parameters. A parameter is little more than a name and
   a pointer to its type.
-- **ContainerSet** — the containers. A container is a packet layout: an ordered
+- **ContainerSet**: the containers. A container is a packet layout: an ordered
   list of entries naming parameters.
 
 ### Types and encodings are two different things
@@ -122,7 +122,7 @@ appear in is the order they appear in the packet:
 </SequenceContainer>
 ```
 
-Go's `encoding/xml` cannot keep that order across separate struct fields — give
+Go's `encoding/xml` cannot keep that order across separate struct fields, give
 it one slice per element name and the interleaving is lost. So `EntryList`
 decodes itself, and every entry lands in one ordered `[]Entry`. It is the only
 hand-written unmarshaller in the package, and this is why.
@@ -133,13 +133,13 @@ XTCE has hundreds of elements. This package covers the ones needed to describe
 a packet layout and read it. The full list is in
 [the coverage matrix](/conformance/xtce); the short version:
 
-- **Algorithms** of every kind — math-operation calibrators, input and output
+- **Algorithms** of every kind, math-operation calibrators, input and output
   algorithms. Evaluating an expression tree is a different job.
-- **Alarms** — parsed as far as the schema allows, not modeled.
+- **Alarms**: parsed as far as the schema allows, not modeled.
 - **Streams**, **messages**, **services**.
-- **Command semantics** — verifiers, transmission constraints, significance.
+- **Command semantics**: verifiers, transmission constraints, significance.
   Commands are a skeleton: names and argument types.
-- **Array, aggregate and relative-time parameter types** — kept as named
+- **Array, aggregate and relative-time parameter types**: kept as named
   opaque entries, so references to them resolve and `TypeKind()` says what was
   found, but their contents stay raw and `Layout` refuses parameters of these
   types.
@@ -160,7 +160,7 @@ conformance. It covers the five faults that make a database unusable:
 2. a container inheriting in a circle
 3. two things sharing a name in one SpaceSystem
 4. a malformed reference
-5. an encoding attribute — `encoding`, `bitOrder`, `byteOrder` — that is not
+5. an encoding attribute (`encoding`, `bitOrder`, `byteOrder`) that is not
    one of the schema's enumeration members
 
 A file that breaks the schema some other way will load and pass. If you need
@@ -185,7 +185,7 @@ What remains is plain resource abuse, and two limits cover it:
   tree would mean the recursion had already happened.
 
 `Validate` is also written to stay linear in the number of containers. It did
-not start that way — the first version re-walked the tree to find each base
+not start that way, the first version re-walked the tree to find each base
 container's home, which made it cubic, and an 80 KB file took 200 ms. Since the
 size cap allows files hundreds of times larger, that was a way to hang a
 process with a document. `TestValidateScalesLinearly` guards the fix.
@@ -204,7 +204,7 @@ fmt.Println(db.Humanize())
 ```
 
 Load and Validate are separate, and that matters. Load says the file is
-well-formed XTCE. Validate says it is coherent — every reference resolves,
+well-formed XTCE. Validate says it is coherent, every reference resolves,
 nothing inherits in a circle, no two things share a name, every encoding
 attribute is a legal enumeration member. A database being edited usually has
 references that do not resolve yet, and a loader that refused to read those
@@ -213,7 +213,7 @@ would be useless during authoring.
 Load's errors say which of three things went wrong: `ErrMalformedXML` for
 broken XML, `ErrNotSpaceSystem` for a document whose root is not an XTCE 1.2
 SpaceSystem, and `ErrInvalidValue` for a real database with one unreadable
-value in it — a `FixedValue` that is not a number, say. Fixed integers accept
+value in it. A `FixedValue` that is not a number, say. Fixed integers accept
 every spelling the schema's `FixedIntegerValueType` allows: decimal, `0x` hex,
 `0o` octal and `0b` binary.
 
@@ -244,14 +244,14 @@ XTCE names things by path, and the paths behave the way file paths do:
 | relative | `../Power/BusVoltage` | from the referencing system |
 | bare | `BusVoltage` | here, then each ancestor up to the root |
 
-The bare form has the wrinkle. It is not just "in this SpaceSystem" — the
+The bare form has the wrinkle. It is not just "in this SpaceSystem". The
 search continues up the tree, which is what lets a mission define a type once
 near the root and use it everywhere below. A path never searches upwards: it
 says exactly where to look, so a miss is a miss.
 
 Absolute references have a wrinkle of their own: files in the wild spell them
-two ways. The schema's example writes the root system's name out —
-`/Spacecraft/Power/BusVoltage` — but some tools treat `/` as already being the
+two ways. The schema's example writes the root system's name out (
+`/Spacecraft/Power/BusVoltage`) but some tools treat `/` as already being the
 root, so the first segment names one of its children:
 `/Power/BusVoltage` for the same parameter. This package accepts both. When
 the first segment matches the root's name it is read as the spelled-out form
@@ -269,7 +269,7 @@ Two entry points, and the difference is worth knowing:
 ## Worked example: the CCSDS primary header
 
 `testdata/ccsds-header.xml` describes the six-octet Space Packet primary header
-that `pkg/spp` implements — seven fields, 3 + 1 + 1 + 11 + 2 + 14 + 16 = 48
+that `pkg/spp` implements, seven fields, 3 + 1 + 1 + 11 + 2 + 14 + 16 = 48
 bits. Loading and printing it gives:
 
 ```
@@ -291,7 +291,7 @@ SpaceSystem /CCSDS
 ```
 
 The container is marked abstract, because a primary header is never a packet on
-its own — real packet types extend it through `BaseContainer`.
+its own, real packet types extend it through `BaseContainer`.
 
 ## Extracting packets
 
@@ -317,7 +317,7 @@ degrees, ok := temp.Float()
 
 Every value comes with both readings:
 
-- `Raw` is what the packet carried — a `uint64`, `int64`, `float64`, `string`
+- `Raw` is what the packet carried, a `uint64`, `int64`, `float64`, `string`
   or `[]byte`, depending on the encoding.
 - `Engineering` is what an operator should see: the calibrated number, the
   enumeration's label, the boolean's word.
@@ -361,7 +361,7 @@ extracted.
 
 **Comparisons run against the engineering value by default.** The schema's
 `useCalibratedValue` defaults to `true`, so a comparison on an enumerated
-parameter is against its label — `value="SCIENCE"`, not `value="1"`. Set the
+parameter is against its label, `value="SCIENCE"`, not `value="1"`. Set the
 attribute to `false` for the raw number.
 
 Comparison values follow the schema's spelling: base ten unless the text starts
@@ -375,8 +375,8 @@ depend on the packet:
 
 | Refused by `Layout` | Resolved by `ResolveLayout` |
 |---|---|
-| delimited or dynamically sized fields | yes — the packet states the width |
-| `RepeatEntry` with a dynamic count | yes — the packet states the count |
+| delimited or dynamically sized fields | yes, the packet states the width |
+| `RepeatEntry` with a dynamic count | yes, the packet states the count |
 | an entry positioned by a `DynamicValue` | yes |
 | `referenceLocation="containerEnd"` | yes, against the packet length |
 
@@ -395,7 +395,7 @@ These stay refused on both paths:
 
 `Match` refuses a `CustomAlgorithm` in the criteria, and a `Comparison` or
 `Condition` with a non-zero `instance`, rather than quietly reading them as
-false — a criterion silently treated as false misroutes packets. An algorithm
+false, a criterion silently treated as false misroutes packets. An algorithm
 is not in the file, and a non-zero instance is a value from another packet,
 which one packet cannot answer.
 
@@ -442,9 +442,9 @@ power of zero, and an absent threshold means any change is significant.
 
 ## Reference
 
-- [XTCE 1.2](https://www.omg.org/spec/XTCE/) — the OMG specification and its
+- [XTCE 1.2](https://www.omg.org/spec/XTCE/), the OMG specification and its
   XSD. The target namespace is `http://www.omg.org/spec/XTCE/20180204`; the
   date is the schema's publication, not a version of its own.
-- [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) — the Green Book
+- [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf), the Green Book
   guide. Informational, and the clearest explanation of the semantics.
 - [CLI](/cli/xtce) | [Conformance](/conformance/xtce) | [The stack](/docs/start/concepts)

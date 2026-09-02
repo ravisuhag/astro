@@ -1,9 +1,9 @@
 package ocsc
 
 // Slice cuts a stream of Sync-Marked Transfer Frames into information blocks
-// of k binary digits, per CCSDS 142.0-B-1 §3.4.
+// of k binary digits, per CCSDS 142.0-B-1 clause 3.4.
 //
-// §3.4.2.1.1: at transmission closure the output is zero-filled with the
+// Clause 3.4.2.1.1: at transmission closure the output is zero-filled with the
 // minimum number of zeros needed to make its length a multiple of k. So the
 // final block is always full, padded if it has to be.
 //
@@ -25,7 +25,7 @@ func Slice(smtfs *BitString, rate CodeRate) ([]*BitString, error) {
 		return nil, nil
 	}
 
-	// §3.4.2.1.1: round up to a whole number of blocks.
+	// Clause 3.4.2.1.1: round up to a whole number of blocks.
 	blocks := (smtfs.Len() + k - 1) / k
 
 	out := make([]*BitString, 0, blocks)

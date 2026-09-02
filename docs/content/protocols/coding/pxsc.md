@@ -1,7 +1,7 @@
 ---
 title: Proximity-1 Coding and Sync
 short: PXSC
-description: Proximity-1 Coding and Synchronization (CCSDS 211.2-B-3) — framing, CRC, and convolutional coding for the proximity link.
+description: Proximity-1 Coding and Synchronization (CCSDS 211.2-B-3), framing, CRC, and convolutional coding for the proximity link.
 order: 32
 ---
 
@@ -26,7 +26,7 @@ differences follow from the link being short and bursty:
 | Marker | 4-octet ASM | 2-octet start sequence | 3-octet ASM |
 | Error control | Reed-Solomon | BCH(63,56) | CRC-32, detect only |
 | Unit length | Fixed | Fixed blocks | Variable |
-| Between units | Continuous | — | Idle PN pattern |
+| Between units | Continuous | - | Idle PN pattern |
 
 A Proximity-1 stream is not continuous. PLTUs of different lengths arrive in
 bursts with gaps between them, and the receiver re-acquires for each one.
@@ -41,7 +41,7 @@ bursts with gaps between them, and the receiver re-acquires for each one.
   pseudo-randomizer of clause 3.4.5, which applies only when LDPC is used.
 - **Reed-Solomon**, which some transceivers add but clause 3.4.1 notes is not part of
   the CCSDS Proximity-1 standards and is not intended for cross support.
-- **CLI subcommands** — a follow-up once the API settles.
+- **CLI subcommands**: a follow-up once the API settles.
 
 ## The CRC-32 is not the one you expect
 
@@ -61,7 +61,7 @@ which is **0x00A00805**. That is neither of the CRC-32s you have met before:
 | CRC-32C | 0x1EDC6F41 | `pkg/crc.ComputeCRC32`, USLP FECF |
 | **Proximity-1** | **0x00A00805** | here |
 
-Two more details. The shift register **starts at zero**, not all-ones — the
+Two more details. The shift register **starts at zero**, not all-ones. The
 spec flags this itself, noting it "differs from that performed for the 16-bit
 CRC described in other CCSDS books". And there is no final inversion.
 
@@ -121,7 +121,7 @@ pxsc.TailSequence(n)
 ## Receiving: the synchronizer
 
 Finding PLTUs in a stream is not parsing, it is hunting. Units are
-variable-length, separated by idle runs, and the marker is only 24 bits — a
+variable-length, separated by idle runs, and the marker is only 24 bits, a
 random match turns up roughly every 16 million octets.
 
 So the CRC does the real work of telling a PLTU from a coincidence:
@@ -139,8 +139,8 @@ for _, pltu := range s.Scan(stream) {
 ```
 
 At each marker the synchronizer first reads the Length field of the Version-3
-frame header that should follow — that is how the clause 3.6 receiver delimits a
-PLTU — and checks the CRC at exactly that length. Only if the header's claim
+frame header that should follow (that is how the clause 3.6 receiver delimits a
+PLTU) and checks the CRC at exactly that length. Only if the header's claim
 does not verify does it fall back to trying frame lengths from the minimum
 upward and taking the first whose CRC verifies. A marker with no verifying
 length at all is a false match: it steps one octet past and keeps hunting, so
@@ -169,13 +169,13 @@ Two things to know.
 
 **The G2 output is inverted** (clause 3.4.3.1 note 1). Connection vectors are
 G1 = 171 octal and G2 = 133 octal, with the second path complemented. The
-encoder realizes the standard CCSDS 171/133 code — the same convention as
-libfec and gr-satellites — and known-answer tests pin it there, because the
+encoder realizes the standard CCSDS 171/133 code (the same convention as
+libfec and gr-satellites) and known-answer tests pin it there, because the
 mirror-image (reciprocal) code passes every round-trip test while being
 undecodable by real receivers.
 
 **The encoder state carries across calls.** clause 3.4.3.2 encodes everything
-transmitted as one continuous stream — PLTUs and idle data alike — so the shift
+transmitted as one continuous stream (PLTUs and idle data alike) so the shift
 register must not reset at unit boundaries. Reuse one `ConvolutionalEncoder`
 for the whole stream; `Reset()` is there if you genuinely need to start over.
 
@@ -234,6 +234,6 @@ full-confidence decision, which is the best it can do from octets alone.
 
 ## Reference
 
-- [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) — Coding and Synchronization Sublayer
-- [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) — Data Link Layer, for the transfer frame
+- [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf), Coding and Synchronization Sublayer
+- [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf), Data Link Layer, for the transfer frame
 - [CLI](/cli/pxsc) | [Conformance](/conformance/pxsc) | [The stack](/docs/start/concepts)

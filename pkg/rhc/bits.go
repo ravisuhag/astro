@@ -3,7 +3,7 @@ package rhc
 // Bit-level packing.
 //
 // Every output of CCSDS 124.0-B-1 is a variable-length binary vector, and
-// nothing in it is octet aligned. §1.6.1 fixes the order: "The first bit in
+// nothing in it is octet aligned. Clause 1.6.1 fixes the order: "The first bit in
 // the vector to be transmitted (i.e., the most left justified when drawing a
 // figure) is defined to be 'bit N-1'", and for an unsigned value the most
 // significant bit is bit N-1. So writing is MSB first.
@@ -75,7 +75,7 @@ func (w *BitWriter) BitLen() int { return len(w.data)*8 + int(w.used) }
 
 // Bytes returns the written bits, padding the last octet with zeros.
 //
-// The padding is this package's, not the standard's: §2.2 says framing an
+// The padding is this package's, not the standard's: Clause 2.2 says framing an
 // output vector is mission specific, and an octet slice is the framing this
 // API offers. The true length is BitLen.
 func (w *BitWriter) Bytes() []byte {

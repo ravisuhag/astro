@@ -8,7 +8,7 @@ import (
 
 // The association state machine.
 //
-// An SLE association runs over one TCP connection (CCSDS 913.1-B-2 §3.3.1) and
+// An SLE association runs over one TCP connection (CCSDS 913.1-B-2 clause 3.3.1) and
 // moves through a small sequence of states: a context message opens it, a BIND
 // exchange establishes it, PDUs flow, and an UNBIND or a PEER-ABORT ends it.
 //
@@ -71,7 +71,7 @@ func (r Role) String() string {
 }
 
 // AuthenticationLevel says which inbound PDUs must carry verified
-// credentials. CCSDS 913.1-B-2 §3.1 names the three levels a service
+// credentials. CCSDS 913.1-B-2 clause 3.1 names the three levels a service
 // agreement can pick.
 type AuthenticationLevel int
 
@@ -111,7 +111,7 @@ type AssociationConfig struct {
 	PeerIdentifier string
 
 	// HeartbeatInterval is how many seconds between heartbeats. Zero disables
-	// the heartbeat (§3.3.3).
+	// the heartbeat (clause 3.3.3).
 	HeartbeatInterval uint16
 	// DeadFactor is how many intervals of silence mean the peer has gone.
 	DeadFactor uint16
@@ -130,7 +130,7 @@ type AssociationConfig struct {
 	AuthLevel AuthenticationLevel
 
 	// AcceptableDelay is how far a peer's credential time may be from now
-	// before it is rejected (§3.1.2.2.1). Zero disables the check.
+	// before it is rejected (clause 3.1.2.2.1). Zero disables the check.
 	AcceptableDelay time.Duration
 }
 
@@ -189,7 +189,7 @@ func (a *Association) Bound() bool {
 
 // ContextMessage builds the TML context message that opens the connection.
 //
-// §3.3.2.2 makes this the first message on a connection, before any SLE PDU.
+// Clause 3.3.2.2 makes this the first message on a connection, before any SLE PDU.
 func (a *Association) ContextMessage(now time.Time) *Message {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -208,8 +208,8 @@ func (a *Association) ContextMessage(now time.Time) *Message {
 // The peer's heartbeat interval and dead factor govern what this end must
 // send and how long it waits, so they replace the configured values.
 //
-// §3.3.2.2 makes the context message the initiator's — the SLE user sends
-// it, the provider receives it — so a user rejects an inbound one. The
+// Clause 3.3.2.2 makes the context message the initiator's (the SLE user sends
+// it, the provider receives it) so a user rejects an inbound one. The
 // parameters are range-checked: a nonzero heartbeat interval with a zero
 // dead factor could never declare the peer dead.
 func (a *Association) HandleContextMessage(body []byte, now time.Time) error {
@@ -467,9 +467,9 @@ func (a *Association) HandleUnbindReturn(u *UnbindReturn, now time.Time) error {
 
 // Abort ends the association abruptly, returning the PEER-ABORT to send.
 //
-// ISP1 maps PEER-ABORT onto the transport twice over (CCSDS 913.1-B-2 §3.4):
-// the diagnostic goes out as one octet of TCP urgent data — take it from
-// PeerAbort.UrgentData and write it with MSG_OOB — and then the connection
+// ISP1 maps PEER-ABORT onto the transport twice over (CCSDS 913.1-B-2 clause 3.4):
+// the diagnostic goes out as one octet of TCP urgent data (take it from
+// PeerAbort.UrgentData and write it with MSG_OOB) and then the connection
 // closes. This package owns no socket, so both are the caller's to do after
 // sending the PDU this returns.
 func (a *Association) Abort(diagnostic PeerAbortDiagnostic, now time.Time) *PeerAbort {
@@ -494,7 +494,7 @@ func (a *Association) HandlePeerAbort(p *PeerAbort, now time.Time) {
 }
 
 // HandleUrgentData processes a peer abort that arrived as TCP urgent data:
-// the single diagnostic octet of CCSDS 913.1-B-2 §3.4. A caller reading its
+// the single diagnostic octet of CCSDS 913.1-B-2 clause 3.4. A caller reading its
 // socket out of band hands the octet here and gets the decoded abort back;
 // the association closes just as it does for the in-band PDU.
 func (a *Association) HandleUrgentData(octet byte, now time.Time) *PeerAbort {
@@ -512,7 +512,7 @@ func (a *Association) AbortDiagnostic() *PeerAbortDiagnostic {
 
 // RecordSent notes that something went out, which resets the heartbeat timer.
 //
-// §3.3.3: a heartbeat is only needed on an idle connection, so any traffic
+// Clause 3.3.3: a heartbeat is only needed on an idle connection, so any traffic
 // serves the same purpose.
 func (a *Association) RecordSent(now time.Time) {
 	a.mu.Lock()
@@ -557,7 +557,7 @@ func (a *Association) HeartbeatDue(now time.Time) bool {
 // PeerDead reports whether the peer has been silent for longer than the
 // heartbeat interval times the dead factor.
 //
-// §3.3.3 makes this the signal to abort the association.
+// Clause 3.3.3 makes this the signal to abort the association.
 func (a *Association) PeerDead(now time.Time) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -624,8 +624,8 @@ func (a *Association) MakeCredentials(now time.Time, randomNumber int32) (*Crede
 //
 // The service machines call it from every HandlePDU path. It returns nil
 // unless the association's authentication level is 'all' and a peer password
-// is on file — the two lower levels leave service PDUs unchecked, per the
-// levels of CCSDS 913.1-B-2 §3.1. When it does check, missing credentials
+// is on file. The two lower levels leave service PDUs unchecked, per the
+// levels of CCSDS 913.1-B-2 clause 3.1. When it does check, missing credentials
 // are as bad as wrong ones: an association configured for authentication
 // must not accept a PDU that simply left the field out.
 func (a *Association) CheckPeerCredentials(c *Credentials, now time.Time) error {

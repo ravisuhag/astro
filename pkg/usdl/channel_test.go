@@ -127,7 +127,7 @@ func TestFrameGapDetector(t *testing.T) {
 	}
 }
 
-// §4.1.2.12.4-12.5: sequence-controlled and expedited frames keep
+// Clause 4.1.2.12.4-12.5: sequence-controlled and expedited frames keep
 // independent counts per VC, so mixed traffic must not read as a gap.
 func TestFrameGapDetector_PerQoSCounts(t *testing.T) {
 	det := usdl.NewFrameGapDetector(2)

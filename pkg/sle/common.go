@@ -329,7 +329,7 @@ func (g GVCID) String() string {
 // SEQUENCE of CCSDS 911.2-B-4 annex A.
 //
 // Note USLP is 12, not 4. The value is the four-bit Transfer Frame Version
-// Number as it appears on the wire — '1100' binary — rather than the "Version
+// Number as it appears on the wire ('1100' binary) rather than the "Version
 // 4" the protocol is called.
 const (
 	// FrameVersionTM is a TM Transfer Frame, called Version 1.
@@ -475,8 +475,8 @@ type LockStatusReport struct {
 // SyncNotifyInvocation is the sync notification a return service sends: the
 // provider telling the user something happened to the channel.
 //
-// RAF, RCF and ROCF each define this SEQUENCE in their own ASN.1 module —
-// RafSyncNotifyInvocation, RcfSyncNotifyInvocation, RocfSyncNotifyInvocation —
+// RAF, RCF and ROCF each define this SEQUENCE in their own ASN.1 module (
+// RafSyncNotifyInvocation, RcfSyncNotifyInvocation, RocfSyncNotifyInvocation)
 // and all three are the same two fields wrapping the same Notification
 // CHOICE. One Go type covers all three.
 type SyncNotifyInvocation struct {
@@ -502,7 +502,7 @@ func (n *SyncNotifyInvocation) Encode() ([]byte, error) {
 		}
 		// lossFrameSync [0] IMPLICIT LockStatusReport: the module is
 		// DEFINITIONS IMPLICIT TAGS, so [0] replaces the report's SEQUENCE
-		// tag and the fields sit directly under it — no inner SEQUENCE.
+		// tag and the fields sit directly under it, no inner SEQUENCE.
 		var report []byte
 		report = AppendTimeChoice(report, n.LockStatus.Time)
 		report = AppendInteger(report, int64(n.LockStatus.CarrierLockStatus))

@@ -28,7 +28,7 @@ routine  ──► VC1 ──┘                       │
                    (rides home on TM)
 ```
 
-Two virtual channels, both using Type-A frames — sequence controlled, so anything lost gets sent again.
+Two virtual channels, both using Type-A frames, sequence controlled, so anything lost gets sent again.
 
 ## Ground side setup
 
@@ -42,7 +42,7 @@ gsVcCrit := tcdl.NewVirtualChannel(vcidCritical, 32)
 gsVcRout := tcdl.NewVirtualChannel(vcidRoutine, 32)
 ```
 
-That is not an inconsistency. TC has no master channel frame count — reliability is per virtual channel, handled by COP-1, so each VC sequences independently.
+That is not an inconsistency. TC has no master channel frame count, reliability is per virtual channel, handled by COP-1, so each VC sequences independently.
 
 Then a MAP Packet service per channel:
 
@@ -64,7 +64,7 @@ fopCrit.Initialize(0)
 
 ## Sending a command
 
-Build a telecommand packet — note `NewTCPacket`, not `NewTMPacket`:
+Build a telecommand packet, note `NewTCPacket`, not `NewTMPacket`:
 
 ```go
 payload := append([]byte{cmd.Opcode}, cmd.Payload...)
@@ -100,7 +100,7 @@ for gsVcCrit.Len() > 0 {
 }
 ```
 
-Passing `nil` for the start and tail sequences uses the standard ones. The `true` turns on randomization — and note that the [TC randomizer is not the TM randomizer](/protocols/coding/tcsc#gotchas).
+Passing `nil` for the start and tail sequences uses the standard ones. The `true` turns on randomization, and note that the [TC randomizer is not the TM randomizer](/protocols/coding/tcsc#gotchas).
 
 `TransmitFrame` returns `ErrFOPWindowFull` when too many frames are outstanding. That is the window doing its job: stop sending until something is acknowledged.
 
@@ -112,7 +112,7 @@ Unwrap the CLTU, decode the frame, and let FARM-1 decide:
 frameBytes, corrected, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
 ```
 
-FARM-1 compares the frame's N(S) against the V(R) it expects. In sequence — accept and increment. Ahead — discard and ask for a resend. Behind but within the window — a duplicate, discard silently. Way off — lockout.
+FARM-1 compares the frame's N(S) against the V(R) it expects. In sequence, accept and increment. Ahead, discard and ask for a resend. Behind but within the window, a duplicate, discard silently. Way off, lockout.
 
 Whatever it decides, it reports through a CLCW.
 
@@ -162,6 +162,6 @@ FOP-1 after CLCW processing:
 
 ## Next
 
-- [Handle a lossy link](/docs/guides/lossy-link) — the downlink under real loss
-- [COP-1 protocol page](/protocols/data-link/cop) — both state machines in full
+- [Handle a lossy link](/docs/guides/lossy-link), the downlink under real loss
+- [COP-1 protocol page](/protocols/data-link/cop), both state machines in full
 - [TC](/protocols/data-link/tcdl) | [TCSC](/protocols/coding/tcsc)

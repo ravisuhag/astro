@@ -616,7 +616,7 @@ func TestValidateMismatchedLength(t *testing.T) {
 			PVN:            epp.PVN,
 			ProtocolID:     epp.ProtocolIDIPE,
 			LengthOfLength: epp.LoL1Octet,
-			PacketLength:   100, // wrong — doesn't match data
+			PacketLength:   100, // wrong, doesn't match data
 		},
 		Data: []byte{0x01, 0x02},
 	}
@@ -626,7 +626,7 @@ func TestValidateMismatchedLength(t *testing.T) {
 }
 
 func TestDecodeExtraTrailingData(t *testing.T) {
-	// Valid packet followed by extra bytes — Decode should only consume the packet
+	// Valid packet followed by extra bytes, Decode should only consume the packet
 	pkt, _ := epp.NewIPEPacket([]byte{0x01, 0x02})
 	encoded, _ := pkt.Encode()
 

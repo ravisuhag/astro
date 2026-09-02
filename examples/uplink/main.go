@@ -2,24 +2,24 @@
 //
 // This example demonstrates a complete CCSDS telecommand (TC) uplink chain:
 //
-//   Ground Station Side:
-//     1. Create telecommand Space Packets (SPP)
-//     2. Frame packets into TC Transfer Frames (TCDL) via MAP Packet Service
-//     3. Manage reliable delivery with FOP-1 sliding window (COP-1)
-//     4. Wrap frames as CLTUs with BCH(63,56) error coding (TCSC)
-//     5. Transmit CLTUs over a simulated RF uplink
+//	Ground Station Side:
+//	  1. Create telecommand Space Packets (SPP)
+//	  2. Frame packets into TC Transfer Frames (TCDL) via MAP Packet Service
+//	  3. Manage reliable delivery with FOP-1 sliding window (COP-1)
+//	  4. Wrap frames as CLTUs with BCH(63,56) error coding (TCSC)
+//	  5. Transmit CLTUs over a simulated RF uplink
 //
-//   Spacecraft Side:
-//     1. Receive CLTUs from the RF uplink
-//     2. Unwrap CLTUs: BCH decode with single-bit error correction
-//     3. Decode TC Transfer Frames and verify CRC
-//     4. Validate frame sequence with FARM-1 (COP-1)
-//     5. Extract telecommand Space Packets from accepted frames
-//     6. Send CLCW status back to ground via the TM return link
+//	Spacecraft Side:
+//	  1. Receive CLTUs from the RF uplink
+//	  2. Unwrap CLTUs: BCH decode with single-bit error correction
+//	  3. Decode TC Transfer Frames and verify CRC
+//	  4. Validate frame sequence with FARM-1 (COP-1)
+//	  5. Extract telecommand Space Packets from accepted frames
+//	  6. Send CLCW status back to ground via the TM return link
 //
 // The ground station sends commands on two virtual channels:
-//   - VC0: Critical operations (mode change, safe mode) — Type-A reliable delivery
-//   - VC1: Routine housekeeping requests — Type-A reliable delivery
+//   - VC0: Critical operations (mode change, safe mode), Type-A reliable delivery
+//   - VC1: Routine housekeeping requests, Type-A reliable delivery
 //
 // Run with: go run ./examples/uplink/
 package main
@@ -35,13 +35,13 @@ import (
 )
 
 const (
-	spacecraftID = 42    // 10-bit Spacecraft Identifier
-	apidCritical = 100   // APID for critical operations commands
-	apidRoutine  = 200   // APID for routine housekeeping requests
-	vcidCritical = 0     // Virtual Channel for critical commands
-	vcidRoutine  = 1     // Virtual Channel for routine commands
-	mapID        = 0     // MAP ID (single MAP per VC in this example)
-	copWindow    = 10    // COP-1 sliding window width
+	spacecraftID = 42  // 10-bit Spacecraft Identifier
+	apidCritical = 100 // APID for critical operations commands
+	apidRoutine  = 200 // APID for routine housekeeping requests
+	vcidCritical = 0   // Virtual Channel for critical commands
+	vcidRoutine  = 1   // Virtual Channel for routine commands
+	mapID        = 0   // MAP ID (single MAP per VC in this example)
+	copWindow    = 10  // COP-1 sliding window width
 )
 
 // command represents a spacecraft telecommand.
@@ -214,7 +214,7 @@ func main() {
 			log.Fatalf("Failed to wrap CLTU: %v", err)
 		}
 
-		fmt.Printf("  CLTU %d: VC%d frame (%d bytes) → CLTU (%d bytes), N(S)=%d\n",
+		fmt.Printf("  CLTU %d: VC%d frame (%d bytes) -> CLTU (%d bytes), N(S)=%d\n",
 			cltuCount, vcidCritical, len(encoded), len(cltu), frame.Header.FrameSequenceNum)
 		uplink.transmit(cltu)
 		cltuCount++
@@ -241,7 +241,7 @@ func main() {
 			log.Fatalf("Failed to wrap CLTU: %v", err)
 		}
 
-		fmt.Printf("  CLTU %d: VC%d frame (%d bytes) → CLTU (%d bytes), N(S)=%d\n",
+		fmt.Printf("  CLTU %d: VC%d frame (%d bytes) -> CLTU (%d bytes), N(S)=%d\n",
 			cltuCount, vcidRoutine, len(encoded), len(cltu), frame.Header.FrameSequenceNum)
 		uplink.transmit(cltu)
 		cltuCount++
@@ -289,7 +289,7 @@ func main() {
 			break
 		}
 
-		// Step 1: Unwrap CLTU — BCH decode with error correction.
+		// Step 1: Unwrap CLTU, BCH decode with error correction.
 		frameData, corrections, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
 		if err != nil {
 			fmt.Printf("  [CLTU FAIL] BCH decode error: %v\n", err)
@@ -331,7 +331,7 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("  [ACCEPTED] VC%d N(S)=%d — FARM V(R) now %d\n",
+		fmt.Printf("  [ACCEPTED] VC%d N(S)=%d, FARM V(R) now %d\n",
 			frame.Header.VirtualChannelID, frame.Header.FrameSequenceNum, farm.VR())
 		acceptedFrames++
 

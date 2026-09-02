@@ -8,11 +8,11 @@ var (
 	ErrDataTooShort = errors.New("data too short for the PLTU field being read")
 
 	// ErrInvalidASM indicates the Attached Sync Marker is not the FAF320 of
-	// CCSDS 211.2-B-3 §3.2.3.2.
+	// CCSDS 211.2-B-3 clause 3.2.3.2.
 	ErrInvalidASM = errors.New("invalid attached sync marker: expected FAF320")
 
 	// ErrCRCMismatch indicates the attached CRC-32 did not verify, so the
-	// PLTU must be discarded per §3.6.
+	// PLTU must be discarded per clause 3.6.
 	ErrCRCMismatch = errors.New("CRC-32 mismatch: the PLTU is corrupt")
 
 	// ErrFrameTooLarge indicates a transfer frame beyond the configured

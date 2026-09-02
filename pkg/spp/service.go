@@ -70,7 +70,7 @@ type ServiceConfig struct {
 	// APIDs overrides the receive-side handling per APID. CCSDS 133.0-B-2
 	// manages the Packet Secondary Header Contents per APID and managed data
 	// path (table 5-1), so two APIDs on the same transport may carry
-	// different secondary header formats — and, since the error control
+	// different secondary header formats, and, since the error control
 	// field is likewise a per-data-path convention, one APID may carry a
 	// trailing CRC while another does not.
 	//
@@ -83,7 +83,7 @@ type ServiceConfig struct {
 
 // APIDConfig is the receive-side handling for one APID, overriding the
 // service-wide ServiceConfig fields of the same names. The zero value means
-// "no secondary header decoder, no error control" for that APID — an entry is
+// "no secondary header decoder, no error control" for that APID. An entry is
 // a complete replacement, not a partial override.
 type APIDConfig struct {
 	// NewSecondaryHeader builds a fresh secondary header for each received
@@ -141,7 +141,7 @@ func (s *Service) receiveConfigFor(apid uint16) (func() SecondaryHeader, bool) {
 
 // QoS is the QoS Requirement parameter of the PACKET.request primitive
 // (CCSDS 133.0-B-2 3.3.2.4). It selects a quality-of-service level when an
-// underlying subnetwork offers more than one — for example Type-A
+// underlying subnetwork offers more than one, for example Type-A
 // (sequence-controlled) versus Type-B (expedited) service on a Telecommand
 // space data link. What each value means belongs to the transport, since the
 // standard leaves the levels themselves to the underlying subnetworks.
@@ -181,7 +181,7 @@ func WithQoS(qos QoS) PacketSendOption {
 // the service resynchronizes its own counter for the APID to one past it.
 // 4.1.3.4.3.4 requires the count to be continuous modulo 16384; if the counter
 // kept its old value, an APID that sent one such packet would emit a jump out
-// and a jump back — 0, 1, 2, 1234, 3, 4 — and a receiver would read that as
+// and a jump back (0, 1, 2, 1234, 3, 4) and a receiver would read that as
 // two losses. Two kinds of packet own their count:
 //
 //   - one built with WithSequenceCount, where the caller said which count to
@@ -479,7 +479,7 @@ func WithSendSecondaryHeader(sh SecondaryHeader) SendOption {
 // octet string it is handing over, and the Packet Assembly Function sets the
 // Secondary Header Flag to match (3.4.2.3.3, 4.2.2.3). Nothing in this layer
 // has to interpret the octets, so no SecondaryHeader implementation is needed
-// — which is what lets a user who holds a pre-formatted data field send it.
+// , which is what lets a user who holds a pre-formatted data field send it.
 func WithSendSecondaryHeaderIndicator(present bool) SendOption {
 	return func(cfg *sendConfig) { cfg.shIndicator = present }
 }
@@ -587,8 +587,8 @@ type Indication struct {
 
 	// SecondaryHeader is the parsed secondary header, when the service had a
 	// ServiceConfig.NewSecondaryHeader factory and the flag was set. It is nil
-	// otherwise. This is a convenience beyond the primitive of 3.4.3.3.2 —
-	// the octets themselves are always at the front of Data.
+	// otherwise. This is a convenience beyond the primitive of 3.4.3.3.2.
+	// The octets themselves are always at the front of Data.
 	SecondaryHeader SecondaryHeader
 
 	// DataLoss is the Data Loss Indicator (3.4.2.4): true when the Packet

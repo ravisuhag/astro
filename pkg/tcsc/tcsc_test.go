@@ -119,7 +119,7 @@ func TestWrapUnwrapCLTU_WithPadding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Result includes padding — first 5 bytes should match.
+	// Result includes padding, first 5 bytes should match.
 	if !bytes.Equal(got[:len(frameData)], frameData) {
 		t.Errorf("data prefix: got %x, want %x", got[:len(frameData)], frameData)
 	}
@@ -414,13 +414,13 @@ func TestWrapCLTU_StartSequencePresent(t *testing.T) {
 }
 
 func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
-	// TC does not share the TM randomizer. CCSDS 231.0-B-4 §6.2 specifies
+	// TC does not share the TM randomizer. CCSDS 231.0-B-4 clause 6.2 specifies
 	// h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1 with the register preset to
 	// all ones, and prints the first 40 digits of the sequence:
 	//
 	//   1111 1111 0011 1001 1001 1110 0101 1010 0110 1000
 	//
-	// The TM sequence of CCSDS 131.0-B-5 §10.4.2 opens FF 48 0E C0 9A
+	// The TM sequence of CCSDS 131.0-B-5 clause 10.4.2 opens FF 48 0E C0 9A
 	// instead. This package shipped that one for a while, and nothing caught
 	// it: a randomize-then-derandomize round trip cannot, because XOR is
 	// self-inverse whatever the sequence. Only the published digits can.
@@ -438,8 +438,8 @@ func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
 // whole in the codeblock, right after the 2-octet start sequence EB 90.
 //
 // The expected octets are 01..07 XOR the first seven octets of the
-// CCSDS 231.0-B-4 §6.2 sequence, FF 39 9E 5A 68 E9 06. Under the TM
-// randomizer this test would read FE 4A 0D C4 9F 0B 77 — self-consistent,
+// CCSDS 231.0-B-4 clause 6.2 sequence, FF 39 9E 5A 68 E9 06. Under the TM
+// randomizer this test would read FE 4A 0D C4 9F 0B 77, self-consistent,
 // round-trippable, and unreadable on the far end.
 func TestWrapCLTU_RandomizedOctetsOnTheWire(t *testing.T) {
 	frameData := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}

@@ -407,7 +407,7 @@ func printTMInspect(f *tmdl.TMTransferFrame, raw []byte) {
 
 // tmProtocol describes TM Transfer Frames to the receive loop.
 //
-// Both counts are eight bits (CCSDS 132.0-B-3 §4.1.2.3 and §4.1.2.4) and TM
+// Both counts are eight bits (CCSDS 132.0-B-3 clause 4.1.2.3 and clause 4.1.2.4) and TM
 // has no count cycle, so the cycle mask is zero. The masks match the ones
 // tmdl's own FrameGapDetector uses.
 func tmProtocol() frameProtocol {

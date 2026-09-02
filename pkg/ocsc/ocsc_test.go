@@ -9,7 +9,7 @@ import (
 )
 
 func TestPNSequenceMatchesTheSpecVector(t *testing.T) {
-	// §3.5.2.1 note publishes the first 40 digits:
+	// Clause 3.5.2.1 note publishes the first 40 digits:
 	// 1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
 	want := []uint8{
 		1, 1, 1, 1, 1, 1, 1, 1,
@@ -28,7 +28,7 @@ func TestPNSequenceMatchesTheSpecVector(t *testing.T) {
 }
 
 func TestPNSequencePeriod(t *testing.T) {
-	// §3.5.3.1: the sequence repeats after 255 digits.
+	// Clause 3.5.3.1: the sequence repeats after 255 digits.
 	for i := 0; i < 100; i++ {
 		if ocsc.PNBit(i) != ocsc.PNBit(i+ocsc.PNPeriod) {
 			t.Fatalf("digit %d differs from digit %d; the period is not %d",
@@ -52,7 +52,7 @@ func TestRandomizeIsItsOwnInverse(t *testing.T) {
 }
 
 func TestRandomizeRestartsPerBlock(t *testing.T) {
-	// §3.5.3.1: the sequence begins at the first digit of each block, so two
+	// Clause 3.5.3.1: the sequence begins at the first digit of each block, so two
 	// identical blocks randomize identically.
 	a := ocsc.BitStringFromBytes([]byte("same contents"))
 	b := ocsc.BitStringFromBytes([]byte("same contents"))
@@ -63,7 +63,7 @@ func TestRandomizeRestartsPerBlock(t *testing.T) {
 }
 
 func TestBlockSizeArithmetic(t *testing.T) {
-	// Table 3-1, and §3.6.1.1 plus §3.7: k-hat is k + 32 + 2.
+	// Table 3-1, and clause 3.6.1.1 plus clause 3.7: k-hat is k + 32 + 2.
 	tests := []struct {
 		rate CodeRate
 		k    int
@@ -102,7 +102,7 @@ func TestBlockSizesAreNotByteAligned(t *testing.T) {
 }
 
 func TestCRC32PolynomialIsTheOpticalOne(t *testing.T) {
-	// §3.6.2.2: h(X) = X^32 + X^29 + X^18 + X^14 + X^3 + 1.
+	// Clause 3.6.2.2: h(X) = X^32 + X^29 + X^18 + X^14 + X^3 + 1.
 	// This is the fourth distinct CRC-32 in this library. None is
 	// interchangeable with another.
 	if ocsc.CRC32Polynomial != 0x20044009 {
@@ -172,7 +172,7 @@ func TestCRCDetectsSingleBitErrors(t *testing.T) {
 }
 
 func TestASMAttachAndStrip(t *testing.T) {
-	// §3.3.2: the marker is 1ACFFC1D, the same one TM uses for a CADU.
+	// Clause 3.3.2: the marker is 1ACFFC1D, the same one TM uses for a CADU.
 	if !bytes.Equal(ocsc.DefaultASM(), []byte{0x1A, 0xCF, 0xFC, 0x1D}) {
 		t.Errorf("ASM = %X, want 1ACFFC1D", ocsc.DefaultASM())
 	}
@@ -208,7 +208,7 @@ func TestStripASMRejectsBadMarker(t *testing.T) {
 }
 
 func TestSlicerZeroFills(t *testing.T) {
-	// §3.4.2.1.1: the output is zero-filled to a multiple of k.
+	// Clause 3.4.2.1.1: the output is zero-filled to a multiple of k.
 	rate := ocsc.RateOneThird
 	k := rate.InformationBlockSize()
 
@@ -246,7 +246,7 @@ func TestSlicerRejectsInvalidRate(t *testing.T) {
 }
 
 func TestTerminationBits(t *testing.T) {
-	// §3.7: two zeros.
+	// Clause 3.7: two zeros.
 	block := ocsc.BitStringFromBytes([]byte{0xFF, 0xFF})
 
 	terminated := ocsc.AttachTermination(block)
@@ -337,7 +337,7 @@ func TestFullConditioningChain(t *testing.T) {
 }
 
 func TestRecoverReportsCorruptBlocks(t *testing.T) {
-	// §3.14.2: frames from an incorrectly decoded codeword are marked invalid
+	// Clause 3.14.2: frames from an incorrectly decoded codeword are marked invalid
 	// rather than silently dropped.
 	frames := [][]byte{[]byte("a frame that will be damaged in transit")}
 
@@ -363,12 +363,12 @@ func TestRecoverReportsCorruptBlocks(t *testing.T) {
 }
 
 func TestRecoverMarksOnlyTouchedFramesInvalid(t *testing.T) {
-	// §3.14.2: a frame is invalid exactly when it is recovered from one or
+	// Clause 3.14.2: a frame is invalid exactly when it is recovered from one or
 	// more incorrectly decoded blocks. At rate 1/3 (k = 5006), two 700-octet
 	// frames condition into three blocks:
 	//
-	//	frame 0 (SMTF bits     0..5632)  → blocks 0 and 1
-	//	frame 1 (SMTF bits 5632..11264)  → blocks 1 and 2
+	//	frame 0 (SMTF bits     0..5632)  -> blocks 0 and 1
+	//	frame 1 (SMTF bits 5632..11264)  -> blocks 1 and 2
 	const frameLength = 700
 	frames := [][]byte{
 		bytes.Repeat([]byte{0xA5}, frameLength),
@@ -417,11 +417,11 @@ func TestRecoverMarksOnlyTouchedFramesInvalid(t *testing.T) {
 }
 
 func TestRecoverSequenceIndicator(t *testing.T) {
-	// §3.15: the Sequence Indicator is zero when a transfer frame is the
+	// Clause 3.15: the Sequence Indicator is zero when a transfer frame is the
 	// direct successor of the previous one, one when a gap has been detected.
 	//
-	// Build the marked stream by hand — frame A, then garbage where a frame
-	// was lost, then frame C — and condition it block by block, so every CRC
+	// Build the marked stream by hand (frame A, then garbage where a frame
+	// was lost, then frame C) and condition it block by block, so every CRC
 	// verifies and the only anomaly is the gap.
 	const frameLength = 24
 	rate := ocsc.RateOneThird
@@ -479,7 +479,7 @@ func TestRecoverSequenceIndicator(t *testing.T) {
 }
 
 func TestRecoverLockedSyncIgnoresASMInFrameData(t *testing.T) {
-	// §3.14.1: once a frame is found, the next marker is expected right
+	// Clause 3.14.1: once a frame is found, the next marker is expected right
 	// after it. Frame data that happens to contain the marker pattern must
 	// not produce spurious frames.
 	const frameLength = 24
@@ -516,8 +516,8 @@ func TestRecoverLockedSyncIgnoresASMInFrameData(t *testing.T) {
 }
 
 func TestConditionerStreamsWithoutMidStreamFill(t *testing.T) {
-	// §3.2 NOTE: encoding may be streaming. Pushing frames one at a time and
-	// closing must produce exactly the blocks the batch call produces —
+	// Clause 3.2 NOTE: encoding may be streaming. Pushing frames one at a time and
+	// closing must produce exactly the blocks the batch call produces,
 	// which proves no fill was inserted between pushes.
 	const frameLength = 24
 	frames := [][]byte{
@@ -583,7 +583,7 @@ func TestConditionerRefusesUseAfterClose(t *testing.T) {
 }
 
 func TestFrameLengthBoundEnforced(t *testing.T) {
-	// §5.2, table 5-1: the transfer frame length managed parameter is an
+	// Clause 5.2, table 5-1: the transfer frame length managed parameter is an
 	// integer of at most 65536 octets.
 	tooLong := make([]byte, ocsc.MaxFrameLength+1)
 

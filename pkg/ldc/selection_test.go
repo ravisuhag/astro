@@ -6,7 +6,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/ldc"
 )
 
-// TestNoCompressionWinsOnIncompressibleData checks the arithmetic of §3.7.3 on
+// TestNoCompressionWinsOnIncompressibleData checks the arithmetic of clause 3.7.3 on
 // a block chosen so the answer can be worked out by hand.
 //
 // Eight 8-bit samples with no preprocessor, all at 255. The options cost:
@@ -52,7 +52,7 @@ func TestNoCompressionWinsOnIncompressibleData(t *testing.T) {
 //	k=1              3 + 8*1 + 8  = 19 bits
 //	second extension 4 + 4*(gamma(1,1)+1) = 4 + 4*5 = 24 bits
 //
-// FS and k=1 tie at 19. §3.7.4c breaks the tie towards the smaller k, so FS
+// FS and k=1 tie at 19. Clause 3.7.4c breaks the tie towards the smaller k, so FS
 // wins.
 func TestFSWinsAndTieBreaksToSmallestK(t *testing.T) {
 	p := ldc.Params{
@@ -74,7 +74,7 @@ func TestFSWinsAndTieBreaksToSmallestK(t *testing.T) {
 		t.Fatalf("chose %v, want a split-sample option", infos[0].Option)
 	}
 	if infos[0].K != 0 {
-		t.Errorf("chose k=%d; §3.7.4c breaks a tie towards the smallest k, so k=0", infos[0].K)
+		t.Errorf("chose k=%d; clause 3.7.4c breaks a tie towards the smallest k, so k=0", infos[0].K)
 	}
 	if infos[0].Bits != 19 {
 		t.Errorf("coded data set is %d bits, want 19 (3 identifier + 16 FS)", infos[0].Bits)
@@ -113,7 +113,7 @@ func TestSecondExtensionNotChosenWhenFSIsShorter(t *testing.T) {
 	}
 }
 
-// TestZeroBlockAlwaysWins pins §3.7.2: an all-zero block takes the zero-block
+// TestZeroBlockAlwaysWins pins clause 3.7.2: an all-zero block takes the zero-block
 // option whatever else would cost, and one coded data set covers the whole
 // run.
 func TestZeroBlockAlwaysWins(t *testing.T) {
@@ -152,7 +152,7 @@ func TestZeroBlockAlwaysWins(t *testing.T) {
 }
 
 // TestRemainderOfSegmentIsUsed exercises the codeword displaced between four
-// and five in table 3-2. A segment is 64 blocks (§3.5.2), so a reference
+// and five in table 3-2. A segment is 64 blocks (clause 3.5.2), so a reference
 // interval of at least 64 blocks of zeros reaches the end of one.
 func TestRemainderOfSegmentIsUsed(t *testing.T) {
 	p := ldc.Params{
@@ -237,7 +237,7 @@ func TestZeroRunStopsAtSixtyThree(t *testing.T) {
 	}
 }
 
-// TestZeroRunDoesNotCrossAReferenceInterval checks §3.5.2's other boundary: a
+// TestZeroRunDoesNotCrossAReferenceInterval checks clause 3.5.2's other boundary: a
 // run is bounded by the reference interval as well as by the segment, because
 // the next interval starts with an uncoded reference sample.
 func TestZeroRunDoesNotCrossAReferenceInterval(t *testing.T) {

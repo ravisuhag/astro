@@ -5,7 +5,7 @@ description: "Element coverage matrix: what pkg/xtce does with each schema eleme
 order: 220
 ---
 
-## Element coverage for `pkg/xtce` — XTCE 1.2 (OMG), CCSDS 660.1-G-2
+## Element coverage for `pkg/xtce`, XTCE 1.2 (OMG), CCSDS 660.1-G-2
 
 ---
 
@@ -13,7 +13,7 @@ order: 220
 
 Every other package in this repository carries a PICS proforma, because CCSDS
 Blue Books publish one to fill in. XTCE has none to fill in: it is an OMG
-schema, and CCSDS 660.1-G-2 is a Green Book — a guide, not a Recommended
+schema, and CCSDS 660.1-G-2 is a Green Book, a guide, not a Recommended
 Standard. So this file substitutes a coverage matrix, listing the schema's
 elements against what the package does with each. It lives beside the protocol page so
 the documentation triad stays uniform.
@@ -25,10 +25,10 @@ the documentation triad stays uniform.
 | **Supported** | Modeled as Go types, decoded, and reachable through the API. |
 | **Opaque** | Parsed as far as the XML allows and kept as raw bytes, so a caller can handle it and a later version can model it without changing what Load accepts. |
 | **Ignored** | Decoded past without error. The element does not appear in the model. A file using it still loads. |
-| **Unsupported** | Same as ignored on the wire, but named here because something depends on it — a parameter whose type is an unsupported kind will fail Validate with an unresolved reference. |
+| **Unsupported** | Same as ignored on the wire, but named here because something depends on it: a parameter whose type is an unsupported kind will fail Validate with an unresolved reference. |
 
 The loader rejects malformed XML, a non-SpaceSystem root, documents past the
-size or depth limits — and a document whose values cannot be read as their
+size or depth limits, and a document whose values cannot be read as their
 schema types, such as a `FixedValue` that is not a number (`ErrInvalidValue`).
 Element *coverage* never fails Load: every status in the tables below loads.
 Values inside a covered element still have to parse.
@@ -89,7 +89,7 @@ Values inside a covered element still have to parse.
 | `FloatDataEncoding` | Supported | Same. |
 | `StringDataEncoding` | Supported | Fixed size in `Layout`. `TerminationChar` resolves through `ResolveLayout`, with the terminator counted toward the field because it occupies packet space; a delimited string starting off an octet boundary is refused, since searching over octets would be meaningless. `LeadingSize` is refused by name: the width of the size field is an attribute of an element kept raw, so there is no way to know how far to skip. `Variable` is opaque. |
 | `BinaryDataEncoding` | Supported | Fixed size in `Layout`; a `DynamicValue` size resolves through `ResolveLayout`. A negative resolved width is refused rather than read as zero. |
-| `@changeThreshold` | Supported | Carried on both numeric encodings, as a pointer so absent — meaning any change is significant — stays distinguishable from zero. |
+| `@changeThreshold` | Supported | Carried on both numeric encodings, as a pointer so absent, meaning any change is significant, stays distinguishable from zero. |
 | `@bitOrder`, `@byteOrder` | Supported | Defaults applied through accessors. `Validate` checks that `encoding`, `bitOrder` and `byteOrder` are legal enumeration members (`ErrInvalidEncoding`). |
 | `ErrorDetectCorrect` | Ignored | Checksums and CRCs described in the database. This repository's own CRCs are in `pkg/crc`. |
 | `FromBinaryTransformAlgorithm` | Ignored | An algorithm, and algorithms are out of scope. |
@@ -119,7 +119,7 @@ Values inside a covered element still have to parse.
 | `StreamSegmentEntry` | Opaque | Same. |
 | `IndirectParameterRefEntry` | Opaque | Same. |
 | `ArrayParameterRefEntry` | Opaque | Same. |
-| `LocationInContainerInBits` | Supported | Fixed values in every `FixedIntegerValueType` spelling — decimal, `0x`, `0o`, `0b`. The reference location is carried, defaulting through `ReferenceLocationOrDefault()`. `DynamicValue` resolves through `ResolveLayout`; `DiscreteLookupList` is opaque. `containerEnd` resolves against the packet length for the container being read, and is refused for a spliced inner container whose end is not yet known. `nextEntry` is refused: it positions the *following* entry, and treating it as `previousEntry` would silently misplace the field. |
+| `LocationInContainerInBits` | Supported | Fixed values in every `FixedIntegerValueType` spelling: decimal, `0x`, `0o`, `0b`. The reference location is carried, defaulting through `ReferenceLocationOrDefault()`. `DynamicValue` resolves through `ResolveLayout`; `DiscreteLookupList` is opaque. `containerEnd` resolves against the packet length for the container being read, and is refused for a spliced inner container whose end is not yet known. `nextEntry` is refused: it positions the *following* entry, and treating it as `previousEntry` would silently misplace the field. |
 | `RepeatEntry` | Supported | Fixed counts in every `FixedIntegerValueType` spelling, and `DynamicValue` counts through `ResolveLayout`. `Offset` is refused: the gap between repetitions is not modeled, and packing them without it would place them wrongly. |
 | `IncludeCondition` | Opaque | Raw XML. `Layout` places the entry regardless; a caller that needs the condition can parse it. |
 | `TimeAssociation` | Ignored | |
@@ -146,7 +146,7 @@ Values inside a covered element still have to parse.
 | `MetaCommand` | Supported | Skeleton only: name, abstract flag, descriptions. |
 | `MetaCommandRef` | Supported | A command included by reference. The reference is kept but not resolved. |
 | `BlockMetaCommand` | Opaque | The name and descriptions are decoded; the `MetaCommandStepList` stays raw. |
-| `BaseMetaCommand` | Supported | The reference and the `ArgumentAssignmentList` — the name/value pairs that narrow the base command — are decoded. The reference is not resolved or cycle-checked. |
+| `BaseMetaCommand` | Supported | The reference and the `ArgumentAssignmentList`, the name/value pairs that narrow the base command, are decoded. The reference is not resolved or cycle-checked. |
 | `ArgumentList`, `Argument` | Supported | Names and `argumentTypeRef`. |
 | `ArgumentTypeSet` and its types | Unsupported | The argument-side mirror of the parameter types. |
 | `CommandContainer` | Unsupported | The uplink bit layout. |
@@ -157,7 +157,7 @@ Values inside a covered element still have to parse.
 | `ParameterToSetList`, `ParametersToSuspendAlarmsOnSet` | Unsupported | |
 
 **A warning about the command side.** Everything that makes a command *safe to
-send* — verifiers, constraints, significance — is in the unsupported list. This
+send* (verifiers, constraints, significance) is in the unsupported list. This
 package can tell you a command exists and what arguments it takes. It cannot
 tell you whether sending it is allowed or what it will do. Do not build an
 uplink path on this model.
@@ -222,5 +222,5 @@ of them were.
 
 This matrix is the contract for scope. Anything moving out of Unsupported or
 Opaque lands with its model structs, a fixture exercising it, and a change to
-its row here — in the same commit. A status that drifts from the code is worse
+its row here, in the same commit. A status that drifts from the code is worse
 than a gap that is written down.

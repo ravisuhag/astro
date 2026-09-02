@@ -11,7 +11,7 @@
 //
 // The scheme comes from ASN.1 Object Identifier encoding. Two protocols in
 // this library use it for nearly every variable-length field: LTP
-// (RFC 5326 §1.6 item 20) and Bundle Protocol version 6 (RFC 5050 §4.1).
+// (RFC 5326 clause 1.6 item 20) and Bundle Protocol version 6 (RFC 5050 clause 4.1).
 // It lives in its own package so neither has to carry a private copy, the
 // same way pkg/crc serves the checksum users.
 package sdnv
@@ -34,8 +34,8 @@ var (
 	ErrOverflow = errors.New("sdnv: value does not fit in 64 bits")
 
 	// ErrTooLong indicates an encoding running past MaxEncodedSize octets.
-	// RFC 6256 §3.2 allows leading zero-padding octets (0x80), so an encoding
-	// this long is not necessarily a value overflow — but this package caps
+	// RFC 6256 clause 3.2 allows leading zero-padding octets (0x80), so an encoding
+	// this long is not necessarily a value overflow, but this package caps
 	// what it will read at ten octets, the width a canonical 64-bit value
 	// needs, and refuses longer inputs with this distinct error.
 	ErrTooLong = errors.New("sdnv: encoding is longer than the 10-octet maximum")

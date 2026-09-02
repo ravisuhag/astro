@@ -2,7 +2,7 @@
 // per CCSDS 211.2-B-3 (October 2019).
 //
 // This is the layer beneath pkg/pxdl. It wraps each transfer frame in a
-// Proximity Link Transmission Unit — a sync marker, the frame, and a CRC-32 —
+// Proximity Link Transmission Unit (a sync marker, the frame, and a CRC-32)
 // and fills the gaps between them with idle data so the receiver keeps bit
 // lock.
 //
@@ -12,24 +12,24 @@
 // It plays the same role for Proximity-1 that pkg/tmsc plays for TM and
 // pkg/tcsc for TC, and the shape of the API follows those two.
 //
-// The convolutional code of §3.4.3 is fully supported: the encoder is in
+// The convolutional code of clause 3.4.3 is fully supported: the encoder is in
 // convolutional.go and a matching Viterbi decoder is in viterbi.go, taking
-// hard decisions through Decode and the soft decisions §3.4.3.3 recommends
-// through DecodeSoft. Deliberately absent are the LDPC code of §3.4.4, its
-// Codeword Sync Marker, and the pseudo-randomizer of §3.4.5, which applies
+// hard decisions through Decode and the soft decisions clause 3.4.3.3 recommends
+// through DecodeSoft. Deliberately absent are the LDPC code of clause 3.4.4, its
+// Codeword Sync Marker, and the pseudo-randomizer of clause 3.4.5, which applies
 // only when LDPC is used; the PICS declares all three.
 package pxsc
 
 import "fmt"
 
-// ASM is the Attached Synchronization Marker of CCSDS 211.2-B-3 §3.2.3.2:
+// ASM is the Attached Synchronization Marker of CCSDS 211.2-B-3 clause 3.2.3.2:
 // the 24-bit pattern FAF320.
 //
 // Note it is three octets, not the four that TM and AOS use. A Proximity-1
 // link is short and re-acquires per PLTU, so the marker is cheaper.
 var ASM = [3]byte{0xFA, 0xF3, 0x20}
 
-// ASMSize is the width of the sync marker in octets (§3.2.3.1).
+// ASMSize is the width of the sync marker in octets (clause 3.2.3.1).
 const ASMSize = 3
 
 // PLTUOverhead is what a PLTU costs on top of the frame it carries.
@@ -37,9 +37,9 @@ const PLTUOverhead = ASMSize + CRC32Size
 
 // DefaultMaxFrameLength bounds a frame recovered from a PLTU when no limit is
 // given. It matches the largest Version-3 Transfer Frame, per
-// CCSDS 211.0-B-6 §3.2.2.10.2.
+// CCSDS 211.0-B-6 clause 3.2.2.10.2.
 //
-// The coding sublayer itself sets no ceiling: §3.2.2 note 1 says the maximum
+// The coding sublayer itself sets no ceiling: Clause 3.2.2 note 1 says the maximum
 // comes from the mission's Maximum_Frame_Length parameter. This is a safe
 // default for a decoder that has not been told one.
 const DefaultMaxFrameLength = 2048
@@ -53,7 +53,7 @@ func DefaultASM() []byte {
 }
 
 // WrapPLTU builds a Proximity Link Transmission Unit around a transfer frame,
-// per §3.2.2: the sync marker, the frame, then a CRC-32 over the frame.
+// per clause 3.2.2: the sync marker, the frame, then a CRC-32 over the frame.
 //
 // Annex C, C1.2 note 2 is explicit that the ASM is not covered by the CRC.
 func WrapPLTU(frame []byte) ([]byte, error) {
@@ -96,7 +96,7 @@ func UnwrapPLTUWithLimit(pltu []byte, maxFrameLength int) ([]byte, error) {
 
 	frame := pltu[ASMSize : ASMSize+frameLen]
 
-	// §3.6: a PLTU whose CRC fails is discarded.
+	// Clause 3.6: a PLTU whose CRC fails is discarded.
 	if !VerifyCRC32(pltu[ASMSize:]) {
 		return nil, ErrCRCMismatch
 	}

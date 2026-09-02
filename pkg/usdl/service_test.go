@@ -10,7 +10,7 @@ import (
 
 func TestMAPPacketService_VariableLength(t *testing.T) {
 	vc := usdl.NewVirtualChannel(1, 100)
-	config := usdl.ChannelConfig{HasFECF: true} // FrameLength=0 → variable-length mode
+	config := usdl.ChannelConfig{HasFECF: true} // FrameLength=0 -> variable-length mode
 	counter := usdl.NewFrameCounter()
 
 	svc := usdl.NewMAPPacketService(100, 1, 0, vc, config, counter)
@@ -174,7 +174,7 @@ func TestMAPPacketService_FixedLength_RoundTrip(t *testing.T) {
 func TestMAPPacketService_MAPDemultiplexing(t *testing.T) {
 	// Two MAP channels sharing one VC: each service must receive its own
 	// MAP's traffic, and pulling one MAP's frame past the other's must not
-	// discard the other's data (§4.3 MAP demultiplexing).
+	// discard the other's data (clause 4.3 MAP demultiplexing).
 	config := usdl.ChannelConfig{HasFECF: true}
 	vc := usdl.NewVirtualChannel(1, 100)
 
@@ -386,7 +386,7 @@ func TestMAPOctetStreamService_RejectsFixedLength(t *testing.T) {
 	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true}
 	svc := usdl.NewMAPOctetStreamService(100, 1, 0, vc, config, nil)
 
-	// §4.2.4.1 note 1: octet streams cannot ride fixed-length frames.
+	// Clause 4.2.4.1 note 1: octet streams cannot ride fixed-length frames.
 	if err := svc.Send([]byte{0x01}); err != usdl.ErrOctetStreamFixedLength {
 		t.Errorf("expected ErrOctetStreamFixedLength, got %v", err)
 	}
@@ -414,7 +414,7 @@ func TestFrameCounter(t *testing.T) {
 	if got := fc.Next(2, false); got != 0 {
 		t.Errorf("Next(2) = %d, want 0 (separate VC)", got)
 	}
-	// §4.1.2.12.4-12.5: the expedited count of a VC is independent of its
+	// Clause 4.1.2.12.4-12.5: the expedited count of a VC is independent of its
 	// sequence-controlled count.
 	if got := fc.Next(1, true); got != 0 {
 		t.Errorf("Next(1, expedited) = %d, want 0 (separate QoS counter)", got)
@@ -434,11 +434,11 @@ func TestMAPAccessService_Flush(t *testing.T) {
 	}
 }
 
-// §4.1.4.2.4.3-4.4.4: the FHP points at the first packet header starting
+// Clause 4.1.4.2.4.3-4.4.4: the FHP points at the first packet header starting
 // in the TFDZ; 'all ones' only when NO packet starts there. A flush frame
 // that carries just a spanning packet's tail still has the appended
 // Encapsulation Idle Packet starting in it, so the FHP must point at the
-// idle packet — and a receiver that lost the preceding frame must be able
+// idle packet, and a receiver that lost the preceding frame must be able
 // to resynchronize on the flush frame.
 func TestMAPPacketService_FlushFHP_ResyncAfterLoss(t *testing.T) {
 	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, VCFCountLen: 2}
@@ -508,7 +508,7 @@ func TestMAPPacketService_PatternLikePayloadDelivered(t *testing.T) {
 	tx := usdl.NewMAPPacketService(100, 1, 0, sendVC, config, usdl.NewFrameCounter())
 
 	// Two fixed-size packets exactly fill one frame; the second is all
-	// 0x55 — byte-identical to the default idle pattern.
+	// 0x55, byte-identical to the default idle pattern.
 	half := capacity / 2
 	pkt1 := bytes.Repeat([]byte{0x11}, half)
 	pkt2 := bytes.Repeat([]byte{usdl.DefaultIdleFill}, capacity-half)
@@ -548,7 +548,7 @@ func TestMAPPacketService_PatternLikePayloadDelivered(t *testing.T) {
 }
 
 // A channel configured with HasOCF requires an OCF supplier; the OCF is
-// then carried on every emitted frame (§4.1.5).
+// then carried on every emitted frame (clause 4.1.5).
 func TestMAPServices_OCFSupplier(t *testing.T) {
 	config := usdl.ChannelConfig{HasFECF: true, HasOCF: true}
 	clcw := []byte{0xC1, 0xC2, 0xC3, 0xC4}

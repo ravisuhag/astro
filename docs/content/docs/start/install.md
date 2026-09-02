@@ -48,6 +48,6 @@ The Makefile has the gates the project runs in CI: `make test`, `make race`, `ma
 
 ## Next
 
-- [Go quickstart](/docs/start/quickstart-go) — build and parse a packet
-- [CLI quickstart](/docs/start/quickstart-cli) — do the same from a terminal
-- [The stack](/docs/start/concepts) — how the layers fit together
+- [Go quickstart](/docs/start/quickstart-go), build and parse a packet
+- [CLI quickstart](/docs/start/quickstart-cli), do the same from a terminal
+- [The stack](/docs/start/concepts), how the layers fit together

@@ -1,10 +1,10 @@
 // Package cmac implements the AES-CMAC message authentication code of
 // NIST SP 800-38B, also published as RFC 4493.
 //
-// CCSDS 355.0-B-2 §E2 names it as the baseline authentication algorithm for
+// CCSDS 355.0-B-2 clause E2 names it as the baseline authentication algorithm for
 // telecommand: AES-CMAC with a 256-bit key and a 128-bit tag. The Go standard
 // library has AES but no CMAC, so it is implemented here rather than pulled in
-// as a dependency — pkg/ takes none.
+// as a dependency, pkg/ takes none.
 //
 // # How it works
 //
@@ -28,7 +28,7 @@ const BlockSize = aes.BlockSize
 // ErrInvalidTagLength indicates a truncation length outside 1 to 16 octets.
 var ErrInvalidTagLength = errors.New("invalid CMAC tag length: must be 1 to 16 octets")
 
-// rb is the constant of SP 800-38B §5.3 for a 128-bit block: the low octet of
+// rb is the constant of SP 800-38B clause 5.3 for a 128-bit block: the low octet of
 // the polynomial x^128 + x^7 + x^2 + x + 1.
 const rb = 0x87
 
@@ -41,7 +41,7 @@ type CMAC struct {
 }
 
 // New returns a CMAC for the given AES key. The key must be 16, 24 or 32
-// octets; CCSDS 355.0-B-2 §E2a requires 32.
+// octets; CCSDS 355.0-B-2 clause E2a requires 32.
 func New(key []byte) (*CMAC, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -56,7 +56,7 @@ func New(key []byte) (*CMAC, error) {
 	return c, nil
 }
 
-// deriveSubkeys implements the subkey generation of SP 800-38B §6.1.
+// deriveSubkeys implements the subkey generation of SP 800-38B clause 6.1.
 //
 //	L  = CIPH(0^128)
 //	K1 = L<<1        if MSB(L) = 0, else (L<<1) XOR Rb
@@ -96,9 +96,9 @@ func shiftLeftOne(in [BlockSize]byte) [BlockSize]byte {
 func (c *CMAC) Sum(message []byte) []byte {
 	var last [BlockSize]byte
 
-	// SP 800-38B §6.2: a message that is a positive whole number of blocks
-	// uses K1 on its final block; anything else — including the empty
-	// message — is padded with a one bit and zeros, and uses K2.
+	// SP 800-38B clause 6.2: a message that is a positive whole number of blocks
+	// uses K1 on its final block; anything else (including the empty
+	// message) is padded with a one bit and zeros, and uses K2.
 	complete := len(message) > 0 && len(message)%BlockSize == 0
 
 	var n int
@@ -136,8 +136,8 @@ func (c *CMAC) Sum(message []byte) []byte {
 
 // SumTruncated returns the leading length octets of the tag.
 //
-// SP 800-38B §6.4 permits truncation and warns that a shorter tag weakens the
-// forgery bound. CCSDS 355.0-B-2 §E2c specifies the full 128 bits, so a caller
+// SP 800-38B clause 6.4 permits truncation and warns that a shorter tag weakens the
+// forgery bound. CCSDS 355.0-B-2 clause E2c specifies the full 128 bits, so a caller
 // following the baseline has no reason to truncate.
 func (c *CMAC) SumTruncated(message []byte, length int) ([]byte, error) {
 	if length < 1 || length > BlockSize {

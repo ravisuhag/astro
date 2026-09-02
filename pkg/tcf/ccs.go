@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// CCS represents a CCSDS Calendar Segmented Time Code per CCSDS 301.0-B-4 §3.4.
+// CCS represents a CCSDS Calendar Segmented Time Code per CCSDS 301.0-B-4 clause 3.4.
 //
 // All segments use Binary Coded Decimal (BCD) encoding where each 8-bit
 // segment represents two decimal digits.
@@ -130,7 +130,7 @@ func NewCCS(t time.Time, opts ...CCSOption) (*CCS, error) {
 }
 
 // Encode serializes the CCS time code into bytes (P-field + T-field).
-// All segments are BCD-encoded per §3.4.1.
+// All segments are BCD-encoded per clause 3.4.1.
 func (c *CCS) Encode() ([]byte, error) {
 	pBytes, err := c.PField.Encode()
 	if err != nil {
@@ -192,13 +192,13 @@ func DecodeCCS(data []byte) (*CCS, error) {
 		return nil, ErrInvalidTimeCodeID
 	}
 
-	// The CCS P-field is a single octet (§3.4.2): the extension flag is
+	// The CCS P-field is a single octet (clause 3.4.2): the extension flag is
 	// always zero. A set flag would misalign the T-field.
 	if c.PField.Extension {
 		return nil, ErrInvalidPField
 	}
 
-	// Extract format from P-field detail bits (§3.4.2)
+	// Extract format from P-field detail bits (clause 3.4.2)
 	// Bit 4 (Detail bit 3): calendar variation (0=Month/Day, 1=Day-of-Year)
 	// Bits 5-7 (Detail bits 2-0): resolution (number of sub-second octets)
 	c.MonthDay = (c.PField.Detail>>3)&0x01 == 0
@@ -218,7 +218,7 @@ func DecodeCCS(data []byte) (*CCS, error) {
 }
 
 // DecodeCCSTField parses a T-field-only (implicit P-field) CCS time code.
-// The format parameters — calendar variant and sub-second octet count — must
+// The format parameters (calendar variant and sub-second octet count) must
 // be supplied by the caller, as they are in contexts where no P-field is
 // transmitted.
 func DecodeCCSTField(data []byte, monthDay bool, subSecBytes uint8) (*CCS, error) {
@@ -417,7 +417,7 @@ func (c *CCS) Humanize() string {
 	return strings.Join(parts, "\n")
 }
 
-// buildPField constructs the P-field from the CCS configuration (§3.4.2).
+// buildPField constructs the P-field from the CCS configuration (clause 3.4.2).
 // Bit 4: calendar variation (0=Month/Day, 1=Day-of-Year)
 // Bits 5-7: number of sub-second octets (resolution)
 func (c *CCS) buildPField() error {
@@ -479,7 +479,7 @@ func fromBCD8Strict(b byte) (uint8, error) {
 	return hi*10 + lo, nil
 }
 
-// toBCD16 converts a 4-digit value to 2 BCD bytes (e.g., year 2024 → 0x20 0x24).
+// toBCD16 converts a 4-digit value to 2 BCD bytes (e.g., year 2024 -> 0x20 0x24).
 func toBCD16(v uint16) []byte {
 	hi := uint8(v / 100)
 	lo := uint8(v % 100)
@@ -501,7 +501,7 @@ func fromBCD16Strict(b0, b1 byte) (uint16, error) {
 }
 
 // toBCD16DOY converts a day-of-year (1-366) to 2 BCD bytes.
-// Upper 4 bits of first byte are zero per §3.4.1.2.
+// Upper 4 bits of first byte are zero per clause 3.4.1.2.
 func toBCD16DOY(v uint16) []byte {
 	hundreds := uint8(v / 100)
 	tens := uint8((v % 100) / 10)
@@ -510,7 +510,7 @@ func toBCD16DOY(v uint16) []byte {
 }
 
 // fromBCD16DOYStrict converts 2 BCD bytes to a day-of-year value. The upper
-// 4 bits of the first byte must be zero per §3.4.1.2 and every nibble must
+// 4 bits of the first byte must be zero per clause 3.4.1.2 and every nibble must
 // be a decimal digit.
 func fromBCD16DOYStrict(b0, b1 byte) (uint16, error) {
 	if b0>>4 != 0 {

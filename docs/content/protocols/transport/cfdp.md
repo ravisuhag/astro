@@ -1,7 +1,7 @@
 ---
 title: CCSDS File Delivery Protocol
 short: CFDP
-description: CCSDS 727.0-B-5 — moving files across a space link, reliably or not.
+description: CCSDS 727.0-B-5, moving files across a space link, reliably or not.
 order: 12
 ---
 
@@ -34,7 +34,7 @@ rather than changing them.
 ┌─────────────────────────────────────────────┐
 │  Files (images, logs, software loads)       │
 ├─────────────────────────────────────────────┤
-│  CFDP — transactions, PDUs, checksums       │  <- this package
+│  CFDP, transactions, PDUs, checksums       │  <- this package
 ├─────────────────────────────────────────────┤
 │  Space Packet / Encapsulation Packet        │  <- carries the PDU bytes
 ├─────────────────────────────────────────────┤
@@ -46,18 +46,18 @@ rather than changing them.
 
 **Implemented.** Both classes of service, the full PDU set, checksums, filestore requests, fault handling and cancellation, the optional PDU CRC, and the Part 2 User Operations message formats.
 
-The library owns no clock. You drive every timer yourself — see below.
+The library owns no clock. You drive every timer yourself, see below.
 
 **Not here yet.**
 
-- **Part 2 user behaviour** — the message formats of clause 6 are here; what is not
+- **Part 2 user behaviour**: the message formats of clause 6 are here; what is not
   is which primitive to call on receipt, and how to queue concurrent
   suspension orders, which clause 6.5.4.1.2 calls "an implementation matter".
-- **Store-and-forward overlay** (Appendix A) — a separate overlay service, and
+- **Store-and-forward overlay** (Appendix A), a separate overlay service, and
   Clause 6.2's note is explicit that the proxy mechanism may not invoke it.
-- **Extended filestore actions** — append, replace, and directory operations
+- **Extended filestore actions**: append, replace, and directory operations
   decode but do not execute.
-- **Adaptive flow control** — Keep Alive and Prompt PDUs encode and decode, but
+- **Adaptive flow control**: Keep Alive and Prompt PDUs encode and decode, but
   nothing tunes the send rate from them.
 
 ## Two classes of service
@@ -114,7 +114,7 @@ for {
 ```
 
 `NextPDU` returning `false` does not mean the transaction is over. It means
-nothing is pending at this instant — a Class 2 sender will have more to do once
+nothing is pending at this instant. A Class 2 sender will have more to do once
 a NAK arrives. Check `Done()` for completion.
 
 ## Receiving a file
@@ -130,7 +130,7 @@ receiver := cfdp.NewReceiver(fs, cfdp.ReceiverConfig{
 for raw := range incoming {
     pdu, err := cfdp.DecodePDU(raw)
     if err != nil {
-        continue // malformed, or a CRC failure — discard it
+        continue // malformed, or a CRC failure, discard it
     }
     if err := receiver.HandlePDU(pdu); err != nil {
         log.Printf("cfdp: %v", err)
@@ -194,8 +194,8 @@ policy stays where the mission can set it.
 
 ## Faults and cancellation
 
-When something goes wrong — a checksum failure, a filestore rejection, a
-retry limit — CFDP looks up a **fault handler** for that condition (clause 4.8).
+When something goes wrong (a checksum failure, a filestore rejection, a
+retry limit) CFDP looks up a **fault handler** for that condition (clause 4.8).
 There are four: cancel, suspend, ignore, and abandon. Table 4-1 defaults
 every condition to cancel: the transaction closes out with a Finished PDU
 carrying the fault's condition code, and the partial file is discarded.
@@ -260,8 +260,8 @@ outside the root.
 
 ## Filestore requests
 
-A Metadata PDU can carry requests for the receiver to run — delete a file,
-rename one, create one — and the Finished PDU carries one response per
+A Metadata PDU can carry requests for the receiver to run (delete a file,
+rename one, create one) and the Finished PDU carries one response per
 request (table 5-7).
 
 ```go
@@ -271,8 +271,8 @@ config.FilestoreRequests = []cfdp.FilestoreRequest{{
 }}
 ```
 
-This package executes create, delete, rename, and deny-file. The rest — append,
-replace, and the directory actions — decode correctly but come back with status
+This package executes create, delete, rename, and deny-file. The rest (append,
+replace, and the directory actions) decode correctly but come back with status
 "not performed", which table 5-18 provides for.
 
 A transaction with empty filenames carries no file at all. That is how a pure
@@ -292,6 +292,6 @@ a Frame Error Control Field, this is a second layer.
 
 ## Reference
 
-- [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf) — CCSDS File Delivery Protocol
-- [CCSDS 720.1-G-4](https://public.ccsds.org/Pubs/720x1g4.pdf) — CFDP Part 1: Introduction and Overview (Green Book)
+- [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf), CCSDS File Delivery Protocol
+- [CCSDS 720.1-G-4](https://public.ccsds.org/Pubs/720x1g4.pdf), CFDP Part 1: Introduction and Overview (Green Book)
 - [CLI](/cli/cfdp) | [Conformance](/conformance/cfdp) | [The stack](/docs/start/concepts)

@@ -24,13 +24,13 @@ var (
 
 	// ErrInvalidValue indicates a document that is well-formed XML with the
 	// right root, but which spells a value in a way its schema type cannot
-	// hold — a FixedValue that is not a number, say. It is distinct from
+	// hold. A FixedValue that is not a number, say. It is distinct from
 	// ErrNotSpaceSystem so a bad value in the middle of a real database is not
 	// misreported as the wrong kind of document.
 	ErrInvalidValue = errors.New("XTCE document has a value that cannot be read as its schema type")
 
-	// ErrInvalidEncoding indicates a data encoding attribute — encoding,
-	// bitOrder or byteOrder — whose value is not one of the schema's legal
+	// ErrInvalidEncoding indicates a data encoding attribute (encoding,
+	// bitOrder or byteOrder) whose value is not one of the schema's legal
 	// enumeration members.
 	ErrInvalidEncoding = errors.New("data encoding attribute is not a legal value")
 

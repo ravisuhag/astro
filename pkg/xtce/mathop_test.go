@@ -198,7 +198,7 @@ func TestMathOperationOverIsNotDup(t *testing.T) {
 	}
 	// 7 2 over -> 7 2 7; two drops leave 7.
 	if overResult != 7 {
-		t.Errorf("over left %v, want 7 — it copied the top rather than the second item", overResult)
+		t.Errorf("over left %v, want 7, it copied the top rather than the second item", overResult)
 	}
 }
 
@@ -370,7 +370,7 @@ func TestParameterInstanceRefDefaults(t *testing.T) {
 		t.Errorf("Instance = %d, want 0", ref.Instance)
 	}
 	if !ref.Calibrated() {
-		t.Error("Calibrated() = false, want true — the schema defaults useCalibratedValue to true")
+		t.Error("Calibrated() = false, want true, the schema defaults useCalibratedValue to true")
 	}
 
 	explicit := decodeMath(t,

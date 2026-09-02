@@ -46,7 +46,7 @@ func TestGapCounterWrapsCleanly(t *testing.T) {
 		t.Errorf("254 to 255 gave %d, want 0", gap)
 	}
 	if gap := g.Track(0, 0); gap != 0 {
-		t.Errorf("255 to 0 gave %d, want 0 — the counter wrapped", gap)
+		t.Errorf("255 to 0 gave %d, want 0, the counter wrapped", gap)
 	}
 	if gap := g.Track(0, 2); gap != 1 {
 		t.Errorf("0 to 2 gave %d, want 1", gap)

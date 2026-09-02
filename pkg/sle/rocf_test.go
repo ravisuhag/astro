@@ -74,7 +74,7 @@ func TestROCFStartInvocationRoundTrip(t *testing.T) {
 
 // TestROCFTransferDataCarriesFourOctets pins the payload size. An operational
 // control field is the four octets a TM or AOS frame ends with, and a CLCW is
-// what usually sits in them — pkg/cop decodes those.
+// what usually sits in them, pkg/cop decodes those.
 func TestROCFTransferDataCarriesFourOctets(t *testing.T) {
 	ocf := []byte{0x00, 0x01, 0x02, 0x03}
 

@@ -8,9 +8,9 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdls"
 )
 
-// tcBaselineLengths is the CCSDS 355.0-B-2 §E2 telecommand baseline: no
+// tcBaselineLengths is the CCSDS 355.0-B-2 clause E2 telecommand baseline: no
 // initialization vector, a 32-bit sequence number, no padding, a 128-bit MAC.
-// §E2.2 figure E-3 makes the Security Header six octets.
+// Clause E2.2 figure E-3 makes the Security Header six octets.
 var tcBaselineLengths = sdls.FieldLengths{IV: 0, SeqNum: 4, PadLen: 0, MAC: 16}
 
 func newCMACSA(t *testing.T) *sdls.SecurityAssociation {
@@ -24,16 +24,16 @@ func newCMACSA(t *testing.T) *sdls.SecurityAssociation {
 		SeqWindow:     100,
 	}
 	if err := sa.Validate(); err != nil {
-		t.Fatalf("the §E2 baseline SA is invalid: %v", err)
+		t.Fatalf("the clause E2 baseline SA is invalid: %v", err)
 	}
 	return sa
 }
 
-// TestTCBaselineSecurityHeaderSize pins §E2.2 figure E-3: 16-bit SPI, no IV,
-// 32-bit sequence number, no pad length — six octets in all.
+// TestTCBaselineSecurityHeaderSize pins clause E2.2 figure E-3: 16-bit SPI, no IV,
+// 32-bit sequence number, no pad length, six octets in all.
 func TestTCBaselineSecurityHeaderSize(t *testing.T) {
 	if got := tcBaselineLengths.HeaderSize(); got != 6 {
-		t.Errorf("the §E2 header is %d octets, want 6", got)
+		t.Errorf("the clause E2 header is %d octets, want 6", got)
 	}
 }
 
@@ -49,10 +49,10 @@ func TestCMACRoundTrip(t *testing.T) {
 		t.Fatalf("ApplySecurity() = %v", err)
 	}
 
-	// §E2: authentication without encryption, so the data field travels in
+	// Clause E2: authentication without encryption, so the data field travels in
 	// the clear between the header and the MAC.
 	if !bytes.Contains(protected, plaintext) {
-		t.Error("the data field was altered; §E2 authenticates without encrypting")
+		t.Error("the data field was altered; clause E2 authenticates without encrypting")
 	}
 
 	header, recovered, err := sdls.ProcessSecurity(protected, frameHeader, sdls.StaticLookup(receiver))
@@ -66,7 +66,7 @@ func TestCMACRoundTrip(t *testing.T) {
 		t.Errorf("SPI = %d, want 7", header.SPI)
 	}
 	if len(header.IV) != 0 {
-		t.Errorf("IV is %d octets, want none under §E2", len(header.IV))
+		t.Errorf("IV is %d octets, want none under clause E2", len(header.IV))
 	}
 }
 
@@ -113,14 +113,14 @@ func TestCMACDiffersFromGMAC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A GMAC receiver on the §E1 layout cannot read a §E2 frame.
+	// A GMAC receiver on the clause E1 layout cannot read a clause E2 frame.
 	gmacSA := newTestSA(t, sdls.Authentication)
 	if _, _, err := sdls.ProcessSecurity(protected, frameHeader, sdls.StaticLookup(gmacSA)); err == nil {
 		t.Error("a GMAC receiver accepted a CMAC-protected frame")
 	}
 }
 
-// TestCMACRequiresNoIV pins the §E2.2 note: CMAC needs no initialization
+// TestCMACRequiresNoIV pins the clause E2.2 note: CMAC needs no initialization
 // vector, so an SA declaring one is misconfigured.
 func TestCMACRequiresNoIV(t *testing.T) {
 	sa := &sdls.SecurityAssociation{
@@ -136,7 +136,7 @@ func TestCMACRequiresNoIV(t *testing.T) {
 }
 
 // TestGMACRemainsTheDefault checks the zero value did not change behaviour:
-// an SA that does not choose an algorithm still gets the §E1 baseline.
+// an SA that does not choose an algorithm still gets the clause E1 baseline.
 func TestGMACRemainsTheDefault(t *testing.T) {
 	sa := newTestSA(t, sdls.Authentication)
 	if sa.AuthAlgorithm != sdls.AuthGMAC {
@@ -151,7 +151,7 @@ func TestGMACRemainsTheDefault(t *testing.T) {
 }
 
 // TestCMACTruncatedMAC checks that a CMAC SA may truncate below the GCM
-// floor: SP 800-38B §6.4 permits any width, so 1 to 16 octets validate and
+// floor: SP 800-38B clause 6.4 permits any width, so 1 to 16 octets validate and
 // round-trip, while GCM keeps its 12-octet floor (Go's crypto/cipher limit).
 func TestCMACTruncatedMAC(t *testing.T) {
 	for _, width := range []int{sdls.MinCMACSize, 4, 8, sdls.MaxMACSize} {

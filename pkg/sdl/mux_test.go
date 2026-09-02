@@ -39,7 +39,7 @@ func TestMultiplexer_WeightedPriority(t *testing.T) {
 		_ = ch2.Add("lo")
 	}
 
-	// Priority 2:1 → ch1, ch1, ch2, ch1, ch2, ...
+	// Priority 2:1 -> ch1, ch1, ch2, ch1, ch2, ...
 	expected := []string{"hi", "hi", "lo", "hi", "lo"}
 	for i, want := range expected {
 		got, _ := mux.Next()

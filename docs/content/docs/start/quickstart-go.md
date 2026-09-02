@@ -1,5 +1,5 @@
 ---
-title: Quickstart — Go
+title: Quickstart. Go
 short: Go
 description: Build a Space Packet, frame it, and wrap it for transmission.
 order: 2
@@ -9,7 +9,7 @@ Five minutes, from a temperature reading to something you could put on a radio. 
 
 ## Make a packet
 
-A [Space Packet](/protocols/transport/spp) is the unit an application sends. It needs an APID — the number naming which application produced it — and some data.
+A [Space Packet](/protocols/transport/spp) is the unit an application sends. It needs an APID (the number naming which application produced it) and some data.
 
 ```go
 package main
@@ -103,7 +103,7 @@ fmt.Printf("%d bytes, starts % X\n", len(cadu), cadu[:8])
 27 bytes, starts 1A CF FC 1D FD E8 0E C0
 ```
 
-`1A CF FC 1D` is the Attached Sync Marker — the pattern a receiver looks for to find where a frame begins. Everything after it is randomized, which is why the frame header does not look like `2A 00` any more.
+`1A CF FC 1D` is the Attached Sync Marker. The pattern a receiver looks for to find where a frame begins. Everything after it is randomized, which is why the frame header does not look like `2A 00` any more.
 
 ## Adding a CRC
 
@@ -127,6 +127,6 @@ If the two disagree, the receiver reads the last two bytes as payload. That mism
 
 This built one packet by hand. Real systems use the service layer, which handles sequence counting, packing packets into frames, and filling the leftover space correctly.
 
-- [Downlink guide](/docs/guides/downlink) — the same chain with services, two virtual channels, and a ground-side receiver
-- [SPP protocol page](/protocols/transport/spp) — the field map and the rules that bite
-- [SPP Go API](/protocols/transport/spp) — the service layer, secondary headers, options
+- [Downlink guide](/docs/guides/downlink), the same chain with services, two virtual channels, and a ground-side receiver
+- [SPP protocol page](/protocols/transport/spp), the field map and the rules that bite
+- [SPP Go API](/protocols/transport/spp), the service layer, secondary headers, options

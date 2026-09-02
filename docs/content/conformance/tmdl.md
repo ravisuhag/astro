@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 60
 ---
 
-## Conformance Statement for `pkg/tmdl` — CCSDS 132.0-B-3
+## Conformance Statement for `pkg/tmdl`, CCSDS 132.0-B-3
 
 ---
 
@@ -33,7 +33,7 @@ order: 60
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/tmdl (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 60
 | Specification | CCSDS 132.0-B-3 (TM Space Data Link Protocol, Blue Book, Issue 3, October 2021) |
 | Have any exceptions been required? | Yes [ ] No [X] |
 
-NOTE — Every mandatory item is supported: the frame codec, all seven
+NOTE. Every mandatory item is supported: the frame codec, all seven
 transfer services (VCP, VCA, VC_FSH, VC_OCF, VCF, MC_FSH, MC_OCF, MCF), and
 the protocol procedures at both ends. Optional items not supported: TM-9
 (Packet Quality Indicator), TM-89 (SDLS Protocol).
@@ -60,7 +60,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 | TM-1 | Packet SDU | 3.2.2 | M | Yes | Space Packets are carried in `TMTransferFrame.DataField`. The `VirtualChannelPacketService` accepts packet data via `Send()`, pushes frames into a `VirtualChannel`, and delivers data via `Receive()`. |
 | TM-2 | VCA_SDU | 3.2.3 | M | Yes | `VirtualChannelAccessService` accepts fixed-length VCA SDUs via `Send()` with `VCASize` enforcement, pushes frames into a `VirtualChannel`, and delivers them via `Receive()`. |
 | TM-3 | FSH_SDU | 3.2.4 | M | Yes | `SecondaryHeader.DataField` carries the FSH SDU. Presence indicated by `PrimaryHeader.FSHFlag`. Encoded/decoded via `SecondaryHeader.Encode()` / `SecondaryHeader.Decode()`. |
-| TM-4 | OCF_SDU | 3.2.5 | M | Yes | `TMTransferFrame.OperationalControl` — 4-byte OCF field. Presence indicated by `PrimaryHeader.OCFFlag`. Extracted during decode when present. |
+| TM-4 | OCF_SDU | 3.2.5 | M | Yes | `TMTransferFrame.OperationalControl`, 4-byte OCF field. Presence indicated by `PrimaryHeader.OCFFlag`. Extracted during decode when present. |
 | TM-5 | TM Transfer Frame | 3.2.6 | M | Yes | `TMTransferFrame` struct with `Encode()` / `DecodeTMTransferFrame()` round-trip support. Composed of Primary Header, optional Secondary Header, Data Field, optional OCF, and Frame Error Control. |
 
 ### Table A-2: Service Parameters
@@ -68,41 +68,41 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | | **VCP Packet Service Parameters** | | | | | |
-| TM-6 | Packet | 3.3.2.2 | M | — | Yes | Packet data passed as `[]byte` to `VirtualChannelPacketService.Send()`. Frame pushed into `VirtualChannel`. Delivered via `Receive()`. |
-| TM-7 | GVCID | 3.3.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID configured at service construction. |
-| TM-8 | Packet Version Number | 3.3.2.4 | M | — | Yes | PVN validation was removed from the VCP service; it is delegated to the application layer. The first 3 bits of packet data carry the PVN per CCSDS. |
-| TM-9 | Packet Quality Indicator | 3.3.2.5 | O | — | No | Not implemented. |
+| TM-6 | Packet | 3.3.2.2 | M | - | Yes | Packet data passed as `[]byte` to `VirtualChannelPacketService.Send()`. Frame pushed into `VirtualChannel`. Delivered via `Receive()`. |
+| TM-7 | GVCID | 3.3.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID configured at service construction. |
+| TM-8 | Packet Version Number | 3.3.2.4 | M | - | Yes | PVN validation was removed from the VCP service; it is delegated to the application layer. The first 3 bits of packet data carry the PVN per CCSDS. |
+| TM-9 | Packet Quality Indicator | 3.3.2.5 | O | - | No | Not implemented. |
 | TM-10 | Verification Status Code | 3.3.2.6 | C2 | (see reference [10]) | N/A | SDLS Option not implemented. |
 | | **VCA SDU Service Parameters** | | | | | |
-| TM-11 | VCA SDU | 3.4.2.2 | M | — | Yes | Fixed-length data passed to `VirtualChannelAccessService.Send()`. Size enforced against `vcaSize`. Frame pushed into `VirtualChannel`. |
-| TM-12 | VCA Status Fields | 3.4.2.3 | M | — | Yes | Both directions. Sending: `VirtualChannelAccessService.SetSendStatus(VCAStatus{...})` sets the Packet Order Flag, Segment Length ID, and First Header Pointer carried by subsequent `Send()` calls — the mandatory VCA Status Fields parameter of the VCA.request primitive (clause 3.4.3.2.2), whose semantics are the user's. Receiving: `LastStatus()` returns `VCAStatus{SyncFlag, PacketOrderFlag, SegmentLengthID, FirstHeaderPtr}` from the last received frame. The Synchronization Flag is not a user field: Clause 4.1.2.7.3.2 fixes it at '1' for a VCA_SDU and `Send()` always sets it. |
-| TM-13 | GVCID | 3.4.2.4 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. VCID configured at service construction. |
-| TM-14 | VCA SDU Loss Flag | 3.4.2.5 | O | — | Yes | `FrameGapDetector` tracks VC frame count gaps. `MasterChannel.VCFrameGap()` returns gap count after each `AddFrame()`. |
+| TM-11 | VCA SDU | 3.4.2.2 | M | - | Yes | Fixed-length data passed to `VirtualChannelAccessService.Send()`. Size enforced against `vcaSize`. Frame pushed into `VirtualChannel`. |
+| TM-12 | VCA Status Fields | 3.4.2.3 | M | - | Yes | Both directions. Sending: `VirtualChannelAccessService.SetSendStatus(VCAStatus{...})` sets the Packet Order Flag, Segment Length ID, and First Header Pointer carried by subsequent `Send()` calls, the mandatory VCA Status Fields parameter of the VCA.request primitive (clause 3.4.3.2.2), whose semantics are the user's. Receiving: `LastStatus()` returns `VCAStatus{SyncFlag, PacketOrderFlag, SegmentLengthID, FirstHeaderPtr}` from the last received frame. The Synchronization Flag is not a user field: Clause 4.1.2.7.3.2 fixes it at '1' for a VCA_SDU and `Send()` always sets it. |
+| TM-13 | GVCID | 3.4.2.4 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. VCID configured at service construction. |
+| TM-14 | VCA SDU Loss Flag | 3.4.2.5 | O | - | Yes | `FrameGapDetector` tracks VC frame count gaps. `MasterChannel.VCFrameGap()` returns gap count after each `AddFrame()`. |
 | TM-15 | Verification Status Code | 3.4.2.6 | C2 | (see reference [10]) | N/A | SDLS Option not implemented. |
 | | **VC FSH SDU Service Parameters** | | | | | |
-| TM-16 | FSH SDU | 3.5.2.2 | M | — | Yes | `SecondaryHeader.DataField` carries the FSH_SDU on the wire. The VC_FSH service user installs it via `SetFSHSupplier()` on the VCP or VCA service, which fills the header of every frame that service emits (clause 3.5.1 makes the transfer synchronous with frame release), and reads it back with `LastFSH()`. Width is the channel's fixed `ChannelConfig.FSHDataLength` (clause 4.1.3.1.6). |
-| TM-17 | GVCID | 3.5.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. |
-| TM-18 | FSH_SDU Loss Flag | 3.5.2.4 | O | — | Yes | `MasterChannel.VCFrameGap()` reports the Virtual Channel Frame Count gap, which clause 3.5.2.4 names as the derivation for this flag; read it alongside the service's `LastFSH()`. |
+| TM-16 | FSH SDU | 3.5.2.2 | M | - | Yes | `SecondaryHeader.DataField` carries the FSH_SDU on the wire. The VC_FSH service user installs it via `SetFSHSupplier()` on the VCP or VCA service, which fills the header of every frame that service emits (clause 3.5.1 makes the transfer synchronous with frame release), and reads it back with `LastFSH()`. Width is the channel's fixed `ChannelConfig.FSHDataLength` (clause 4.1.3.1.6). |
+| TM-17 | GVCID | 3.5.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. |
+| TM-18 | FSH_SDU Loss Flag | 3.5.2.4 | O | - | Yes | `MasterChannel.VCFrameGap()` reports the Virtual Channel Frame Count gap, which clause 3.5.2.4 names as the derivation for this flag; read it alongside the service's `LastFSH()`. |
 | | **OCF SDU Service Parameters** | | | | | |
-| TM-19 | OCF SDU | 3.6.2.2 | M | — | Yes | `TMTransferFrame.OperationalControl` — 4-byte field. |
-| TM-20 | GVCID | 3.6.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. |
-| TM-21 | OCF SDU Frame Loss Flag | 3.6.2.4 | O | — | Yes | `FrameGapDetector` integrated into `MasterChannel.AddFrame()`. Gap detected via MC/VC frame count tracking. |
+| TM-19 | OCF SDU | 3.6.2.2 | M | - | Yes | `TMTransferFrame.OperationalControl`, 4-byte field. |
+| TM-20 | GVCID | 3.6.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. |
+| TM-21 | OCF SDU Frame Loss Flag | 3.6.2.4 | O | - | Yes | `FrameGapDetector` integrated into `MasterChannel.AddFrame()`. Gap detected via MC/VC frame count tracking. |
 | | **VC Frame Service Parameters** | | | | | |
-| TM-22 | TM Frame | 3.7.2.2 | M | — | Yes | `VirtualChannelFrameService` accepts and delivers complete `*TMTransferFrame` objects via `Send()` / `Receive()`. |
-| TM-23 | GVCID | 3.7.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. |
-| TM-24 | Frame Loss Flag | 3.7.2.4 | O | — | Yes | `FrameGapDetector` integrated into `MasterChannel.AddFrame()`. Gap detected via MC/VC frame count tracking. |
+| TM-22 | TM Frame | 3.7.2.2 | M | - | Yes | `VirtualChannelFrameService` accepts and delivers complete `*TMTransferFrame` objects via `Send()` / `Receive()`. |
+| TM-23 | GVCID | 3.7.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. |
+| TM-24 | Frame Loss Flag | 3.7.2.4 | O | - | Yes | `FrameGapDetector` integrated into `MasterChannel.AddFrame()`. Gap detected via MC/VC frame count tracking. |
 | | **MC FSH Service Parameters** | | | | | |
-| TM-25 | FSH SDU | 3.8.2.2 | M | — | Yes | `MasterChannel.SetFSHSupplier()` installs the MC_FSH service user: its FSH_SDU is placed into the Transfer Frame Secondary Header of every frame released through the master channel (clause 4.2.5.2), idle frames included. `MasterChannel.LastFSH()` delivers the SDU decommutated from the most recently received frame (clause 4.3.5.2). The SDU width is the channel's fixed `ChannelConfig.FSHDataLength` (clause 4.1.3.1.6); a mismatch is refused with `ErrFSHSizeMismatch` rather than silently truncated. |
-| TM-26 | MCID | 3.8.2.3 | M | — | Yes | `PrimaryHeader.MCID()` returns TFVN + SCID. It is the SAP address of the MC_FSH service: a `MasterChannel` is created for one SCID and rejects frames from another with `ErrSCIDMismatch`, so its FSH supplier and `LastFSH()` are scoped to that MCID. |
-| TM-27 | FSH_SDU Loss Flag | 3.8.2.4 | O | — | Yes | `MasterChannel.MCFrameGap()` reports the Master Channel Frame Count gap after each `AddFrame`, which clause 3.8.2.4 names as the way to derive the flag; read it alongside `LastFSH()`. |
+| TM-25 | FSH SDU | 3.8.2.2 | M | - | Yes | `MasterChannel.SetFSHSupplier()` installs the MC_FSH service user: its FSH_SDU is placed into the Transfer Frame Secondary Header of every frame released through the master channel (clause 4.2.5.2), idle frames included. `MasterChannel.LastFSH()` delivers the SDU decommutated from the most recently received frame (clause 4.3.5.2). The SDU width is the channel's fixed `ChannelConfig.FSHDataLength` (clause 4.1.3.1.6); a mismatch is refused with `ErrFSHSizeMismatch` rather than silently truncated. |
+| TM-26 | MCID | 3.8.2.3 | M | - | Yes | `PrimaryHeader.MCID()` returns TFVN + SCID. It is the SAP address of the MC_FSH service: a `MasterChannel` is created for one SCID and rejects frames from another with `ErrSCIDMismatch`, so its FSH supplier and `LastFSH()` are scoped to that MCID. |
+| TM-27 | FSH_SDU Loss Flag | 3.8.2.4 | O | - | Yes | `MasterChannel.MCFrameGap()` reports the Master Channel Frame Count gap after each `AddFrame`, which clause 3.8.2.4 names as the way to derive the flag; read it alongside `LastFSH()`. |
 | | **MC OCF Service Parameters** | | | | | |
-| TM-28 | OCF SDU | 3.9.2.2 | M | — | Yes | `MasterChannel.SetOCFSupplier()` installs the MC_OCF service user: its 4-octet OCF_SDU is placed into the Operational Control Field of every frame released through the master channel (clause 4.2.5.3), idle frames included. `MasterChannel.LastOCF()` delivers the SDU from the most recently received frame (clause 4.3.5.2). Per-virtual-channel OCF remains available via the services' own `SetOCFSupplier` (VC_OCF, clause 3.6). |
-| TM-29 | MCID | 3.9.2.3 | M | — | Yes | `PrimaryHeader.MCID()`, scoped as the MC_OCF service's SAP address by the owning `MasterChannel` (see TM-26). |
-| TM-30 | OCF_SDU Loss Flag | 3.9.2.4 | O | — | Yes | `MasterChannel.MCFrameGap()` reports the Master Channel Frame Count gap after each `AddFrame` (clause 3.9.2.4); read it alongside `LastOCF()`. |
+| TM-28 | OCF SDU | 3.9.2.2 | M | - | Yes | `MasterChannel.SetOCFSupplier()` installs the MC_OCF service user: its 4-octet OCF_SDU is placed into the Operational Control Field of every frame released through the master channel (clause 4.2.5.3), idle frames included. `MasterChannel.LastOCF()` delivers the SDU from the most recently received frame (clause 4.3.5.2). Per-virtual-channel OCF remains available via the services' own `SetOCFSupplier` (VC_OCF, clause 3.6). |
+| TM-29 | MCID | 3.9.2.3 | M | - | Yes | `PrimaryHeader.MCID()`, scoped as the MC_OCF service's SAP address by the owning `MasterChannel` (see TM-26). |
+| TM-30 | OCF_SDU Loss Flag | 3.9.2.4 | O | - | Yes | `MasterChannel.MCFrameGap()` reports the Master Channel Frame Count gap after each `AddFrame` (clause 3.9.2.4); read it alongside `LastOCF()`. |
 | | **MC Frame Service Parameters** | | | | | |
-| TM-31 | TM Frame | 3.10.2.2 | M | — | Yes | Realized by `MasterChannel` rather than a `Service` type: `AddFrame()` routes inbound frames to Virtual Channels by VCID, `GetNextFrame()` pulls from the integrated multiplexer, SCID matching enforced. |
-| TM-32 | MCID | 3.10.2.3 | M | — | Yes | `PrimaryHeader.MCID()`. SCID validated in `MasterChannel.AddFrame()`. |
-| TM-33 | Frame Loss Flag | 3.10.2.4 | O | — | Yes | `MasterChannel.MCFrameGap()` and `VCFrameGap()` detect frame count gaps via `FrameGapDetector`. |
+| TM-31 | TM Frame | 3.10.2.2 | M | - | Yes | Realized by `MasterChannel` rather than a `Service` type: `AddFrame()` routes inbound frames to Virtual Channels by VCID, `GetNextFrame()` pulls from the integrated multiplexer, SCID matching enforced. |
+| TM-32 | MCID | 3.10.2.3 | M | - | Yes | `PrimaryHeader.MCID()`. SCID validated in `MasterChannel.AddFrame()`. |
+| TM-33 | Frame Loss Flag | 3.10.2.4 | O | - | Yes | `MasterChannel.MCFrameGap()` and `VCFrameGap()` detect frame count gaps via `FrameGapDetector`. |
 
 **C2:** O if SDLS Option else N/A.
 
@@ -140,11 +140,11 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | TM-50 | TM Transfer Frame | 4.1.1 | M | Yes | `TMTransferFrame` struct with `Encode()` / `DecodeTMTransferFrame()` round-trip. |
-| TM-51 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader` — 6 octets (48 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (3 bits), OCF Flag (1 bit), MC Frame Count (8 bits), VC Frame Count (8 bits), Transfer Frame Data Field Status (16 bits). Big-endian encoding via `Encode()` / `Decode()`. Validated via `Validate()`. |
+| TM-51 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader`, 6 octets (48 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (3 bits), OCF Flag (1 bit), MC Frame Count (8 bits), VC Frame Count (8 bits), Transfer Frame Data Field Status (16 bits). Big-endian encoding via `Encode()` / `Decode()`. Validated via `Validate()`. |
 | TM-52 | Transfer Frame Secondary Header | 4.1.3 | M | Yes | `SecondaryHeader` struct: Version Number (2 bits, enforced as `00`), Header Length (6 bits, 0-63), Data Field (variable). `Encode()` / `Decode()` / `Validate()` methods. Presence controlled by FSHFlag. |
-| TM-53 | Transfer Frame Data Field | 4.1.4 | M | Yes | `TMTransferFrame.DataField` — the payload, sized by `ChannelConfig.DataFieldCapacity()` as the fixed frame length minus the primary header, secondary header, and trailer (clause 4.1.4.2). OID frames (clause 4.1.4.6) carry the mandatory Pseudo Noise fill: `OIDSequence` implements the 32-cell LFSR of clause 4.1.4.6.2 with polynomial D0+D1+D2+D22+D32 and the 'all ones' seed, and each `MasterChannel` keeps one generator for its lifetime so the sequence is never restarted between frames (clause 4.1.4.6.2.1). |
-| TM-54 | Operational Control Field | 4.1.5 | M | Yes | `TMTransferFrame.OperationalControl` — 4 bytes (32 bits). Included when `OCFFlag` is set. Extracted during decode. |
-| TM-55 | Frame Error Control Field | 4.1.6 | M | Yes | `TMTransferFrame.FrameErrorControl` — 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on encode via `crc.ComputeCRC16()`. Verified on decode; CRC mismatch returns error. |
+| TM-53 | Transfer Frame Data Field | 4.1.4 | M | Yes | `TMTransferFrame.DataField`, the payload, sized by `ChannelConfig.DataFieldCapacity()` as the fixed frame length minus the primary header, secondary header, and trailer (clause 4.1.4.2). OID frames (clause 4.1.4.6) carry the mandatory Pseudo Noise fill: `OIDSequence` implements the 32-cell LFSR of clause 4.1.4.6.2 with polynomial D0+D1+D2+D22+D32 and the 'all ones' seed, and each `MasterChannel` keeps one generator for its lifetime so the sequence is never restarted between frames (clause 4.1.4.6.2.1). |
+| TM-54 | Operational Control Field | 4.1.5 | M | Yes | `TMTransferFrame.OperationalControl`, 4 bytes (32 bits). Included when `OCFFlag` is set. Extracted during decode. |
+| TM-55 | Frame Error Control Field | 4.1.6 | M | Yes | `TMTransferFrame.FrameErrorControl`, 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on encode via `crc.ComputeCRC16()`. Verified on decode; CRC mismatch returns error. |
 
 ### Table A-5: Protocol Procedures
 
@@ -168,18 +168,18 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | | **Managed Parameters for a Physical Channel** | | | | | |
-| TM-68 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name` — configured at construction via `NewPhysicalChannel(name, config)`. |
+| TM-68 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name`, configured at construction via `NewPhysicalChannel(name, config)`. |
 | TM-69 | Transfer Frame Length (octets) | Table 5-1 | M | Integer | Yes | `ChannelConfig.FrameLength` defines the fixed frame length. Enforced by VCP (packing + idle-packet fill) and VCA (padding) during frame construction, and by the codec itself: `EncodeWithConfig()` and `DecodeTMTransferFrameWithConfig()` reject any other length with `ErrFrameLengthMismatch`. `DataFieldCapacity()` computes available data space. |
-| TM-70 | Transfer Frame Version Number (TFVN) | Table 5-1 | M | '00' binary | Yes | `PrimaryHeader.VersionNumber` — enforced as `0` in `Validate()`. |
-| TM-71 | Valid Spacecraft IDs | Table 5-1 | M | Integers | Yes | `PrimaryHeader.SpacecraftID` — 10 bits (0-1023). Validated in `Validate()`. Configurable per frame via `NewTMTransferFrame()`. |
+| TM-70 | Transfer Frame Version Number (TFVN) | Table 5-1 | M | '00' binary | Yes | `PrimaryHeader.VersionNumber`, enforced as `0` in `Validate()`. |
+| TM-71 | Valid Spacecraft IDs | Table 5-1 | M | Integers | Yes | `PrimaryHeader.SpacecraftID`, 10 bits (0-1023). Validated in `Validate()`. Configurable per frame via `NewTMTransferFrame()`. |
 | TM-72 | MC Multiplexing Scheme | Table 5-1 | M | Mission Specific | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing. Priority weights configured per `MasterChannel` via `AddMasterChannel()`. |
 | TM-73 | Presence of Frame Error Control | Table 5-1 | M | Present ('1') / Absent ('0') | Yes | Configurable via `ChannelConfig.HasFEC`. The default entry points (`Encode()`, `DecodeTMTransferFrame()`) keep the field; `EncodeWithConfig()` / `DecodeTMTransferFrameWithConfig()` omit or verify it per the channel configuration, which is the Reed-Solomon case CCSDS permits. |
 | | **Managed Parameters for a Master Channel** | | | | | |
-| TM-74 | SCID | Table 5-2 | M | Integer | Yes | `MasterChannel.scid` — configured at construction. Enforced in `AddFrame()`. |
-| TM-75 | Valid VCIDs | Table 5-2 | M | Selectable set of integers (0-7) | Yes | `PrimaryHeader.VirtualChannelID` — 3 bits (0-7). `MasterChannel.channels` maps registered VCIDs. |
+| TM-74 | SCID | Table 5-2 | M | Integer | Yes | `MasterChannel.scid`, configured at construction. Enforced in `AddFrame()`. |
+| TM-75 | Valid VCIDs | Table 5-2 | M | Selectable set of integers (0-7) | Yes | `PrimaryHeader.VirtualChannelID`, 3 bits (0-7). `MasterChannel.channels` maps registered VCIDs. |
 | TM-76 | VC Multiplexing Scheme | Table 5-2 | M | Mission Specific | Yes | `VirtualChannelMultiplexer` implements weighted round-robin scheduling. Priority weights determine how many consecutive frames each VC can transmit before yielding. Integrated into `MasterChannel`. |
 | TM-77 | Presence of MC_FSH | Table 5-2 | M | Present ('1') / Absent ('0') | Yes | `PrimaryHeader.FSHFlag` indicates presence. Secondary header included/excluded at frame construction. |
-| TM-78 | MC_FSH Length (if present) (octets) | Table 5-2 | M | Integer (2-64) | Yes | `SecondaryHeader.HeaderLength` — 6 bits (0-63). Data field length is variable. |
+| TM-78 | MC_FSH Length (if present) (octets) | Table 5-2 | M | Integer (2-64) | Yes | `SecondaryHeader.HeaderLength`, 6 bits (0-63). Data field length is variable. |
 | TM-79 | Presence of MC_OCF | Table 5-2 | M | Present ('1') / Absent ('0') | Yes | `PrimaryHeader.OCFFlag` indicates presence. OCF included/excluded at frame construction. |
 | | **Managed Parameters for a Virtual Channel** | | | | | |
 | TM-80 | SCID | Table 5-3 | M | Integer | Yes | `PrimaryHeader.SpacecraftID`. Set via `NewTMTransferFrame()`. |

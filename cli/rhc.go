@@ -36,7 +36,7 @@ func rhcCmd() *cobra.Command {
 // coding of one cycle and leaves delivery to whatever carries it, which for
 // a real mission is a Space Packet or a frame. But a compressed output is a
 // bit string, not an octet string, and its length in bits is not recoverable
-// from the octets — so nothing can be decompressed without being told how
+// from the octets, so nothing can be decompressed without being told how
 // long it is.
 //
 // These commands therefore write a listing of their own: one line per cycle,

@@ -1,7 +1,7 @@
 ---
 title: Time Code Formats
 short: TCF
-description: CCSDS 301.0-B-4 — how spacecraft timestamps are encoded, and what leap seconds do to them.
+description: CCSDS 301.0-B-4, how spacecraft timestamps are encoded, and what leap seconds do to them.
 order: 60
 ---
 
@@ -15,11 +15,11 @@ Most of what is hard here is not the encoding. It is [leap seconds](#tai-utc-and
 
 ## Scope
 
-**Implemented.** All four formats — CUC, CDS, CCS, and ASCII — at both epoch levels where the format allows, with the full P-field, and with bare T-field encode and decode for streams that carry no preamble.
+**Implemented.** All four formats — CUC, CDS, CCS, and ASCII: at both epoch levels where the format allows, with the full P-field, and with bare T-field encode and decode for streams that carry no preamble.
 
 **Included.** The complete integer TAI-UTC leap second table, applied automatically for CUC Level 1. `TAIUTCOffsetAt(t)` exposes it.
 
-**For the Go API** — constructors, options, and per-format detail — see the [API page](/protocols/mission/tcf).
+**For the Go API**: constructors, options, and per-format detail: see the [API page](/protocols/mission/tcf).
 
 ## Field map: the P-field
 
@@ -39,10 +39,10 @@ Second octet (only when E = 1):
 
 | ID | Binary | Format | Go |
 |---|---|---|---|
-| 1 | `001` | CUC Level 1 — unsegmented, CCSDS epoch | `tcf.CUC` |
-| 2 | `010` | CUC Level 2 — unsegmented, agency epoch | `tcf.CUC` |
-| 4 | `100` | CDS — day segmented, either level | `tcf.CDS` |
-| 5 | `101` | CCS — calendar segmented, always Level 1 UTC | `tcf.CCS` |
+| 1 | `001` | CUC Level 1, unsegmented, CCSDS epoch | `tcf.CUC` |
+| 2 | `010` | CUC Level 2, unsegmented, agency epoch | `tcf.CUC` |
+| 4 | `100` | CDS, day segmented, either level | `tcf.CDS` |
+| 5 | `101` | CCS, calendar segmented, always Level 1 UTC | `tcf.CCS` |
 
 **Level 1** means the CCSDS epoch, 1958-01-01T00:00:00 TAI. Anyone can decode it. **Level 2** means a mission-defined epoch, and the decoder has to be told which one out of band.
 
@@ -54,13 +54,13 @@ Second octet (only when E = 1):
 | Human-readable | No | Partly | Yes (BCD) | Yes |
 | Epoch | Level 1 or 2 | Level 1 or 2 | Level 1 only (UTC) | UTC |
 | Precision | 1 s to 2^-80 s | 1 ms to 1 ps | 1 s to 1 ps | 1 s to 1 ns |
-| Hardware cost | Trivial — it is a counter | Moderate | High (BCD) | N/A |
+| Hardware cost | Trivial: it is a counter | Moderate | High (BCD) | N/A |
 
 Rules of thumb: **CUC** if it runs on a spacecraft processor. **CDS** if it runs on the ground and you want to debug it. **CCS** if it has to be calendar-readable while still binary. **ASCII Type A** (calendar) or **Type B** (ordinal) if it is text.
 
 ## Gotchas
 
-**Many real streams carry no P-field at all.** A Space Packet secondary header agrees the format once in mission documentation and then sends bare T-fields forever. Use `EncodeTField()` to write one, and `DecodeCUCTField` / `DecodeCDSTField` / `DecodeCCSTField` to read one — you supply the octet counts, variant, and epoch yourself.
+**Many real streams carry no P-field at all.** A Space Packet secondary header agrees the format once in mission documentation and then sends bare T-fields forever. Use `EncodeTField()` to write one, and `DecodeCUCTField` / `DecodeCDSTField` / `DecodeCCSTField` to read one: you supply the octet counts, variant, and epoch yourself.
 
 **CUC Level 1 and Level 2 treat leap seconds differently, on purpose.** Level 1 is true TAI, so Astro applies the offset. Level 2 is pure arithmetic with no correction at all. Mixing up which one your mission uses shifts every timestamp by 37 seconds.
 
@@ -80,11 +80,11 @@ Since 1972 the offset has been a whole number of seconds, growing from 10 to **3
 
 The full table of integer TAI-UTC offsets is embedded in the package. They are historical facts and cannot change.
 
-- **CUC Level 1** — the coarse count is **true TAI seconds**. `NewCUC` adds the offset in effect at that instant and `Time()` subtracts it again. A UTC instant round-trips exactly, and the count on the wire matches what real TAI-referenced hardware produces.
-- **CUC Level 2** — **purely arithmetic**. Elapsed seconds between your epoch and the instant, no correction either way. If your mission epoch is itself TAI-referenced, apply your own convention on top.
-- **CDS**, both levels — purely arithmetic day and millisecond counting. No table applied.
-- **CCS** — always UTC calendar fields.
-- **ASCII** — always UTC, marked by the `Z` suffix. Second 60 is accepted only at 23:59:60.
+- **CUC Level 1**: the coarse count is **true TAI seconds**. `NewCUC` adds the offset in effect at that instant and `Time()` subtracts it again. A UTC instant round-trips exactly, and the count on the wire matches what real TAI-referenced hardware produces.
+- **CUC Level 2**: **purely arithmetic**. Elapsed seconds between your epoch and the instant, no correction either way. If your mission epoch is itself TAI-referenced, apply your own convention on top.
+- **CDS**, both levels, purely arithmetic day and millisecond counting. No table applied.
+- **CCS**: always UTC calendar fields.
+- **ASCII**: always UTC, marked by the `Z` suffix. Second 60 is accepted only at 23:59:60.
 
 ### Edge cases, by design
 
@@ -140,7 +140,7 @@ tcf.TAIUTCOffsetAt(t) // 37 for any t after 2017-01-01
 
 **Level 1** time codes use `CCSDSEpoch`. **Level 2** time codes use an agency-defined custom epoch.
 
-## CUC — Unsegmented Time Code
+## CUC, Unsegmented Time Code
 
 Binary counter split into coarse time (seconds since epoch) and fine time (binary fraction of a second).
 
@@ -187,7 +187,7 @@ cuc, err := tcf.NewCUC(time.Now(),
 // Encode to bytes (P-field + T-field)
 encoded, err := cuc.Encode()
 
-// Decode — pass zero time for Level 1, or the agency epoch for Level 2
+// Decode, pass zero time for Level 1, or the agency epoch for Level 2
 decoded, err := tcf.DecodeCUC(encoded, time.Time{})
 
 // Convert to Go time
@@ -197,7 +197,7 @@ t := decoded.Time()
 fmt.Println(decoded.Humanize())
 ```
 
-## CDS — Day Segmented Time Code
+## CDS, Day Segmented Time Code
 
 Day count since epoch plus milliseconds of day, with optional sub-millisecond precision.
 
@@ -240,7 +240,7 @@ cds, err := tcf.NewCDS(time.Now(),
 // Encode to bytes
 encoded, err := cds.Encode()
 
-// Decode — pass zero time for Level 1, or the agency epoch for Level 2
+// Decode, pass zero time for Level 1, or the agency epoch for Level 2
 decoded, err := tcf.DecodeCDS(encoded, time.Time{})
 
 // Convert to Go time
@@ -250,7 +250,7 @@ t := decoded.Time()
 fmt.Println(decoded.Humanize())
 ```
 
-## CCS — Calendar Segmented Time Code
+## CCS, Calendar Segmented Time Code
 
 Human-readable binary format using BCD-encoded calendar fields. Always Level 1 (UTC).
 
@@ -294,7 +294,7 @@ ccs, err := tcf.NewCCS(time.Now(), tcf.WithCCSSubSecBytes(3))
 // Encode to bytes (BCD-encoded)
 encoded, err := ccs.Encode()
 
-// Decode — no epoch needed (CCS is always Level 1 UTC)
+// Decode, no epoch needed (CCS is always Level 1 UTC)
 decoded, err := tcf.DecodeCCS(encoded)
 
 // Convert to Go time
@@ -304,7 +304,7 @@ t := decoded.Time()
 fmt.Println(decoded.Humanize())
 ```
 
-## ASCII — Text Time Codes
+## ASCII, Text Time Codes
 
 Human-readable text formats derived from ISO 8601.
 
@@ -381,6 +381,6 @@ Commentary, not sourced from the standard.
 
 ## Reference
 
-- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) — Time Code Formats (Blue Book)
-- [CCSDS 301.0-G-1](https://public.ccsds.org/Pubs/301x0g1.pdf) — Time Code Formats Summary (Green Book)
+- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf), Time Code Formats (Blue Book)
+- [CCSDS 301.0-G-1](https://public.ccsds.org/Pubs/301x0g1.pdf), Time Code Formats Summary (Green Book)
 - [CLI](/cli/time) | [Conformance](/conformance/tcf) | [The stack](/docs/start/concepts)

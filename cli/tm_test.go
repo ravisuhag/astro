@@ -38,7 +38,7 @@ func tmStream(t *testing.T, frames ...[]byte) (string, int) {
 	var all []byte
 	for i, f := range frames {
 		if len(f) != frameLen {
-			t.Fatalf("frame %d is %d bytes, want %d — all frames must be equal length", i, len(f), frameLen)
+			t.Fatalf("frame %d is %d bytes, want %d, all frames must be equal length", i, len(f), frameLen)
 		}
 		all = append(all, f...)
 	}

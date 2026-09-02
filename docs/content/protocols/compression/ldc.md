@@ -1,7 +1,7 @@
 ---
 title: Lossless Data Compression
 short: LDC
-description: CCSDS 121.0-B-3 — the Rice adaptive entropy coder, every bit recoverable.
+description: CCSDS 121.0-B-3, the Rice adaptive entropy coder, every bit recoverable.
 order: 50
 ---
 
@@ -11,8 +11,8 @@ order: 50
 
 Downlink is the scarcest thing a mission has. An instrument that produces more
 data than the link can carry has three choices: send less of it, throw some
-away, or compress it. This standard is the third choice done without loss —
-every bit comes back exactly.
+away, or compress it. This standard is the third choice done without loss.
+Every bit comes back exactly.
 
 It is the most widely used CCSDS compression standard, and it is small. Two
 stages, both pure integer arithmetic:
@@ -27,13 +27,13 @@ stages, both pure integer arithmetic:
 
 Where it sits in this library: an instrument produces samples, `pkg/ldc`
 compresses them, and the caller puts the result into packets with `pkg/spp` or
-into a file. This package does no packetization — clause 5.3 leaves that to the
+into a file. This package does no packetization, clause 5.3 leaves that to the
 packet formatter, and so does this code.
 
 ## Scope
 
-**Implemented.** Both stages — the preprocessor of section 4 and the adaptive
-entropy coder of section 3 — all five code options, reference samples, the
+**Implemented.** Both stages (the preprocessor of section 4 and the adaptive
+entropy coder of section 3) all five code options, reference samples, the
 zero-block run counting with its ROS codeword, and the section 7 file header.
 Compression and decompression both, verified against the standard's test
 vectors.
@@ -60,7 +60,7 @@ p := ldc.Params{
 }
 
 file, err := ldc.CompressFile(samples, p, 1)
-// 8192 octets in, 2617 out — a ratio of 3.13
+// 8192 octets in, 2617 out, a ratio of 3.13
 
 back, err := ldc.DecompressFile(file)
 // identical to samples
@@ -71,8 +71,8 @@ carrying every parameter and the sample count, then the coded data, then zero
 fill. That header is what makes the output self-describing, and it exists
 because a coded stream on its own says nothing about how it was made.
 
-For a caller who already shares a configuration with the far end — a mission
-putting coded data sets straight into space packets — `Compress` and
+For a caller who already shares a configuration with the far end (a mission
+putting coded data sets straight into space packets) `Compress` and
 `Decompress` skip the header.
 
 ## The preprocessor
@@ -92,7 +92,7 @@ Small errors of either sign become small values:
 
 That interleaving only works while the error can go both ways. Near the ends
 of the sample range it cannot, and the mapping switches to running straight on
-— which is what keeps an (n+1)-bit residual inside n bits instead of spilling.
+, which is what keeps an (n+1)-bit residual inside n bits instead of spilling.
 The variable that decides where the switch happens is θ, the distance from the
 prediction to the nearer end of the range.
 
@@ -101,7 +101,7 @@ Three predictor settings:
 | | |
 |---|---|
 | `PredictorUnitDelay` | predict from the previous sample; the standard's own |
-| `PredictorBypass` | predict zero, keep the mapper — for data already decorrelated but signed |
+| `PredictorBypass` | predict zero, keep the mapper, for data already decorrelated but signed |
 | `PredictorNone` | no preprocessor at all |
 
 ## Reference samples
@@ -169,18 +169,18 @@ only to 63, so a wholly zero segment can be written no other way.
 
 ## Choosing parameters
 
-`Resolution` must match the data — samples that do not fit are refused rather
+`Resolution` must match the data, samples that do not fit are refused rather
 than truncated, because truncating would make a lossless coder lossy.
 
 The rest are trades:
 
-- **BlockSize** — smaller blocks adapt faster to changing statistics and pay
+- **BlockSize**: smaller blocks adapt faster to changing statistics and pay
   more identifier bits. 16 is a reasonable default.
-- **Predictor** — unit delay for correlated data. If prediction does not help,
+- **Predictor**: unit delay for correlated data. If prediction does not help,
   it does not hurt much either; the coder will simply pick no-compression more
   often.
-- **ReferenceInterval** — see above; it is an error-containment choice.
-- **Restricted** — at four bits or fewer, clause 5.2.1.1 allows a shorter identifier
+- **ReferenceInterval**: see above; it is an error-containment choice.
+- **Restricted**: at four bits or fewer, clause 5.2.1.1 allows a shorter identifier
   at the cost of most split-sample options. Worth it only when blocks are small
   and identifiers are a real fraction of the output.
 
@@ -206,12 +206,12 @@ The official CCSDS 121.0-B-2 vector set, as mirrored in libaec's
 `data/121B2TestData`, is vendored in `pkg/ldc/testdata/` and run in full: all
 72 AllOptions and LowEntropyOptions vectors, covering resolutions 1 through
 32, each required to encode byte-identically and decode back to the exact
-samples. The ExtendedParameters set is excluded — its streams use
+samples. The ExtendedParameters set is excluded. Its streams use
 per-reference-interval byte alignment, an application framing choice this
 package does not implement (see the [PICS](/conformance/ldc)).
 
 The Green Book, CCSDS 120.0-G-4, publishes a worked preprocessor table in
-Clause 3.3.3 that this package transcribes as a test — including the two rows that
+Clause 3.3.3 that this package transcribes as a test, including the two rows that
 fall past θ, where the mapping stops interleaving. An implementation that got
 only the interleaved branch right would pass every other row of that table, so
 those two are the ones worth having.
@@ -228,8 +228,8 @@ it against this package.
 
 ## Reference
 
-- [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) — Lossless Data
+- [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf), Lossless Data
   Compression, the Blue Book
-- [CCSDS 120.0-G-4](https://public.ccsds.org/Pubs/120x0g4.pdf) — the Green Book
+- [CCSDS 120.0-G-4](https://public.ccsds.org/Pubs/120x0g4.pdf), the Green Book
   report, with the worked examples
 - [CLI](/cli/ldc) | [Conformance](/conformance/ldc) | [The stack](/docs/start/concepts)

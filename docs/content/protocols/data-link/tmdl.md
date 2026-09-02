@@ -1,7 +1,7 @@
 ---
 title: TM Space Data Link Protocol
 short: TMDL
-description: CCSDS 132.0-B-3 — fixed-length telemetry frames on the downlink.
+description: CCSDS 132.0-B-3, fixed-length telemetry frames on the downlink.
 order: 20
 ---
 
@@ -13,13 +13,13 @@ One spacecraft owns a master channel. That master channel is split into up to ei
 
 ## Scope
 
-**Implemented.** The transfer frame format, all three services from the standard — VCP (clause 3.4), VCF, and VCA — master and virtual channel multiplexing, frame gap detection, and idle frame generation with the mandatory PN fill.
+**Implemented.** The transfer frame format, all three services from the standard — VCP (clause 3.4), VCF, and VCA: master and virtual channel multiplexing, frame gap detection, and idle frame generation with the mandatory PN fill.
 
 **Somewhere else.** The sync layer is not here. Attached Sync Markers, pseudo-randomization, and CADU wrapping live in [`pkg/tmsc`](/protocols/coding/tmsc). `tmdl.PhysicalChannel` does master channel multiplexing and nothing below it.
 
 **Left to you.** Secondary header contents, and the CLCW you put in the Operational Control Field. [`pkg/cop`](/protocols/data-link/cop) builds CLCWs if you want one.
 
-**Also checked.** `ChannelConfig.Validate()` enforces the ECSS-E-ST-50-03C 2048-octet frame ceiling. It is not called for you — a CCSDS-only mission may legitimately run longer frames. See the [ECSS conformance statement](/conformance/tmdl-ecss).
+**Also checked.** `ChannelConfig.Validate()` enforces the ECSS-E-ST-50-03C 2048-octet frame ceiling. It is not called for you. A CCSDS-only mission may legitimately run longer frames. See the [ECSS conformance statement](/conformance/tmdl-ecss).
 
 ## Field map
 
@@ -50,7 +50,7 @@ The rest of the frame, on `tmdl.TMTransferFrame`:
 
 Two derived identifiers are available as methods: `PrimaryHeader.MCID()` and `PrimaryHeader.GVCID()`.
 
-Channel-wide settings live on `ChannelConfig` — `FrameLength`, `HasOCF`, `HasFEC`, and `FSHDataLength`. `ChannelConfig.DataFieldCapacity(n)` does the arithmetic for you.
+Channel-wide settings live on `ChannelConfig`, `FrameLength`, `HasOCF`, `HasFEC`, and `FSHDataLength`. `ChannelConfig.DataFieldCapacity(n)` does the arithmetic for you.
 
 ### First Header Pointer
 
@@ -68,7 +68,7 @@ When `SyncFlag` is true the FHP is undefined. Astro sends `0x07FF` and a receive
 
 **The secondary header length field is not the data field length minus one.** Clause 4.1.3.2.2.3 defines it as the *total* header length minus one, and the total includes the identification octet. So for an N-octet data field the field holds N, not N-1. Use `SecondaryHeader.SetDataField()` and let Astro work it out.
 
-**Fill is a real idle packet, not padding.** When VCP has spare room at the end of a data field it writes a Space Packet with APID `0x7FF`. Raw fill bytes would be read as a packet header by a conformant receiver. If the spare room is under 7 octets — the smallest a Space Packet can be — the idle packet spans into the next frame.
+**Fill is a real idle packet, not padding.** When VCP has spare room at the end of a data field it writes a Space Packet with APID `0x7FF`. Raw fill bytes would be read as a packet header by a conformant receiver. If the spare room is under 7 octets (the smallest a Space Packet can be) the idle packet spans into the next frame.
 
 **Idle frames must carry a PN sequence.** Clause 4.1.4.6.2 requires fill from a 32-cell shift register, polynomial D0+D1+D2+D22+D32, started at all ones and never restarted. Note 5 of clause 4.1.4.6.3 gives the reason: a repeating pattern gives the receiver too little to lock onto. The first octets are `FF FF FF FF 6D B6 D8 61 45 1F`. Each `MasterChannel` owns one generator, so back-to-back idle frames differ.
 
@@ -221,12 +221,12 @@ counter := tmdl.NewFrameCounter()
 vc := tmdl.NewVirtualChannel(1, 100)
 vcp := tmdl.NewVirtualChannelPacketService(0x1A, 1, vc, config, counter)
 
-// Send packets — automatically packed into frames
+// Send packets, automatically packed into frames
 err := vcp.Send(packet1)
 err = vcp.Send(packet2)
 err = vcp.Flush() // Emit remaining partial frame with idle fill
 
-// Receive — extracts packets using FHP and PacketSizer
+// Receive, extracts packets using FHP and PacketSizer
 pkt, err := vcp.Receive()
 ```
 
@@ -256,7 +256,7 @@ vcp.SetPacketSizer(func(data []byte) int {
 
 ### Virtual Channel Frame Service (VCF)
 
-Pass-through service — sends and receives pre-encoded frames without modification.
+Pass-through service, sends and receives pre-encoded frames without modification.
 
 ```go
 vc := tmdl.NewVirtualChannel(2, 100)
@@ -288,7 +288,7 @@ status := vca.LastStatus() // VCAStatus{SyncFlag, PacketOrderFlag, SegmentLength
 
 ### VCA Status Fields
 
-With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user — they are the VCA Status Fields of clause 3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
+With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user: they are the VCA Status Fields of clause 3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
 
 ```go
 vca.SetSendStatus(tmdl.VCAStatus{
@@ -358,7 +358,7 @@ hasPending := mc.HasPendingFrames()
 
 ### Master Channel FSH and OCF Services (MC_FSH, MC_OCF)
 
-The master channel has its own pair of services (clause 3.8, clause 3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there — that is the Master Channel Generation Function of clause 4.2.5:
+The master channel has its own pair of services (clause 3.8, clause 3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there. That is the Master Channel Generation Function of clause 4.2.5:
 
 ```go
 mc.SetFSHSupplier(func() []byte { return spacecraftTime() })  // MC_FSH
@@ -382,7 +382,7 @@ idle, err := mc.GetNextFrameOrIdle()
 ```
 
 - The First Header Pointer is `0x7FE` (`FHPOnlyIdleData`), which says "only idle data", not the `0x7FF` that says "no packet starts here" (clause 4.1.2.7.6.5).
-- The data field carries the mandatory PN sequence from `OIDSequence` — a 32-cell LFSR with polynomial D0+D1+D2+D22+D32 (clause 4.1.4.6.2). Each `MasterChannel` keeps one generator for its lifetime, since clause 4.1.4.6.2.1 forbids restarting it, so consecutive idle frames carry different octets. Constant fill would defeat the randomization the sequence exists to provide.
+- The data field carries the mandatory PN sequence from `OIDSequence`, a 32-cell LFSR with polynomial D0+D1+D2+D22+D32 (clause 4.1.4.6.2). Each `MasterChannel` keeps one generator for its lifetime, since clause 4.1.4.6.2.1 forbids restarting it, so consecutive idle frames carry different octets. Constant fill would defeat the randomization the sequence exists to provide.
 - The VCID is one that carries packets (clause 4.1.4.6.3), so a receiver has a reception function for it.
 - The secondary header and OCF still carry their MC service data: only the *data field* of an OID frame is idle (clause 4.1.4.6.3 note 1).
 
@@ -407,7 +407,7 @@ err := pc.AddFrame(frame)
 
 ### Composing with tmsc for Sync and Channel Coding
 
-The `tmsc` package (CCSDS 131.0-B-5) handles the sync layer — ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
+The `tmsc` package (CCSDS 131.0-B-5) handles the sync layer: ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tmsc"
@@ -558,12 +558,12 @@ Commentary, not sourced from the standard.
 
 **Why only 8 virtual channels?** Three bits is enough separation for most missions and keeps the header at 6 bytes. A mission that needs finer separation can multiplex by APID inside one VC.
 
-**Why 8-bit frame counters?** 256 values wrap slowly enough to catch the common failure — a single lost frame — while staying small. Longer outages are somebody else's problem, usually the FHP resync.
+**Why 8-bit frame counters?** 256 values wrap slowly enough to catch the common failure (a single lost frame) while staying small. Longer outages are somebody else's problem, usually the FHP resync.
 
 **Why no retransmission?** A TM link is one-way, and the round trip is seconds to hours. Asking again is useless. The protocol detects loss with counters, recovers with the FHP, and leaves bit errors to the coding layer.
 
 ## Reference
 
-- [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) — TM Space Data Link Protocol (Blue Book)
-- [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/) — the European profile
+- [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf), TM Space Data Link Protocol (Blue Book)
+- [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/), the European profile
 - [CLI](/cli/tm) | [Conformance](/conformance/tmdl) | [ECSS conformance](/conformance/tmdl-ecss)

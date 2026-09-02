@@ -2,32 +2,25 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/ravisuhag/astro.svg)](https://pkg.go.dev/github.com/ravisuhag/astro)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ravisuhag/astro)](https://goreportcard.com/report/github.com/ravisuhag/astro)
 
-Astro is an open-source Go library and CLI implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards — the protocols NASA, ESA, JAXA and other agencies use for spacecraft communication and data systems.
+Astro is a Go library and CLI implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards, the protocols NASA, ESA, JAXA and other agencies use to talk to spacecraft.
 
-22 standards across packets, data link, coding and synchronization, ground transfer, compression, time, packet utilization, and mission databases. No dependencies outside the Go standard library.
+22 standards, from channel coding up to mission operations. `pkg/` takes no dependencies outside the Go standard library.
 
-**[Documentation](https://astro-docs.vercel.app)** · [Protocols](https://astro-docs.vercel.app/protocols) · [CLI](https://astro-docs.vercel.app/cli)
+**[Documentation](https://astro-docs.vercel.app)** | [Protocols](https://astro-docs.vercel.app/protocols) | [CLI](https://astro-docs.vercel.app/cli) | [Conformance](https://astro-docs.vercel.app/conformance)
 
 ## Install
 
 Requires Go 1.26 or later.
 
 ```bash
-go get github.com/ravisuhag/astro          # library
-go install github.com/ravisuhag/astro@latest   # CLI
+go get github.com/ravisuhag/astro                # library
+go install github.com/ravisuhag/astro@latest     # CLI
 ```
 
 ## Library
 
 ```go
-import (
-	"github.com/ravisuhag/astro/pkg/spp"
-	"github.com/ravisuhag/astro/pkg/tmdl"
-	"github.com/ravisuhag/astro/pkg/tmsc"
-)
-
 // A telemetry packet from application 100.
 packet, _ := spp.NewTMPacket(100, []byte("temperature=22.5"))
 encoded, _ := packet.Encode()
@@ -40,44 +33,48 @@ frameBytes, _ := frame.Encode()
 cadu := tmsc.WrapCADU(frameBytes, tmsc.DefaultASM(), true)
 ```
 
-See the [Go quickstart](https://astro-docs.vercel.app/docs/start/quickstart-go) to go further, or [build a downlink](https://astro-docs.vercel.app/docs/guides/downlink) for the full chain with services and virtual channels.
+That is the chain by hand. [`pkg/stack`](https://pkg.go.dev/github.com/ravisuhag/astro/pkg/stack) builds both ends of it from one configuration value, so the spacecraft and the ground station cannot drift apart.
+
+Start with the [Go quickstart](https://astro-docs.vercel.app/docs/start/quickstart-go), then [build a downlink](https://astro-docs.vercel.app/docs/guides/downlink).
 
 ## CLI
 
 ```bash
-# Encode a telemetry Space Packet
-astro spp encode --apid 100 --type tm --data 68656c6c6f
-
-# Inspect one with an annotated hex dump
+# Encode a telemetry Space Packet, then look at what you built
 astro spp encode --apid 100 --type tm --data 68656c6c6f | astro spp inspect --input hex
 
-# Verify a CRC
+# Encode with a CRC and check it
 astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate --input hex --crc
 ```
 
-Commands: `spp`, `epp`, `tm`, `tc`, `aos`, `usdl`, `cadu`, `cltu`, `time`. Run `astro manual` for the built-in reference, or see the [CLI docs](https://astro-docs.vercel.app/cli).
+22 commands, one per protocol: `spp` `epp` `tm` `tc` `aos` `usdl` `pxdl` `cadu` `cltu` `pxsc` `ocsc` `sdls` `cop` `time` `xtce` `pus` `ldc` `rhc` `cfdp` `ltp` `bp` `sle`.
+
+Every one takes `encode`, `decode`, `inspect` and friends, reads stdin and writes stdout. Run `astro manual` for the reference built into the binary, or see the [CLI docs](https://astro-docs.vercel.app/cli).
 
 ## Protocols
 
-The full table — every standard, its package, and its conformance statement — is in the [protocol index](https://astro-docs.vercel.app/protocols).
+Every standard, its package, and its conformance statement: the [protocol index](https://astro-docs.vercel.app/protocols).
 
-Briefly: [SPP](https://astro-docs.vercel.app/protocols/transport/spp) and [EPP](https://astro-docs.vercel.app/protocols/transport/epp) for packets; [TM](https://astro-docs.vercel.app/protocols/data-link/tmdl), [TC](https://astro-docs.vercel.app/protocols/data-link/tcdl), [AOS](https://astro-docs.vercel.app/protocols/data-link/aos), [USLP](https://astro-docs.vercel.app/protocols/data-link/usdl) and [Proximity-1](https://astro-docs.vercel.app/protocols/data-link/pxdl) for data link; [TMSC](https://astro-docs.vercel.app/protocols/coding/tmsc), [TCSC](https://astro-docs.vercel.app/protocols/coding/tcsc), [PXSC](https://astro-docs.vercel.app/protocols/coding/pxsc) and [OCSC](https://astro-docs.vercel.app/protocols/coding/ocsc) for coding; [COP-1](https://astro-docs.vercel.app/protocols/data-link/cop) for reliable commanding and [SDLS](https://astro-docs.vercel.app/protocols/data-link/sdls) for security; [CFDP](https://astro-docs.vercel.app/protocols/transport/cfdp), [LTP](https://astro-docs.vercel.app/protocols/transport/ltp) and [BP](https://astro-docs.vercel.app/protocols/transport/bp) for files and delay-tolerant networking; [SLE](https://astro-docs.vercel.app/protocols/ground/sle) for ground-to-ground; [LDC](https://astro-docs.vercel.app/protocols/compression/ldc) and [RHC](https://astro-docs.vercel.app/protocols/compression/rhc) for compression; [time codes](https://astro-docs.vercel.app/protocols/mission/tcf), [PUS](https://astro-docs.vercel.app/protocols/mission/pus), and [XTCE](https://astro-docs.vercel.app/protocols/mission/xtce).
+Packets [SPP](https://astro-docs.vercel.app/protocols/transport/spp) | [EPP](https://astro-docs.vercel.app/protocols/transport/epp), data link [TM](https://astro-docs.vercel.app/protocols/data-link/tmdl) | [TC](https://astro-docs.vercel.app/protocols/data-link/tcdl) | [AOS](https://astro-docs.vercel.app/protocols/data-link/aos) | [USLP](https://astro-docs.vercel.app/protocols/data-link/usdl) | [Proximity-1](https://astro-docs.vercel.app/protocols/data-link/pxdl), coding [TMSC](https://astro-docs.vercel.app/protocols/coding/tmsc) | [TCSC](https://astro-docs.vercel.app/protocols/coding/tcsc) | [PXSC](https://astro-docs.vercel.app/protocols/coding/pxsc) | [OCSC](https://astro-docs.vercel.app/protocols/coding/ocsc) (reliability [COP-1](https://astro-docs.vercel.app/protocols/data-link/cop)) security [SDLS](https://astro-docs.vercel.app/protocols/data-link/sdls), files and DTN [CFDP](https://astro-docs.vercel.app/protocols/transport/cfdp) | [LTP](https://astro-docs.vercel.app/protocols/transport/ltp) | [BP](https://astro-docs.vercel.app/protocols/transport/bp) (ground [SLE](https://astro-docs.vercel.app/protocols/ground/sle)) compression [LDC](https://astro-docs.vercel.app/protocols/compression/ldc) | [RHC](https://astro-docs.vercel.app/protocols/compression/rhc), mission [time codes](https://astro-docs.vercel.app/protocols/mission/tcf) | [PUS](https://astro-docs.vercel.app/protocols/mission/pus) | [XTCE](https://astro-docs.vercel.app/protocols/mission/xtce).
+
+Each package ships a [conformance statement](https://astro-docs.vercel.app/conformance) saying what it implements clause by clause, and what it does not.
 
 ## Examples
-
-Runnable programs in [`examples/`](examples), each with a [walkthrough](https://astro-docs.vercel.app/docs/guides/downlink):
 
 ```bash
 go run ./examples/downlink/    # telemetry, spacecraft to ground
 go run ./examples/uplink/      # commands, with COP-1 reliable delivery
 go run ./examples/lossylink/   # the same downlink under frame loss
+go run ./examples/composed/    # both ends from one configuration
 ```
+
+Each has a walkthrough under [building things](https://astro-docs.vercel.app/docs/guides/downlink).
 
 ## Contributing
 
-Contributions are welcome. Several standards are still unimplemented and open.
+Several standards are still [unimplemented and open](https://astro-docs.vercel.app/protocols#not-implemented-yet).
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) — especially the rule about never coding a constant or field layout from memory — and [adding a protocol](https://astro-docs.vercel.app/docs/contribute/adding-a-protocol) for the conventions and required docs. Open an issue to discuss your approach before submitting a pull request.
+Read [contributing](https://astro-docs.vercel.app/docs/contribute) (especially the rule about never coding a constant or field layout from memory) and [adding a protocol](https://astro-docs.vercel.app/docs/contribute/adding-a-protocol). Open an issue to discuss your approach first.
 
 ## License
 

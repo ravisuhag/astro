@@ -19,7 +19,7 @@ var (
 	ErrInvalidEndpointID = errors.New("invalid endpoint ID")
 
 	// ErrMissingPayload indicates a bundle with no payload block, which
-	// RFC 5050 §4.5.2 requires.
+	// RFC 5050 clause 4.5.2 requires.
 	ErrMissingPayload = errors.New("bundle has no payload block")
 
 	// ErrMultiplePayloads indicates more than one payload block.
@@ -49,16 +49,16 @@ var (
 	ErrCannotFragment = errors.New("bundle must not be fragmented")
 
 	// ErrAdminRecordFlags indicates an administrative record requesting
-	// custody transfer or status reports, which §4.2 forbids.
+	// custody transfer or status reports, which clause 4.2 forbids.
 	ErrAdminRecordFlags = errors.New("an administrative record must not request custody transfer or status reports")
 
 	// ErrInvalidPriority indicates a class of service of 3, which RFC 5050
-	// §4.2 reserves.
+	// Clause 4.2 reserves.
 	ErrInvalidPriority = errors.New("class of service 3 is reserved")
 
 	// ErrAnonymousSource indicates a bundle with source dtn:none that
 	// requests custody transfer or omits the "must not be fragmented" flag.
-	// §4.2: an anonymous bundle is not uniquely identifiable, so it can
+	// Clause 4.2: an anonymous bundle is not uniquely identifiable, so it can
 	// neither take custody nor be fragmented.
 	ErrAnonymousSource = errors.New("an anonymous bundle must not request custody and must set the no-fragment flag")
 

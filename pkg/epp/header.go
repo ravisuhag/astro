@@ -19,22 +19,22 @@ Octet 0 (always present):
 The header size is a pure function of the 2-bit Length of Length field
 (table 4-1 / figure 4-2):
 
-LoL '00' — 1-octet header (idle packets only):
+LoL '00', 1-octet header (idle packets only):
   +--------+
   | Octet0 |
   +--------+
 
-LoL '01' — 2-octet header:
+LoL '01', 2-octet header:
   +--------+------------------+
   | Octet0 | Packet Length 8b |
   +--------+------------------+
 
-LoL '10' — 4-octet header:
+LoL '10', 4-octet header:
   +--------+-----------+-----------+---------------------+
   | Octet0 | UDF (4b)  | PIE (4b)  | Packet Length 16b   |
   +--------+-----------+-----------+---------------------+
 
-LoL '11' — 8-octet header:
+LoL '11', 8-octet header:
   +--------+-----------+-----------+----------------+---------------------+
   | Octet0 | UDF (4b)  | PIE (4b)  | CCSDS Defined  | Packet Length 32b   |
   |        |           |           | Field (16b)    |                     |
@@ -43,7 +43,7 @@ LoL '11' — 8-octet header:
 Legend:
   - PVN = Packet Version Number (3 bits, always '111' = 7)
   - Protocol ID = Encapsulation Protocol ID (3 bits)
-  - LoL = Length of Length (2 bits): '00'→1, '01'→2, '10'→4, '11'→8 octet header
+  - LoL = Length of Length (2 bits): '00'->1, '01'->2, '10'->4, '11'->8 octet header
   - UDF = User Defined Field (4 bits, 4- and 8-octet headers)
   - PIE = Encapsulation Protocol ID Extension (4 bits, 4- and 8-octet headers)
   - CCSDS Defined Field = 2 octets, 8-octet header only, reserved ('all zeros')
@@ -70,10 +70,10 @@ const (
 // Length of Length values per CCSDS 133.1-B-3 table 4-1. The value selects
 // both the size of the Packet Length field and the total header size.
 const (
-	LoLNone   uint8 = 0 // '00' — no Packet Length field; 1-octet header (idle only)
-	LoL1Octet uint8 = 1 // '01' — 1-octet Packet Length; 2-octet header
-	LoL2Octet uint8 = 2 // '10' — 2-octet Packet Length; 4-octet header
-	LoL4Octet uint8 = 3 // '11' — 4-octet Packet Length; 8-octet header
+	LoLNone   uint8 = 0 // '00' (no Packet Length field; 1-octet header (idle only)
+	LoL1Octet uint8 = 1 // '01') 1-octet Packet Length; 2-octet header
+	LoL2Octet uint8 = 2 // '10' (2-octet Packet Length; 4-octet header
+	LoL4Octet uint8 = 3 // '11') 4-octet Packet Length; 8-octet header
 )
 
 // Header sizes in octets, a pure function of the Length of Length field.
@@ -103,7 +103,7 @@ type Header struct {
 }
 
 // Size returns the header size in octets, determined solely by the
-// Length of Length field: '00'→1, '01'→2, '10'→4, '11'→8.
+// Length of Length field: '00'->1, '01'->2, '10'->4, '11'->8.
 func (h *Header) Size() int {
 	return 1 << (h.LengthOfLength & 0x03)
 }

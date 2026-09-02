@@ -55,7 +55,7 @@ Input comes from a file argument or from stdin. Hex input tolerates a `0x` prefi
 
 They mean the same thing everywhere.
 
-**`encode`** builds a unit from flags. **`decode`** takes one apart into fields. **`inspect`** does the same but prints an annotated hex dump alongside — this is the one for staring at a capture. **`validate`** checks a unit is well formed and reports what is wrong. **`stream`** reads a concatenated run of units from a file or pipe. **`gen`** produces synthetic test data. **`wrap`** and **`unwrap`** add and remove a coding layer.
+**`encode`** builds a unit from flags. **`decode`** takes one apart into fields. **`inspect`** does the same but prints an annotated hex dump alongside. This is the one for staring at a capture. **`validate`** checks a unit is well formed and reports what is wrong. **`stream`** reads a concatenated run of units from a file or pipe. **`gen`** produces synthetic test data. **`wrap`** and **`unwrap`** add and remove a coding layer.
 
 ## Piping
 

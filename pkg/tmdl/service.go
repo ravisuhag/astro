@@ -83,9 +83,9 @@ func makeOCF(config ChannelConfig, supplier func() []byte) ([]byte, error) {
 // supplier's octets when one is installed, and zeros otherwise.
 //
 // The length is the channel's, not the supplier's choice: CCSDS 132.0-B-3
-// §4.1.3.1.6 fixes the secondary header length for the associated channel
-// throughout a Mission Phase, and §4.1.3.1.5 requires the field to occur in
-// every frame of that channel — so a frame is emitted with a zero-filled
+// Clause 4.1.3.1.6 fixes the secondary header length for the associated channel
+// throughout a Mission Phase, and clause 4.1.3.1.5 requires the field to occur in
+// every frame of that channel, so a frame is emitted with a zero-filled
 // header rather than none when the user has nothing to say.
 func makeFSH(config ChannelConfig, supplier func() []byte) ([]byte, error) {
 	if config.FSHDataLength <= 0 {
@@ -104,7 +104,7 @@ func makeFSH(config ChannelConfig, supplier func() []byte) ([]byte, error) {
 
 // isIdleFill checks if all bytes are 0xFF (raw idle fill pattern).
 //
-// Conformant streams built by this package no longer produce raw 0xFF fill —
+// Conformant streams built by this package no longer produce raw 0xFF fill,
 // spare data field space carries real SPP idle packets (see idleFillPacket).
 // The check is kept as decode-side leniency for frames produced by older
 // versions of this package, which padded with bare 0xFF.
@@ -118,13 +118,13 @@ func isIdleFill(data []byte) bool {
 }
 
 // minPacketSize is the shortest possible Space Packet: six octets of primary
-// header plus at least one octet of data (CCSDS 133.0-B-2 §4.1.1.2).
+// header plus at least one octet of data (CCSDS 133.0-B-2 clause 4.1.1.2).
 const minPacketSize = spp.PrimaryHeaderSize + 1
 
 // idleFillPacket returns an encoded SPP idle packet (APID 0x7FF) of exactly
 // n octets. While n is below the seven-octet minimum packet size, it is grown
 // by whole data fields so the packet ends exactly on a later frame boundary,
-// per CCSDS 132.0-B-3 §4.2.2.4: fill that cannot hold a packet header spans
+// per CCSDS 132.0-B-3 clause 4.2.2.4: fill that cannot hold a packet header spans
 // into the next frame.
 func idleFillPacket(n, capacity int) ([]byte, error) {
 	for n < minPacketSize {
@@ -142,7 +142,7 @@ func idleFillPacket(n, capacity int) ([]byte, error) {
 }
 
 // isIdlePacket reports whether an encoded packet carries the SPP idle APID
-// (all ones). ECSS-E-ST-50-03C 5.4.3.5d and CCSDS 132.0-B-3 §4.3.2 require
+// (all ones). ECSS-E-ST-50-03C 5.4.3.5d and CCSDS 132.0-B-3 clause 4.3.2 require
 // the packet extraction function to discard such packets.
 func isIdlePacket(pkt []byte) bool {
 	return spp.IsIdleBytes(pkt)
@@ -216,24 +216,24 @@ func (s *VirtualChannelPacketService) SetPacketSizer(sizer PacketSizer) {
 // SetOCFSupplier installs a callback that supplies the 4-octet Operational
 // Control Field (typically a CLCW) for every frame emitted on a channel
 // configured with HasOCF. Without a supplier the field is all zeros, which a
-// receiver reads as an empty Type-1-Report; per CCSDS 132.0-B-3 §4.1.5 the
+// receiver reads as an empty Type-1-Report; per CCSDS 132.0-B-3 clause 4.1.5 the
 // field content should come from the OCF service user.
 func (s *VirtualChannelPacketService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
 
-// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 §3.5): a
+// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 clause 3.5): a
 // callback whose FSH_SDU fills the Transfer Frame Secondary Header of every
 // frame this service emits. The SDU must be exactly
 // ChannelConfig.FSHDataLength octets. Without a supplier the header is
-// zero-filled, since §4.1.3.1.5 requires it in every frame of the channel
+// zero-filled, since clause 4.1.3.1.5 requires it in every frame of the channel
 // once the channel carries one.
 func (s *VirtualChannelPacketService) SetFSHSupplier(supplier func() []byte) {
 	s.fshSupplier = supplier
 }
 
 // LastFSH returns the FSH_SDU carried by the most recently received frame, or
-// nil when none carried one. It is the VC_FSH.indication of §3.5.3.3; pair it
+// nil when none carried one. It is the VC_FSH.indication of clause 3.5.3.3; pair it
 // with the VC frame gap for the optional FSH_SDU Loss Flag.
 func (s *VirtualChannelPacketService) LastFSH() []byte { return s.lastFSH }
 
@@ -244,7 +244,7 @@ func (s *VirtualChannelPacketService) LastFSH() []byte { return s.lastFSH }
 //
 // When ChannelConfig is not set, Send creates one variable-length frame per
 // packet. That legacy path violates the fixed-frame-length rule of CCSDS
-// 132.0-B-3 §2.1.3 and exists only for in-process loopback and tests; set
+// 132.0-B-3 clause 2.1.3 and exists only for in-process loopback and tests; set
 // ChannelConfig.FrameLength for anything that leaves the process.
 func (s *VirtualChannelPacketService) Send(data []byte) error {
 	if len(data) == 0 {
@@ -273,7 +273,7 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 // idle packet (APID 0x7FF) and emits the resulting frame(s). Only meaningful
 // when ChannelConfig is set.
 //
-// CCSDS 132.0-B-3 §4.2.2 and ECSS-E-ST-50-03C 5.4.3.4g require spare data
+// CCSDS 132.0-B-3 clause 4.2.2 and ECSS-E-ST-50-03C 5.4.3.4g require spare data
 // field space to carry idle packets a conformant receiver can parse and
 // discard, not raw fill it would misread as a packet header. When the spare
 // space is under the seven-octet minimum packet size, the idle packet spans
@@ -406,9 +406,9 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 		}
 
 		// The Virtual Channel Reception Function decommutates every frame of
-		// the channel (§4.3.3.2), so the FSH_SDU of an OID frame counts too:
+		// the channel (clause 4.3.3.2), so the FSH_SDU of an OID frame counts too:
 		// only its data field is idle, the secondary header can carry valid
-		// data (§4.1.4.6.3 note 1).
+		// data (clause 4.1.4.6.3 note 1).
 		if frame.Header.FSHFlag {
 			s.lastFSH = append([]byte(nil), frame.SecondaryHeader.DataField...)
 		}
@@ -442,7 +442,7 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 
 		default:
 			if int(fhp) >= len(data) {
-				// Corrupted FHP — discard and resync
+				// Corrupted FHP, discard and resync
 				s.recvBuf = nil
 				s.synced = false
 				continue
@@ -485,7 +485,7 @@ func (s *VirtualChannelPacketService) Receive() ([]byte, error) {
 type VirtualChannelFrameService struct {
 	// config carries HasFEC so pass-through frames are decoded and re-encoded
 	// the way the channel actually frames them. It defaults to a channel with
-	// an error control field, which is the mandatory case under §5.6.1b.
+	// an error control field, which is the mandatory case under clause 5.6.1b.
 	config ChannelConfig
 
 	vcid uint8
@@ -528,16 +528,16 @@ func (s *VirtualChannelFrameService) Receive() ([]byte, error) {
 // Flush is a no-op for VCF service.
 func (s *VirtualChannelFrameService) Flush() error { return nil }
 
-// VCAStatus contains the VCA Status Fields of CCSDS 132.0-B-3 §3.4.2.3: the
+// VCAStatus contains the VCA Status Fields of CCSDS 132.0-B-3 clause 3.4.2.3: the
 // Packet Order Flag, the Segment Length Identifier, and the First Header
 // Pointer of the Transfer Frame Data Field Status. With the Synchronization
 // Flag set these bits are undefined by CCSDS and belong to the VCA service
-// user, who gives them whatever meaning the mission needs — validity,
+// user, who gives them whatever meaning the mission needs, validity,
 // sequence, or other status of the VCA_SDU. Providing the field is mandatory;
 // the semantics are user-optional.
 //
 // SyncFlag is reported on receive for completeness. It is not a status field
-// the user sets: §4.1.2.7.3.2 fixes it at '1' for a frame carrying a VCA_SDU,
+// the user sets: Clause 4.1.2.7.3.2 fixes it at '1' for a frame carrying a VCA_SDU,
 // and VirtualChannelAccessService.Send always sets it.
 type VCAStatus struct {
 	SyncFlag        bool
@@ -582,7 +582,7 @@ func NewVirtualChannelAccessService(scid uint16, vcid uint8, vcaSize int, vc *Vi
 		counter: counter,
 		vc:      vc,
 		// A user who sets no status fields gets all ones in the First Header
-		// Pointer, the value §4.1.2.7.6.4 uses for 'no packet starts here'.
+		// Pointer, the value clause 4.1.2.7.6.4 uses for 'no packet starts here'.
 		// It is the least surprising thing to put in a field CCSDS leaves
 		// undefined for VCA frames, and matches what a receiver that ignores
 		// the VCA status fields expects to see.
@@ -597,22 +597,22 @@ func (s *VirtualChannelAccessService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
 
-// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 §3.5) for
+// SetFSHSupplier installs the VC_FSH service user (CCSDS 132.0-B-3 clause 3.5) for
 // this virtual channel; see VirtualChannelPacketService.SetFSHSupplier.
 func (s *VirtualChannelAccessService) SetFSHSupplier(supplier func() []byte) {
 	s.fshSupplier = supplier
 }
 
 // LastFSH returns the FSH_SDU carried by the most recently received frame, or
-// nil when none carried one (the VC_FSH.indication of §3.5.3.3).
+// nil when none carried one (the VC_FSH.indication of clause 3.5.3.3).
 func (s *VirtualChannelAccessService) LastFSH() []byte { return s.lastFSH }
 
 // SetSendStatus sets the VCA Status Fields carried by frames from subsequent
 // Send calls. It is the VCA Status Fields parameter of the VCA.request
-// primitive (CCSDS 132.0-B-3 §3.4.3.2.2), a mandatory parameter whose
+// primitive (CCSDS 132.0-B-3 clause 3.4.3.2.2), a mandatory parameter whose
 // semantics belong to the service user.
 //
-// The Synchronization Flag field of the argument is ignored: §4.1.2.7.3.2
+// The Synchronization Flag field of the argument is ignored: Clause 4.1.2.7.3.2
 // fixes it at '1' for a frame carrying a VCA_SDU, and Send always sets it.
 func (s *VirtualChannelAccessService) SetSendStatus(status VCAStatus) {
 	s.sendStatus = status
@@ -620,7 +620,7 @@ func (s *VirtualChannelAccessService) SetSendStatus(status VCAStatus) {
 
 // Send wraps a fixed-length SDU into a TM Transfer Frame.
 //
-// CCSDS 132.0-B-3 §3.4.2.2 fixes the VCA_SDU length per virtual channel, so
+// CCSDS 132.0-B-3 clause 3.4.2.2 fixes the VCA_SDU length per virtual channel, so
 // data must be exactly vcaSize octets. On a fixed-length channel the SDU must
 // also fit the data field: a vcaSize past DataFieldCapacity returns
 // ErrDataTooLarge, since the padding a larger SDU would force could not be
@@ -654,12 +654,12 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 		return err
 	}
 
-	// §4.1.2.7.3.2: the Synchronization Flag is '1' when a VCA_SDU is
+	// Clause 4.1.2.7.3.2: the Synchronization Flag is '1' when a VCA_SDU is
 	// inserted into the data field.
 	frame.Header.SyncFlag = true
 
 	// The remaining Transfer Frame Data Field Status bits are the VCA Status
-	// Fields of §3.4.2.3, undefined by CCSDS with the Synchronization Flag
+	// Fields of clause 3.4.2.3, undefined by CCSDS with the Synchronization Flag
 	// set and carried on behalf of the service user.
 	frame.Header.PacketOrderFlag = s.sendStatus.PacketOrderFlag
 	frame.Header.SegmentLengthID = s.sendStatus.SegmentLengthID & 0x03

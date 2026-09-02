@@ -1,7 +1,7 @@
 ---
 title: astro pxsc
 short: PXSC
-description: Proximity-1 coding — PLTUs, sync, convolutional code.
+description: Proximity-1 coding, PLTUs, sync, convolutional code.
 order: 100
 ---
 
@@ -107,7 +107,7 @@ astro pxsc encode [file] [flags]
 
 ### The tail
 
-A Viterbi decoder does not commit a bit until it has seen enough of what follows to be sure of it — this one looks back 35 bits. **Without a tail, the last 35 bits of a stream never come out and a round trip silently loses its final few octets.**
+A Viterbi decoder does not commit a bit until it has seen enough of what follows to be sure of it. This one looks back 35 bits. **Without a tail, the last 35 bits of a stream never come out and a round trip silently loses its final few octets.**
 
 So `encode` appends five zero octets by default, which is the smallest whole number covering 35 bits, and a round trip through `encode | decode` comes out exact. Pass `--flush=false` when you are appending more data yourself.
 
@@ -146,4 +146,4 @@ The decoder corrects errors, which is the point of the code: a symbol stream wit
 
 ---
 
-**See also** — [the protocol page](/protocols/coding/pxsc) for the standard and the Go API, and the [conformance statement](/conformance/pxsc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/coding/pxsc) for the standard and the Go API, and the [conformance statement](/conformance/pxsc) for what is and is not implemented.

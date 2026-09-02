@@ -8,9 +8,9 @@ import (
 )
 
 // TestTMSequenceMatchesTheCCSDSVector is one of the two tests here that can
-// catch wrong taps. CCSDS 131.0-B-5 §10.4.2 specifies
+// catch wrong taps. CCSDS 131.0-B-5 clause 10.4.2 specifies
 // h(x) = x^8 + x^7 + x^5 + x^3 + 1 preset to all ones, and CCSDS 142.0-B-1
-// §3.5.2.1, which adopts the same sequence, publishes the first 40 digits:
+// Clause 3.5.2.1, which adopts the same sequence, publishes the first 40 digits:
 //
 //	1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
 //
@@ -26,7 +26,7 @@ func TestTMSequenceMatchesTheCCSDSVector(t *testing.T) {
 }
 
 // TestTCSequenceMatchesTheCCSDSVector is the other. TC does not reuse the TM
-// randomizer: CCSDS 231.0-B-4 §6.2 specifies
+// randomizer: CCSDS 231.0-B-4 clause 6.2 specifies
 // h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, also preset to all ones, and
 // prints the first 40 digits of its sequence:
 //
@@ -184,7 +184,7 @@ func TestApplyIsItsOwnInverse(t *testing.T) {
 
 // TestApplyUsesItsOwnSequence checks that the two Apply functions are wired to
 // the generators their names promise. Randomizing with one and derandomizing
-// with the other must not recover the input — which is exactly the failure a
+// with the other must not recover the input, which is exactly the failure a
 // conformant peer sees when the wrong randomizer ships.
 func TestApplyUsesItsOwnSequence(t *testing.T) {
 	data := []byte("telecommand, uplinked once")
@@ -255,7 +255,7 @@ func TestSequenceEdgeCases(t *testing.T) {
 }
 
 // TestOIDSequenceMatchesTheCCSDSVector pins the 32-cell OID generator to the
-// octets CCSDS publishes for it (132.0-B-3 §4.1.4.6.2.2 note, 732.1-B-3 annex
+// octets CCSDS publishes for it (132.0-B-3 clause 4.1.4.6.2.2 note, 732.1-B-3 annex
 // H). As with the 8-bit randomizers above, a permuted set of taps still yields
 // a plausible maximal-length sequence that no round-trip test can catch; only
 // the published digits distinguish right from wrong.
@@ -271,7 +271,7 @@ func TestOIDSequenceMatchesTheCCSDSVector(t *testing.T) {
 // TestOIDSequenceIsContinuousAcrossFills checks that the generator streams:
 // filling two buffers must give the same octets as filling one of the combined
 // length. Idle frames are filled one at a time and the sequence may not
-// restart between them (132.0-B-3 §4.1.4.6.2.1).
+// restart between them (132.0-B-3 clause 4.1.4.6.2.1).
 func TestOIDSequenceIsContinuousAcrossFills(t *testing.T) {
 	whole := make([]byte, 32)
 	pn.NewOIDSequence().Fill(whole)

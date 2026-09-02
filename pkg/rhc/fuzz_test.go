@@ -17,7 +17,7 @@ var fuzzConfigs = []rhc.Config{
 
 // FuzzDecompressPacket throws arbitrary bytes at the decompressor.
 //
-// Two properties. It never panics — every read goes through BitReader, which
+// Two properties. It never panics. Every read goes through BitReader, which
 // reports exhaustion. And it never poisons itself: after any amount of
 // rubbish, a decompressor that was working still works, which is what the
 // parse-then-commit split in Decompress exists to guarantee.
@@ -93,7 +93,7 @@ func FuzzDecompressPacket(f *testing.F) {
 			// Decompress buys, and it is worth asserting hard.
 			//
 			// Accepted: the bytes parsed as a well-formed output vector, and
-			// the decompressor took them for one. It has no way not to. §2.2
+			// the decompressor took them for one. It has no way not to. Clause 2.2
 			// is explicit that the standard "does not incorporate sync
 			// markers or other mechanisms to flag the header of the next
 			// output binary vector", and leaves detection to the mission. So

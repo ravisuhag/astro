@@ -94,7 +94,7 @@ func TestBindInvocationAcceptsLegacyStringSII(t *testing.T) {
 
 func TestPeerAbortWireVector(t *testing.T) {
 	// Annex A2.2: peerAbortInvocation [104] IMPLICIT SlePeerAbort, and the
-	// module is IMPLICIT TAGS — a primitive [104] holding the bare
+	// module is IMPLICIT TAGS, a primitive [104] holding the bare
 	// diagnostic octet. 104 needs the high-tag form: 9F 68.
 	assoc, err := sle.NewAssociation(sle.AssociationConfig{
 		Role:            sle.RoleUser,

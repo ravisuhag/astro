@@ -154,9 +154,9 @@ func (s *MAPPacketService) emitFrame(data []byte, segFlags uint8) error {
 // carrying several packets back to back is delimited with the configured
 // PacketSizer, and the extra packets are buffered for later calls.
 //
-// A gap in a segment sequence — a First or Unsegmented frame arriving
+// A gap in a segment sequence (a First or Unsegmented frame arriving
 // while a reassembly is in progress, a Continuation or Last without a
-// First, or a MAP ID change mid-packet — discards the partial packet and
+// First, or a MAP ID change mid-packet) discards the partial packet and
 // returns ErrIncompleteSegment. The interrupting frame is preserved and
 // delivered by the next call.
 func (s *MAPPacketService) Receive() ([]byte, error) {

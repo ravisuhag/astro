@@ -223,7 +223,7 @@ func printCLTUInspect(data []byte) {
 	if startMatch {
 		fmt.Println(" [VALID]")
 	} else {
-		fmt.Printf(" [MISMATCH — expected %s]\n", hex.EncodeToString(startSeq))
+		fmt.Printf(" [MISMATCH, expected %s]\n", hex.EncodeToString(startSeq))
 	}
 
 	// Tail sequence
@@ -237,7 +237,7 @@ func printCLTUInspect(data []byte) {
 	if tailMatch {
 		fmt.Println(" [VALID]")
 	} else {
-		fmt.Printf(" [MISMATCH — expected %s]\n", hex.EncodeToString(tailSeq))
+		fmt.Printf(" [MISMATCH, expected %s]\n", hex.EncodeToString(tailSeq))
 	}
 
 	// Codeblocks

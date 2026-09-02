@@ -3,22 +3,22 @@ package cfdp
 import "hash/crc32"
 
 // Checksum types from the SANA Checksum Identifiers registry, as referenced by
-// CCSDS 727.0-B-5 §4.2.2.2.
+// CCSDS 727.0-B-5 clause 4.2.2.2.
 const (
-	// ChecksumModular is the legacy modular checksum. §4.2.2.3 requires every
+	// ChecksumModular is the legacy modular checksum. Clause 4.2.2.3 requires every
 	// implementation to provide it.
 	ChecksumModular uint8 = 0
 	// ChecksumCRC32C is CRC-32 Castagnoli, registry entry 2.
 	ChecksumCRC32C uint8 = 2
 	// ChecksumCRC32 is the standard CRC-32, registry entry 3.
 	ChecksumCRC32 uint8 = 3
-	// ChecksumNull always yields zero. §4.2.2.4 requires it, and warns that it
+	// ChecksumNull always yields zero. Clause 4.2.2.4 requires it, and warns that it
 	// protects nothing.
 	ChecksumNull uint8 = 15
 )
 
 // Checksum accumulates a CFDP file checksum. Every checksum is 32 bits
-// (§4.2.1.2).
+// (clause 4.2.1.2).
 //
 // Segments may arrive in any order and at any offset: Update takes the file
 // offset with the data, so an out-of-order stream produces the same result as
@@ -49,7 +49,7 @@ func NewChecksum(checksumType uint8) (Checksum, error) {
 	}
 }
 
-// modularChecksum implements the legacy modular checksum of §4.2.2.3, with the
+// modularChecksum implements the legacy modular checksum of clause 4.2.2.3, with the
 // worked example in Annex F.
 //
 // The file is cut into 4-octet words aligned to file offsets that are
@@ -59,7 +59,7 @@ func NewChecksum(checksumType uint8) (Checksum, error) {
 // Rather than buffer words, this folds one octet at a time: an octet at file
 // offset q contributes its value shifted left by 8*(3 - q mod 4) bits. That is
 // the same arithmetic, and it makes the alignment rule of Annex F note 1 and
-// the padding rule of note 2 fall out for free — a partial word simply has
+// the padding rule of note 2 fall out for free. A partial word simply has
 // fewer contributions, which is identical to padding it with zeros.
 type modularChecksum struct {
 	sum uint32
@@ -75,7 +75,7 @@ func (c *modularChecksum) Update(offset uint64, data []byte) {
 func (c *modularChecksum) Sum() uint32 { return c.sum }
 func (c *modularChecksum) Type() uint8 { return ChecksumModular }
 
-// nullChecksum is the null algorithm of §4.2.2.4: always zero.
+// nullChecksum is the null algorithm of clause 4.2.2.4: always zero.
 type nullChecksum struct{}
 
 func (c *nullChecksum) Update(uint64, []byte) {}

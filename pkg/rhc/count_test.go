@@ -25,7 +25,7 @@ func bitString(data []byte, bits int) string {
 	return string(out)
 }
 
-// TestCountTable transcribes table 5-1 of CCSDS 124.0-B-1 §5.2.2:
+// TestCountTable transcribes table 5-1 of CCSDS 124.0-B-1 clause 5.2.2:
 //
 //	A = 1          '0'
 //	2 <= A <= 33   '110' || BIT5(A-2)
@@ -168,7 +168,7 @@ func TestRLEFigure5_1(t *testing.T) {
 	}
 }
 
-// TestRLETrailingZerosAreNotEncoded pins note 1 of §5.2.3: zeros after the last
+// TestRLETrailingZerosAreNotEncoded pins note 1 of clause 5.2.3: zeros after the last
 // one bit are inferred from the vector length.
 func TestRLETrailingZerosAreNotEncoded(t *testing.T) {
 	short := rhc.VectorFromString("1")
@@ -188,7 +188,7 @@ func TestRLETrailingZerosAreNotEncoded(t *testing.T) {
 	}
 }
 
-// TestRLEOfZeroVector pins note 2 of §5.2.3: a vector with no one bits encodes
+// TestRLEOfZeroVector pins note 2 of clause 5.2.3: a vector with no one bits encodes
 // as just the '10' terminator.
 func TestRLEOfZeroVector(t *testing.T) {
 	var w rhc.BitWriter

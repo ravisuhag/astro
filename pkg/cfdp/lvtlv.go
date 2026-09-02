@@ -4,8 +4,8 @@ package cfdp
 // followed by that many octets. Used for filenames, whose position in the PDU
 // is fixed even though their length is not.
 //
-// A zero length means the value is absent — an empty filename, for instance,
-// marks a transaction with no associated file (§5.2.5).
+// A zero length means the value is absent, an empty filename, for instance,
+// marks a transaction with no associated file (clause 5.2.5).
 type LV struct {
 	Value []byte
 }
@@ -44,21 +44,21 @@ func DecodeLV(data []byte) (LV, int, error) {
 	return LV{Value: v}, 1 + n, nil
 }
 
-// TLVType identifies the kind of a TLV object, per §5.4.
+// TLVType identifies the kind of a TLV object, per clause 5.4.
 type TLVType uint8
 
 const (
-	// TLVFilestoreRequest carries a filestore action to perform (§5.4.1).
+	// TLVFilestoreRequest carries a filestore action to perform (clause 5.4.1).
 	TLVFilestoreRequest TLVType = 0x00
-	// TLVFilestoreResponse reports the outcome of one request (§5.4.2).
+	// TLVFilestoreResponse reports the outcome of one request (clause 5.4.2).
 	TLVFilestoreResponse TLVType = 0x01
-	// TLVMessageToUser carries an opaque application message (§5.4.3).
+	// TLVMessageToUser carries an opaque application message (clause 5.4.3).
 	TLVMessageToUser TLVType = 0x02
-	// TLVFaultHandlerOverride changes the handler for one condition (§5.4.4).
+	// TLVFaultHandlerOverride changes the handler for one condition (clause 5.4.4).
 	TLVFaultHandlerOverride TLVType = 0x04
-	// TLVFlowLabel carries a mission-defined flow label (§5.4.5).
+	// TLVFlowLabel carries a mission-defined flow label (clause 5.4.5).
 	TLVFlowLabel TLVType = 0x05
-	// TLVEntityID carries an entity ID, used for fault location (§5.4.6).
+	// TLVEntityID carries an entity ID, used for fault location (clause 5.4.6).
 	TLVEntityID TLVType = 0x06
 )
 
@@ -146,7 +146,7 @@ func encodeTLVs(tlvs []TLV) ([]byte, error) {
 	return out, nil
 }
 
-// EntityIDTLV builds the entity ID TLV that carries a fault location (§5.4.6).
+// EntityIDTLV builds the entity ID TLV that carries a fault location (clause 5.4.6).
 func EntityIDTLV(id EntityID) (TLV, error) {
 	b, err := id.Encode()
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 
 // FuzzLoad throws arbitrary bytes at the loader.
 //
-// Load is this package's only untrusted-input entry point — everything else
-// works on an already-parsed tree — so it is the only thing worth fuzzing. The
+// Load is this package's only untrusted-input entry point (everything else
+// works on an already-parsed tree) so it is the only thing worth fuzzing. The
 // properties are that it never panics and never hangs, which is what the size
 // cap and the depth pre-scan exist to guarantee. Validate and Humanize run too
 // whenever Load succeeds, because a document that parses can still steer them

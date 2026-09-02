@@ -2,7 +2,7 @@ package pxdl
 
 import "time"
 
-// Managed parameters, per CCSDS 211.0-B-6 §4 and annex C.
+// Managed parameters, per CCSDS 211.0-B-6 clause 4 and annex C.
 //
 // Proximity-1 keeps its per-session configuration in a Management
 // Information Base. Most of its entries drive the MAC sublayer and COP-P,
@@ -17,11 +17,11 @@ import "time"
 type ManagedParameters struct {
 	// LocalSpacecraftID is Local_Spacecraft_ID: the SCID of this node. Used
 	// to validate a received frame whose Source-or-Destination Identifier
-	// says the SCID names the destination (§3.2.2.9.3).
+	// says the SCID names the destination (clause 3.2.2.9.3).
 	LocalSpacecraftID uint16
 
 	// RemoteSpacecraftID is Remote_Spacecraft_ID: the SCID of the node at
-	// the far end of the link (§3.2.2.9.3).
+	// the far end of the link (clause 3.2.2.9.3).
 	RemoteSpacecraftID uint16
 
 	// SendMaximumFrameLength is Maximum_Frame_Length for the frames this
@@ -35,7 +35,7 @@ type ManagedParameters struct {
 	ReceiveMaximumFrameLength int
 
 	// MaximumPacketSize is Maximum_Packet_Size: the largest packet the
-	// segmentation and reassembly process handles, in octets (§4.4.2.1).
+	// segmentation and reassembly process handles, in octets (clause 4.4.2.1).
 	MaximumPacketSize int
 
 	// SynchTimeout is Synch_Timeout: how long the receiving end waits

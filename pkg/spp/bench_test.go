@@ -9,8 +9,8 @@ import (
 
 // Benchmarks for the packet paths a ground station runs at packet rate.
 //
-// A downlink carries far more packets than frames — several packets fit in
-// one frame — so this loop runs more often than the frame one.
+// A downlink carries far more packets than frames (several packets fit in
+// one frame) so this loop runs more often than the frame one.
 //
 // Run with:
 //

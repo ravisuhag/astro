@@ -36,7 +36,7 @@ func TestEOFPDURoundTrip(t *testing.T) {
 }
 
 func TestEOFPDUCarriesFaultLocation(t *testing.T) {
-	// §5.2.2: present whenever the condition code is not 'no error'.
+	// Clause 5.2.2: present whenever the condition code is not 'no error'.
 	loc, err := cfdp.EntityIDTLV(cfdp.EntityID{Value: 9, Width: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestFinishedPDUSeparatesResponsesFromFaultLocation(t *testing.T) {
 }
 
 func TestACKPDUSubtypeRules(t *testing.T) {
-	// §5.2.4: subtype '0001' for a Finished PDU, '0000' otherwise.
+	// Clause 5.2.4: subtype '0001' for a Finished PDU, '0000' otherwise.
 	tests := []struct {
 		acked       cfdp.DirectiveCode
 		wantSubtype uint8
@@ -210,7 +210,7 @@ func TestMetadataPDURoundTrip(t *testing.T) {
 }
 
 func TestMetadataPDUEmptyFilenames(t *testing.T) {
-	// §5.2.5: a transaction with no associated file carries zero-length LVs.
+	// Clause 5.2.5: a transaction with no associated file carries zero-length LVs.
 	meta := &cfdp.MetadataPDU{ChecksumType: cfdp.ChecksumNull}
 	encoded, err := meta.Encode(false)
 	if err != nil {

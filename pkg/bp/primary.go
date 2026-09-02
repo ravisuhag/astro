@@ -6,7 +6,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-// BundleFlags are the bundle processing control flags of RFC 5050 §4.2.
+// BundleFlags are the bundle processing control flags of RFC 5050 clause 4.2.
 //
 // The field is an SDNV, so it has no fixed width. Bits 0 to 6 are handling
 // requests, 7 to 13 carry the class of service, and 14 to 20 request status
@@ -40,10 +40,10 @@ const (
 )
 
 // priorityShift is where the two-bit class-of-service field starts: bits 7
-// and 8, with bit 8 the most significant (§4.2).
+// and 8, with bit 8 the most significant (clause 4.2).
 const priorityShift = 7
 
-// Priority is the bundle's class of service, per §4.2.
+// Priority is the bundle's class of service, per clause 4.2.
 type Priority uint8
 
 const (
@@ -84,14 +84,14 @@ func (f BundleFlags) WithPriority(p Priority) BundleFlags {
 func (f BundleFlags) Has(want BundleFlags) bool { return f&want == want }
 
 // CreationTimestamp identifies a bundle together with its source endpoint,
-// per §4.5.1. The time is seconds since the year 2000, and the sequence
+// per clause 4.5.1. The time is seconds since the year 2000, and the sequence
 // number distinguishes bundles created within the same second.
 type CreationTimestamp struct {
 	Time           uint64
 	SequenceNumber uint64
 }
 
-// PrimaryBlock is the primary bundle block of RFC 5050 §4.5.1.
+// PrimaryBlock is the primary bundle block of RFC 5050 clause 4.5.1.
 //
 // The four endpoints travel as offsets into a shared dictionary rather than
 // as strings, so a bundle whose source and report-to are the same endpoint
@@ -111,7 +111,7 @@ type PrimaryBlock struct {
 	Lifetime uint64
 
 	// FragmentOffset and TotalADULength are present only when FlagFragment
-	// is set (§4.5.1).
+	// is set (clause 4.5.1).
 	FragmentOffset uint64
 	TotalADULength uint64
 }
@@ -122,9 +122,9 @@ func (p *PrimaryBlock) IsFragment() bool { return p.Flags.Has(FlagFragment) }
 // IsAdminRecord reports whether the payload is an administrative record.
 func (p *PrimaryBlock) IsAdminRecord() bool { return p.Flags.Has(FlagAdminRecord) }
 
-// Validate checks the block against §4.2 and §4.5.1.
+// Validate checks the block against clause 4.2 and clause 4.5.1.
 func (p *PrimaryBlock) Validate() error {
-	// §4.2: an administrative record requests neither custody transfer nor
+	// Clause 4.2: an administrative record requests neither custody transfer nor
 	// any status report.
 	if p.IsAdminRecord() {
 		reportFlags := FlagReportReception | FlagReportCustody | FlagReportForwarding |
@@ -134,7 +134,7 @@ func (p *PrimaryBlock) Validate() error {
 		}
 	}
 
-	// §4.2: class of service 3 is reserved.
+	// Clause 4.2: class of service 3 is reserved.
 	if p.Flags.Priority() > PriorityExpedited {
 		return ErrInvalidPriority
 	}
@@ -144,7 +144,7 @@ func (p *PrimaryBlock) Validate() error {
 		return ErrFragmentFlags
 	}
 
-	// §4.2: an anonymous bundle — source dtn:none — is not uniquely
+	// Clause 4.2: an anonymous bundle (source dtn:none) is not uniquely
 	// identifiable, so custody transfer must not be requested and the
 	// "must not be fragmented" flag must be set.
 	if p.Source.IsNull() {
@@ -161,11 +161,11 @@ func (p *PrimaryBlock) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	// RFC 6260 §2.1: when every endpoint is either ipn or dtn:none, the
-	// dictionary is omitted entirely — its length encodes as zero — and each
+	// RFC 6260 clause 2.1: when every endpoint is either ipn or dtn:none, the
+	// dictionary is omitted entirely (its length encodes as zero) and each
 	// endpoint's node and service numbers ride in the offset fields
 	// themselves. That is Compressed Bundle Header Encoding, and CCSDS
-	// 734.2-B-1 §3.2 mandates it. dtn:none travels as the pair (0, 0).
+	// 734.2-B-1 clause 3.2 mandates it. dtn:none travels as the pair (0, 0).
 	endpoints := [4]EndpointID{p.Destination, p.Source, p.ReportTo, p.Custodian}
 	var pairs [8]uint64
 	cbhe := true
@@ -180,7 +180,7 @@ func (p *PrimaryBlock) Encode() ([]byte, error) {
 
 	var dictBuf []byte
 	if !cbhe {
-		// RFC 5050 §4.4: the general form, a dictionary of null-terminated
+		// RFC 5050 clause 4.4: the general form, a dictionary of null-terminated
 		// strings with each endpoint as a pair of offsets into it. Build the
 		// dictionary first: the offsets depend on it.
 		dict := newDictionary()
@@ -268,7 +268,7 @@ func DecodePrimaryBlock(data []byte) (*PrimaryBlock, int, error) {
 	for i, target := range []*EndpointID{&p.Destination, &p.Source, &p.ReportTo, &p.Custodian} {
 		var eid EndpointID
 		if dictLen == 0 {
-			// RFC 6260 §2.2: a zero-length dictionary marks CBHE — the
+			// RFC 6260 clause 2.2: a zero-length dictionary marks CBHE. The
 			// offset fields hold ipn node and service numbers directly,
 			// with (0, 0) standing for dtn:none.
 			eid, err = cbheEndpoint(fields[i*2], fields[i*2+1])

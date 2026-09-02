@@ -20,10 +20,10 @@ import (
 )
 
 // TFVN is the USLP Transfer Frame Version Number (CCSDS 732.1-B-3
-// §4.1.2.2.2: '1100').
+// Clause 4.1.2.2.2: '1100').
 const TFVN = 12 // 0b1100
 
-// TFDZ Construction Rules per CCSDS 732.1-B-3 §4.1.4.2.2.2.
+// TFDZ Construction Rules per CCSDS 732.1-B-3 clause 4.1.4.2.2.2.
 const (
 	// RulePacketsSpanning ('000'): fixed-length TFDZ of concatenated CCSDS
 	// packets that may span frame boundaries; the First Header Pointer is
@@ -52,18 +52,18 @@ const (
 	RuleNoSegmentation uint8 = 0b111
 )
 
-// Special pointer values (CCSDS 732.1-B-3 §4.1.4.2.4).
+// Special pointer values (CCSDS 732.1-B-3 clause 4.1.4.2.4).
 const (
 	// FHPNoPacketStart: for rule '000', no packet starts within this TFDZ
-	// ('all ones', §4.1.4.2.4.4).
+	// ('all ones', clause 4.1.4.2.4.4).
 	FHPNoPacketStart uint16 = 0xFFFF
 	// LVOPIncomplete: for rules '001'/'010', the SDU does not complete
-	// within this TFDZ ('all ones', §4.1.4.2.4.6).
+	// within this TFDZ ('all ones', clause 4.1.4.2.4.6).
 	LVOPIncomplete uint16 = 0xFFFF
 )
 
 // USLP Protocol Identifiers from the SANA UPID registry
-// (https://sanaregistry.org/r/uslp_protocol_id, CCSDS 732.1-B-3 §4.1.4.2.3).
+// (https://sanaregistry.org/r/uslp_protocol_id, CCSDS 732.1-B-3 clause 4.1.4.2.3).
 const (
 	UPIDSpacePackets       uint8 = 0  // Space Packets or Encapsulation Packets
 	UPIDCOP1Control        uint8 = 1  // COP-1 Control Commands
@@ -77,7 +77,7 @@ const (
 )
 
 // OIDVCID is the Virtual Channel ID reserved for Only Idle Data frames
-// (CCSDS 732.1-B-3 §4.1.4.1.6: 'all ones').
+// (CCSDS 732.1-B-3 clause 4.1.4.1.6: 'all ones').
 const OIDVCID = 63
 
 // Primary header sizes.
@@ -89,13 +89,13 @@ const (
 	// header before the variable Virtual Channel Frame Count.
 	PrimaryHeaderBaseSize = 7
 	// MaxVCFCountLen is the largest VCF Count field length in octets
-	// (§4.1.2.11, table 4-2).
+	// (clause 4.1.2.11, table 4-2).
 	MaxVCFCountLen = 7
 )
 
 // PrimaryHeader represents the USLP Transfer Frame Primary Header.
 //
-// Bit layout (CCSDS 732.1-B-3 §4.1.2):
+// Bit layout (CCSDS 732.1-B-3 clause 4.1.2):
 //
 //	Byte 0:  TFVN[3:0]    | SCID[15:12]
 //	Byte 1:  SCID[11:4]
@@ -229,7 +229,7 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 	h.FrameLength = binary.BigEndian.Uint16(data[4:6])
 	h.BypassSeqCtrl = data[6]&(1<<7) != 0
 	h.ProtCtrlCmd = data[6]&(1<<6) != 0
-	// §4.1.2.9: bits 50-51 are reserved spares and shall be '00'.
+	// Clause 4.1.2.9: bits 50-51 are reserved spares and shall be '00'.
 	if data[6]&0x30 != 0 {
 		return ErrInvalidHeaderSpare
 	}
@@ -299,7 +299,7 @@ func (h *PrimaryHeader) Humanize() string {
 }
 
 // DataFieldHeader represents the USLP Transfer Frame Data Field Header
-// (TFDF Header, CCSDS 732.1-B-3 §4.1.4.2): one mandatory octet holding
+// (TFDF Header, CCSDS 732.1-B-3 clause 4.1.4.2): one mandatory octet holding
 // the TFDZ Construction Rules (3 bits) and the UPID (5 bits), followed by
 // a 16-bit First Header Pointer / Last Valid Octet Pointer only for the
 // construction rules that require one ('000', '001', '010').
@@ -310,7 +310,7 @@ type DataFieldHeader struct {
 }
 
 // HasPointer reports whether the construction rule carries the 16-bit
-// pointer field (§4.1.4.2.4.1: rules '000', '001', and '010' only).
+// pointer field (clause 4.1.4.2.4.1: rules '000', '001', and '010' only).
 func (h *DataFieldHeader) HasPointer() bool {
 	return h.ConstructionRule <= RuleContinuingSDU
 }
@@ -401,8 +401,8 @@ func (h *DataFieldHeader) Humanize() string {
 }
 
 // FECSize16 is the size of the 16-bit Frame Error Control Field
-// (§4.1.6.2.2: when present, the FECF occupies the last 16 bits of every
-// Transfer Frame — USLP has no other FECF size).
+// (clause 4.1.6.2.2: when present, the FECF occupies the last 16 bits of every
+// Transfer Frame, USLP has no other FECF size).
 const FECSize16 = 2
 
 // OCFSize is the size of the Operational Control Field in bytes.
@@ -413,7 +413,7 @@ const OCFSize = 4
 // Layout: PrimaryHeader | InsertZone? | TFDF Header | TFDZ | OCF? | FECF?
 //
 // Truncated frames (annex D) carry only the 4-octet primary header, a
-// 1-octet TFDF header, and the TFDZ — no insert zone, OCF, or FECF.
+// 1-octet TFDF header, and the TFDZ: no insert zone, OCF, or FECF.
 type TransferFrame struct {
 	Header          PrimaryHeader
 	InsertZone      []byte          // optional, fixed length per physical channel
@@ -439,7 +439,7 @@ func WithOCF(ocf []byte) FrameOption {
 }
 
 // WithoutFECF omits the Frame Error Control Field. Its presence is a
-// managed parameter of the physical channel (§4.1.6.2.1).
+// managed parameter of the physical channel (clause 4.1.6.2.1).
 func WithoutFECF() FrameOption {
 	return func(f *TransferFrame) { f.HasFECF = false }
 }
@@ -561,7 +561,7 @@ func NewTruncatedFrame(scid uint16, vcid, mapid uint8, data []byte, opts ...Fram
 		return nil, ErrTruncatedFrameFields
 	}
 	if len(frame.DataField) == 0 {
-		// Annex D1.3.2 note 2: minimum 6 octets — the truncated headers
+		// Annex D1.3.2 note 2: minimum 6 octets, the truncated headers
 		// plus a single TFDZ octet.
 		return nil, ErrTruncatedFrameTooShort
 	}
@@ -587,7 +587,7 @@ func (f *TransferFrame) computeTotalLength() int {
 	return total
 }
 
-// computeFECF computes the Frame Error Control Field (§4.1.6.2.3: the
+// computeFECF computes the Frame Error Control Field (clause 4.1.6.2.3: the
 // 16-bit coding procedure of annex B).
 func (f *TransferFrame) computeFECF() error {
 	encoded, err := f.encodeWithoutFECF()
@@ -669,7 +669,7 @@ func (f *TransferFrame) Encode() ([]byte, error) {
 // DecodeTransferFrame parses a byte slice into a USLP Transfer Frame.
 //
 // fecSize is the managed FECF presence for the physical channel: 0
-// (absent) or FECSize16 (§4.1.6.2.2: the FECF, when present, is the last
+// (absent) or FECSize16 (clause 4.1.6.2.2: the FECF, when present, is the last
 // 16 bits of the frame). insertZoneLen is the managed insert zone length
 // (0 if none). OCF presence is signaled in-band by the OCF Flag.
 // Truncated frames (EndOfFPH set) carry no insert zone, OCF, or FECF,
@@ -688,7 +688,7 @@ func DecodeTransferFrame(data []byte, fecSize int, insertZoneLen int) (*Transfer
 		return decodeTruncated(data, header)
 	}
 
-	// §4.1.2.7: the frame length field counts every octet of the frame.
+	// Clause 4.1.2.7: the frame length field counts every octet of the frame.
 	// Cross-check it against the buffer before trusting any offset.
 	if int(header.FrameLength)+1 != len(data) {
 		return nil, ErrFrameLengthMismatch
@@ -779,7 +779,7 @@ func decodeTruncated(data []byte, header PrimaryHeader) (*TransferFrame, error) 
 }
 
 // IsIdleFrame reports whether the frame is an Only Idle Data frame.
-// Per CCSDS 732.1-B-3 §4.1.4.1.6, OID frames use VCID 63.
+// Per CCSDS 732.1-B-3 clause 4.1.4.1.6, OID frames use VCID 63.
 func IsIdleFrame(frame *TransferFrame) bool {
 	return frame.Header.VCID == OIDVCID
 }
@@ -787,9 +787,9 @@ func IsIdleFrame(frame *TransferFrame) bool {
 // DefaultIdleFill is the idle fill byte used when ChannelConfig.IdlePattern
 // is empty. It fills the unused tail of fixed-length TFDZs behind the Last
 // Valid Octet Pointer and the body of Encapsulation Idle Packets; that
-// idle pattern is project-specified (§4.1.4.3 note 1; a random pattern is
+// idle pattern is project-specified (clause 4.1.4.3 note 1; a random pattern is
 // preferred) and can be overridden via ChannelConfig.IdlePattern. The TFDZ
-// of an OID frame is NOT filled with this pattern: §4.1.4.1.10 mandates
+// of an OID frame is NOT filled with this pattern: Clause 4.1.4.1.10 mandates
 // the PN sequence generated by OIDSequence.
 const DefaultIdleFill byte = 0x55
 
@@ -813,31 +813,31 @@ func padDataField(data []byte, capacity int, pattern []byte) []byte {
 }
 
 // OIDSequence generates the mandatory Pseudo Noise (PN) sequence that
-// fills the TFDZ of OID Transfer Frames (CCSDS 732.1-B-3 §4.1.4.1.10,
+// fills the TFDZ of OID Transfer Frames (CCSDS 732.1-B-3 clause 4.1.4.1.10,
 // annex H): a 32-cell Fibonacci-form Linear Feedback Shift Register with
 // polynomial D0 + D1 + D2 + D22 + D32, initialized to the 'all ones'
 // state at device start-up and never restarted for subsequent frames.
 // The first octets of the stream are FF FF FF FF 6D B6 D8 61 ...
 // (annex H). It is safe for concurrent use.
 //
-// TM mandates the same generator (CCSDS 132.0-B-3 §4.1.4.6.2), so the
+// TM mandates the same generator (CCSDS 132.0-B-3 clause 4.1.4.6.2), so the
 // implementation is shared with pkg/tmdl rather than copied.
 type OIDSequence = pn.OIDSequence
 
 // NewOIDSequence returns a PN generator in the 'all ones' start-up state.
 // Keep one generator per physical channel for the life of the device; the
-// sequence must not be restarted across OID frames (§4.1.4.1.10.1).
+// sequence must not be restarted across OID frames (clause 4.1.4.1.10.1).
 func NewOIDSequence() *OIDSequence { return pn.NewOIDSequence() }
 
 // NewIdleFrame creates an OID (Only Idle Data) Transfer Frame per CCSDS
-// 732.1-B-3 §4.1.4.1: VCID 63, MAP ID 0, construction rule '001' with the
+// 732.1-B-3 clause 4.1.4.1: VCID 63, MAP ID 0, construction rule '001' with the
 // Last Valid Octet Pointer set to the last TFDZ octet, UPID 'Idle Data',
-// and a TFDZ filled from the mandatory PN sequence (§4.1.4.1.10). OID
+// and a TFDZ filled from the mandatory PN sequence (clause 4.1.4.1.10). OID
 // frames exist only on fixed-length physical channels.
 //
 // fill is the channel's persistent PN generator; passing nil starts a
 // fresh sequence for this frame only, which is fine for a single frame
-// but violates the never-restarted rule across frames — long-lived
+// but violates the never-restarted rule across frames, long-lived
 // senders must keep one OIDSequence (MasterChannel does). ocf supplies
 // the 4-octet Operational Control Field when config.HasOCF is set; with
 // HasOCF and no OCF the frame is refused rather than fabricating an

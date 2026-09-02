@@ -1,7 +1,7 @@
 ---
 title: Space Packet Protocol
 short: SPP
-description: CCSDS 133.0-B-2 — the packet that carries application data across a mission.
+description: CCSDS 133.0-B-2. The packet that carries application data across a mission.
 order: 10
 ---
 
@@ -13,7 +13,7 @@ Packets do not travel alone. A data link protocol packs them into transfer frame
 
 ## Scope
 
-**Implemented.** The full packet format. Both service interfaces from the standard — Packet Service (clause 3.3) and Octet String Service (clause 3.4). Per-APID receive configuration, sequence counting with gap detection, and idle packet handling.
+**Implemented.** The full packet format. Both service interfaces from the standard: Packet Service (clause 3.3) and Octet String Service (clause 3.4). Per-APID receive configuration, sequence counting with gap detection, and idle packet handling.
 
 **Left to you.** Secondary header contents. The standard says these are mission-defined, so `pkg/spp` takes an interface and moves octets. It does not know what your timestamp looks like.
 
@@ -51,9 +51,9 @@ Constants live in `header.go`. A whole packet is 7 to 65,542 bytes.
 
 **The Secondary Header Flag and the header must agree.** The flag is the only signal the standard gives a receiver (clause 4.1.3.3.3.2). Setting one without the other fails at encode time with `ErrSecondaryHeaderFlagClear` or `ErrSecondaryHeaderMissing`. `WithSecondaryHeader()` sets both.
 
-**A secondary header has a fixed shape.** Clause 4.1.4.2.1.5 allows exactly three layouts: a Time Code Field alone, an Ancillary Data Field alone, or a Time Code Field followed by an Ancillary Data Field. Clause 4.1.4.2.1.6 says the choice must hold for a managed data path across every mission phase, so one APID means one layout. The `SecondaryHeader` interface sees only octets and cannot check this — it is your job. What Astro does check: the header is at least 1 octet, encodes to exactly the size it declares, and fits in the data field.
+**A secondary header has a fixed shape.** Clause 4.1.4.2.1.5 allows exactly three layouts: a Time Code Field alone, an Ancillary Data Field alone, or a Time Code Field followed by an Ancillary Data Field. Clause 4.1.4.2.1.6 says the choice must hold for a managed data path across every mission phase, so one APID means one layout. The `SecondaryHeader` interface sees only octets and cannot check this: it is your job. What Astro does check: the header is at least 1 octet, encodes to exactly the size it declares, and fits in the data field.
 
-**Idle packets carry no secondary header.** Clause 4.1.3.3.3.4 forbids it, and Astro returns `ErrIdleWithSecondaryHeader`. Build them with `NewIdlePacket(fill)`. An idle packet is telemetry unless you pass `WithPacketType(PacketTypeTC)` — nothing in the standard ties the idle APID to a direction.
+**Idle packets carry no secondary header.** Clause 4.1.3.3.3.4 forbids it, and Astro returns `ErrIdleWithSecondaryHeader`. Build them with `NewIdlePacket(fill)`. An idle packet is telemetry unless you pass `WithPacketType(PacketTypeTC)`, nothing in the standard ties the idle APID to a direction.
 
 **A relay must not renumber.** If you decode a packet and send it on, Astro keeps the original sequence count. The count belongs to the application that made the packet (clause 4.1.3.4.3.3), and clause 3.3.1 says Packet Service data travels "without further formatting". Pinning a count yourself with `WithSequenceCount()` has the same effect.
 
@@ -61,7 +61,7 @@ Constants live in `header.go`. A whole packet is 7 to 65,542 bytes.
 
 ### Error Control
 
-The optional 2-byte CRC-16-CCITT at the end of the data field is **not part of CCSDS 133.0-B-2**. It is a mission and PUS-style convention that lives inside the data field, which the standard leaves to the mission — so it stays wire-compatible. Astro offers it because most missions want it.
+The optional 2-byte CRC-16-CCITT at the end of the data field is **not part of CCSDS 133.0-B-2**. It is a mission and PUS-style convention that lives inside the data field, which the standard leaves to the mission, so it stays wire-compatible. Astro offers it because most missions want it.
 
 It covers the whole packet up to but not including itself. Polynomial `0x1021`, initial value `0xFFFF`. Turn it on with `WithErrorControl()` when sending and `WithDecodeErrorControl()` when receiving. A receiver that does not expect it will read the two bytes as payload.
 
@@ -73,10 +73,10 @@ svc := spp.NewService(conn, spp.ServiceConfig{
     PacketType: spp.PacketTypeTM,
 })
 
-// Send raw bytes — packet construction is handled automatically
+// Send raw bytes, packet construction is handled automatically
 err := svc.SendBytes(100, []byte("temperature=22.5"))
 
-// Receive — returns the OCTET_STRING.indication parameters
+// Receive, returns the OCTET_STRING.indication parameters
 ind, err := svc.ReceiveBytes()
 fmt.Println(ind.APID, ind.Data, ind.SecondaryHeaderIndicator, ind.DataLoss)
 ```
@@ -85,8 +85,8 @@ fmt.Println(ind.APID, ind.Data, ind.SecondaryHeaderIndicator, ind.DataLoss)
 
 The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
 
-- **Packet Service** (CCSDS 3.3) — send and receive pre-built `SpacePacket` values
-- **Octet String Service** (CCSDS 3.4) — send and receive raw byte data, with automatic packet wrapping
+- **Packet Service** (CCSDS 3.3), send and receive pre-built `SpacePacket` values
+- **Octet String Service** (CCSDS 3.4), send and receive raw byte data, with automatic packet wrapping
 
 ```go
 svc := spp.NewService(conn, spp.ServiceConfig{
@@ -104,7 +104,7 @@ svc := spp.NewService(conn, spp.ServiceConfig{
 
 ### Per-APID Receive Configuration
 
-CCSDS 133.0-B-2 manages the secondary header contents per APID (table 5-1), so two APIDs on one transport may carry different header formats — and one may carry a trailing CRC while another does not. `ServiceConfig.APIDs` overrides the receive-side handling for chosen APIDs:
+CCSDS 133.0-B-2 manages the secondary header contents per APID (table 5-1), so two APIDs on one transport may carry different header formats, and one may carry a trailing CRC while another does not. `ServiceConfig.APIDs` overrides the receive-side handling for chosen APIDs:
 
 ```go
 svc := spp.NewService(conn, spp.ServiceConfig{
@@ -139,7 +139,7 @@ err := svc.SendBytes(100, data,
     spp.WithSendErrorControl(),
 )
 
-// Receive — returns the indication parameters of CCSDS 3.4.3.3.2
+// Receive, returns the indication parameters of CCSDS 3.4.3.3.2
 ind, err := svc.ReceiveBytes()
 ```
 
@@ -164,8 +164,8 @@ err := svc.SendPacket(packet)
 // Receive and decode a packet
 packet, err := svc.ReceivePacket()
 
-// Receive with the PACKET.indication parameters of CCSDS 3.3.3.3.2 —
-// the loss figures are bound to the returned packet.
+// Receive with the PACKET.indication parameters of CCSDS 3.3.3.3.2.
+// The loss figures are bound to the returned packet.
 ind, err := svc.ReceivePacketIndication()
 if ind.PacketLoss {
     log.Printf("%d packet(s) lost on APID %d", ind.PacketsLost, ind.APID)
@@ -174,7 +174,7 @@ if ind.PacketLoss {
 
 ### QoS Requirement
 
-`WithQoS` attaches the optional QoS Requirement of PACKET.request (CCSDS 3.3.2.4), which selects a service level when the underlying subnetwork offers more than one — for example Type-A versus Type-B service on a telecommand link. The transport declares support by implementing `QoSWriter`; without it, a send carrying a QoS requirement is refused with `ErrQoSUnsupported` before anything reaches the wire:
+`WithQoS` attaches the optional QoS Requirement of PACKET.request (CCSDS 3.3.2.4), which selects a service level when the underlying subnetwork offers more than one, for example Type-A versus Type-B service on a telecommand link. The transport declares support by implementing `QoSWriter`; without it, a send carrying a QoS requirement is refused with `ErrQoSUnsupported` before anything reaches the wire:
 
 ```go
 err := svc.SendPacket(packet, spp.WithQoS(1))
@@ -190,7 +190,7 @@ Pinning a count with `WithSequenceCount` (or `WithSendSequenceCount`) does not b
 
 ### Loss Detection
 
-Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication` and `ReceivePacketIndication` on the `PacketIndication`, bound to the delivered packet. After a plain `ReceivePacket`, read it with `LastDataLoss()` — but note the figure is service-wide, so with concurrent receivers prefer `ReceivePacketIndication`:
+Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication` and `ReceivePacketIndication` on the `PacketIndication`, bound to the delivered packet. After a plain `ReceivePacket`, read it with `LastDataLoss()`, but note the figure is service-wide, so with concurrent receivers prefer `ReceivePacketIndication`:
 
 ```go
 packet, err := svc.ReceivePacket()
@@ -375,7 +375,7 @@ All errors are exported package-level variables, suitable for use with `errors.I
 
 Commentary, not sourced from the standard. Read it as one implementer's reading of why the format looks the way it does.
 
-**Why 11 bits of APID?** 2,048 addresses is generous for a spacecraft — most missions use fewer than a hundred — and it keeps the header at 6 bytes. On a 1 kbps downlink every byte is real money.
+**Why 11 bits of APID?** 2,048 addresses is generous for a spacecraft (most missions use fewer than a hundred) and it keeps the header at 6 bytes. On a 1 kbps downlink every byte is real money.
 
 **Why a separate type bit?** Telemetry and telecommand usually run through different hardware onboard. One bit at a fixed offset lets a router decide where a packet goes without parsing anything else.
 
@@ -385,6 +385,6 @@ Commentary, not sourced from the standard. Read it as one implementer's reading 
 
 ## Reference
 
-- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol (Blue Book)
-- [CCSDS 133.0-G-1](https://public.ccsds.org/Pubs/133x0g1.pdf) — Space Packet Protocol Summary (Green Book)
+- [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf), Space Packet Protocol (Blue Book)
+- [CCSDS 133.0-G-1](https://public.ccsds.org/Pubs/133x0g1.pdf), Space Packet Protocol Summary (Green Book)
 - [CLI](/cli/spp) | [Conformance](/conformance/spp)

@@ -24,7 +24,7 @@ const (
 )
 
 // counterKey identifies one VCF Count: per CCSDS 732.1-B-3
-// §4.1.2.12.4-12.5 the sequence-controlled and expedited counts of a VC
+// Clause 4.1.2.12.4-12.5 the sequence-controlled and expedited counts of a VC
 // are independent, so the key carries the Bypass/Sequence Control Flag
 // alongside the VCID.
 type counterKey struct {
@@ -33,10 +33,10 @@ type counterKey struct {
 }
 
 // FrameCounter manages Virtual Channel Frame Counts per CCSDS 732.1-B-3
-// §4.1.2.12, keyed by VC and quality of service (§4.1.2.12.4-12.5: one
+// Clause 4.1.2.12, keyed by VC and quality of service (clause 4.1.2.12.4-12.5: one
 // sequence-controlled and one expedited count per VC). The count is
 // carried in the primary header's VCF Count field, whose width (0-7
-// octets) is a managed parameter (§4.1.2.11).
+// octets) is a managed parameter (clause 4.1.2.11).
 type FrameCounter struct {
 	mu       sync.Mutex
 	vcCounts map[counterKey]uint64
@@ -86,8 +86,8 @@ func vcfCountOpt(config ChannelConfig, counter *FrameCounter, vcid uint8) []Fram
 
 // makeOCF builds the Operational Control Field for a frame: nil when the
 // channel carries no OCF, and the supplier's 4 octets otherwise. A channel
-// configured with HasOCF requires a supplier — the OCF content comes from
-// the OCF service user (§4.1.5); emitting zeros would fabricate an empty
+// configured with HasOCF requires a supplier. The OCF content comes from
+// the OCF service user (clause 4.1.5); emitting zeros would fabricate an empty
 // Type-1 report.
 func makeOCF(config ChannelConfig, supplier func() []byte) ([]byte, error) {
 	if !config.HasOCF {
@@ -125,7 +125,7 @@ func channelOpts(config ChannelConfig, ocf []byte) []FrameOption {
 // isIdleEncap reports whether data begins with an Encapsulation Idle
 // Packet header: packet version '111' with protocol ID '000'
 // (CCSDS 133.1-B-3), the fill mandated for partially completed
-// fixed-length TFDZs by CCSDS 732.1-B-3 §4.1.4.3.4.
+// fixed-length TFDZs by CCSDS 732.1-B-3 clause 4.1.4.3.4.
 func isIdleEncap(data []byte) bool {
 	return len(data) > 0 && data[0]&0xFC == 0xE0
 }
@@ -149,7 +149,7 @@ func stripIdleEncap(buf []byte) []byte {
 // On fixed-length channels, packets are concatenated into fixed-length
 // TFDZs under construction rule '000' with the First Header Pointer for
 // boundary recovery; a partially filled final TFDZ is completed with an
-// Encapsulation Idle Packet (§4.1.4.3.4). On variable-length channels,
+// Encapsulation Idle Packet (clause 4.1.4.3.4). On variable-length channels,
 // each Send emits one frame under rule '111' (No Segmentation).
 type MAPPacketService struct {
 	scid        uint16
@@ -193,7 +193,7 @@ func (s *MAPPacketService) SetPacketSizer(sizer PacketSizer) {
 // Control Field (typically a CLCW) for every frame emitted on a channel
 // configured with HasOCF. Without a supplier such a channel refuses to
 // emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
-// Type-1 report (§4.1.5).
+// Type-1 report (clause 4.1.5).
 func (s *MAPPacketService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
@@ -241,7 +241,7 @@ func (s *MAPPacketService) sendVariableLength(data []byte) error {
 }
 
 // Flush completes any remaining buffered packet data with an
-// Encapsulation Idle Packet and emits the final frame (§4.1.4.3.4).
+// Encapsulation Idle Packet and emits the final frame (clause 4.1.4.3.4).
 func (s *MAPPacketService) Flush() error {
 	if s.config.FrameLength == 0 || len(s.sendBuf) == 0 {
 		return nil
@@ -262,8 +262,8 @@ func (s *MAPPacketService) Flush() error {
 	if fhp == FHPNoPacketStart {
 		// The buffer holds only the tail of a packet that started in an
 		// earlier frame, and the Encapsulation Idle Packet appended below
-		// starts right behind it. §4.1.4.2.4.3-4.4.4: the FHP points at
-		// the first packet header starting in the TFDZ — 'all ones' is
+		// starts right behind it. Clause 4.1.4.2.4.3-4.4.4: the FHP points at
+		// the first packet header starting in the TFDZ, 'all ones' is
 		// reserved for TFDZs in which no packet starts at all, and the
 		// idle packet is a packet. Pointing at it lets a receiver that
 		// lost the preceding frame resynchronize on this one.
@@ -350,7 +350,7 @@ func (s *MAPPacketService) emitFrame(dataField []byte, fhp uint16) error {
 // Receive extracts the next complete packet from frame data.
 //
 // Rule '000' fill is exactly delimited: spare TFDZ space carries
-// Encapsulation Idle Packets (§4.1.4.3.4), which stripIdleEncap removes.
+// Encapsulation Idle Packets (clause 4.1.4.3.4), which stripIdleEncap removes.
 // No pattern heuristic is applied to user data, so payloads that happen to
 // look like an idle pattern are delivered intact.
 func (s *MAPPacketService) Receive() ([]byte, error) {
@@ -389,7 +389,7 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 			return nil, err
 		}
 
-		// Frame loss detection via the VCF Count (§4.1.2.12).
+		// Frame loss detection via the VCF Count (clause 4.1.2.12).
 		vcGap := s.gapDetector.Track(frame)
 		if vcGap > 0 {
 			s.recvBuf = nil
@@ -415,7 +415,7 @@ func (s *MAPPacketService) Receive() ([]byte, error) {
 
 		default:
 			if int(fhp) >= len(data) {
-				// Corrupted FHP — discard and resync
+				// Corrupted FHP, discard and resync
 				s.recvBuf = nil
 				s.synced = false
 				continue
@@ -479,7 +479,7 @@ func NewMAPAccessService(scid uint16, vcid, mapid uint8, sduSize int, vc *Virtua
 // Control Field (typically a CLCW) for every frame emitted on a channel
 // configured with HasOCF. Without a supplier such a channel refuses to
 // emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
-// Type-1 report (§4.1.5).
+// Type-1 report (clause 4.1.5).
 func (s *MAPAccessService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
@@ -517,7 +517,7 @@ func (s *MAPAccessService) Send(data []byte) error {
 	}
 
 	// The SDU always begins in the first octet of a rule '001' TFDZ
-	// (§4.1.4.2.2.1.4) and continues in rule '010' TFDZs.
+	// (clause 4.1.4.2.2.1.4) and continues in rule '010' TFDZs.
 	rule := RuleStartOfSDU
 	for len(data) > 0 {
 		n := len(data)
@@ -614,7 +614,7 @@ func (s *MAPAccessService) Flush() error { return nil }
 
 // MAPOctetStreamService implements the MAP Octet Stream service (MAPO)
 // for USLP: a continuous octet-aligned stream under construction rule
-// '011'. Per CCSDS 732.1-B-3 §4.2.4.1 an octet stream is carried only in
+// '011'. Per CCSDS 732.1-B-3 clause 4.2.4.1 an octet stream is carried only in
 // variable-length Transfer Frames.
 type MAPOctetStreamService struct {
 	scid        uint16
@@ -642,7 +642,7 @@ func NewMAPOctetStreamService(scid uint16, vcid, mapid uint8, vc *VirtualChannel
 // Control Field (typically a CLCW) for every frame emitted on a channel
 // configured with HasOCF. Without a supplier such a channel refuses to
 // emit frames (ErrNoOCFSupplier) rather than fabricating an all-zero
-// Type-1 report (§4.1.5).
+// Type-1 report (clause 4.1.5).
 func (s *MAPOctetStreamService) SetOCFSupplier(supplier func() []byte) {
 	s.ocfSupplier = supplier
 }
@@ -653,7 +653,7 @@ func (s *MAPOctetStreamService) Send(data []byte) error {
 		return ErrEmptyData
 	}
 	if s.config.FrameLength != 0 {
-		// §4.2.4.1 note 1: one cannot transfer a MAP Octet Stream over
+		// Clause 4.2.4.1 note 1: one cannot transfer a MAP Octet Stream over
 		// fixed-length Transfer Frames.
 		return ErrOctetStreamFixedLength
 	}

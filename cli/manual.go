@@ -96,7 +96,7 @@ func printManualIndex() error {
 func printManual(docsFS embed.FS, protocol string) error {
 	filename, ok := protocols[protocol]
 	if !ok {
-		return fmt.Errorf("unknown protocol %q — run 'astro manual' to see available topics", protocol)
+		return fmt.Errorf("unknown protocol %q, run 'astro manual' to see available topics", protocol)
 	}
 
 	content, err := docsFS.ReadFile("docs/content/cli/" + filename)

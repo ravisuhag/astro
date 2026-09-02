@@ -15,8 +15,8 @@ import (
 )
 
 // The loopback tests are the only ones here that touch a socket, and they use
-// net.Pipe rather than a real one. net.Pipe rendezvouses synchronously — a
-// write blocks until someone reads — so each test runs one side in a
+// net.Pipe rather than a real one. net.Pipe rendezvouses synchronously (a
+// write blocks until someone reads) so each test runs one side in a
 // goroutine. That goroutine is the test's, not the library's: nothing under
 // pkg/sle starts one.
 
@@ -406,7 +406,7 @@ func TestFCLTULoopbackRadiatesACLTU(t *testing.T) {
 	}
 }
 
-// TestFCLTURefusesAnOutOfSequenceCLTU checks the rule of §3.6.2.5: a CLTU
+// TestFCLTURefusesAnOutOfSequenceCLTU checks the rule of clause 3.6.2.5: a CLTU
 // whose number is not the expected one is refused, and the refusal carries
 // the number the provider still wants.
 func TestFCLTURefusesAnOutOfSequenceCLTU(t *testing.T) {

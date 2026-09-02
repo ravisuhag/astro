@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 70
 ---
 
-## Conformance Statement for `pkg/tcdl` — CCSDS 232.0-B-4
+## Conformance Statement for `pkg/tcdl`, CCSDS 232.0-B-4
 
 ---
 
@@ -33,7 +33,7 @@ order: 70
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/tcdl (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 70
 | Specification | CCSDS 232.0-B-4 (TC Space Data Link Protocol, Blue Book, Issue 4, October 2019) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — Non-supported optional capabilities are identified in section A2.2 with explanations.
+NOTE, Non-supported optional capabilities are identified in section A2.2 with explanations.
 
 ---
 
@@ -64,16 +64,16 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | | **MAP Packet Service Parameters** | | | | | |
-| TC-5 | MAP Packet | 3.3.2.2 | M | — | Yes | Packet data passed as `[]byte` to `MAPPacketService.Send()`. Segmented if larger than frame capacity. |
-| TC-6 | GVCID | 3.3.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID/SCID configured at service construction. |
-| TC-7 | MAP ID | 3.3.2.4 | M | 0-63 | Yes | `SegmentHeader.MAPID` — 6 bits. Configured per service instance. |
+| TC-5 | MAP Packet | 3.3.2.2 | M | - | Yes | Packet data passed as `[]byte` to `MAPPacketService.Send()`. Segmented if larger than frame capacity. |
+| TC-6 | GVCID | 3.3.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID/SCID configured at service construction. |
+| TC-7 | MAP ID | 3.3.2.4 | M | 0-63 | Yes | `SegmentHeader.MAPID`, 6 bits. Configured per service instance. |
 | | **MAP Access Service Parameters** | | | | | |
-| TC-8 | MAP Access SDU | 3.4.2.2 | M | — | Yes | Raw data passed to `MAPAccessService.Send()`. Wrapped in single unsegmented frame. |
-| TC-9 | GVCID | 3.4.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. |
+| TC-8 | MAP Access SDU | 3.4.2.2 | M | - | Yes | Raw data passed to `MAPAccessService.Send()`. Wrapped in single unsegmented frame. |
+| TC-9 | GVCID | 3.4.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. |
 | TC-10 | MAP ID | 3.4.2.4 | M | 0-63 | Yes | `SegmentHeader.MAPID`. |
 | | **VC Frame Service Parameters** | | | | | |
-| TC-11 | TC Frame | 3.5.2.2 | M | — | Yes | `VCFrameService` accepts complete `[]byte` frame data via `Send()` / `Receive()`. |
-| TC-12 | GVCID | 3.5.2.3 | M | — | Yes | Derived from `PrimaryHeader.GVCID()`. |
+| TC-11 | TC Frame | 3.5.2.2 | M | - | Yes | `VCFrameService` accepts complete `[]byte` frame data via `Send()` / `Receive()`. |
+| TC-12 | GVCID | 3.5.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()`. |
 
 ### Table A-3: Service Primitives
 
@@ -81,7 +81,7 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 |------|-------------|-----------|--------|---------|-------|
 | | **MAP Packet Service Primitives** | | | | |
 | TC-13 | MAP_PACKET.request | 3.3.3.2 | M | Yes | `MAPPacketService.Send(data)` implements MAP_PACKET.request. Segments data across multiple frames using Segment Header sequence flags (First/Continuation/Last/Unsegmented). Type-A segments get N(S) from `FrameCounter.Next()`; Type-B frames always carry N(S)=0. NOTE: Send is non-blocking; a full virtual channel returns `ErrBufferFull` instead of blocking (declared simplification). |
-| TC-14 | MAP_PACKET.indication | 3.3.3.3 | M | Yes | `MAPPacketService.Receive()` implements MAP_PACKET.indication. Reassembles segments by buffering First/Continuation data and completing on the Last segment, then delimits packets with the configured `PacketSizer` — a frame data field carrying several packets back to back is delivered one packet at a time. Gaps in a segment sequence (First/Unsegmented interrupting a reassembly, Continuation/Last without a First, MAP ID change mid-packet) discard the partial packet and return `ErrIncompleteSegment`. |
+| TC-14 | MAP_PACKET.indication | 3.3.3.3 | M | Yes | `MAPPacketService.Receive()` implements MAP_PACKET.indication. Reassembles segments by buffering First/Continuation data and completing on the Last segment, then delimits packets with the configured `PacketSizer`, a frame data field carrying several packets back to back is delivered one packet at a time. Gaps in a segment sequence (First/Unsegmented interrupting a reassembly, Continuation/Last without a First, MAP ID change mid-packet) discard the partial packet and return `ErrIncompleteSegment`. |
 | | **MAP Access Service Primitives** | | | | |
 | TC-15 | MAP_ACCESS.request | 3.4.3.2 | M | Yes | `MAPAccessService.Send(data)` implements MAP_ACCESS.request. Wraps data in frame with unsegmented segment header. |
 | TC-16 | MAP_ACCESS.indication | 3.4.3.3 | M | Yes | `MAPAccessService.Receive()` implements MAP_ACCESS.indication. Returns data field of next frame. |
@@ -94,11 +94,11 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | TC-19 | TC Transfer Frame | 4.1.1 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTCTransferFrame()` round-trip. Variable length up to 1024 bytes. |
-| TC-20 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader` — 5 octets (40 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Bypass Flag (1 bit), Control Command Flag (1 bit), Reserved (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (6 bits), Frame Length (10 bits, total-1), Frame Sequence Number (8 bits). Big-endian encoding. The invalid type Bypass=0 + Control Command=1 is rejected (`ErrInvalidFrameType`, 4.1.2.3); Type-B frames are forced to N(S)=0 on construction (4.1.2.7). Octets beyond the declared frame length are ignored on decode (CLTU fill, 4.1.2.7.2). |
+| TC-20 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader`, 5 octets (40 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Bypass Flag (1 bit), Control Command Flag (1 bit), Reserved (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (6 bits), Frame Length (10 bits, total-1), Frame Sequence Number (8 bits). Big-endian encoding. The invalid type Bypass=0 + Control Command=1 is rejected (`ErrInvalidFrameType`, 4.1.2.3); Type-B frames are forced to N(S)=0 on construction (4.1.2.7). Octets beyond the declared frame length are ignored on decode (CLTU fill, 4.1.2.7.2). |
 | TC-20a | BC Frame Contents (Unlock, Set V(R)) | 4.1.3.3 | M | Yes | `BuildUnlockCommand()` (`0x00`), `BuildSetVRCommand(vr)` (`0x82 0x00 <V(R)>`), `ParseControlCommand()`, plus frame-level builders `NewUnlockFrame()` / `NewSetVRFrame()` producing Type-BC frames (Bypass=1, CC=1, N(S)=0, no segment header). Malformed contents return `ErrInvalidControlCommand`. |
-| TC-21 | Segment Header | 4.1.4.1 | M | Yes | `SegmentHeader` — 1 octet: Sequence Flags (2 bits), MAP ID (6 bits). Present when MAP sublayer is used. `Encode()` / `Decode()` / `Validate()` methods. Constants: `SegUnsegmented`, `SegFirst`, `SegContinuation`, `SegLast`. |
-| TC-22 | Transfer Frame Data Field | 4.1.4.2 | M | Yes | `TCTransferFrame.DataField` — variable-length telecommand payload. |
-| TC-23 | Frame Error Control Field | 4.1.5 | M | Yes | `TCTransferFrame.FrameErrorControl` — 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on construction via `NewTCTransferFrame()`. Verified on decode; CRC mismatch returns `ErrCRCMismatch`. |
+| TC-21 | Segment Header | 4.1.4.1 | M | Yes | `SegmentHeader`, 1 octet: Sequence Flags (2 bits), MAP ID (6 bits). Present when MAP sublayer is used. `Encode()` / `Decode()` / `Validate()` methods. Constants: `SegUnsegmented`, `SegFirst`, `SegContinuation`, `SegLast`. |
+| TC-22 | Transfer Frame Data Field | 4.1.4.2 | M | Yes | `TCTransferFrame.DataField`, variable-length telecommand payload. |
+| TC-23 | Frame Error Control Field | 4.1.5 | M | Yes | `TCTransferFrame.FrameErrorControl`, 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on construction via `NewTCTransferFrame()`. Verified on decode; CRC mismatch returns `ErrCRCMismatch`. |
 
 ### Table A-5: Protocol Procedures
 
@@ -122,15 +122,15 @@ NOTE — Non-supported optional capabilities are identified in section A2.2 with
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
 |------|-------------|-----------|--------|----------------|---------|-------|
 | | **Managed Parameters for a Physical Channel** | | | | | |
-| TC-36 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name` — configured at construction via `NewPhysicalChannel(name)`. |
+| TC-36 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name`, configured at construction via `NewPhysicalChannel(name)`. |
 | TC-37 | Maximum Frame Length (octets) | Table 5-1 | M | Integer (up to 1024) | Yes | `MaxFrameLength` constant = 1024. Enforced in `NewTCTransferFrame()` via `ErrDataTooLarge`. |
-| TC-38 | Transfer Frame Version Number (TFVN) | Table 5-1 | M | '00' binary | Yes | `PrimaryHeader.VersionNumber` — enforced as `0` in `Validate()`. |
-| TC-39 | Valid Spacecraft IDs | Table 5-1 | M | Integers | Yes | `PrimaryHeader.SpacecraftID` — 10 bits (0-1023). Validated in `Validate()`. |
+| TC-38 | Transfer Frame Version Number (TFVN) | Table 5-1 | M | '00' binary | Yes | `PrimaryHeader.VersionNumber`, enforced as `0` in `Validate()`. |
+| TC-39 | Valid Spacecraft IDs | Table 5-1 | M | Integers | Yes | `PrimaryHeader.SpacecraftID`, 10 bits (0-1023). Validated in `Validate()`. |
 | TC-40 | MC Multiplexing Scheme | Table 5-1 | M | Mission Specific | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing. |
 | TC-41 | Presence of Frame Error Control | Table 5-1 | M | Present ('1') | Yes | Always present. CRC-16-CCITT auto-computed and verified. |
 | | **Managed Parameters for a Master Channel** | | | | | |
-| TC-42 | SCID | Table 5-2 | M | Integer | Yes | `MasterChannel.scid` — configured at construction. Enforced in `AddFrame()`. |
-| TC-43 | Valid VCIDs | Table 5-2 | M | Selectable set of integers (0-63) | Yes | `PrimaryHeader.VirtualChannelID` — 6 bits (0-63). `MasterChannel.channels` maps registered VCIDs. |
+| TC-42 | SCID | Table 5-2 | M | Integer | Yes | `MasterChannel.scid`, configured at construction. Enforced in `AddFrame()`. |
+| TC-43 | Valid VCIDs | Table 5-2 | M | Selectable set of integers (0-63) | Yes | `PrimaryHeader.VirtualChannelID`, 6 bits (0-63). `MasterChannel.channels` maps registered VCIDs. |
 | TC-44 | VC Multiplexing Scheme | Table 5-2 | M | Mission Specific | Yes | `VirtualChannelMultiplexer` implements weighted round-robin scheduling. |
 | | **Managed Parameters for a Virtual Channel** | | | | | |
 | TC-45 | SCID | Table 5-3 | M | Integer | Yes | `PrimaryHeader.SpacecraftID`. Set via `NewTCTransferFrame()`. |

@@ -5,7 +5,7 @@ description: "Coverage matrix: what pkg/tcf implements from CCSDS 301.0-B-4, and
 order: 200
 ---
 
-## Coverage matrix for `pkg/tcf` — CCSDS 301.0-B-4
+## Coverage matrix for `pkg/tcf`, CCSDS 301.0-B-4
 
 **CCSDS 301.0-B-4 ships no PICS proforma.** It is a format definition
 standard, not a protocol with a conformance annex, so there is no official
@@ -37,17 +37,17 @@ round-trip test cannot tell you it is wrong.
 |---|---|---|---|
 | First octet: extension flag, 3-bit ID, 4 detail bits | clause 3.2.2 and per-format | Y | `PField` |
 | Second octet when the extension flag is set | clause 3.2.2 | Y | 7 detail bits |
-| Bit 0 of the second octet reserved for a third octet | clause 3.2.2 | Y | No third octet is defined, so a set bit is rejected with `ErrInvalidPField` rather than misparsing the next octet as T-field data. **Derived** — the standard reserves the bit without stating a receiver rule. |
-| Time code ID `001` — CUC Level 1 | clause 3.2 | Y | `TimeCodeCUCLevel1` |
-| Time code ID `010` — CUC Level 2 | clause 3.2 | Y | `TimeCodeCUCLevel2` |
-| Time code ID `100` — CDS | clause 3.3 | Y | `TimeCodeCDS`; level from detail bit 4 |
-| Time code ID `101` — CCS | clause 3.4 | Y | `TimeCodeCCS`; Level 1 only |
-| Unrecognised time code ID | — | Y | `ErrInvalidTimeCodeID` |
-| Implicit P-field (bare T-field) | — | Y | `EncodeTField`, `DecodeCUCTField`, `DecodeCDSTField`, `DecodeCCSTField`. The standard permits an agreed format without a preamble; the octet counts, variant, and epoch are then caller-supplied. |
+| Implicit P-field (bare T-field) |: | Y | `EncodeTField`, `DecodeCUCTField`, `DecodeCDSTField`, `DecodeCCSTField`. The standard permits an agreed format without a preamble; the octet counts, variant, and epoch are then caller-supplied. |
+| Time code ID `001`, CUC Level 1 | clause 3.2 | Y | `TimeCodeCUCLevel1` |
+| Time code ID `010`, CUC Level 2 | clause 3.2 | Y | `TimeCodeCUCLevel2` |
+| Time code ID `100`, CDS | clause 3.3 | Y | `TimeCodeCDS`; level from detail bit 4 |
+| Time code ID `101`, CCS | clause 3.4 | Y | `TimeCodeCCS`; Level 1 only |
+| Unrecognised time code ID | - | Y | `ErrInvalidTimeCodeID` |
+| Implicit P-field (bare T-field) | - | Y | `EncodeTField`, `DecodeCUCTField`, `DecodeCDSTField`, `DecodeCCSTField`. The standard permits an agreed format without a preamble; the octet counts, variant, and epoch are then caller-supplied. |
 
 ---
 
-## C. CUC — Unsegmented Time Code (clause 3.2)
+## C. CUC, Unsegmented Time Code (clause 3.2)
 
 | Feature | Clause | Status | Notes |
 |---|---|---|---|
@@ -56,14 +56,14 @@ round-trip test cannot tell you it is wrong.
 | Extension octet: additional coarse (2 bits), additional fine (3 bits) | clause 3.2.2 | Y | Coarse to 7 octets, fine to 10 |
 | Reserved bits 6-7 of the extension octet | clause 3.2.2 | Y | A non-zero value is rejected |
 | Out-of-range octet counts | clause 3.2.2 | Y | `ErrInvalidCoarseOctets`, `ErrInvalidFineOctets` |
-| Level 1 — CCSDS epoch, 1958-01-01 TAI | clause 3.2 | Y | Coarse count is **true TAI seconds**: the offset in effect at the encoded instant is added on encode and removed on decode |
-| Level 2 — agency-defined epoch | clause 3.2 | Y | Purely arithmetic, no leap-second correction. `WithCUCEpoch`; `ErrEpochRequired` if omitted |
+| Level 1, CCSDS epoch, 1958-01-01 TAI | clause 3.2 | Y | Coarse count is **true TAI seconds**: the offset in effect at the encoded instant is added on encode and removed on decode |
+| Level 2, agency-defined epoch | clause 3.2 | Y | Purely arithmetic, no leap-second correction. `WithCUCEpoch`; `ErrEpochRequired` if omitted |
 | Coarse value exceeding the configured width | clause 3.2.2 | Y | `ErrOverflow` |
 | Fine-time wire fidelity across an encode/decode cycle | clause 3.2.2 | Y | Fine octets are preserved as transmitted, not re-derived from a rounded duration |
 
 ---
 
-## D. CDS — Day Segmented Time Code (clause 3.3)
+## D. CDS, Day Segmented Time Code (clause 3.3)
 
 | Feature | Clause | Status | Notes |
 |---|---|---|---|
@@ -81,7 +81,7 @@ round-trip test cannot tell you it is wrong.
 
 ---
 
-## E. CCS — Calendar Segmented Time Code (clause 3.4)
+## E. CCS, Calendar Segmented Time Code (clause 3.4)
 
 | Feature | Clause | Status | Notes |
 |---|---|---|---|
@@ -93,7 +93,7 @@ round-trip test cannot tell you it is wrong.
 | Sub-second octets, 0-6 | clause 3.4.2 | Y | `WithCCSSubSecBytes`; each octet holds two decimal digits |
 | Second value 60 (the leap second) | clause 3.4 | Y | Accepted and flagged; `Time()` normalizes it, because Go's `time.Time` cannot represent second 60 |
 | Calendar field range checks | clause 3.4.1 | Y | Month 1-12, day of month 1-31, day of year 1-366, hour 0-23, minute 0-59; `ErrInvalidCalendarTime` |
-| Cross-checks between calendar fields | clause 3.4.1 | Y | **Derived** — the standard gives per-field ranges; consistency between them is checked here as a decoder safeguard |
+| Cross-checks between calendar fields | clause 3.4.1 | Y | **Derived**: the standard gives per-field ranges; consistency between them is checked here as a decoder safeguard |
 | Level 2 | clause 3.4 | N/A | CCS is Level 1 UTC only, by definition |
 
 ---
@@ -102,8 +102,8 @@ round-trip test cannot tell you it is wrong.
 
 | Feature | Clause | Status | Notes |
 |---|---|---|---|
-| Type A — `YYYY-MM-DDThh:mm:ss.d...dZ` | clause 3.5.1.1 | Y | `ASCIITypeA` |
-| Type B — `YYYY-DDDThh:mm:ss.d...dZ` | clause 3.5 | Y | `ASCIITypeB` |
+| Type A, `YYYY-MM-DDThh:mm:ss.d...dZ` | clause 3.5.1.1 | Y | `ASCIITypeA` |
+| Type B, `YYYY-DDDThh:mm:ss.d...dZ` | clause 3.5 | Y | `ASCIITypeB` |
 | Fractional seconds, 1-9 digits | clause 3.5 | Y | `WithASCIIPrecision`; default 3 |
 | Optional `Z` terminator | clause 3.5 | Y | Accepted on decode, written on encode |
 | Fixed field widths and mandatory separators | clause 3.5 | Y | Decode enforces the subset strictly and rejects anything ISO 8601 allows but clause 3.5 does not |
@@ -148,5 +148,5 @@ and never allocate from a length field an attacker controls.
 
 ## Reference
 
-- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) — Time Code Formats (Blue Book)
+- [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf), Time Code Formats (Blue Book)
 - [Protocol page](/protocols/mission/tcf) | [CLI](/cli/time)

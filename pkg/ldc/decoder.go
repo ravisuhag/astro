@@ -9,10 +9,10 @@ import "fmt"
 // knows how to read itself back. What the coded stream does not carry is how
 // many samples it holds.
 //
-// That is not an omission in this implementation. §5.3.2.2 says as much: to
+// That is not an omission in this implementation. Clause 5.3.2.2 says as much: to
 // decode a stream that may include fill bits, "several pieces of information
 // must be communicated to the decoder a priori", and the file header of
-// §7.2.2 exists to carry them, sample count included. So there are three ways
+// Clause 7.2.2 exists to carry them, sample count included. So there are three ways
 // in, in increasing order of certainty:
 //
 //	Decompress          whole blocks only, fill detected by inspection
@@ -22,14 +22,14 @@ import "fmt"
 // Decompress reads a coded data set stream back into samples.
 //
 // It decodes until the input is exhausted, treating a trailing run of fewer
-// than eight zero bits as the fill of §7.2.3.2. That works because fill is
+// than eight zero bits as the fill of clause 7.2.3.2. That works because fill is
 // always zeros and every coded data set needs a one bit to terminate its
 // first codeword, so fill can never be mistaken for another set.
 //
 // The eight-bit bound is deliberate, and it is a limitation: a file written
-// with an output word size B above one octet (§7.2.1.2) may carry up to 8B-1
+// with an output word size B above one octet (clause 7.2.1.2) may carry up to 8B-1
 // bits of zero fill, and Decompress cannot tell such a tail from a truncated
-// coded data set — it returns an error rather than guessing. That is the safe
+// coded data set. It returns an error rather than guessing. That is the safe
 // failure: only a decode that knows the sample count can skip longer fill,
 // which is what DecompressCount and DecompressFile do.
 //
@@ -102,7 +102,7 @@ func decompress(data []byte, p Params, count int) ([]uint32, error) {
 	return Unpreprocess(mapped, references, p), nil
 }
 
-// isOnlyFillLeft reports whether what remains is the zero fill of §7.2.3.2
+// isOnlyFillLeft reports whether what remains is the zero fill of clause 7.2.3.2
 // rather than another coded data set.
 //
 // Fill is at most seven bits and always zeros. Any real coded data set needs
@@ -159,7 +159,7 @@ func (p Params) readBlock(
 	case OptionSecondExtension:
 		paired := codedCount
 		if hasReference {
-			// §5.2.6 inserted a zero in front, so one more symbol was coded.
+			// Clause 5.2.6 inserted a zero in front, so one more symbol was coded.
 			paired++
 		}
 		if paired%2 != 0 {
@@ -236,9 +236,9 @@ func (p Params) readZeroBlock(
 	}
 
 	// Every further block in the run is all zeros too, and may itself carry a
-	// reference sample position. §3.5.1 counts a reference block as all zeros
+	// reference sample position. Clause 3.5.1 counts a reference block as all zeros
 	// when the J-1 samples after the reference are zero, so a run can span
-	// one — but a reference sample is uncoded and cannot be inside a run's
+	// one, but a reference sample is uncoded and cannot be inside a run's
 	// single codeword, so a run never crosses a reference interval.
 	for i := 1; i < run; i++ {
 		for range p.BlockSize {

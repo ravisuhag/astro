@@ -164,7 +164,7 @@ func TestViterbiUncorrectedIsWorse(t *testing.T) {
 }
 
 // TestViterbiStreamingMatchesOneShot checks that a stream split across calls
-// decodes the same as one handed over whole. §3.4.3.2 encodes everything as a
+// decodes the same as one handed over whole. Clause 3.4.3.2 encodes everything as a
 // single continuous stream, so the decoder has to carry the trellis across
 // calls the way the encoder carries its register.
 func TestViterbiStreamingMatchesOneShot(t *testing.T) {
@@ -199,7 +199,7 @@ func TestViterbiStreamingMatchesOneShot(t *testing.T) {
 	}
 }
 
-// TestViterbiSoftDecisionsBeatHard is the point of §3.4.3.3. Given the same
+// TestViterbiSoftDecisionsBeatHard is the point of clause 3.4.3.3. Given the same
 // channel, three-bit soft decisions should recover messages that hard
 // decisions lose, because a marginal symbol costs little to overrule.
 func TestViterbiSoftDecisionsBeatHard(t *testing.T) {
@@ -271,7 +271,7 @@ func TestViterbiSoftDecisionsBeatHard(t *testing.T) {
 	t.Logf("soft %d/%d, hard %d/%d", softWins, trials, hardWins, trials)
 
 	// On this channel soft decisions recover every message and hard decisions
-	// about half, which is the §3.4.3.3 gain showing up. The assertion is only
+	// about half, which is the clause 3.4.3.3 gain showing up. The assertion is only
 	// that soft wins, not by how much.
 	if softWins <= hardWins {
 		t.Errorf("soft decisions recovered %d of %d messages and hard decisions %d; soft should win",

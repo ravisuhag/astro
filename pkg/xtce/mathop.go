@@ -9,7 +9,7 @@ import (
 
 // MathOperationCalibrator: the third calibrator form, a postfix expression.
 //
-// The other two calibrators are arithmetic the schema states outright — a
+// The other two calibrators are arithmetic the schema states outright, a
 // polynomial's terms, a spline's points. This one is a program. The schema's
 // MathOperationCalibratorType holds a run of operands and operators in
 // Reverse Polish order: operands are pushed as they appear, and each operator
@@ -327,7 +327,7 @@ func applyMathOperator(symbol string, stack []float64) ([]float64, error) {
 		}
 		return binary(math.Pow(a, b)), nil
 
-	case "y^x": // (x1 x2 -- x2**x1) — reversed, per the notation
+	case "y^x": // (x1 x2 -- x2**x1), reversed, per the notation
 		a, b, err := pop2()
 		if err != nil {
 			return nil, err
@@ -341,7 +341,7 @@ func applyMathOperator(symbol string, stack []float64) ([]float64, error) {
 		}
 		return unary(math.Abs(x)), nil
 
-	case "int": // (x1 -- int(x1)) — the integer part, so toward zero
+	case "int": // (x1 -- int(x1)), the integer part, so toward zero
 		x, err := pop1()
 		if err != nil {
 			return nil, err

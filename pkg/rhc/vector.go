@@ -1,6 +1,6 @@
 package rhc
 
-// Binary vectors, as CCSDS 124.0-B-1 §1.6.1 defines them.
+// Binary vectors, as CCSDS 124.0-B-1 clause 1.6.1 defines them.
 //
 // The standard works entirely in fixed-length binary vectors and a handful of
 // operations on them: XOR, OR, AND, inversion, left shift, bit reversal,
@@ -8,10 +8,10 @@ package rhc
 // them named the way the spec names them is what lets the encoder read like
 // the equations it implements.
 //
-// Indexing needs care. §1.6.1 numbers the first transmitted bit N-1 and counts
+// Indexing needs care. Clause 1.6.1 numbers the first transmitted bit N-1 and counts
 // down to 0, so the spec's subscript is a position from the *end*. This type
-// indexes from the front instead — index 0 is the first transmitted bit, which
-// the spec calls bit N-1 — because every operation here walks the vector in
+// indexes from the front instead (index 0 is the first transmitted bit, which
+// the spec calls bit N-1) because every operation here walks the vector in
 // transmission order. Where a spec equation refers to a bit by its own
 // numbering, the comment says so.
 
@@ -90,7 +90,7 @@ func (v Vector) String() string {
 	return string(out)
 }
 
-// XOR returns the exclusive or of two vectors of equal length, per §1.6.1
+// XOR returns the exclusive or of two vectors of equal length, per clause 1.6.1
 // equation 3.
 func (v Vector) XOR(other Vector) Vector {
 	out := NewVector(len(v.bits))
@@ -118,7 +118,7 @@ func (v Vector) AND(other Vector) Vector {
 	return out
 }
 
-// Not returns the bit-wise inverse, which §1.6.1 writes ~a.
+// Not returns the bit-wise inverse, which clause 1.6.1 writes ~a.
 func (v Vector) Not() Vector {
 	out := NewVector(len(v.bits))
 	for i := range v.bits {
@@ -127,7 +127,7 @@ func (v Vector) Not() Vector {
 	return out
 }
 
-// ShiftLeft returns the left bit-shift, which §1.6.1 writes a<< and equation 1
+// ShiftLeft returns the left bit-shift, which clause 1.6.1 writes a<< and equation 1
 // defines: every bit moves one place towards the first transmitted bit, and a
 // zero enters at the end.
 func (v Vector) ShiftLeft() Vector {
@@ -139,7 +139,7 @@ func (v Vector) ShiftLeft() Vector {
 }
 
 // Reverse returns the vector with its bits in the opposite order, which
-// §1.6.1 writes <a>.
+// Clause 1.6.1 writes <a>.
 func (v Vector) Reverse() Vector {
 	out := NewVector(len(v.bits))
 	for i, bit := range v.bits {
@@ -148,7 +148,7 @@ func (v Vector) Reverse() Vector {
 	return out
 }
 
-// Weight returns the Hamming weight, which §1.6.1 writes H(a): the number of
+// Weight returns the Hamming weight, which clause 1.6.1 writes H(a): the number of
 // one bits.
 func (v Vector) Weight() int {
 	count := 0
@@ -163,7 +163,7 @@ func (v Vector) Weight() int {
 // IsZero reports whether every bit is zero, which the spec writes a = 0.
 func (v Vector) IsZero() bool { return v.Weight() == 0 }
 
-// Extract returns the bit extraction of v relative to selector, which §5.2.4
+// Extract returns the bit extraction of v relative to selector, which clause 5.2.4
 // writes BE(a, b): the bits of v at the positions where selector has a one,
 // emitted in the reverse of transmission order.
 //
@@ -173,7 +173,7 @@ func (v Vector) IsZero() bool { return v.Weight() == 0 }
 //	BE(a, b) = ȧ_{g(H(b)-1)} || ... || ȧ_{g0}
 //
 // where g_i is "the position of the ith '1' bit in b, starting from the MSB"
-// — so g_0 is the first selected position in transmission order and g_{H-1}
+// , so g_0 is the first selected position in transmission order and g_{H-1}
 // the last. Equation 1 fixes what a concatenation means: it writes the left
 // shift as a« = {ȧ_{N-2}, ..., ȧ_0, 0} and gives the example '10111' becoming
 // '01110', so the first listed element is the first transmitted bit. Put

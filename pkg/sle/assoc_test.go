@@ -62,7 +62,7 @@ func TestCredentialsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// §3.1.2.3 requires SHA-256, which is 32 octets.
+	// Clause 3.1.2.3 requires SHA-256, which is 32 octets.
 	if len(creds.Protected) != sle.DigestSizeSHA256 {
 		t.Fatalf("digest is %d octets, want %d for SHA-256",
 			len(creds.Protected), sle.DigestSizeSHA256)
@@ -105,7 +105,7 @@ func TestCredentialsVerify(t *testing.T) {
 }
 
 func TestCredentialsRejectStaleTime(t *testing.T) {
-	// §3.1.2.2.1: credentials too far from now fail authentication. This is
+	// Clause 3.1.2.2.1: credentials too far from now fail authentication. This is
 	// what stops a captured BIND being replayed later.
 	const user = "MISSION-USER"
 	password := []byte("secret")
@@ -560,7 +560,7 @@ func TestHeartbeatTiming(t *testing.T) {
 }
 
 func TestPeerDeadDetection(t *testing.T) {
-	// §3.3.3: silence longer than the interval times the dead factor means
+	// Clause 3.3.3: silence longer than the interval times the dead factor means
 	// the peer has gone.
 	user, _ := association(t, false)
 	now := testEpoch
@@ -577,7 +577,7 @@ func TestPeerDeadDetection(t *testing.T) {
 }
 
 func TestHeartbeatDisabledByZeroInterval(t *testing.T) {
-	// §3.3.3: a zero interval turns the heartbeat off.
+	// Clause 3.3.3: a zero interval turns the heartbeat off.
 	a, err := sle.NewAssociation(sle.AssociationConfig{
 		Role:              sle.RoleUser,
 		LocalIdentifier:   "CTRL-CENTRE",
@@ -618,7 +618,7 @@ func TestPeerContextOverridesLocalTiming(t *testing.T) {
 }
 
 func TestContextMessageRoleAndRanges(t *testing.T) {
-	// §3.3.2.2: the context message is the initiator's — the user sends it,
+	// Clause 3.3.2.2: the context message is the initiator's, the user sends it,
 	// so a user refuses an inbound one.
 	user, provider := association(t, false)
 	now := testEpoch

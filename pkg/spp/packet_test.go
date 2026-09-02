@@ -1085,7 +1085,7 @@ func TestDecodeEncodeRoundTripWithoutSecondaryHeaderDecoder(t *testing.T) {
 // the buffer is complete, the configured decoder simply wants more octets than
 // this packet's data field holds.
 func TestDecodeSecondaryHeaderLargerThanDataField(t *testing.T) {
-	// APID 1, flag set, data field of 4 octets — smaller than the 8-octet
+	// APID 1, flag set, data field of 4 octets, smaller than the 8-octet
 	// decoder.
 	raw := []byte{0x08, 0x01, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x02, 0x03, 0x04}
 
@@ -1175,8 +1175,8 @@ func TestIsIdleBytes(t *testing.T) {
 		t.Error("IsIdleBytes(one octet) = true, want false")
 	}
 
-	// Only the 11 APID bits decide. The bits above them — version and packet
-	// type — must not be read as part of the APID, or a telecommand idle
+	// Only the 11 APID bits decide. The bits above them (version and packet
+	// type) must not be read as part of the APID, or a telecommand idle
 	// packet would go unrecognized and reach an application as if it were
 	// data. pkg/tmdl and pkg/aos both discard fill through this function.
 	tcIdle, err := spp2.NewIdlePacket([]byte{0xFF}, spp2.WithPacketType(spp2.PacketTypeTC))

@@ -13,9 +13,9 @@ import (
 //
 // The operations, from the PDU CHOICEs of annex A2.6 and A2.7:
 //
-//	user → provider    BIND, UNBIND, START, STOP, SCHEDULE-STATUS-REPORT,
+//	user -> provider    BIND, UNBIND, START, STOP, SCHEDULE-STATUS-REPORT,
 //	                   GET-PARAMETER, PEER-ABORT
-//	provider → user    the returns for those, plus TRANSFER-BUFFER carrying
+//	provider -> user    the returns for those, plus TRANSFER-BUFFER carrying
 //	                   frames and notifications, and STATUS-REPORT
 
 // RAF PDU tags, from the RafUsertoProviderPdu and RafProviderToUserPdu
@@ -665,7 +665,7 @@ func (b RAFTransferBuffer) Humanize() string {
 
 // RAFUser is the user half of a RAF service instance.
 //
-// The lifecycle is the one the state table of CCSDS 911.1-B-5 §4.2.2 walks:
+// The lifecycle is the one the state table of CCSDS 911.1-B-5 clause 4.2.2 walks:
 // Bind, wait for the return, Start, then pull transfer buffers until you have
 // what you came for, Stop, Unbind. Each call queues a PDU; NextPDU hands it
 // to you to write, and HandlePDU takes what comes back.
@@ -685,7 +685,7 @@ func NewRAFUser(config ServiceConfig) (*RAFUser, error) {
 }
 
 // Start asks the provider to begin delivering frames. State 2 only, per
-// §3.4.1.7.
+// Clause 3.4.1.7.
 func (u *RAFUser) Start(
 	now time.Time, randomNumber int32,
 	start, stop ConditionalTime, quality RequestedFrameQuality,
@@ -742,7 +742,7 @@ type RAFUserEvent struct {
 // returns what arrived.
 //
 // A PDU the state does not allow is answered with a PEER-ABORT for protocol
-// error, queued for sending, and reported as ErrUnexpectedPDU — which is what
+// error, queued for sending, and reported as ErrUnexpectedPDU, which is what
 // every 'peer abort protocol error' cell of the state table says to do.
 func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 	pdu, err := DecodePDU(data, ServiceRAF)
@@ -874,7 +874,7 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 }
 
 // RAFProvider is the provider half of a RAF instance. Pair it with a
-// Production for the transfer buffer that §3.1.9.1 requires of a return
+// Production for the transfer buffer that clause 3.1.9.1 requires of a return
 // service.
 type RAFProvider struct {
 	*ServiceProvider
@@ -913,7 +913,7 @@ func (p *RAFProvider) HandleStartInvocation(
 }
 
 // SendTransferBuffer queues a buffer of frames and notifications. State 3
-// only, per §3.6.1.3.
+// only, per clause 3.6.1.3.
 func (p *RAFProvider) SendTransferBuffer(buffer RAFTransferBuffer, now time.Time) error {
 	content, err := buffer.Encode()
 	if err != nil {

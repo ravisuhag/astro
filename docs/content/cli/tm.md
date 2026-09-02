@@ -1,11 +1,11 @@
 ---
 title: astro tm
 short: TM
-description: TM transfer frames — encode, decode, inspect, gaps, demux.
+description: TM transfer frames, encode, decode, inspect, gaps, demux.
 order: 30
 ---
 
-TM Transfer Frame operations — encode, decode, inspect, and analyze CCSDS TM Transfer Frames ([CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf)).
+TM Transfer Frame operations: encode, decode, inspect, and analyze CCSDS TM Transfer Frames ([CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf)).
 
 ## Subcommands
 
@@ -253,4 +253,4 @@ astro tm encode --scid 26 --vcid 1 --data 0102030405 --ocf 00000000 | astro tm i
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/tmdl) for the standard and the Go API, and the [conformance statement](/conformance/tmdl) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/tmdl) for the standard and the Go API, and the [conformance statement](/conformance/tmdl) for what is and is not implemented.

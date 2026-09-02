@@ -9,11 +9,11 @@ import (
 // The service state machine shared by RAF, RCF, ROCF and FCLTU.
 //
 // All four specs define the same three states and the same shape of table:
-// CCSDS 911.1-B-5 §4.2.1, 911.2-B-4 §4.2.1, 911.5-B-4 §4.2.1 and
-// 912.1-B-5 §4.2.1 each say state 1 'unbound', state 2 'ready', state 3
+// CCSDS 911.1-B-5 clause 4.2.1, 911.2-B-4 clause 4.2.1, 911.5-B-4 clause 4.2.1 and
+// 912.1-B-5 clause 4.2.1 each say state 1 'unbound', state 2 'ready', state 3
 // 'active', and each table hangs the same association operations off them.
-// What differs is the data operation in state 3 — frames, control fields,
-// CLTUs — and that lives in the per-service machines in raf.go, rcf.go,
+// What differs is the data operation in state 3 (frames, control fields,
+// CLTUs) and that lives in the per-service machines in raf.go, rcf.go,
 // rocf.go and fcltu.go.
 //
 // This file holds the part that would otherwise be written four times. It is
@@ -22,8 +22,8 @@ import (
 //
 // The machines are caller-pumped, following pkg/cop's FOP-1: you hand them
 // events, you pull PDUs out, and they own no goroutines, no timers and no
-// sockets. Anything the spec describes with a timer — the return <n> timer of
-// table note 11, the release timer of state table row 13 — is the caller's to
+// sockets. Anything the spec describes with a timer (the return <n> timer of
+// table note 11, the release timer of state table row 13) is the caller's to
 // run, using the deadline hints on Association.
 
 // ServiceState is the state of one service instance.
@@ -197,7 +197,7 @@ func (c *serviceCore) abort(diagnostic PeerAbortDiagnostic, now time.Time) {
 		if ok {
 			// PEER-ABORT is [104] IMPLICIT PeerAbortDiagnostic: the tag
 			// replaces the INTEGER's, so the PDU is a primitive element
-			// holding the bare diagnostic octets — 9F 68 01 xx on the wire.
+			// holding the bare diagnostic octets, 9F 68 01 xx on the wire.
 			c.outbound = append(c.outbound,
 				AppendElement(nil, ClassContext, false, tag, pdu.Encode()))
 		}
@@ -333,7 +333,7 @@ func (u *ServiceUser) settle(id InvokeId, op OperationType) error {
 }
 
 // Bind opens the association and asks for the service instance. State 1 only,
-// per CCSDS 911.1-B-5 §3.2.1.6.
+// per CCSDS 911.1-B-5 clause 3.2.1.6.
 func (u *ServiceUser) Bind(now time.Time, randomNumber int32) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -376,7 +376,7 @@ func (u *ServiceUser) HandleBindReturn(b *BindReturn, now time.Time) error {
 	return nil
 }
 
-// Unbind ends the association. State 2 only, per §3.3.1.5 — a user must stop
+// Unbind ends the association. State 2 only, per clause 3.3.1.5. A user must stop
 // before it may unbind.
 func (u *ServiceUser) Unbind(now time.Time, randomNumber int32, reason UnbindReason) error {
 	u.mu.Lock()
@@ -409,7 +409,7 @@ func (u *ServiceUser) HandleUnbindReturn(r *UnbindReturn, now time.Time) error {
 	return nil
 }
 
-// Stop ends data transfer. State 3 only, per §3.5.1.3.
+// Stop ends data transfer. State 3 only, per clause 3.5.1.3.
 func (u *ServiceUser) Stop(now time.Time, randomNumber int32) (InvokeId, error) {
 	return u.invoke(OpStopInvocation, ServiceActive, now, randomNumber,
 		func(id InvokeId, creds *Credentials) ([]byte, error) {
@@ -469,7 +469,7 @@ func (u *ServiceUser) HandleScheduleStatusReportReturn(r *ScheduleStatusReportRe
 }
 
 // GetParameter asks the provider for one configuration parameter, named by
-// the service's ParameterName value. Valid in states 2 and 3, per §3.10 of
+// the service's ParameterName value. Valid in states 2 and 3, per clause 3.10 of
 // each service specification.
 func (u *ServiceUser) GetParameter(parameter int, now time.Time, randomNumber int32) (InvokeId, error) {
 	u.mu.Lock()
@@ -502,7 +502,7 @@ func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
 
 // ServiceProvider is the provider half: the ground-station side.
 //
-// It answers the operations a user drives — BIND, START, STOP, UNBIND — and
+// It answers the operations a user drives (BIND, START, STOP, UNBIND) and
 // lets the caller push data while active. One of these is one service
 // instance on one association.
 //
@@ -694,10 +694,10 @@ func (p *ServiceProvider) HandleScheduleStatusReportInvocation(
 }
 
 // HandleGetParameterInvocation answers a GET-PARAMETER. Valid in states 2
-// and 3, per §3.10.
+// and 3, per clause 3.10.
 //
 // parameter is the still-encoded alternative of the service's parameter
-// CHOICE — one complete BER element — or nil, which answers negatively with
+// CHOICE (one complete BER element) or nil, which answers negatively with
 // 'unknown parameter'. This package does not model the per-service parameter
 // CHOICEs; the caller that has a value to report encodes it.
 func (p *ServiceProvider) HandleGetParameterInvocation(

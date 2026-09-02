@@ -1,7 +1,7 @@
 ---
 title: astro rhc
 short: RHC
-description: Robust housekeeping compression (POCKET+) — compress, decompress.
+description: Robust housekeeping compression (POCKET+), compress, decompress.
 order: 180
 ---
 
@@ -24,7 +24,7 @@ CCSDS 124.0-B-1 defines **no** file or container format. It specifies the coding
 
 But a compressed output is a bit string, not an octet string, and its length in bits cannot be recovered from the octets. Nothing can be decompressed without being told how long it is.
 
-So these commands write a listing of their own — one line per cycle, the bit length then the octets:
+So these commands write a listing of their own, one line per cycle, the bit length then the octets:
 
 ```
 84 81bfea500ff18003300010
@@ -79,7 +79,7 @@ astro rhc decompress [file] [flags]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--vector-bits` | *(required)* | Length of every vector in bits — must match `compress` |
+| `--vector-bits` | *(required)* | Length of every vector in bits, must match `compress` |
 | `--strict` | `false` | After a reported loss, accept nothing but an uncompressed output |
 | `--format` | `bin` | Output format: `bin` or `hex` |
 
@@ -95,8 +95,8 @@ cmp housekeeping.bin recovered.bin
 
 ## Limits
 
-The standard specifies no decoder section — its annex A conformance list holds only encoder items — so the decompressor is the encoder run backwards, which clause 2.1 lays out the requirements for.
+The standard specifies no decoder section (its annex A conformance list holds only encoder items) so the decompressor is the encoder run backwards, which clause 2.1 lays out the requirements for.
 
 ---
 
-**See also** — [the protocol page](/protocols/compression/rhc) for the standard and the Go API, and the [conformance statement](/conformance/rhc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/compression/rhc) for the standard and the Go API, and the [conformance statement](/conformance/rhc) for what is and is not implemented.

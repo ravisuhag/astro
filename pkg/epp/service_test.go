@@ -257,8 +257,8 @@ func TestServiceReceiveMaxPacketLength(t *testing.T) {
 // receive starts in the middle of that payload and reads it as a packet.
 //
 // The oversize packet's payload opens with E5 05 DE AD BE. E5 is '111 001 01'
-// — a valid PVN with an LTP Protocol ID and a 2-octet header declaring a total
-// length of 5 — so a reader left on that octet hands back a 3-byte LTP packet
+// (a valid PVN with an LTP Protocol ID and a 2-octet header declaring a total
+// length of 5) so a reader left on that octet hands back a 3-byte LTP packet
 // that was never sent, and never reaches the genuine packet behind it.
 func TestServiceReceiveOversizeSkipsDataZone(t *testing.T) {
 	payload := make([]byte, 58)

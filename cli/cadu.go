@@ -17,7 +17,7 @@ func caduCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cadu <command>",
 		Short: "Channel Access Data Unit operations",
-		Long:  "Wrap, unwrap, inspect, and sync CCSDS Channel Access Data Units (CCSDS 131.0-B-4).",
+		Long:  "Wrap, unwrap, inspect, and sync CCSDS Channel Access Data Units (CCSDS 131.0-B-5).",
 		Annotations: map[string]string{
 			"group": "protocol",
 		},
@@ -247,7 +247,7 @@ func printCADUInspect(data []byte) {
 		if asmMatch {
 			fmt.Println(" [VALID]")
 		} else {
-			fmt.Println(" [MISMATCH — expected 1acffc1d]")
+			fmt.Println(" [MISMATCH, expected 1acffc1d]")
 		}
 	} else {
 		fmt.Println("Data too short for ASM")

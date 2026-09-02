@@ -154,7 +154,7 @@ func (s *MultiplexingService) Send(data []byte) error {
 
 // Flush completes any remaining buffered packet data with an SPP idle
 // packet (APID 0x7FF) and emits the final frame(s), per CCSDS 732.0-B-4
-// §4.1.4.2.2: a partially filled packet zone is completed with an idle
+// Clause 4.1.4.2.2: a partially filled packet zone is completed with an idle
 // packet, not raw fill. When the leftover space is too small to hold a
 // whole idle packet, the idle packet spans into further frames.
 func (s *MultiplexingService) Flush() error {
@@ -172,7 +172,7 @@ func (s *MultiplexingService) Flush() error {
 		// primary header and one octet of fill. While the leftover space is
 		// smaller than that, grow the packet by another packet zone so it
 		// ends exactly on a later frame boundary. One extra zone is not
-		// always enough — a small zone may need several — so this loops.
+		// always enough (a small zone may need several) so this loops.
 		idleLen := remaining
 		for idleLen < minIdlePacketLen {
 			idleLen += capacity
@@ -482,7 +482,7 @@ func (s *BitstreamService) Receive() ([]byte, error) {
 // VirtualChannelAccessService implements the VCA service for AOS.
 //
 // VCA delivers an opaque, fixed-length SDU per frame. The data field
-// has no protocol header — the entire data field is the SDU.
+// has no protocol header. The entire data field is the SDU.
 type VirtualChannelAccessService struct {
 	scid    uint8
 	vcid    uint8
@@ -506,7 +506,7 @@ func NewVirtualChannelAccessService(scid, vcid uint8, sduSize int, vc *VirtualCh
 
 // Send wraps a fixed-length SDU into an AOS Transfer Frame. On a
 // fixed-length physical channel the VCA_SDU must exactly fill the data
-// field (CCSDS 732.0-B-4 §3.3.4: VCA_SDUs are of constant, managed
+// field (CCSDS 732.0-B-4 clause 3.3.4: VCA_SDUs are of constant, managed
 // length); short or long SDUs are rejected rather than padded, since a
 // receiver has no in-band way to recover the SDU boundary.
 func (s *VirtualChannelAccessService) Send(data []byte) error {

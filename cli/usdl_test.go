@@ -56,7 +56,7 @@ func TestUSDLRoundTripCRC16FECF(t *testing.T) {
 	if frame.DataField != "0102030405" {
 		t.Errorf("data_field = %q, want 0102030405", frame.DataField)
 	}
-	// The USLP FECF is the 16-bit CRC (CCSDS 732.1-B-3 §4.1.6.2.2):
+	// The USLP FECF is the 16-bit CRC (CCSDS 732.1-B-3 clause 4.1.6.2.2):
 	// 2 bytes, so 4 hex characters.
 	if len(frame.FECF) != 4 {
 		t.Errorf("fecf = %q, want a 4-character CRC-16 value", frame.FECF)

@@ -5,7 +5,7 @@ description: "ICS proforma: what this package implements, clause by clause."
 order: 190
 ---
 
-## Conformance Statement for `pkg/rhc` — CCSDS 124.0-B-1
+## Conformance Statement for `pkg/rhc`, CCSDS 124.0-B-1
 
 ---
 
@@ -29,16 +29,16 @@ detail the five-item requirements list does not have room for.
 |---|---|
 | Implementation Name | astro/pkg/rhc |
 | Implementation Version | See `go.mod` / latest commit on `main` |
-| Function Implemented | Compression **Y** — Decompression **Y (derived, see A2.3)** |
+| Function Implemented | Compression **Y**, Decompression **Y (derived, see A2.3)** |
 | Special Configuration | None |
-| Other Information | Go library. Both directions are explicit state types holding the mask, the build and the previous vector; neither is safe for concurrent use. Integer and bitwise operations only. Byte-slice in, byte-slice out with an explicit bit length — framing is the caller's, per clause 2.2. |
+| Other Information | Go library. Both directions are explicit state types holding the mask, the build and the previous vector; neither is safe for concurrent use. Integer and bitwise operations only. Byte-slice in, byte-slice out with an explicit bit length, framing is the caller's, per clause 2.2. |
 
 ### A2.1.3 Identification of Supplier
 
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Versions | astro/pkg/rhc (Go package) |
 | System Name(s) | Astro |
 
@@ -108,7 +108,7 @@ The five-item list above is coarse, so this section breaks each item down.
 | RHC-13 | Run-length encoding, equation 10 | 5.2.3 | Yes | Including the '10' terminator. Figure 5-1's worked counts transcribed as a test. |
 | RHC-14 | Trailing zeros not encoded | 5.2.3 note 1 | Yes | Inferred from the vector length. |
 | RHC-15 | All-zero vector encodes as the terminator alone | 5.2.3 note 2 | Yes | |
-| RHC-16 | Bit extraction, equation 11 | 5.2.4 | Yes | Emitted last selected position first, which is what the equation says once clause 1.6.1's conventions are applied — see the interpretation note in A2.4. |
+| RHC-16 | Bit extraction, equation 11 | 5.2.4 | Yes | Emitted last selected position first, which is what the equation says once clause 1.6.1's conventions are applied, see the interpretation note in A2.4. |
 | RHC-17 | Bit ordering, MSB first | 1.6.1 | Yes | |
 | RHC-18 | Vector operations: XOR, OR, AND, inverse, left shift, reversal, Hamming weight | 1.6.1 | Yes | The examples given in clause 1.6.1's text are transcribed as tests. |
 
@@ -141,7 +141,7 @@ Equation 11 defines the bit extraction as
 
 Two readings are possible, and they produce different bit streams. Since g_0
 is the first selected position in transmission order, the concatenation as
-written leads with the bit at the *last* selected position — but an
+written leads with the bit at the *last* selected position, but an
 implementer could suspect the subscripts of merely reflecting clause 1.6.1's
 downward bit numbering, in which case a forward scan would be intended.
 
@@ -165,7 +165,7 @@ them. An earlier revision of this package used the forward reading; streams
 it produced do not decode against this one where a k_t or compressed u_t of
 two or more differing bits is involved.
 
-No published test vector arbitrates the point — see below — so the reading
+No published test vector arbitrates the point (see below) so the reading
 rests on the two grounds given.
 
 ### The decompressor is derived, not transcribed
@@ -175,8 +175,8 @@ sections are clause 3, clause 4 and clause 5; the requirements list in annex A2.
 items and every one is an encoder item. There is no decoder section.
 
 The decompressor here is the encoder run backwards. Clause 2.1 lists what a
-decompressor needs — the last reconstructed vector, a synchronized mask, and
-the unpredictable bit values — and the encoding is losslessly invertible, so
+decompressor needs (the last reconstructed vector, a synchronized mask, and
+the unpredictable bit values) and the encoding is losslessly invertible, so
 the derivation is sound. But it is a derivation, and no published vector
 confirms it. What stands behind it instead:
 
@@ -210,8 +210,8 @@ not a defect here, but it is the single most important thing for an integrator
 to get right.
 
 Likewise clause 2.2 disclaims sync markers: a corrupt or foreign vector that happens
-to parse will be accepted as genuine. Framing with a length field — space
-packets, for instance — is assumed.
+to parse will be accepted as genuine. Framing with a length field (space
+packets, for instance) is assumed.
 
 The loss test drives this: 300-vector streams, robustness 0 through 7, drop
 rates 5% to 50%, gaps reported through NotifyLoss. Every vector the
@@ -222,17 +222,17 @@ to refuse; it is never allowed to be wrong.
 
 The recovery gate above has a trust assumption worth stating plainly. After a
 reported gap, the decompressor accepts the next output when the gap is at most
-that output's effective robustness level V_t — a field the output vector
+that output's effective robustness level V_t, a field the output vector
 declares *about itself* (clause 5.3.2.2), which nothing in the format lets a
 decompressor verify. The standard offers no integrity mechanism at all: no
 checksum, no signature, no sync marker. So the model is:
 
 - **Transport is trusted to deliver what was sent.** Corruption and forgery
-  are for the layers below — CRCs and FECFs on the space link, SDLS if the
+  are for the layers below, CRCs and FECFs on the space link, SDLS if the
   mission needs cryptographic integrity.
 - **The caller is trusted to report every gap.** clause 2.2 makes loss detection
   the mission's job; NotifyLoss is how it is reported here.
-- **Given both, the output vector's own fields are believed** — V_t
+- **Given both, the output vector's own fields are believed**: V_t
   included. A hostile or corrupt vector that survives the layers below can
   claim a reach of up to 15 and be believed, and the reconstruction it
   produces will be wrong.
@@ -240,7 +240,7 @@ checksum, no signature, no sync marker. So the model is:
 For callers who will not extend the third trust across a gap, `Config.Strict`
 narrows the gate: after any reported loss (NotifyLoss, or an output that
 failed to parse), a strict decompressor refuses everything except an
-uncompressed output — the one kind that proves itself by carrying the whole
+uncompressed output, the one kind that proves itself by carrying the whole
 input vector, rather than claiming a reach back to state the decompressor no
 longer has. The cost is availability: outputs between the gap and the next
 uncompressed one are refused even when their V_t is honest. Strict mode is
@@ -256,10 +256,10 @@ with simple periodic knobs in `Config` for the common case:
 
 | Knob | Normative? |
 |---|---|
-| `Robustness` | Yes — clause 3.3.2a, 0 to 7 |
-| `NewMaskInterval` | No — this package's convenience |
-| `SendMaskInterval` | No — beyond the clause 3.3.2c forcing while t <= R_t |
-| `UncompressedInterval` | No — beyond the clause 3.3.2d forcing while t <= R_t |
+| `Robustness` | Yes: clause 3.3.2a, 0 to 7 |
+| `NewMaskInterval` | No: this package's convenience |
+| `SendMaskInterval` | No: beyond the clause 3.3.2c forcing while t <= R_t |
+| `UncompressedInterval` | No: beyond the clause 3.3.2d forcing while t <= R_t |
 
 No adaptive or loss-aware scheduling is built in. That is a mission heuristic
 and belongs above this package.

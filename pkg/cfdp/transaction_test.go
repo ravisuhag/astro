@@ -162,7 +162,7 @@ func TestClass1WithClosureRequested(t *testing.T) {
 		}
 	}
 
-	// §5.2.5: closure requested means a Finished PDU comes back.
+	// Clause 5.2.5: closure requested means a Finished PDU comes back.
 	back, ok, err := receiver.NextPDU()
 	if err != nil {
 		t.Fatal(err)
@@ -533,7 +533,7 @@ func TestSenderCancel(t *testing.T) {
 }
 
 func TestMetadataOnlyTransaction(t *testing.T) {
-	// §5.2.5: an empty source filename means no file travels, which is how
+	// Clause 5.2.5: an empty source filename means no file travels, which is how
 	// pure filestore requests are carried.
 	srcFS := cfdp.NewMemoryFilestore()
 	dstFS := cfdp.NewMemoryFilestore()
@@ -639,7 +639,7 @@ func TestDuplicateSegmentsDoNotCorruptChecksum(t *testing.T) {
 	}
 
 	if got := receiver.ConditionCode(); got != cfdp.CondNoError {
-		t.Errorf("condition = %s, want no error — duplicates were folded in twice", got)
+		t.Errorf("condition = %s, want no error, duplicates were folded in twice", got)
 	}
 	delivered, err := dstFS.Read("dst.dat")
 	if err != nil {

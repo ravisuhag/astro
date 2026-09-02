@@ -1,7 +1,7 @@
 ---
 title: astro sdls
 short: SDLS
-description: Space Data Link Security — read a Security Header.
+description: Space Data Link Security, read a Security Header.
 order: 120
 ---
 
@@ -27,7 +27,7 @@ Reading the header needs no keys at all, and it is usually what you want when a 
 
 Decode the Security Header at the front of a protected frame's data field: the Security Parameter Index, and whichever of the initialisation vector, sequence number and pad length the Security Association carries.
 
-The field widths are **per Security Association**, not per frame, and nothing in the header states them — so they are flags. Getting them wrong shifts everything after the SPI, which is why the SPI is reported separately: it is the one field whose position is fixed.
+The field widths are **per Security Association**, not per frame, and nothing in the header states them, so they are flags. Getting them wrong shifts everything after the SPI, which is why the SPI is reported separately: it is the one field whose position is fixed.
 
 The protected data is reported as a length, not decrypted, and a MAC is shown but not verified. Both need keys.
 
@@ -58,4 +58,4 @@ astro sdls inspect --input hex --seq 4 --mac 16 < frame-data.hex
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/sdls) for the standard and the Go API, and the [conformance statement](/conformance/sdls) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/sdls) for the standard and the Go API, and the [conformance statement](/conformance/sdls) for what is and is not implemented.

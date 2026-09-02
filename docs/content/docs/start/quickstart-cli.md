@@ -1,5 +1,5 @@
 ---
-title: Quickstart — CLI
+title: Quickstart, CLI
 short: CLI
 description: Encode, inspect, and validate packets from a terminal.
 order: 3
@@ -44,7 +44,7 @@ Raw Packet (11 bytes)
   0000  00 64 c0 00 00 04 68 65  6c 6c 6f                 |.d....hello|
 ```
 
-`inspect` is the one you want when staring at a capture. It shows the raw field value *and* what it means — note Packet Data Length reads 4 for a five-byte payload, because [that field is length minus one](/protocols/transport/spp#gotchas).
+`inspect` is the one you want when staring at a capture. It shows the raw field value *and* what it means, note Packet Data Length reads 4 for a five-byte payload, because [that field is length minus one](/protocols/transport/spp#gotchas).
 
 ## Check a CRC
 
@@ -138,6 +138,6 @@ astro manual        # list the topics
 
 ## What to read next
 
-- [CLI reference](/cli) — shared flags, formats, and piping conventions
-- [Downlink guide](/docs/guides/downlink) — the same chain in Go, with services
-- [The stack](/docs/start/concepts) — what each layer is for
+- [CLI reference](/cli), shared flags, formats, and piping conventions
+- [Downlink guide](/docs/guides/downlink), the same chain in Go, with services
+- [The stack](/docs/start/concepts), what each layer is for

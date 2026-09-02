@@ -46,7 +46,7 @@ The ground runs the same thing backwards.
 
 **The packet layer** answers *whose data is this?* A Space Packet carries an APID naming the application that produced it, and a counter so you can tell when one goes missing. Packets are whatever size the data is.
 
-**The data link layer** answers *how do I find one thing in a continuous stream?* Frames are a fixed size, so a receiver always knows where the next one starts. Because packets and frames are different sizes, a packet can span several frames — the First Header Pointer in the frame header is how the receiver finds packet boundaries again after a loss.
+**The data link layer** answers *how do I find one thing in a continuous stream?* Frames are a fixed size, so a receiver always knows where the next one starts. Because packets and frames are different sizes, a packet can span several frames. The First Header Pointer in the frame header is how the receiver finds packet boundaries again after a loss.
 
 **The coding layer** answers *what about bit errors?* There is no asking for a resend when the round trip is an hour. Reed-Solomon parity lets the receiver fix errors where they land. Randomization keeps the receiver's clock locked. The Attached Sync Marker is a known pattern that says a frame begins here.
 
@@ -58,10 +58,10 @@ The ground runs the same thing backwards.
 | Frames | [TM](/protocols/data-link/tmdl), [AOS](/protocols/data-link/aos) | [TC](/protocols/data-link/tcdl) |
 | Both directions | [USLP](/protocols/data-link/usdl) | [USLP](/protocols/data-link/usdl) |
 | Coding | [TMSC](/protocols/coding/tmsc), [OCSC](/protocols/coding/ocsc) | [TCSC](/protocols/coding/tcsc) |
-| Reliability | — | [COP-1](/protocols/data-link/cop) |
+| Reliability | - | [COP-1](/protocols/data-link/cop) |
 | Security | [SDLS](/protocols/data-link/sdls) | [SDLS](/protocols/data-link/sdls) |
 
-**TM or AOS?** TM for a normal downlink. AOS when the data rate is high enough that TM's 8-bit frame counter wraps too fast to be useful — Earth observation, deep space.
+**TM or AOS?** TM for a normal downlink. AOS when the data rate is high enough that TM's 8-bit frame counter wraps too fast to be useful, Earth observation, deep space.
 
 **Why is the uplink different?** Commands must arrive correctly and in order, because a wrong one can end the mission. TC frames are variable length so a ten-byte command costs ten bytes, and [COP-1](/protocols/data-link/cop) sits on top to retransmit anything that goes missing. The downlink has no equivalent: it detects loss but cannot ask again.
 
@@ -73,13 +73,13 @@ Some protocols do not sit in that stack at all.
 
 **Between ground systems.** [SLE](/protocols/ground/sle) moves frames between a ground station and a control centre over the internet. It is the only protocol here that never touches a spacecraft.
 
-**Between spacecraft.** [Proximity-1](/protocols/data-link/pxdl) is the short-range link — a rover to an orbiter overhead, which then relays to Earth on a completely separate downlink. It has its own coding layer, [PXSC](/protocols/coding/pxsc), which wraps frames in PLTUs the way TMSC wraps them in CADUs.
+**Between spacecraft.** [Proximity-1](/protocols/data-link/pxdl) is the short-range link, a rover to an orbiter overhead, which then relays to Earth on a completely separate downlink. It has its own coding layer, [PXSC](/protocols/coding/pxsc), which wraps frames in PLTUs the way TMSC wraps them in CADUs.
 
 **Over a laser.** [OCSC](/protocols/coding/ocsc) is the coding layer for optical links. It replaces Reed-Solomon with SCPPM and works in bits rather than octets, because a codeblock's length is not a whole number of them.
 
 **Files and networking.** [CFDP](/protocols/transport/cfdp) moves files. [LTP](/protocols/transport/ltp) and [BP](/protocols/transport/bp) do delay-tolerant networking for multi-hop paths.
 
-**Inside the packet.** [PUS](/protocols/mission/pus) defines what a telemetry or telecommand packet's payload actually means — housekeeping reports, event notifications, command acknowledgements. [Time codes](/protocols/mission/tcf) are how timestamps are written. [XTCE](/protocols/mission/xtce) is the database that says which bytes are which parameter.
+**Inside the packet.** [PUS](/protocols/mission/pus) defines what a telemetry or telecommand packet's payload actually means, housekeeping reports, event notifications, command acknowledgements. [Time codes](/protocols/mission/tcf) are how timestamps are written. [XTCE](/protocols/mission/xtce) is the database that says which bytes are which parameter.
 
 **Before transmission.** [LDC](/protocols/compression/ldc) and [RHC](/protocols/compression/rhc) compress data losslessly, because downlink is the scarcest thing a mission has.
 

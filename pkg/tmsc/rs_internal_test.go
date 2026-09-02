@@ -6,22 +6,22 @@ import (
 )
 
 // TestForneyRejectsZeroSigmaDerivative pins the fix for the silent-skip bug:
-// when the formal derivative σ'(X⁻¹) evaluates to zero at a claimed error
+// when the formal derivative σ'(X^-1) evaluates to zero at a claimed error
 // position, the magnitude is undefined and the decode must fail loudly
 // rather than skip the position and report success.
 func TestForneyRejectsZeroSigmaDerivative(t *testing.T) {
 	rs := NewRS255_223()
 
-	// σ(x) = 1 + x². In characteristic 2 the formal derivative keeps only
+	// σ(x) = 1 + x^2. In characteristic 2 the formal derivative keeps only
 	// the odd-degree coefficients, all of which are zero here, so σ'
-	// evaluates to zero at every point — including any claimed position.
+	// evaluates to zero at every point, including any claimed position.
 	sigma := []byte{1, 0, 1}
 	syndromes := make([]byte, rs.nroots)
 	codeword := make([]byte, rsNN)
 
 	err := rs.forney(codeword, syndromes, sigma, []int{0})
 	if !errors.Is(err, ErrUncorrectable) {
-		t.Fatalf("forney with σ'(X⁻¹) = 0 returned %v, want ErrUncorrectable", err)
+		t.Fatalf("forney with σ'(X^-1) = 0 returned %v, want ErrUncorrectable", err)
 	}
 }
 
@@ -60,7 +60,7 @@ func TestSyndromesDetectCorruption(t *testing.T) {
 // It is slow and plainly correct, which is what makes it a useful reference.
 // The real syndromes method interleaves the roots so the processor has
 // several dependency chains to overlap, which is worth about 3.7x on a clean
-// codeword — and is exactly the sort of rewrite that can be self-consistent
+// codeword, and is exactly the sort of rewrite that can be self-consistent
 // and wrong. A wrong syndrome does not fail loudly: it makes a good codeword
 // look corrupt, or worse, makes a corrupt one decode to the wrong data.
 func (rs *RSCodec) referenceSyndromes(work []byte) ([]byte, bool) {

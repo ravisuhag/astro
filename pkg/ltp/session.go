@@ -137,7 +137,7 @@ type SenderConfig struct {
 	// the block length makes it all red.
 	RedPartLength uint64
 
-	// FirstCheckpointSerial seeds the checkpoint counter. §3.2.1 says the
+	// FirstCheckpointSerial seeds the checkpoint counter. Clause 3.2.1 says the
 	// first serial must be chosen randomly for security, and must never be
 	// zero. The caller picks it, because this package has no randomness
 	// policy of its own.
@@ -185,12 +185,12 @@ type Sender struct {
 	pendingReportAcks []uint64
 
 	// respondingTo is the serial of the report whose gaps are being
-	// retransmitted; §3.2.1 requires the checkpoint that closes the cycle to
+	// retransmitted; clause 3.2.1 requires the checkpoint that closes the cycle to
 	// carry it. Zero when no report prompted the transmission.
 	respondingTo uint64
 
 	// cancelAckPending is set when a cancel from the receiver still needs
-	// its acknowledgment, per §6.17.
+	// its acknowledgment, per clause 6.17.
 	cancelAckPending bool
 
 	// cancelReason is set once the session is cancelled.
@@ -207,7 +207,7 @@ func NewSender(block []byte, config SenderConfig) (*Sender, error) {
 		config.RedPartLength = uint64(len(block))
 	}
 	if config.FirstCheckpointSerial == 0 {
-		// §3.2.1 forbids zero. Rather than invent randomness, insist.
+		// Clause 3.2.1 forbids zero. Rather than invent randomness, insist.
 		return nil, ErrInvalidSerialNumber
 	}
 
@@ -225,7 +225,7 @@ func (s *Sender) header(t SegmentType) *Header {
 }
 
 // dataTypeFor picks the segment type for a range, applying the flag rules of
-// §3.1.1: a red segment is a checkpoint when it ends the red part, and a
+// Clause 3.1.1: a red segment is a checkpoint when it ends the red part, and a
 // segment is end-of-block when it reaches the end of the block.
 func (s *Sender) dataTypeFor(start, end uint64, forceCheckpoint bool) SegmentType {
 	blockLen := uint64(len(s.block))
@@ -256,7 +256,7 @@ func (s *Sender) dataTypeFor(start, end uint64, forceCheckpoint bool) SegmentTyp
 
 // buildData assembles a data segment for a range. reportSerial is the serial
 // of the report that prompted this transmission, or zero when none did;
-// §3.2.1 puts it on any checkpoint the range produces.
+// Clause 3.2.1 puts it on any checkpoint the range produces.
 func (s *Sender) buildData(start, end uint64, forceCheckpoint bool, reportSerial uint64) (*Segment, error) {
 	t := s.dataTypeFor(start, end, forceCheckpoint)
 
@@ -270,7 +270,7 @@ func (s *Sender) buildData(start, end uint64, forceCheckpoint bool, reportSerial
 		d.CheckpointSerial = s.nextCheckpoint
 		s.checkpointSerial = s.nextCheckpoint
 		s.nextCheckpoint++
-		// §3.2.1: the report serial of the prompting report, or zero when
+		// Clause 3.2.1: the report serial of the prompting report, or zero when
 		// the checkpoint was not prompted by one.
 		d.ReportSerial = reportSerial
 	}
@@ -302,7 +302,7 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 		return seg, true, nil
 	}
 
-	// §6.17: a cancel from the receiver is acknowledged, even though the
+	// Clause 6.17: a cancel from the receiver is acknowledged, even though the
 	// session is over as far as this end is concerned. Without the ack the
 	// receiver's cancel timer retransmits forever.
 	if s.cancelAckPending {
@@ -310,10 +310,10 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 		return &Segment{Header: s.header(TypeCancelAckToReceiver)}, true, nil
 	}
 
-	// Acknowledge any reports received, per §3.2.3. This runs before the
+	// Acknowledge any reports received, per clause 3.2.3. This runs before the
 	// closed-state check on purpose: the report that completed the red part
-	// arrives an instant before the session closes, and §6.13 still requires
-	// its RA — a conformant peer retransmits the report until it gets one.
+	// arrives an instant before the session closes, and clause 6.13 still requires
+	// its RA. A conformant peer retransmits the report until it gets one.
 	if len(s.pendingReportAcks) > 0 {
 		serial := s.pendingReportAcks[0]
 		s.pendingReportAcks = s.pendingReportAcks[1:]
@@ -342,7 +342,7 @@ func (s *Sender) NextSegment() (*Segment, bool, error) {
 			s.retransmit = append([]span{{end, gap.end}}, s.retransmit...)
 		}
 
-		// §6.9: the last segment of a retransmission cycle is a checkpoint
+		// Clause 6.9: the last segment of a retransmission cycle is a checkpoint
 		// wherever it sits in the block, so the receiver reports again and
 		// the loop can converge. Reaching the end of the red part is a
 		// checkpoint for the same reason.
@@ -414,7 +414,7 @@ func (s *Sender) HandleSegment(seg *Segment) error {
 		return s.handleReport(seg.Report)
 
 	case TypeCancelFromReceiver:
-		// §6.17: queue the acknowledgment before tearing the session down.
+		// Clause 6.17: queue the acknowledgment before tearing the session down.
 		s.cancelAckPending = true
 		s.state = StateCancelled
 
@@ -427,7 +427,7 @@ func (s *Sender) HandleSegment(seg *Segment) error {
 // handleReport folds a reception report into the session and queues whatever
 // the gaps demand.
 func (s *Sender) handleReport(r *ReportSegment) error {
-	// §3.2.3: every report is acknowledged.
+	// Clause 3.2.3: every report is acknowledged.
 	s.pendingReportAcks = append(s.pendingReportAcks, r.ReportSerial)
 
 	// Claim offsets are relative to the report's lower bound.
@@ -450,7 +450,7 @@ func (s *Sender) handleReport(r *ReportSegment) error {
 		limit = red
 	}
 	s.retransmit = append(s.retransmit, s.acknowledged.gaps(limit)...)
-	// §3.2.1: the checkpoint closing this retransmission cycle carries the
+	// Clause 3.2.1: the checkpoint closing this retransmission cycle carries the
 	// serial of the report that prompted it.
 	s.respondingTo = r.ReportSerial
 	s.state = StateActive

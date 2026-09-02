@@ -1,7 +1,7 @@
 ---
 title: astro ocsc
 short: OCSC
-description: Optical coding — condition frames into codeblocks, randomise.
+description: Optical coding, condition frames into codeblocks, randomise.
 order: 110
 ---
 
@@ -75,4 +75,4 @@ astro ocsc randomize --input hex --bits 64 < block.hex |
 
 ---
 
-**See also** — [the protocol page](/protocols/coding/ocsc) for the standard and the Go API, and the [conformance statement](/conformance/ocsc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/coding/ocsc) for the standard and the Go API, and the [conformance statement](/conformance/ocsc) for what is and is not implemented.

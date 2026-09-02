@@ -34,8 +34,8 @@
 // # Security
 //
 // Go's encoding/xml does not fetch DTDs and does not expand external entities,
-// so the classic XML attacks — XXE, entity expansion bombs, network callbacks
-// from a document — do not apply. What remains is plain resource abuse: a very
+// so the classic XML attacks (XXE, entity expansion bombs, network callbacks
+// from a document) do not apply. What remains is plain resource abuse: a very
 // large file, or one nested very deeply. MaxDocumentSize and MaxDepth bound
 // both, and the depth check runs as a token scan before any decoding, so deep
 // input is refused rather than recursed into.
@@ -169,7 +169,7 @@ type ContainerSet struct {
 // each naming a parameter or another container.
 //
 // Containers inherit. A container names a BaseContainer, and its own entries
-// follow the base's — which is how a mission describes "a CCSDS packet" once
+// follow the base's, which is how a mission describes "a CCSDS packet" once
 // and then twenty packet types that extend it.
 type SequenceContainer struct {
 	Name             string `xml:"name,attr"`
@@ -252,7 +252,7 @@ type BooleanExpression struct {
 //
 // Whether a group is an AND or an OR is decided by the element that holds it,
 // not by anything inside it, so one type serves both. The schema only nests
-// the opposite kind — an AND group holds OR groups — but both slices are here
+// the opposite kind (an AND group holds OR groups) but both slices are here
 // because rejecting a document that nests the same kind would gain nothing:
 // AND and OR are each associative, so a nested AND inside an AND means what it
 // reads as.
@@ -268,7 +268,7 @@ type ConditionGroup struct {
 // Condition is the schema's ComparisonCheckType: a parameter tested against
 // either a value or another parameter.
 //
-// This is what a Condition has that a Comparison does not — the right-hand
+// This is what a Condition has that a Comparison does not. The right-hand
 // side can be a second parameter, so a container can be selected by two
 // fields agreeing rather than by one field's value.
 type Condition struct {
@@ -385,7 +385,7 @@ func (k EntryKind) String() string {
 // Entry is one element of an EntryList.
 //
 // The schema makes EntryList a choice repeated without limit, so the entries
-// are of mixed kinds in a meaningful order — the order they appear in the
+// are of mixed kinds in a meaningful order, the order they appear in the
 // packet. Go's encoding/xml cannot preserve order across separate struct
 // fields, so EntryList decodes itself and keeps one ordered slice. That is why
 // this type exists rather than a struct per entry kind.
@@ -488,7 +488,7 @@ func (f *FixedInteger) UnmarshalXMLAttr(attr xml.Attr) error {
 
 // parseFixedInteger reads one FixedIntegerValueType spelling.
 //
-// The base comes from the prefix — 0x, 0o or 0b — and is ten otherwise. A
+// The base comes from the prefix (0x, 0o or 0b) and is ten otherwise. A
 // leading zero alone does not mean octal: the schema's octal member requires
 // the 0o prefix, so 010 is ten, which is why this is not strconv's base 0.
 func parseFixedInteger(text string) (int64, error) {
@@ -544,8 +544,8 @@ type MetaCommandRef struct {
 
 // BlockMetaCommand is an ordered grouping of commands sent as one.
 //
-// Only the identity is modeled. The step list — which commands, with which
-// argument values — is kept raw, so a caller who needs it can parse it and a
+// Only the identity is modeled. The step list (which commands, with which
+// argument values) is kept raw, so a caller who needs it can parse it and a
 // later version can model it without changing what Load accepts.
 type BlockMetaCommand struct {
 	Name             string `xml:"name,attr"`
@@ -560,8 +560,8 @@ type BlockMetaCommand struct {
 // MetaCommand is one command, modeled as a skeleton: its name, what it
 // extends, and its argument names and types.
 //
-// Everything that makes a command safe to send — verifiers, transmission
-// constraints, significance, the command container's bit layout — is out of
+// Everything that makes a command safe to send (verifiers, transmission
+// constraints, significance, the command container's bit layout) is out of
 // scope here and is not parsed into the model.
 type MetaCommand struct {
 	Name             string `xml:"name,attr"`
@@ -612,7 +612,7 @@ type Argument struct {
 // DynamicValue is the schema's DynamicValueType: a value read from another
 // parameter in the same packet, optionally scaled.
 //
-// This is what lets a container's shape depend on its contents — a repeat
+// This is what lets a container's shape depend on its contents, a repeat
 // count taken from a "number of samples" field, a binary blob whose width a
 // length field states. Resolving one means having already decoded the
 // parameter it names, which is why it needs a packet rather than just a

@@ -246,7 +246,7 @@ func TestCUCExtendedFineBytes(t *testing.T) {
 
 func TestCUCPFieldExtensionBitLayout(t *testing.T) {
 	// Verify extension octet encodes additional coarse in bits 1-2
-	// and additional fine in bits 3-5 per §3.2.2
+	// and additional fine in bits 3-5 per clause 3.2.2
 	testTime := CCSDSEpoch.Add(100 * time.Second)
 	cuc, err := NewCUC(testTime, WithCUCCoarseBytes(5), WithCUCFineBytes(4))
 	if err != nil {

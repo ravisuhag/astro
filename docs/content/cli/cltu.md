@@ -1,11 +1,11 @@
 ---
 title: astro cltu
 short: CLTU
-description: Command Link Transmission Units — wrap, unwrap, inspect.
+description: Command Link Transmission Units, wrap, unwrap, inspect.
 order: 90
 ---
 
-Command Link Transmission Unit operations — wrap, unwrap, and inspect CLTUs ([CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf)).
+Command Link Transmission Unit operations: wrap, unwrap, and inspect CLTUs ([CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf)).
 
 ## Subcommands
 
@@ -115,7 +115,7 @@ Raw CLTU (26 bytes)
 
 ## astro cltu gen
 
-Generate a stream of synthetic CLTUs — BCH-encoded TC frames with start and tail sequences.
+Generate a stream of synthetic CLTUs, BCH-encoded TC frames with start and tail sequences.
 
 ```
 astro cltu gen [flags]
@@ -159,4 +159,4 @@ astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro cltu wrap --input h
 
 ---
 
-**See also** — [the protocol page](/protocols/coding/tcsc) for the standard and the Go API, and the [conformance statement](/conformance/tcsc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/coding/tcsc) for the standard and the Go API, and the [conformance statement](/conformance/tcsc) for what is and is not implemented.

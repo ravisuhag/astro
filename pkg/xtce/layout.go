@@ -45,7 +45,7 @@ type Field struct {
 	Container *SequenceContainer
 
 	// Entry is the entry itself, for a caller that needs the parts the layout
-	// does not act on — an IncludeCondition, say.
+	// does not act on. An IncludeCondition, say.
 	Entry Entry
 }
 

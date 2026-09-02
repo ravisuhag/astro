@@ -135,19 +135,19 @@ func (rs *RSCodec) Decode(codeword []byte) ([]byte, int, error) {
 		return data, 0, nil
 	}
 
-	// Step 2: Berlekamp-Massey → error-locator polynomial σ(x)
+	// Step 2: Berlekamp-Massey -> error-locator polynomial σ(x)
 	sigma, nerrs, err := rs.berlekampMassey(syndromes)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Step 3: Chien search → error positions
+	// Step 3: Chien search -> error positions
 	errPos := rs.chienSearch(sigma, nerrs)
 	if errPos == nil {
 		return nil, 0, ErrUncorrectable
 	}
 
-	// Step 4: Forney algorithm → error magnitudes, correct in-place
+	// Step 4: Forney algorithm -> error magnitudes, correct in-place
 	if err := rs.forney(work, syndromes, sigma, errPos); err != nil {
 		return nil, 0, err
 	}
@@ -184,7 +184,7 @@ func (rs *RSCodec) syndromes(work []byte) ([]byte, bool) {
 	// waits on two dependent table lookups per octet with nothing else to do.
 	// The roots are independent of one another, so interleaving them gives it
 	// nroots chains to overlap instead. The accumulators live in a stack
-	// array for the same reason — a slice would add a bounds check and a
+	// array for the same reason. A slice would add a bounds check and a
 	// store to memory on every step.
 	var acc [rsNN]byte
 
@@ -298,14 +298,14 @@ func evalPoly(p []byte, x byte) byte {
 
 // forney computes error magnitudes using the Forney algorithm and
 // corrects the codeword in-place. It returns ErrUncorrectable if the formal
-// derivative σ'(X⁻¹) evaluates to zero at a claimed error position: a root
+// derivative σ'(X^-1) evaluates to zero at a claimed error position: a root
 // of σ with multiplicity, which no valid error pattern produces, so the
 // decode as a whole cannot be trusted.
 func (rs *RSCodec) forney(codeword []byte, syndromes []byte, sigma []byte, errPos []int) error {
 	n := rs.nroots
 
 	// Compute error-evaluator polynomial:
-	// Ω(x) = S(x) · σ(x) mod x^nroots
+	// Ω(x) = S(x) | σ(x) mod x^nroots
 	omega := make([]byte, n)
 	for i := range n {
 		val := byte(0)
@@ -318,7 +318,7 @@ func (rs *RSCodec) forney(codeword []byte, syndromes []byte, sigma []byte, errPo
 	}
 
 	// Formal derivative of σ(x) in characteristic 2:
-	// σ'(x) = σ_1 + σ_3·x^2 + σ_5·x^4 + ... (only odd-indexed coefficients)
+	// σ'(x) = σ_1 + σ_3|x^2 + σ_5|x^4 + ... (only odd-indexed coefficients)
 	sigmaD := make([]byte, len(sigma))
 	for j := 1; j < len(sigma); j += 2 {
 		sigmaD[j-1] = sigma[j]
@@ -336,7 +336,7 @@ func (rs *RSCodec) forney(codeword []byte, syndromes []byte, sigma []byte, errPo
 			return ErrUncorrectable
 		}
 
-		// Forney: e_i = X_i^{1-FCR} · Ω(X_i^{-1}) / σ'(X_i^{-1})
+		// Forney: e_i = X_i^{1-FCR} | Ω(X_i^{-1}) / σ'(X_i^{-1})
 		magnitude := gfMul(gfMul(gfPowB(power*(1-rsFCR)), omegaVal), gfInv(sigmaDVal))
 		codeword[pos] ^= magnitude
 	}
@@ -489,7 +489,7 @@ func (rs *RSCodec) DecodeShortened(data []byte, depth, virtualFill int) ([]byte,
 
 // validVirtualFill checks the constraints of CCSDS 131.0-B-5 4.3.7.3 and
 // 4.3.8.2 e): the fill is a non-negative multiple of the interleaving depth
-// (Q symbols is 8·I·(Q/I) bits, an integer multiple of 8I) and leaves at
+// (Q symbols is 8|I|(Q/I) bits, an integer multiple of 8I) and leaves at
 // least one information symbol per codeword.
 func validVirtualFill(rs *RSCodec, depth, virtualFill int) bool {
 	return virtualFill >= 0 &&

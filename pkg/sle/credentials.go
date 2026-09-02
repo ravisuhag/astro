@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// ISP1 credentials, per CCSDS 913.1-B-2 §3.1.2.
+// ISP1 credentials, per CCSDS 913.1-B-2 clause 3.1.2.
 //
 // SLE authenticates with a scheme the standard calls "Protected 1". Neither
 // end sends its password. Instead the sender hashes a DER-encoded structure
@@ -15,19 +15,19 @@ import (
 // and transmits the time, the random number and the digest. The receiver, who
 // knows the peer's password, recomputes the digest and compares.
 //
-// The time is what stops a replay: §3.1.2.2.1 has the receiver reject
+// The time is what stops a replay: Clause 3.1.2.2.1 has the receiver reject
 // credentials whose time is further from now than an acceptable delay.
 //
 // # SHA-256, not SHA-1
 //
-// §3.1.2.3 requires SHA-256. SHA-1 was the previous issue of the standard, and
-// §3.2.3's note keeps a 20-octet digest recognizable only so a new
+// Clause 3.1.2.3 requires SHA-256. SHA-1 was the previous issue of the standard, and
+// Clause 3.2.3's note keeps a 20-octet digest recognizable only so a new
 // implementation can talk to an old one. This package generates SHA-256 only.
-// A digest must be exactly 20 or 32 octets to decode at all — no other length
-// is a digest either issue defines — and a 20-octet one then fails
+// A digest must be exactly 20 or 32 octets to decode at all (no other length
+// is a digest either issue defines) and a 20-octet one then fails
 // verification, because the superseded SHA-1 scheme is not implemented.
 
-// Digest sizes, per §3.2.3 note 2.
+// Digest sizes, per clause 3.2.3 note 2.
 const (
 	// DigestSizeSHA256 is what this package generates.
 	DigestSizeSHA256 = 32
@@ -58,7 +58,7 @@ type Credentials struct {
 //	, passWord      OCTET STRING
 //	}
 //
-// §3.1.2.1.1 specifies DER here even though the PDUs themselves use BER. For
+// Clause 3.1.2.1.1 specifies DER here even though the PDUs themselves use BER. For
 // this structure the two coincide: every field is definite-length and
 // minimally encoded either way.
 func hashInput(t Time, randomNumber int32, userName string, password []byte) []byte {
@@ -70,7 +70,7 @@ func hashInput(t Time, randomNumber int32, userName string, password []byte) []b
 	return AppendSequence(nil, content)
 }
 
-// GenerateCredentials builds credentials for an outgoing PDU, per §3.1.2.1.
+// GenerateCredentials builds credentials for an outgoing PDU, per clause 3.1.2.1.
 //
 // The caller supplies the random number rather than this package choosing one.
 // A library has no business picking a mission's randomness source, and the
@@ -93,7 +93,7 @@ func GenerateCredentials(t time.Time, randomNumber int32, userName string, passw
 	}, nil
 }
 
-// Verify checks credentials received from a peer, per §3.1.2.2.
+// Verify checks credentials received from a peer, per clause 3.1.2.2.
 //
 // now is the current time and acceptableDelay is how far the credential time
 // may be from it. userName and password are the peer's, which the receiver
@@ -109,7 +109,7 @@ func (c *Credentials) Verify(now time.Time, acceptableDelay time.Duration, userN
 		return ErrInvalidCredentials
 	}
 
-	// §3.1.2.2.1: reject credentials too far from now, in either direction.
+	// Clause 3.1.2.2.1: reject credentials too far from now, in either direction.
 	skew := now.Sub(c.Time.Time())
 	if skew < 0 {
 		skew = -skew
@@ -137,7 +137,7 @@ func (c *Credentials) Encode() ([]byte, error) {
 	if c == nil {
 		return nil, ErrInvalidCredentials
 	}
-	// §3.2.3 note 2: a digest is 32 octets (SHA-256) or the legacy 20
+	// Clause 3.2.3 note 2: a digest is 32 octets (SHA-256) or the legacy 20
 	// (SHA-1). Nothing in between is a digest at all.
 	if len(c.Protected) != DigestSizeSHA1 && len(c.Protected) != DigestSizeSHA256 {
 		return nil, ErrInvalidCredentials

@@ -24,11 +24,11 @@ func TestTMLMessageLayout(t *testing.T) {
 	if encoded[0] != byte(sle.MessageSLEPDU) {
 		t.Errorf("type octet = %d, want 1", encoded[0])
 	}
-	// §3.3.2.2.2 b): the reserved field is three zero octets.
+	// Clause 3.3.2.2.2 b): the reserved field is three zero octets.
 	if encoded[1] != 0 || encoded[2] != 0 || encoded[3] != 0 {
 		t.Errorf("reserved field = % X, want 00 00 00", encoded[1:4])
 	}
-	// §3.3.2.2.6: big-endian.
+	// Clause 3.3.2.2.6: big-endian.
 	length := uint32(encoded[4])<<24 | uint32(encoded[5])<<16 | uint32(encoded[6])<<8 | uint32(encoded[7])
 	if int(length) != len(body) {
 		t.Errorf("length field = %d, want %d", length, len(body))
@@ -67,7 +67,7 @@ func TestTMLMessageRoundTrip(t *testing.T) {
 }
 
 func TestHeartbeatMustBeEmpty(t *testing.T) {
-	// §3.3.2.2.5: a heartbeat is a header only.
+	// Clause 3.3.2.2.5: a heartbeat is a header only.
 	hb := sle.HeartbeatMessage()
 	encoded, err := hb.Encode()
 	if err != nil {
@@ -84,7 +84,7 @@ func TestHeartbeatMustBeEmpty(t *testing.T) {
 }
 
 func TestContextMessageLayout(t *testing.T) {
-	// §3.3.2.2.4 and figure 3-4: 'ISP1', three reserved zeros, version 1,
+	// Clause 3.3.2.2.4 and figure 3-4: 'ISP1', three reserved zeros, version 1,
 	// then the heartbeat interval and dead factor.
 	c := &sle.ContextMessage{HeartbeatInterval: 30, DeadFactor: 3}
 	body := c.Encode()

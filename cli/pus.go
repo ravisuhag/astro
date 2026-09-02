@@ -16,7 +16,7 @@ func pusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pus <command>",
 		Short: "PUS packet utilisation service operations",
-		Long: "Encode, decode and inspect ECSS PUS-C secondary headers and message bodies (ECSS-E-ST-70-41C).\n\n" +
+		Long: "Encode and decode ECSS PUS-C secondary headers and message bodies (ECSS-E-ST-70-41C).\n\n" +
 			"PUS rides inside a Space Packet's data field, so these commands work on what is left after the Space Packet primary header. Pipe through 'astro spp' to get there.",
 		Annotations: map[string]string{
 			"group": "protocol",

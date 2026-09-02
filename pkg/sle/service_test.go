@@ -93,7 +93,7 @@ func TestServiceStatesStartAtOne(t *testing.T) {
 }
 
 // TestRAFStateWalk follows the lifecycle the state table of CCSDS 911.1-B-5
-// §4.2.2 describes: rows 5 and 4 for BIND, row 9 for START, row 10 for STOP,
+// Clause 4.2.2 describes: rows 5 and 4 for BIND, row 9 for START, row 10 for STOP,
 // row 8 for UNBIND.
 func TestRAFStateWalk(t *testing.T) {
 	now := testTime

@@ -16,11 +16,11 @@ import (
 // context-specific tags in both primitive and constructed form, multi-octet
 // tag numbers, and the definite-length form in both short and long variants.
 //
-// The indefinite-length form is accepted on decode — real providers emit it —
+// The indefinite-length form is accepted on decode (real providers emit it)
 // by scanning for the end-of-contents octets. This encoder always emits the
 // definite form.
 
-// Tag classes, per X.690 §8.1.2.2.
+// Tag classes, per X.690 clause 8.1.2.2.
 const (
 	// ClassUniversal is the class of the built-in ASN.1 types.
 	ClassUniversal uint8 = 0x00
@@ -34,7 +34,7 @@ const (
 )
 
 // Constructed is the bit marking a constructed rather than primitive encoding
-// (X.690 §8.1.2.5).
+// (X.690 clause 8.1.2.5).
 const Constructed uint8 = 0x20
 
 // Universal tag numbers SLE uses.
@@ -83,7 +83,7 @@ func (e *Element) IsUniversal(tag uint8) bool {
 // --- encoding ---
 
 // AppendTag writes a BER identifier octet, or several when the tag number
-// needs the high-tag-number form (X.690 §8.1.2.4).
+// needs the high-tag-number form (X.690 clause 8.1.2.4).
 func AppendTag(dst []byte, class uint8, constructed bool, tag uint32) []byte {
 	first := class & 0xC0
 	if constructed {
@@ -101,8 +101,8 @@ func AppendTag(dst []byte, class uint8, constructed bool, tag uint32) []byte {
 }
 
 // appendBase128 writes v as base-128 digits with the continuation bit set on
-// all but the last, the form both high tag numbers (X.690 §8.1.2.4) and
-// OBJECT IDENTIFIER subidentifiers (§8.19.2) use.
+// all but the last, the form both high tag numbers (X.690 clause 8.1.2.4) and
+// OBJECT IDENTIFIER subidentifiers (clause 8.19.2) use.
 func appendBase128(dst []byte, v uint32) []byte {
 	var digits [5]byte
 	n := 0
@@ -124,7 +124,7 @@ func appendBase128(dst []byte, v uint32) []byte {
 }
 
 // AppendLength writes a definite-form length, short or long as needed
-// (X.690 §8.1.3).
+// (X.690 clause 8.1.3).
 func AppendLength(dst []byte, length int) []byte {
 	if length < 128 {
 		return append(dst, byte(length))
@@ -156,7 +156,7 @@ func AppendElement(dst []byte, class uint8, constructed bool, tag uint32, conten
 //
 // BER integers are two's complement and minimally encoded: a leading zero
 // octet appears only when it is needed to keep a positive value from looking
-// negative (X.690 §8.3).
+// negative (X.690 clause 8.3).
 func AppendInteger(dst []byte, v int64) []byte {
 	return AppendElement(dst, ClassUniversal, false, uint32(TagInteger), encodeIntegerContent(v))
 }
@@ -202,7 +202,7 @@ func AppendNull(dst []byte) []byte {
 	return AppendElement(dst, ClassUniversal, false, uint32(TagNull), nil)
 }
 
-// AppendObjectIdentifier writes a universal OBJECT IDENTIFIER (X.690 §8.19).
+// AppendObjectIdentifier writes a universal OBJECT IDENTIFIER (X.690 clause 8.19).
 //
 // The first two arcs pack into one subidentifier (first*40 + second), then
 // every subidentifier is base-128 with continuation bits. The service
@@ -303,10 +303,10 @@ func (d *Decoder) Next() (*Element, error) {
 	}
 
 	if indefinite {
-		// X.690 §8.1.3.6. Real providers emit it, so it is accepted on
+		// X.690 clause 8.1.3.6. Real providers emit it, so it is accepted on
 		// decode: the content runs to the end-of-contents octets, found by
 		// walking the nested elements. Only a constructed encoding may use
-		// it (§8.1.3.2).
+		// it (clause 8.1.3.2).
 		if !e.Constructed {
 			return nil, ErrIndefiniteLength
 		}
@@ -412,7 +412,7 @@ func (d *Decoder) readLength() (length int, indefinite bool, err error) {
 		return 0, true, nil
 	}
 	if first == 0xFF {
-		// Reserved by §8.1.3.5 c).
+		// Reserved by clause 8.1.3.5 c).
 		return 0, false, ErrInvalidLength
 	}
 
@@ -487,7 +487,7 @@ func (e *Element) Uint64() (uint64, error) {
 func (e *Element) String() string { return string(e.Bytes) }
 
 // ObjectIdentifier reads an element's content as the arcs of an OBJECT
-// IDENTIFIER (X.690 §8.19).
+// IDENTIFIER (X.690 clause 8.19).
 func (e *Element) ObjectIdentifier() ([]uint32, error) {
 	if len(e.Bytes) == 0 {
 		return nil, ErrInvalidObjectIdentifier
@@ -525,7 +525,7 @@ func (e *Element) ObjectIdentifier() ([]uint32, error) {
 	return out, nil
 }
 
-// Bool reads an element's content as a BOOLEAN. X.690 §8.2.2: any non-zero
+// Bool reads an element's content as a BOOLEAN. X.690 clause 8.2.2: any non-zero
 // octet is true.
 func (e *Element) Bool() (bool, error) {
 	if len(e.Bytes) != 1 {

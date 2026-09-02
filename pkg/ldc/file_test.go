@@ -273,7 +273,7 @@ func TestFileRoundTrip(t *testing.T) {
 				t.Fatalf("CompressFile() = %v", err)
 			}
 
-			// §7.2.3.2: the file is a multiple of the output word size.
+			// Clause 7.2.3.2: the file is a multiple of the output word size.
 			if len(file)%test.wordSize != 0 {
 				t.Errorf("file is %d octets, not a multiple of the %d-octet word",
 					len(file), test.wordSize)
@@ -297,8 +297,8 @@ func TestFileRoundTrip(t *testing.T) {
 
 // TestDecompressRefusesLongWordFill pins the documented limitation of the
 // unbounded Decompress: it treats only a trailing run of fewer than eight zero
-// bits as the fill of §7.2.3.2, so the up-to-8B-1 bits of fill a B>1 file can
-// carry make it fail — with an error, never with wrong samples. A decode that
+// bits as the fill of clause 7.2.3.2, so the up-to-8B-1 bits of fill a B>1 file can
+// carry make it fail, with an error, never with wrong samples. A decode that
 // knows the count skips the same tail fine.
 func TestDecompressRefusesLongWordFill(t *testing.T) {
 	p := ldc.DefaultParams()

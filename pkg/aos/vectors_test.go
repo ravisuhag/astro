@@ -126,7 +126,7 @@ func crcCCITT(data []byte) uint16 {
 }
 
 // M_PDU golden vector: FHP special values sit at the top of the 11-bit
-// range (§4.1.4.2.3.4-5): 0x7FF = no packet starts, 0x7FE = only idle.
+// range (clause 4.1.4.2.3.4-5): 0x7FF = no packet starts, 0x7FE = only idle.
 func TestGoldenVector_MPDUSpecialFHPValues(t *testing.T) {
 	if aos.FHPNoPacketStart != 0x07FF {
 		t.Errorf("FHPNoPacketStart = 0x%04X, want 0x07FF ('all ones')", aos.FHPNoPacketStart)

@@ -131,7 +131,7 @@ func TestSegmentizeSmallPacketIsUnsegmented(t *testing.T) {
 }
 
 func TestReassemblyInterleavesByRoutingID(t *testing.T) {
-	// §3.2.3.3.2 c): segments of different packets may interleave when their
+	// Clause 3.2.3.3.2 c): segments of different packets may interleave when their
 	// PCID or Port ID differs.
 	first, err := pxdl.Segmentize([]byte("packet one contents"), 1, 8)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestReassemblyInterleavesByRoutingID(t *testing.T) {
 }
 
 func TestReassemblyRejectsSegmentBeforeStart(t *testing.T) {
-	// §3.2.3.3.5 b): the first segment for a routing ID must be a start
+	// Clause 3.2.3.3.5 b): the first segment for a routing ID must be a start
 	// segment. Anything else is discarded rather than guessed at.
 	r := pxdl.NewReassembler()
 	stray := &pxdl.Segment{
@@ -193,7 +193,7 @@ func TestReassemblyRejectsSegmentBeforeStart(t *testing.T) {
 }
 
 func TestReassemblyDeliversOnlyCompletePackets(t *testing.T) {
-	// §3.2.3.3.4.
+	// Clause 3.2.3.3.4.
 	segments, err := pxdl.Segmentize(make([]byte, 300), 1, 100)
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestReassemblyBoundsPacketSize(t *testing.T) {
 }
 
 func TestNewFirstSegmentAbandonsThePrevious(t *testing.T) {
-	// §3.2.3.3.5 b): a start segment arriving mid-packet restarts.
+	// Clause 3.2.3.3.5 b): a start segment arriving mid-packet restarts.
 	r := pxdl.NewReassembler()
 
 	if _, err := r.Accept(0, 0, &pxdl.Segment{

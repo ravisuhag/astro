@@ -299,7 +299,7 @@ func TestComplexNextDeadlineWithNothingBuffered(t *testing.T) {
 	}
 }
 
-// §3.1.9.1.12: an abort clears the buffers, because there is nowhere left to
+// Clause 3.1.9.1.12: an abort clears the buffers, because there is nowhere left to
 // deliver them.
 func TestComplexAbortClearsEveryBuffer(t *testing.T) {
 	complex := sle.NewComplex()

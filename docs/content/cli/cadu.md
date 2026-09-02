@@ -1,11 +1,11 @@
 ---
 title: astro cadu
 short: CADU
-description: Channel Access Data Units — wrap, unwrap, inspect, sync.
+description: Channel Access Data Units, wrap, unwrap, inspect, sync.
 order: 80
 ---
 
-Channel Access Data Unit operations — wrap, unwrap, inspect, and sync CADUs ([CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf)).
+Channel Access Data Unit operations: wrap, unwrap, inspect, and sync CADUs ([CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf)).
 
 ## Subcommands
 
@@ -131,7 +131,7 @@ astro cadu sync --input hex --frame-len 17 --format json stream.hex
 
 ## astro cadu gen
 
-Generate a stream of synthetic CADUs — an ASM followed by a TM frame — with incrementing counters and random data.
+Generate a stream of synthetic CADUs (an ASM followed by a TM frame) with incrementing counters and random data.
 
 ```
 astro cadu gen [flags]
@@ -175,4 +175,4 @@ astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input h
 
 ---
 
-**See also** — [the protocol page](/protocols/coding/tmsc) for the standard and the Go API, and the [conformance statement](/conformance/tmsc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/coding/tmsc) for the standard and the Go API, and the [conformance statement](/conformance/tmsc) for what is and is not implemented.

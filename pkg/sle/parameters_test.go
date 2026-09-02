@@ -92,7 +92,7 @@ func TestTagMeansDifferentParametersPerService(t *testing.T) {
 	}
 
 	if len(seen) != 4 {
-		t.Errorf("tag [4] resolved to %d distinct parameters, want 4 — the tables are not distinct",
+		t.Errorf("tag [4] resolved to %d distinct parameters, want 4. The tables are not distinct",
 			len(seen))
 	}
 }

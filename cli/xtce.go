@@ -191,7 +191,7 @@ func xtceDecodeCmd() *cobra.Command {
 		Short: "Decode a packet against a container in the database",
 		Long: "Read a packet against a named container and print each field's value.\n\n" +
 			"Values are the engineering ones by default: calibrated numbers and enumeration labels. Use --raw for the counts as the packet carried them.\n\n" +
-			"A container whose shape depends on its own contents — a delimited string, a blob sized by a length field, a packet-decided repeat count — is resolved against the packet being decoded, and the text output says so. The resulting field map describes that packet only.",
+			"A container whose shape depends on its own contents — a delimited string, a blob sized by a length field, a packet-decided repeat count: is resolved against the packet being decoded, and the text output says so. The resulting field map describes that packet only.",
 		Example: `  # Decode a hex packet from stdin
   astro spp encode --apid 100 --type tm --data 0102 | astro xtce decode mission.xml --container /Sat/Telemetry
 
@@ -308,8 +308,8 @@ func xtceMatchCmd() *cobra.Command {
 // when the database alone cannot settle it.
 //
 // Most containers fix every field's width, and for those the static layout is
-// both cheaper and independent of any packet. Some do not — a delimited
-// string, a length-sized blob, a packet-decided repeat count — and those need
+// both cheaper and independent of any packet. Some do not (a delimited
+// string, a length-sized blob, a packet-decided repeat count) and those need
 // the packet. A caller should not have to know which kind they have, so this
 // tries the cheap path and falls back.
 //

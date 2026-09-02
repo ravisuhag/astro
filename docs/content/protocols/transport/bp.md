@@ -1,7 +1,7 @@
 ---
 title: Bundle Protocol
 short: BP
-description: CCSDS 734.2-B-1 — store-and-forward bundles for delay-tolerant networking.
+description: CCSDS 734.2-B-1, store-and-forward bundles for delay-tolerant networking.
 order: 14
 ---
 
@@ -10,7 +10,7 @@ order: 14
 ## Overview
 
 Bundle Protocol is the network layer of Delay-Tolerant Networking. It moves
-application data units — **bundles** — across networks where no end-to-end
+application data units (**bundles**) across networks where no end-to-end
 path exists at any single moment.
 
 That is the whole idea. IP assumes a path exists right now. In space, a relay
@@ -24,7 +24,7 @@ across the gap.
 **CCSDS 734.2-B-1 profiles RFC 5050, which is Bundle Protocol version 6.**
 
 This matters. BPv7 (RFC 9171) encodes bundles in CBOR and is wire-incompatible
-with v6 — the two cannot talk to each other. This package implements what
+with v6, the two cannot talk to each other. This package implements what
 CCSDS specifies. If you need BPv7, it would be a separate package.
 
 The CCSDS profile adds two things to RFC 5050: the **IPN naming scheme** with
@@ -48,19 +48,19 @@ of Service** block.
 
 ## Scope
 
-**Implemented.** The BPv6 wire format — primary block, canonical blocks, the endpoint dictionary, fragmentation and reassembly, Extended Class of Service, and administrative records. Decoder limits are configurable.
+**Implemented.** The BPv6 wire format: primary block, canonical blocks, the endpoint dictionary, fragmentation and reassembly, Extended Class of Service, and administrative records. Decoder limits are configurable.
 
 **Not here yet.**
 
-- **Bundle Protocol agent** — routing, contact graphs, storage, custody
+- **Bundle Protocol agent**: routing, contact graphs, storage, custody
   timers. This package is the wire format and the block structure; forwarding
   policy is a layer above.
 - **Aggregate Custody Signals** (annex D) and **Delay-Tolerant Payload
   Conditioning** (annex E).
 - **Bundle Security Protocol** blocks.
-- **BPv7** (RFC 9171) — a different wire format, and a separate package if
+- **BPv7** (RFC 9171), a different wire format, and a separate package if
   anyone needs it.
-- **CLI subcommands** — a follow-up once the API settles.
+- **CLI subcommands**: a follow-up once the API settles.
 
 ## Bundle structure
 
@@ -95,15 +95,15 @@ Node numbers run 1 to 2^64-1 and are assigned by SANA. Service numbers run
 0 to 2^64-1.
 
 Here is the part worth understanding. The primary block does not store four
-endpoint URIs. It stores a **dictionary** — a run of null-terminated strings —
+endpoint URIs. It stores a **dictionary** (a run of null-terminated strings)
 and each endpoint travels as a *pair of offsets* into it, one for the scheme
 and one for the scheme-specific part. Identical strings are stored once, so
 four endpoints all in one scheme pay for that scheme string once. That much
 is plain RFC 5050.
 
 **Compressed Bundle Header Encoding** (RFC 6260) goes further. When all four
-endpoints are in the IPN scheme — with `dtn:none` allowed, traveling as node
-0, service 0 — the dictionary is omitted entirely. Its length encodes as
+endpoints are in the IPN scheme (with `dtn:none` allowed, traveling as node
+0, service 0) the dictionary is omitted entirely. Its length encodes as
 zero, and each endpoint's node and service numbers ride directly in the two
 offset fields. No strings at all, and on a link where every octet is paid
 for in watts, that is the point. CCSDS mandates it, and this package applies
@@ -137,7 +137,7 @@ raw, err := bundle.Encode()
 ```
 
 The creation timestamp counts seconds since the start of the year 2000. It and
-the source endpoint together identify the bundle — which is how status reports
+the source endpoint together identify the bundle, which is how status reports
 and custody signals refer back to it.
 
 ## Processing flags
@@ -157,7 +157,7 @@ forwarding, delivery, deletion.
 Rules the library enforces (clause 4.2): an administrative record must request
 neither custody transfer nor any status report. Class of service 3 is
 reserved and rejected. A bundle cannot both be a fragment and forbid
-fragmentation. And an anonymous bundle — source `dtn:none` — must not
+fragmentation. And an anonymous bundle (source `dtn:none`) must not
 request custody and must set the "must not be fragmented" flag, because
 without a source it is not uniquely identifiable.
 
@@ -179,14 +179,14 @@ What it adds (annex C):
 - **Ordinal**, 0 to 255. Within the expedited class, a finer ranking: ordinal
   100 beats ordinal 99. It means nothing unless the class of service is
   expedited. Value 255 is reserved for custody signals.
-- **Critical** — send one copy along *every* path that might reach the
+- **Critical**: send one copy along *every* path that might reach the
   destination, not just the best one. The bundle arrives by whatever route
   turns out to be fastest, at the cost of flooding the network. This is for
   emergency traffic.
-- **Streaming** — best efforts, no retransmission. For data where a late copy
+- **Streaming**: best efforts, no retransmission. For data where a late copy
   is worse than none, like video.
-- **Reliable** — the opposite: use a convergence layer that retransmits.
-- **Flow label** — an opaque value passed down to the convergence layer.
+- **Reliable**: the opposite: use a convergence layer that retransmits.
+- **Flow label**: an opaque value passed down to the convergence layer.
 
 Two structural rules the library enforces: the ECOS block must come before the
 payload, and a bundle may carry at most one.
@@ -206,7 +206,7 @@ has everything.
 Extension blocks flagged "replicate in every fragment" are copied into each
 piece. Of the rest, clause 5.8 splits them around the payload: blocks that precede
 it ride with the first fragment, and blocks that follow it ride with the
-last — sending an extension block five times when once will do wastes the
+last, sending an extension block five times when once will do wastes the
 link.
 
 Reassembly takes them in any order:
@@ -227,7 +227,7 @@ flag set (clause 6.1).
 
 **Status reports** say what a node did with a bundle: received it, took
 custody, forwarded it, delivered it, deleted it. Each event has a timestamp,
-and — this is the subtle part — **a timestamp is present on the wire only when
+and (this is the subtle part) **a timestamp is present on the wire only when
 its matching status flag is set**. A report of one event is shorter than a
 report of five.
 
@@ -245,7 +245,7 @@ if record.StatusReport != nil {
 ```
 
 Times in administrative records are "DTN time": seconds since the start of
-2000, plus nanoseconds. CCSDS clause 3.4 relaxes this — where a spacecraft clock
+2000, plus nanoseconds. CCSDS clause 3.4 relaxes this, where a spacecraft clock
 cannot produce meaningful nanoseconds, the onboard precision is used, and this
 does not become a requirement on the clock.
 
@@ -262,7 +262,7 @@ bundle, err := bp.DecodeBundleWithOptions(raw, bp.DecodeOptions{
 ```
 
 `DecodeBundle` applies defaults of 16 MiB per block and 64 blocks. Neither cap
-is in RFC 5050 — the protocol states no ceiling — but no real implementation
+is in RFC 5050 (the protocol states no ceiling) but no real implementation
 can go without one.
 
 A bundle ends at its last block. Octets past it are corruption, not padding,
@@ -272,7 +272,7 @@ consumed and leaves the rest for the next call.
 
 ## Reference
 
-- [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) — CCSDS Bundle Protocol Specification
-- [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050.txt) — Bundle Protocol Specification, the wire format
-- [RFC 6260](https://www.rfc-editor.org/rfc/rfc6260.txt) — Compressed Bundle Header Encoding
+- [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf), CCSDS Bundle Protocol Specification
+- [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050.txt), Bundle Protocol Specification, the wire format
+- [RFC 6260](https://www.rfc-editor.org/rfc/rfc6260.txt), Compressed Bundle Header Encoding
 - [CLI](/cli/bp) | [Conformance](/conformance/bp) | [The stack](/docs/start/concepts)

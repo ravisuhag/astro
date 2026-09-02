@@ -21,7 +21,7 @@ func testPrimary() *bp.PrimaryBlock {
 }
 
 func TestIPNEndpoint(t *testing.T) {
-	// CCSDS 734.2-B-1 §3.2.1: node number then a period then service number.
+	// CCSDS 734.2-B-1 clause 3.2.1: node number then a period then service number.
 	e := bp.IPNEndpoint(1234, 5)
 	if e.Scheme != bp.IPNScheme {
 		t.Errorf("scheme = %q, want ipn", e.Scheme)
@@ -40,7 +40,7 @@ func TestIPNEndpoint(t *testing.T) {
 }
 
 func TestIPNNodeNumberMustNotBeZero(t *testing.T) {
-	// §3.2.1: a node number is in the range 1 to 2^64-1.
+	// Clause 3.2.1: a node number is in the range 1 to 2^64-1.
 	e := bp.EndpointID{Scheme: bp.IPNScheme, SSP: "0.1"}
 	if _, _, err := e.IPNParts(); !errors.Is(err, bp.ErrInvalidEndpointID) {
 		t.Errorf("error = %v, want ErrInvalidEndpointID", err)
@@ -81,7 +81,7 @@ func TestParseEndpointID(t *testing.T) {
 }
 
 func TestPriorityRoundTrip(t *testing.T) {
-	// §4.2: bits 7 and 8, with bit 8 the most significant.
+	// Clause 4.2: bits 7 and 8, with bit 8 the most significant.
 	for _, p := range []bp.Priority{bp.PriorityBulk, bp.PriorityNormal, bp.PriorityExpedited} {
 		flags := bp.BundleFlags(0).WithPriority(p)
 		if got := flags.Priority(); got != p {
@@ -137,7 +137,7 @@ func TestPrimaryBlockRoundTrip(t *testing.T) {
 }
 
 func TestDictionarySharesRepeatedStrings(t *testing.T) {
-	// §4.4: identical strings are stored once. Four endpoints all in the dtn
+	// Clause 4.4: identical strings are stored once. Four endpoints all in the dtn
 	// scheme must not store "dtn" four times. (All-ipn bundles skip the
 	// dictionary entirely via CBHE, so dtn endpoints force the general
 	// form here.)
@@ -174,7 +174,7 @@ func TestDictionarySharesRepeatedStrings(t *testing.T) {
 }
 
 func TestCBHERoundTripAgainstHandBuiltBytes(t *testing.T) {
-	// RFC 6260 §2.1: with every endpoint ipn (dtn:none as node 0, service 0),
+	// RFC 6260 clause 2.1: with every endpoint ipn (dtn:none as node 0, service 0),
 	// the dictionary length is zero and the node and service numbers ride in
 	// the scheme and SSP offset fields. These bytes are built by hand from
 	// the RFC's layout, field by field.
@@ -230,7 +230,7 @@ func TestCBHERoundTripAgainstHandBuiltBytes(t *testing.T) {
 }
 
 func TestCBHERejectsNodeZeroWithService(t *testing.T) {
-	// RFC 6260 §2.2: node 0 is only meaningful as (0, 0), the null endpoint.
+	// RFC 6260 clause 2.2: node 0 is only meaningful as (0, 0), the null endpoint.
 	wire := []byte{
 		0x06, 0x10, 0x0C, // version, flags, block length 12
 		0x00, 0x07, // node 0, service 7: names nothing
@@ -246,7 +246,7 @@ func TestCBHERejectsNodeZeroWithService(t *testing.T) {
 }
 
 func TestPrimaryBlockValidationTightening(t *testing.T) {
-	// §4.2: reserved priority, contradictory fragment flags, and the
+	// Clause 4.2: reserved priority, contradictory fragment flags, and the
 	// anonymous-source constraints are all refused.
 	p := testPrimary()
 	p.Flags = p.Flags.WithPriority(3)
@@ -285,7 +285,7 @@ func TestPrimaryBlockValidationTightening(t *testing.T) {
 }
 
 func TestDecodeBundleRejectsTrailingBytes(t *testing.T) {
-	// §4.1: a bundle ends at its last block. Octets past it are corruption,
+	// Clause 4.1: a bundle ends at its last block. Octets past it are corruption,
 	// not padding, and DecodeBundle refuses them.
 	b, err := bp.NewBundle(testPrimary(), []byte("payload"))
 	if err != nil {
@@ -316,7 +316,7 @@ func TestDecodeBundleRejectsTrailingBytes(t *testing.T) {
 }
 
 func TestPrimaryBlockFragmentFields(t *testing.T) {
-	// §4.5.1: the two fragment fields are present only with the fragment flag.
+	// Clause 4.5.1: the two fragment fields are present only with the fragment flag.
 	p := testPrimary()
 	p.Flags |= bp.FlagFragment
 	p.FragmentOffset = 1000
@@ -347,7 +347,7 @@ func TestPrimaryBlockFragmentFields(t *testing.T) {
 }
 
 func TestAdminRecordFlagsRejected(t *testing.T) {
-	// §4.2: an administrative record requests neither custody transfer nor
+	// Clause 4.2: an administrative record requests neither custody transfer nor
 	// any status report.
 	p := testPrimary()
 	p.Flags |= bp.FlagAdminRecord | bp.FlagCustodyRequested
@@ -401,7 +401,7 @@ func TestCanonicalBlockRoundTrip(t *testing.T) {
 }
 
 func TestCanonicalBlockEIDReferences(t *testing.T) {
-	// §4.5.2: the reference field is present if and only if the flag is set.
+	// Clause 4.5.2: the reference field is present if and only if the flag is set.
 	b := &bp.CanonicalBlock{
 		Type:  200,
 		Flags: bp.BlockHasEIDRefs | bp.BlockLast,

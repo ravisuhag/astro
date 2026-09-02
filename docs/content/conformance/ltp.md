@@ -5,11 +5,11 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 40
 ---
 
-## Conformance Statement for `pkg/ltp` — RFC 5326
+## Conformance Statement for `pkg/ltp`, RFC 5326
 
 Conformance is claimed against RFC 5326 only. CCSDS 734.1-B-1 profiles that
 RFC for space links; this implementation contains no profile-specific
-behavior, so no claim is made against the profile itself — see A1.5.
+behavior, so no claim is made against the profile itself, see A1.5.
 
 ---
 
@@ -37,7 +37,7 @@ behavior, so no claim is made against the profile itself — see A1.5.
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/ltp, astro/pkg/sdnv (Go packages) |
 | System Name(s) | Astro |
 
@@ -45,8 +45,8 @@ behavior, so no claim is made against the profile itself — see A1.5.
 
 | Field | Value |
 |---|---|
-| Specification | RFC 5326 (Licklider Transmission Protocol — Specification, September 2008). CCSDS 734.1-B-1 profiles this RFC; no conformance to the profile's own requirements is claimed — see A1.5 |
-| Have any exceptions been required? | Yes [X] No [ ] — see A1.5 |
+| Specification | RFC 5326 (Licklider Transmission Protocol, Specification, September 2008). CCSDS 734.1-B-1 profiles this RFC; no conformance to the profile's own requirements is claimed, see A1.5 |
+| Have any exceptions been required? | Yes [X] No [ ], see A1.5 |
 
 ---
 
@@ -55,16 +55,16 @@ behavior, so no claim is made against the profile itself — see A1.5.
 | Feature | Reference | Status | Support |
 |---|---|---|---|
 | Segment header | clause 3.1 | M | Y |
-| Version number 0 | clause 3.1 | M | Y — other versions rejected on decode |
+| Version number 0 | clause 3.1 | M | Y: other versions rejected on decode |
 | Segment type flags: CTRL, EXC, Flag 1, Flag 0 | clause 3.1.1 | M | Y |
-| Segment type codes 0 to 15 | clause 3.1.2 | M | Y — codes 5, 6, 10, 11 rejected as undefined |
-| Segment class masks: CP, EORP, EOB, RS, RA, CS, CAS, CR, CAR | clause 3.1.3 | M | Y — exposed as predicates on `SegmentType` |
-| Session ID: engine ID and session number | clause 3.1 | M | Y — both SDNV |
-| Extensions field, counts octet | clause 3.1.4 | M | Y — 0 to 15 header, 0 to 15 trailer |
+| Segment type codes 0 to 15 | clause 3.1.2 | M | Y: codes 5, 6, 10, 11 rejected as undefined |
+| Segment class masks: CP, EORP, EOB, RS, RA, CS, CAS, CR, CAR | clause 3.1.3 | M | Y: exposed as predicates on `SegmentType` |
+| Session ID: engine ID and session number | clause 3.1 | M | Y: both SDNV |
+| Extensions field, counts octet | clause 3.1.4 | M | Y: 0 to 15 header, 0 to 15 trailer |
 | Extension TLV: tag, SDNV length, value | clause 3.1.4 | O | Y |
 | Header extensions before content | clause 3.1.4 | M | Y |
 | Trailer extensions after content | clause 3.1.4 | M | Y |
-| Self-Delimiting Numeric Values | clause 1.6 item 20 | M | Y — `pkg/sdnv`, rejects values past 64 bits (`ErrOverflow`) and encodings past ten octets (`ErrTooLong`, RFC 6256 clause 3.2 padding included) |
+| Self-Delimiting Numeric Values | clause 1.6 item 20 | M | Y: `pkg/sdnv`, rejects values past 64 bits (`ErrOverflow`) and encodings past ten octets (`ErrTooLong`, RFC 6256 clause 3.2 padding included) |
 
 ---
 
@@ -72,17 +72,17 @@ behavior, so no claim is made against the profile itself — see A1.5.
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Data segment: client service ID, offset, length | clause 3.2.1 | M | Y — all SDNV |
-| Checkpoint serial number on checkpoints only | clause 3.2.1 | M | Y — non-checkpoints carry neither serial |
-| Report serial number on checkpoints | clause 3.2.1 | M | Y — a checkpoint closing a retransmission cycle carries the prompting report's serial; zero when no report prompted it |
-| Checkpoint serial number never zero | clause 3.2.1 | M | Y — enforced on encode and decode |
+| Data segment: client service ID, offset, length | clause 3.2.1 | M | Y: all SDNV |
+| Checkpoint serial number on checkpoints only | clause 3.2.1 | M | Y: non-checkpoints carry neither serial |
+| Report serial number on checkpoints | clause 3.2.1 | M | Y: a checkpoint closing a retransmission cycle carries the prompting report's serial; zero when no report prompted it |
+| Checkpoint serial number never zero | clause 3.2.1 | M | Y: enforced on encode and decode |
 | Report segment: serials, bounds, claim count, claims | clause 3.2.2 | O | Y |
 | Report serial number never zero | clause 3.2.2 | M | Y |
-| Claim offsets relative to the lower bound | clause 3.2.2 | M | Y — `ClaimedRanges()` converts to block offsets |
-| Claim length at least 1, within the bounds | clause 3.2.2 | M | Y — validated on encode and decode |
-| Claims in ascending order, non-overlapping, at least one | clause 3.2.2 | M | Y — validated on encode and decode; zero-claim reports are neither emitted nor accepted |
+| Claim offsets relative to the lower bound | clause 3.2.2 | M | Y: `ClaimedRanges()` converts to block offsets |
+| Claim length at least 1, within the bounds | clause 3.2.2 | M | Y: validated on encode and decode |
+| Claims in ascending order, non-overlapping, at least one | clause 3.2.2 | M | Y: validated on encode and decode; zero-claim reports are neither emitted nor accepted |
 | Report acknowledgment segment | clause 3.2.3 | O | Y |
-| Cancel segment reason code | clause 3.2.4 | O | Y — codes 0 to 5; 6 to 255 rejected as reserved |
+| Cancel segment reason code | clause 3.2.4 | O | Y: codes 0 to 5; 6 to 255 rejected as reserved |
 | Cancel acknowledgment has no content | clause 3.2.5 | O | Y |
 
 ---
@@ -93,20 +93,20 @@ behavior, so no claim is made against the profile itself — see A1.5.
 |---|---|---|---|
 | Red-part reliable delivery | clause 6 | M | Y |
 | Green-part best-effort delivery | clause 6 | O | Y |
-| Mixed red and green blocks | clause 3.1.1 | O | Y — no segment straddles the boundary |
+| Mixed red and green blocks | clause 3.1.1 | O | Y: no segment straddles the boundary |
 | Checkpoint at end of red part | clause 3.1.1 | M | Y |
 | End-of-block flagging | clause 3.1.3 | M | Y |
-| Reception reporting on checkpoint | clause 6.13 | M | Y — report upper bound covers the checkpoint's own end even before the EORP arrives |
-| Duplicate checkpoints answered with the same report | clause 6.11 | M | Y — deduplicated on checkpoint serial; the original report is resent |
-| Asynchronous reception reporting | clause 6.2 | O | Y — `RequestReport`, checkpoint serial zero |
+| Reception reporting on checkpoint | clause 6.13 | M | Y: report upper bound covers the checkpoint's own end even before the EORP arrives |
+| Duplicate checkpoints answered with the same report | clause 6.11 | M | Y: deduplicated on checkpoint serial; the original report is resent |
+| Asynchronous reception reporting | clause 6.2 | O | Y: `RequestReport`, checkpoint serial zero |
 | Retransmission of unclaimed ranges | clause 6.13 | M | Y |
-| Retransmission cycle ends with a checkpoint | clause 6.9 | M | Y — the cycle's last segment is a checkpoint wherever it sits in the block |
-| Report acknowledgment | clause 6.14 | M | Y — every report acknowledged, including the final one after the sender's session closes |
-| Receiver closure gated on report acknowledgment | clause 6.11, clause 6.16 | M | Y — the session stays open until every report is acknowledged; an all-green session closes on the green EOB |
-| Miscolored block detection | clause 3.2.4 | M | Y — cancels with reason MISCOLORED |
+| Retransmission cycle ends with a checkpoint | clause 6.9 | M | Y: the cycle's last segment is a checkpoint wherever it sits in the block |
+| Report acknowledgment | clause 6.14 | M | Y: every report acknowledged, including the final one after the sender's session closes |
+| Receiver closure gated on report acknowledgment | clause 6.11, clause 6.16 | M | Y: the session stays open until every report is acknowledged; an all-green session closes on the green EOB |
+| Miscolored block detection | clause 3.2.4 | M | Y: cancels with reason MISCOLORED |
 | Session cancellation from either end | clause 6.19, clause 6.20 | O | Y |
-| Cancel acknowledgment | clause 6.21 | M | Y — the sender acknowledges a cancel from the receiver, and the receiver one from the sender |
-| Segments for other sessions ignored | clause 6 | M | Y — filtered on session ID |
+| Cancel acknowledgment | clause 6.21 | M | Y: the sender acknowledges a cancel from the receiver, and the receiver one from the sender |
+| Segments for other sessions ignored | clause 6 | M | Y: filtered on session ID |
 
 ---
 
@@ -121,7 +121,7 @@ behavior, so no claim is made against the profile itself — see A1.5.
 | Cookie extension | clause 3.1.4, [LTPEXT] | P | Same. |
 | Random serial number generation | clause 3.2.1, clause 3.2.2 | N by design | The spec says the first serials must be random. The caller supplies them; a zero is rejected. A library should not pick a mission's randomness source. |
 | Deferred transmission and link-state cues | clause 6.5 | N | Scheduling policy the caller owns. |
-| CLI subcommands | — | N | A follow-up once the API settles. |
+| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

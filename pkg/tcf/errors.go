@@ -37,7 +37,7 @@ var (
 	ErrOverflow = errors.New("time value exceeds representable range for the configured octet width")
 
 	// ErrReservedSubmsCode indicates the CDS P-field carried the reserved
-	// sub-millisecond code '11' (CCSDS 301.0-B-4 §3.3.2).
+	// sub-millisecond code '11' (CCSDS 301.0-B-4 clause 3.3.2).
 	ErrReservedSubmsCode = errors.New("reserved CDS sub-millisecond code '11' in P-field")
 
 	// ErrInvalidSubmilliseconds indicates the CDS sub-millisecond value is out

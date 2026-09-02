@@ -6,7 +6,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-// BlockType is the 8-bit type code of a canonical block, per RFC 5050 §4.5.2.
+// BlockType is the 8-bit type code of a canonical block, per RFC 5050 clause 4.5.2.
 type BlockType uint8
 
 const (
@@ -15,7 +15,7 @@ const (
 	BlockTypePayload BlockType = 1
 
 	// BlockTypeECOS is the Extended Class of Service block that
-	// CCSDS 734.2-B-1 §3.3 requires. The code is IANA-assigned; 19 is the
+	// CCSDS 734.2-B-1 clause 3.3 requires. The code is IANA-assigned; 19 is the
 	// value in the IANA Bundle Block Types registry.
 	BlockTypeECOS BlockType = 19
 )
@@ -35,7 +35,7 @@ func (b BlockType) String() string {
 	}
 }
 
-// BlockFlags are the block processing control flags of RFC 5050 §4.5.2.
+// BlockFlags are the block processing control flags of RFC 5050 clause 4.5.2.
 type BlockFlags uint64
 
 const (
@@ -63,7 +63,7 @@ const (
 func (f BlockFlags) Has(want BlockFlags) bool { return f&want == want }
 
 // EIDReference is a pair of dictionary offsets naming an endpoint from within
-// a canonical block, per §4.5.2.
+// a canonical block, per clause 4.5.2.
 type EIDReference struct {
 	SchemeOffset uint64
 	SSPOffset    uint64
@@ -77,7 +77,7 @@ type EIDReference struct {
 // length.
 const DefaultMaxBlockLength = 16 << 20
 
-// CanonicalBlock is any block other than the primary one, per §4.5.2.
+// CanonicalBlock is any block other than the primary one, per clause 4.5.2.
 type CanonicalBlock struct {
 	Type  BlockType
 	Flags BlockFlags
@@ -93,11 +93,11 @@ type CanonicalBlock struct {
 // IsLast reports whether this block carries the last-block flag.
 func (b *CanonicalBlock) IsLast() bool { return b.Flags.Has(BlockLast) }
 
-// Validate checks the block against §4.5.2.
+// Validate checks the block against clause 4.5.2.
 func (b *CanonicalBlock) Validate() error {
 	hasRefs := b.Flags.Has(BlockHasEIDRefs)
 	if hasRefs != (len(b.EIDReferences) > 0) {
-		// §4.5.2 ties the flag and the field together: the field is present
+		// Clause 4.5.2 ties the flag and the field together: the field is present
 		// "if and only if" the flag is set.
 		return ErrInvalidEndpointID
 	}
@@ -221,7 +221,7 @@ const (
 // signals (C3.1.4).
 const ECOSCustodySignalOrdinal uint8 = 255
 
-// ECOS is the Extended Class of Service block CCSDS 734.2-B-1 §3.3 requires
+// ECOS is the Extended Class of Service block CCSDS 734.2-B-1 clause 3.3 requires
 // conformant implementations to support.
 //
 // RFC 5050 gives a bundle three priority levels. Space operations need more:
@@ -283,8 +283,8 @@ func DecodeECOS(data []byte) (*ECOS, error) {
 
 // Block wraps the ECOS data in a canonical block.
 //
-// Annex C requires bit 0 of the block processing flags — replicate in every
-// fragment — and forbids EID references (C2 b and c).
+// Annex C requires bit 0 of the block processing flags (replicate in every
+// fragment) and forbids EID references (C2 b and c).
 func (e *ECOS) Block() (*CanonicalBlock, error) {
 	data, err := e.Encode()
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 // Benchmarks for the uplink coding layer.
 //
 // A command link runs at a fraction of a downlink's rate, so these matter
-// less for throughput than the TM side — but a station commanding several
+// less for throughput than the TM side, but a station commanding several
 // spacecraft still runs them often, and the BCH codeblock is the unit every
 // uplink octet passes through.
 //

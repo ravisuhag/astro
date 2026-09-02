@@ -609,9 +609,9 @@ func (f *FOP) Tick(n int) error {
 			// 5.2.18 defines Ignore as no processing at all, and 5.1.9.1
 			// ties the timer to an actual transmission, which S3 does not
 			// make. That is not a dead end, because every exit from S3 is
-			// driven by an arriving CLCW — new acknowledgements (E2/E6),
+			// driven by an arriving CLCW (new acknowledgements (E2/E6),
 			// the Wait flag clearing (E8/E10), or an alert (E3/E7/E13/E14)
-			// — and the receiver keeps reporting.
+			//) and the receiver keeps reporting.
 
 		case FOPInitialisingWithoutBC:
 			// Nothing has been transmitted that could be retransmitted, so

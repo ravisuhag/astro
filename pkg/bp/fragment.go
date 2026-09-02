@@ -3,14 +3,14 @@ package bp
 import "sort"
 
 // Fragment splits a bundle into pieces whose payloads are at most maxPayload
-// octets each, per RFC 5050 §5.8.
+// octets each, per RFC 5050 clause 5.8.
 //
 // Every fragment carries the same primary block with the fragment flag set,
 // its own offset into the original application data unit, and the total ADU
 // length so a receiver knows when it has everything.
 //
 // Blocks flagged "replicate in every fragment" are copied into each piece.
-// Of the rest, §5.8 sends blocks that precede the payload with the first
+// Of the rest, clause 5.8 sends blocks that precede the payload with the first
 // fragment and blocks that follow the payload with the last.
 func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 	if err := b.Validate(); err != nil {
@@ -19,7 +19,7 @@ func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 	if maxPayload <= 0 {
 		return nil, ErrCannotFragment
 	}
-	// §4.2: the flag means what it says.
+	// Clause 4.2: the flag means what it says.
 	if b.Primary.Flags.Has(FlagNoFragment) {
 		return nil, ErrCannotFragment
 	}
@@ -42,7 +42,7 @@ func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 		total = b.Primary.TotalADULength
 	}
 
-	// §5.8 splits the extension blocks around the payload: those preceding
+	// Clause 5.8 splits the extension blocks around the payload: those preceding
 	// it go with the first fragment, those following it with the last, and
 	// replicate-flagged ones with every fragment.
 	payloadIndex := 0
@@ -111,14 +111,14 @@ func (b *Bundle) Fragment(maxPayload int) ([]*Bundle, error) {
 }
 
 // sameBundle reports whether two fragments came from one original bundle.
-// §4.5.1 identifies a bundle by its source endpoint and creation timestamp.
+// Clause 4.5.1 identifies a bundle by its source endpoint and creation timestamp.
 func sameBundle(a, b *PrimaryBlock) bool {
 	return a.Source == b.Source &&
 		a.CreationTimestamp == b.CreationTimestamp &&
 		a.TotalADULength == b.TotalADULength
 }
 
-// Reassemble rebuilds the original bundle from a set of fragments, per §5.9.
+// Reassemble rebuilds the original bundle from a set of fragments, per clause 5.9.
 //
 // The fragments may arrive in any order and may overlap; what matters is that
 // together they cover the whole application data unit.
@@ -187,7 +187,7 @@ func Reassemble(fragments []*Bundle) (*Bundle, error) {
 
 	rebuilt := &Bundle{Primary: &primary}
 
-	// Extension blocks come from the fragment that carried them, per §5.8:
+	// Extension blocks come from the fragment that carried them, per clause 5.8:
 	// blocks preceding the payload from the first fragment, blocks following
 	// it from the last.
 	blocksAround := func(f *Bundle, before bool) []*CanonicalBlock {

@@ -1,7 +1,7 @@
 ---
 title: Encapsulation Packet Protocol
 short: EPP
-description: CCSDS 133.1-B-3 — a thin wrapper for carrying IP and other non-CCSDS data.
+description: CCSDS 133.1-B-3, a thin wrapper for carrying IP and other non-CCSDS data.
 order: 11
 ---
 
@@ -37,7 +37,7 @@ The header is variable length. Its size is decided entirely by the 2-bit Length 
 
 | LoL | Header | Packet Length field | Max total packet |
 |---|---|---|---|
-| `00` | 1 octet | none | 1 octet — idle only |
+| `00` | 1 octet | none | 1 octet, idle only |
 | `01` | 2 octets | 8 bits | 255 octets |
 | `10` | 4 octets | 16 bits | 65,535 octets |
 | `11` | 8 octets | 32 bits | 4,294,967,295 octets |
@@ -51,7 +51,7 @@ From clause 4.1.2.3 and the SANA Encapsulation Protocol ID registry.
 | 0 | `ProtocolIDIdle` | Fill data |
 | 1 | `ProtocolIDLTP` | [Licklider Transmission Protocol](/protocols/transport/ltp) |
 | 2 | `ProtocolIDIPE` | IPv4 or IPv6, via the Internet Protocol Extension |
-| 3-5 | — | Reserved |
+| 3-5 | - | Reserved |
 | 6 | `ProtocolIDExtended` | Whatever the Protocol ID Extension names |
 | 7 | `ProtocolIDMission` | Mission-specific, privately defined |
 
@@ -67,7 +67,7 @@ From clause 4.1.2.3 and the SANA Encapsulation Protocol ID registry.
 
 **Fields that do not fit are refused, not dropped.** Setting a User Defined Field on a 2-octet header gives `ErrFieldNeedsLongerHeader` rather than silently discarding it.
 
-**A packet with no data field is only legal when idle.** Non-idle packets must carry something — `ErrEmptyData`. For multi-octet fill, use `NewIdleFillPacket(totalLength, fillByte)`.
+**A packet with no data field is only legal when idle.** Non-idle packets must carry something, `ErrEmptyData`. For multi-octet fill, use `NewIdleFillPacket(totalLength, fillByte)`.
 
 header rules, see the [protocol page](/protocols/transport/epp).
 
@@ -77,10 +77,10 @@ header rules, see the [protocol page](/protocols/transport/epp).
 // Create a service over any io.ReadWriter (TCP conn, serial port, etc.)
 svc := epp.NewService(conn, epp.ServiceConfig{})
 
-// Send raw bytes — packet construction is handled automatically
+// Send raw bytes, packet construction is handled automatically
 err := svc.SendBytes(epp.ProtocolIDIPE, ipv4Datagram)
 
-// Receive — returns Protocol ID and data
+// Receive, returns Protocol ID and data
 pid, data, err := svc.ReceiveBytes()
 ```
 
@@ -107,7 +107,7 @@ err := svc.SendBytes(epp.ProtocolIDExtended, data,
     epp.WithExtendedProtocolID(9),
 )
 
-// Receive — returns Protocol ID and data zone
+// Receive, returns Protocol ID and data zone
 pid, data, err := svc.ReceiveBytes()
 ```
 
@@ -272,5 +272,5 @@ Commentary, not sourced from the standard.
 
 ## Reference
 
-- [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) — Encapsulation Packet Protocol (Blue Book)
+- [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf), Encapsulation Packet Protocol (Blue Book)
 - [CLI](/cli/epp) | [Conformance](/conformance/epp) | [The stack](/docs/start/concepts)

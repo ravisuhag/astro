@@ -69,7 +69,7 @@ func TestCCSBCDEncoding(t *testing.T) {
 	}
 
 	// P-field is 1 byte, then T-field starts at index 1
-	// Year should be BCD: 2024 → 0x20 0x24
+	// Year should be BCD: 2024 -> 0x20 0x24
 	if encoded[1] != 0x20 || encoded[2] != 0x24 {
 		t.Errorf("expected BCD year 0x20 0x24, got 0x%02X 0x%02X", encoded[1], encoded[2])
 	}
@@ -93,7 +93,7 @@ func TestCCSBCDDayOfYear(t *testing.T) {
 		t.Fatalf("Encode failed: %v", err)
 	}
 
-	// DOY 75: upper 4 bits zero, then BCD 075 → byte[0]=0x00, byte[1]=0x75
+	// DOY 75: upper 4 bits zero, then BCD 075 -> byte[0]=0x00, byte[1]=0x75
 	doyBytes := encoded[3:5] // after 1-byte P-field and 2-byte year
 	if doyBytes[0] != 0x00 || doyBytes[1] != 0x75 {
 		t.Errorf("expected BCD DOY 0x00 0x75, got 0x%02X 0x%02X", doyBytes[0], doyBytes[1])
@@ -122,7 +122,7 @@ func TestCCSBCDHour(t *testing.T) {
 }
 
 func TestCCSWithSubSeconds(t *testing.T) {
-	// 0.123456 seconds → sub-second octets: 12, 34, 56 (BCD pairs)
+	// 0.123456 seconds -> sub-second octets: 12, 34, 56 (BCD pairs)
 	testTime := time.Date(2024, 1, 1, 0, 0, 0, 123456000, time.UTC)
 
 	ccs, err := NewCCS(testTime, WithCCSSubSecBytes(3))
@@ -213,7 +213,7 @@ func TestCCSMonthDayEncodeDecodeRoundTrip(t *testing.T) {
 }
 
 func TestCCSCalendarVariationFlag(t *testing.T) {
-	// Per §3.4.2: bit 4 = 0 means Month/Day, bit 4 = 1 means Day-of-Year
+	// Per clause 3.4.2: bit 4 = 0 means Month/Day, bit 4 = 1 means Day-of-Year
 	testTime := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 
 	// Day-of-Year variant: bit 4 should be 1

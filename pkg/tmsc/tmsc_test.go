@@ -155,7 +155,7 @@ func TestWrapUnwrapCADU_Deterministic(t *testing.T) {
 
 func TestPNSequenceMatchesTheCCSDSVector(t *testing.T) {
 	// CCSDS 131.0-B specifies h(x) = x^8 + x^7 + x^5 + x^3 + 1 with the
-	// register preset to all ones. CCSDS 142.0-B-1 §3.5.2.1, which adopts the
+	// register preset to all ones. CCSDS 142.0-B-1 clause 3.5.2.1, which adopts the
 	// same sequence by reference, publishes the first 40 digits:
 	//
 	//   1111 1111 0100 1000 0000 1110 1100 0000 1001 1010

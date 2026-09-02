@@ -114,7 +114,7 @@ func TestCFDPDecodeNAKDirective(t *testing.T) {
 	}
 }
 
-// File data is not a directive, so it is reported as octets — and labelled as
+// File data is not a directive, so it is reported as octets, and labelled as
 // uninterpreted rather than left looking decoded.
 func TestCFDPDecodeFileData(t *testing.T) {
 	pdu := &cfdp.PDU{
@@ -148,7 +148,7 @@ func TestCFDPDecodeFileData(t *testing.T) {
 }
 
 // The CRC is verified when the header says one is there, so a corrupted PDU
-// fails rather than decoding to something plausible. §4.1.2 requires the
+// fails rather than decoding to something plausible. Clause 4.1.2 requires the
 // receiver to discard it.
 func TestCFDPDecodeRejectsABadCRC(t *testing.T) {
 	eof := &cfdp.EOFPDU{ConditionCode: cfdp.CondNoError, FileChecksum: 1, FileSize: 8}

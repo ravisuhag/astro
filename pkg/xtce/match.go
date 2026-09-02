@@ -30,7 +30,7 @@ import (
 // candidate rather than a cached layout per container.
 //
 // Only the two errors that mean "the packet decides this" trigger the
-// fallback. Anything else — an unresolved reference, a cycle — is a broken
+// fallback. Anything else (an unresolved reference, a cycle) is a broken
 // database and is reported as it was.
 func layoutAgainst(container *SequenceContainer, packet []byte) (*Layout, error) {
 	layout, err := container.Layout()
@@ -114,7 +114,7 @@ func (s *SpaceSystem) matchFrom(root *SequenceContainer, packet []byte) (*Sequen
 		}
 	}
 
-	// Nothing derived matched, so root itself is the answer — unless it is
+	// Nothing derived matched, so root itself is the answer, unless it is
 	// abstract, which means it was never meant to describe a packet alone.
 	if root.Abstract {
 		return nil, nil
@@ -201,7 +201,7 @@ func (s *SpaceSystem) satisfies(container *SequenceContainer, packet []byte) (bo
 // compare evaluates one Comparison against a packet.
 //
 // The parameter it names belongs to the base container, so it is read from the
-// base's layout — the derived container's own layout cannot be built before we
+// base's layout. The derived container's own layout cannot be built before we
 // know the packet is one of those.
 func (s *SpaceSystem) compare(container *SequenceContainer, comparison *Comparison, packet []byte) (bool, error) {
 	if comparison.Instance != 0 {
@@ -227,8 +227,8 @@ func (s *SpaceSystem) compare(container *SequenceContainer, comparison *Comparis
 // before we know the packet is one of those.
 //
 // present is false when the packet ends before the field. That is a failed
-// match rather than a broken database — a truncated packet simply is not the
-// container it was on its way to being — so it comes back without an error.
+// match rather than a broken database (a truncated packet simply is not the
+// container it was on its way to being) so it comes back without an error.
 func (s *SpaceSystem) readCriterionParameter(
 	container *SequenceContainer, ref string, calibrated bool, packet []byte,
 ) (actual any, field Field, present bool, err error) {
@@ -357,7 +357,7 @@ func evaluate(actual any, operator string, text string, field Field) (bool, erro
 //
 // Truncation only kicks in for a value that does not fit. A value that fits is
 // left alone, because truncating it could only change it into something the
-// database did not write — turning -1 into 255 against a signed field, say,
+// database did not write, turning -1 into 255 against a signed field, say,
 // which would then never match.
 func parseComparisonValue(text string, width uint, signed bool) (float64, error) {
 	text = strings.TrimSpace(text)

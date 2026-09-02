@@ -26,7 +26,7 @@ var monitorControlNames = map[uint8]string{
 //
 // TC[12,4] is worth singling out: it deletes every parameter monitoring
 // definition, and clause 6.12.3.9.2 gives it no arguments at all. There is no
-// selective form of it — TC[12,6] is that.
+// selective form of it, TC[12,6] is that.
 type MonitorControlRequest struct {
 	// Subtype is one of the eight; anything else is refused on encode.
 	Subtype uint8
@@ -81,7 +81,7 @@ var fmonIDListNames = map[uint8]string{
 //
 // Two of the ten give an empty list a meaning: clauses 8.12.2.8c and
 // 8.12.2.25c say that setting N to 0 reports all definitions. The other eight
-// say nothing about it, so IsAll only reports true for those two — an empty
+// say nothing about it, so IsAll only reports true for those two. An empty
 // enable request is an empty enable request, not a request to enable
 // everything.
 type MonitorIDListRequest struct {
@@ -452,7 +452,7 @@ func (r FMONStatusReport) Humanize() string {
 // and Figures 8-114, 8-119 and 8-124.
 //
 // One type serves the add request, the modify request and the report, because
-// they differ only in which fields they carry — and the differences are worth
+// they differ only in which fields they carry, and the differences are worth
 // naming. The add request carries the check validity condition and the
 // monitoring interval; the modify request carries neither, because clause
 // 6.12.3.9.4 modifies a check rather than replacing a definition. The report
@@ -724,7 +724,7 @@ func (r AddPMONDefinitionsRequest) Humanize() string {
 // clause 6.12.3.9.4 modifies the check in an existing definition rather than
 // replacing the definition. Clause 8.12.2.7c adds that the check type must
 // match the definition's original one, which only the flight software can
-// verify — it holds the original.
+// verify. It holds the original.
 type ModifyPMONDefinitionsRequest struct {
 	Profile MissionProfile
 	// Resolve gives the widths of the deduced fields. Required.
@@ -923,7 +923,7 @@ type CheckTransition struct {
 }
 
 // CheckTransitionReport is TM[12,11] or TM[12,12], per Figures 8-128 and
-// 8-129 — one structure printed twice.
+// 8-129. One structure printed twice.
 //
 // The two differ in what they report, not how. TM[12,11] answers TC[12,10]
 // with every definition currently out of limits; TM[12,12] is sent

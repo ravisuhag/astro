@@ -1,11 +1,11 @@
 ---
 title: astro usdl
 short: USDL
-description: USLP transfer frames — encode, decode, inspect.
+description: USLP transfer frames, encode, decode, inspect.
 order: 60
 ---
 
-USLP Transfer Frame operations — encode, decode, inspect, and generate USLP Transfer Frames ([CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf)).
+USLP Transfer Frame operations: encode, decode, inspect, and generate USLP Transfer Frames ([CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf)).
 
 ## Subcommands
 
@@ -153,4 +153,4 @@ astro usdl gen --scid 100 --vcid 1 --count 5 --data-size 32 --format hex
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/usdl) for the standard and the Go API, and the [conformance statement](/conformance/usdl) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/usdl) for the standard and the Go API, and the [conformance statement](/conformance/usdl) for what is and is not implemented.

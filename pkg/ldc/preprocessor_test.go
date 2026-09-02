@@ -7,11 +7,11 @@ import (
 )
 
 // TestPreprocessGreenBookExample transcribes the worked table of
-// CCSDS 120.0-G-4 §3.3.3, which runs a unit-delay predictor and the mapper
+// CCSDS 120.0-G-4 clause 3.3.3, which runs a unit-delay predictor and the mapper
 // over 8-bit samples in the range 0 to 255:
 //
 //	Sample  Predictor   Delta   theta   delta
-//	  101       —         —       —       —     (reference)
+//	  101,         ,       ,       ,     (reference)
 //	  101      101        0      101      0
 //	  100      101       -1      101      1
 //	  101      100        1      100      2
@@ -153,7 +153,7 @@ func TestMapperIsABijection(t *testing.T) {
 	}
 }
 
-// TestReferenceSampleHasZeroError pins §4.2.5: the first sample of a reference
+// TestReferenceSampleHasZeroError pins clause 4.2.5: the first sample of a reference
 // interval predicts itself, so its prediction error is zero.
 func TestReferenceSampleHasZeroError(t *testing.T) {
 	p := ldc.Params{
@@ -174,7 +174,7 @@ func TestReferenceSampleHasZeroError(t *testing.T) {
 	}
 }
 
-// TestBypassPredictorNeedsNoReferences pins §4.2.6: reference samples are
+// TestBypassPredictorNeedsNoReferences pins clause 4.2.6: reference samples are
 // employed only with a predictor that looks at previous samples.
 func TestBypassPredictorNeedsNoReferences(t *testing.T) {
 	if ldc.PredictorBypass.NeedsReferenceSamples() {

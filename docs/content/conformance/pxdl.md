@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 100
 ---
 
-## Conformance Statement for `pkg/pxdl` — CCSDS 211.0-B-6
+## Conformance Statement for `pkg/pxdl`, CCSDS 211.0-B-6
 
 ---
 
@@ -33,7 +33,7 @@ order: 100
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/pxdl (Go package) |
 | System Name(s) | Astro |
 
@@ -41,8 +41,8 @@ order: 100
 
 | Field | Value |
 |---|---|
-| Specification | CCSDS 211.0-B-6 (Proximity-1 Space Link Protocol — Data Link Layer, Blue Book, Issue 6, July 2020) |
-| Have any exceptions been required? | Yes [X] No [ ] — see A1.6 |
+| Specification | CCSDS 211.0-B-6 (Proximity-1 Space Link Protocol, Data Link Layer, Blue Book, Issue 6, July 2020) |
+| Have any exceptions been required? | Yes [X] No [ ], see A1.6 |
 
 ---
 
@@ -50,19 +50,19 @@ order: 100
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Version-3 Transfer Frame structure | clause 3.2.1 | M | Y — 5-octet header, up to 2043 octets of data |
-| Transfer Frame Version Number = binary '10' | clause 3.2.2.2.2 | M | Y — other values rejected on decode |
-| Quality of Service Indicator | clause 3.2.2.3 | M | Y — sequence controlled and expedited |
+| Version-3 Transfer Frame structure | clause 3.2.1 | M | Y: 5-octet header, up to 2043 octets of data |
+| Transfer Frame Version Number = binary '10' | clause 3.2.2.2.2 | M | Y: other values rejected on decode |
+| Quality of Service Indicator | clause 3.2.2.3 | M | Y: sequence controlled and expedited |
 | PDU Type ID: U-frame and P-frame | clause 3.2.2.4 | M | Y |
-| Data Field Construction ID | clause 3.2.2.5 | M | Y — all four values of table 3-1 |
-| DFC ID zero in a P-frame | clause 3.2.2.5.2 | M | Y — enforced |
+| Data Field Construction ID | clause 3.2.2.5 | M | Y: all four values of table 3-1 |
+| DFC ID zero in a P-frame | clause 3.2.2.5.2 | M | Y: enforced |
 | Spacecraft Identifier, 10 bits | clause 3.2.2.6 | M | Y |
 | Physical Channel Identifier | clause 3.2.2.7 | M | Y |
 | Port Identifier, 3 bits | clause 3.2.2.8 | M | Y |
-| Port ID zero in a P-frame | clause 3.2.2.8.2 | M | Y — enforced |
-| Source-or-Destination Identifier | clause 3.2.2.9 | M | Y — '0' = source, '1' = destination, per table 3-2 |
-| Frame Length as a count less one | clause 3.2.2.10.2 | M | Y — 5 to 2048 octets enforced |
-| Frame Sequence Number | clause 3.2.2.11 | M | Y — carried; COP-P is out of scope |
+| Port ID zero in a P-frame | clause 3.2.2.8.2 | M | Y: enforced |
+| Source-or-Destination Identifier | clause 3.2.2.9 | M | Y: '0' = source, '1' = destination, per table 3-2 |
+| Frame Length as a count less one | clause 3.2.2.10.2 | M | Y: 5 to 2048 octets enforced |
+| Frame Sequence Number | clause 3.2.2.11 | M | Y: carried; COP-P is out of scope |
 
 ---
 
@@ -70,14 +70,14 @@ order: 100
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Packets, DFC ID '00' | clause 3.2.3.2 | O | Y — carried verbatim |
+| Packets, DFC ID '00' | clause 3.2.3.2 | O | Y: carried verbatim |
 | Segment data units, DFC ID '01' | clause 3.2.3.3 | O | Y |
 | Segment header: sequence flags and pseudo packet ID | clause 3.2.3.3.2 | M | Y |
 | Sequence flag values of table 3-4 | clause 3.2.3.3.2 a) | M | Y |
-| Reassembly by routing ID | clause 3.2.3.3.3 | M | Y — PCID, Port ID and pseudo packet ID |
+| Reassembly by routing ID | clause 3.2.3.3.3 | M | Y: PCID, Port ID and pseudo packet ID |
 | Only complete packets delivered | clause 3.2.3.3.4 | M | Y |
-| Discard on a segment before the start segment | clause 3.2.3.3.5 b) | M | Y — `ErrSegmentOutOfOrder` |
-| User defined data, DFC ID '11' | clause 3.2.3.5 | O | Y — carried verbatim |
+| Discard on a segment before the start segment | clause 3.2.3.3.5 b) | M | Y: `ErrSegmentOutOfOrder` |
+| User defined data, DFC ID '11' | clause 3.2.3.5 | O | Y: carried verbatim |
 
 ---
 
@@ -85,15 +85,15 @@ order: 100
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Fixed-length SPDU format | clause 3.2.4.2.1 | M | Y — 2 octets |
-| Variable-length SPDU format | clause 3.2.4.2.2 | M | Y — 1 octet header, 0 to 15 octets of data |
+| Fixed-length SPDU format | clause 3.2.4.2.1 | M | Y: 2 octets |
+| Variable-length SPDU format | clause 3.2.4.2.2 | M | Y: 1 octet header, 0 to 15 octets of data |
 | Data field length is the actual count | clause 3.2.4.2.2 a) 3) note | M | Y |
-| SPDUs are self-delimiting | clause 3.2.4.1 | M | Y — a mixed run decodes without a count |
-| SPDUs only on the Expedited service | clause 3.2.4.1 | M | Y — enforced by the constructor |
+| SPDUs are self-delimiting | clause 3.2.4.1 | M | Y: a mixed run decodes without a count |
+| SPDUs only on the Expedited service | clause 3.2.4.1 | M | Y: enforced by the constructor |
 | Type F1: Proximity Link Control Word | clause 3.2.4.3.2 | M | Y |
-| PLCW field layout of figure 3-5 | clause 3.2.4.3.2.1.1 | M | Y — all seven fields, verified against the published figure |
+| PLCW field layout of figure 3-5 | clause 3.2.4.3.2.1.1 | M | Y: all seven fields, verified against the published figure |
 | PLCW Report Value = V(R) | clause 3.2.4.3.2.2.2 | M | Y |
-| Type F2 fixed-length SPDU | table 3-5 | — | N — reserved for future CCSDS use |
+| Type F2 fixed-length SPDU | table 3-5 | - | N: reserved for future CCSDS use |
 
 ---
 
@@ -101,12 +101,12 @@ order: 100
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Managed parameter representation | clause 4, annex C | M | P — `ManagedParameters` holds the frame-layer subset |
+| Managed parameter representation | clause 4, annex C | M | P: `ManagedParameters` holds the frame-layer subset |
 | Local_Spacecraft_ID, Remote_Spacecraft_ID | annex C | M | Y |
-| Maximum_Frame_Length, per direction | annex C | M | Y — send and receive maxima held separately |
+| Maximum_Frame_Length, per direction | annex C | M | Y: send and receive maxima held separately |
 | Maximum_Packet_Size | clause 4.4.2.1 | M | Y |
-| Synch_Timeout, PLCW_Repeat_Interval | annex C | M | Y — carried; nothing in this package acts on timers |
-| MAC, hailing, and COP-P parameters | annex C | M | N — out of scope with those sublayers, see A1.6 |
+| Synch_Timeout, PLCW_Repeat_Interval | annex C | M | Y: carried; nothing in this package acts on timers |
+| MAC, hailing, and COP-P parameters | annex C | M | N: out of scope with those sublayers, see A1.6 |
 
 ---
 
@@ -119,7 +119,7 @@ order: 100
 | MAC sublayer, session establishment | clause 5, clause 6 | N | Out of scope for the frame layer. |
 | Physical layer, transceiver control | CCSDS 211.1-B | N | A separate specification. |
 | Coding and synchronization | CCSDS 211.2-B-3 | N | A separate specification; `pkg/pxsc`. |
-| CLI subcommands | — | N | A follow-up once the API settles. |
+| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

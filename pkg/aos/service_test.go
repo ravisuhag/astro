@@ -99,7 +99,7 @@ func TestMultiplexingService_FixedLength_RoundTrip(t *testing.T) {
 }
 
 func TestMultiplexingService_VariableLength_Rejected(t *testing.T) {
-	config := aos.ChannelConfig{} // FrameLength=0 — invalid for AOS
+	config := aos.ChannelConfig{} // FrameLength=0, invalid for AOS
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewMultiplexingService(50, 1, vc, config, nil)
 	if err := tx.Send([]byte{0x01}); err != aos.ErrDataFieldTooSmall {

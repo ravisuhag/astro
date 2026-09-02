@@ -8,8 +8,8 @@ import (
 // Return Operational Control Fields, per CCSDS 911.5-B-4.
 //
 // ROCF delivers only the Operational Control Field out of each telemetry
-// frame, not the whole frame. In practice that field carries a CLCW — the
-// telecommand acknowledgement, which pkg/cop decodes — so ROCF is how a
+// frame, not the whole frame. In practice that field carries a CLCW (the
+// telecommand acknowledgement, which pkg/cop decodes) so ROCF is how a
 // control centre learns whether its commands got through, without paying for
 // the whole downlink.
 //
@@ -52,7 +52,7 @@ func (c ControlWordKind) String() string {
 //	}
 //
 // The clcw alternative carries a TcVcid, itself a CHOICE of "no telecommand
-// virtual channel" and a specific one — so a caller can ask for CLCWs from one
+// virtual channel" and a specific one, so a caller can ask for CLCWs from one
 // TC virtual channel, or from any.
 type ControlWordType struct {
 	Kind ControlWordKind
@@ -302,8 +302,8 @@ func (s *ROCFStartInvocation) Humanize() string {
 // ROCFTransferDataInvocation is the RocfTransferDataInvocation of the ROCF
 // outgoing PDUs module.
 //
-// Its Data is the operational control field itself — four octets, usually a
-// CLCW that pkg/cop can decode — rather than a whole frame.
+// Its Data is the operational control field itself (four octets, usually a
+// CLCW that pkg/cop can decode) rather than a whole frame.
 type ROCFTransferDataInvocation struct {
 	Credentials        *Credentials
 	EarthReceiveTime   Time

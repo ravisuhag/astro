@@ -160,7 +160,7 @@ var requestIDListNames = map[uint8]string{
 }
 
 // ScheduleRequestIDListRequest is TC[11,5], TC[11,9] or TC[11,12], per
-// Figures 8-92, 8-96 and 8-99 — one structure printed three times.
+// Figures 8-92, 8-96 and 8-99, one structure printed three times.
 type ScheduleRequestIDListRequest struct {
 	Profile MissionProfile
 	// Subtype is one of the three.
@@ -225,7 +225,7 @@ var filterNames = map[uint8]string{
 }
 
 // ScheduleFilterRequest is TC[11,6], TC[11,11] or TC[11,14], per Figures
-// 8-93, 8-98 and 8-101 — again one structure printed three times.
+// 8-93, 8-98 and 8-101, again one structure printed three times.
 type ScheduleFilterRequest struct {
 	Profile MissionProfile
 	// Subtype is one of the three.
@@ -643,7 +643,7 @@ var idListNames = map[uint8]string{
 }
 
 // ScheduleIDListRequest is TC[11,20], TC[11,21], TC[11,23], TC[11,24] or
-// TC[11,25], per Figures 8-104, 8-105, 8-107, 8-108 and 8-109 — one structure
+// TC[11,25], per Figures 8-104, 8-105, 8-107, 8-108 and 8-109, one structure
 // printed five times, over sub-schedule IDs for the first two and group IDs
 // for the last three.
 //

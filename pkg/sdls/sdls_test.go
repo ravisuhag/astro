@@ -14,7 +14,7 @@ import (
 // testKey is a fixed AES-256 key. Test vectors only; never a real key.
 var testKey = bytes.Repeat([]byte{0x0F}, sdls.AESKeySize)
 
-// baselineLengths is the CCSDS 355.0-B-2 §E1 baseline: 96-bit IV, no explicit
+// baselineLengths is the CCSDS 355.0-B-2 clause E1 baseline: 96-bit IV, no explicit
 // sequence number, no padding, 128-bit MAC. Security Header is 14 octets.
 var baselineLengths = sdls.FieldLengths{IV: sdls.GCMIVSize, SeqNum: 0, PadLen: 0, MAC: 16}
 
@@ -34,7 +34,7 @@ func newTestSA(t *testing.T, mode sdls.Mode) *sdls.SecurityAssociation {
 }
 
 func TestBaselineSecurityHeaderSize(t *testing.T) {
-	// §E1.2: the baseline Security Header is 14 octets.
+	// Clause E1.2: the baseline Security Header is 14 octets.
 	if got := baselineLengths.HeaderSize(); got != 14 {
 		t.Errorf("baseline header size = %d, want 14", got)
 	}
@@ -93,7 +93,7 @@ func TestSecurityHeaderRoundTrip(t *testing.T) {
 }
 
 func TestSecurityHeaderSPIPosition(t *testing.T) {
-	// §4.1.1.2.1: bits 0-15 of the Security Header are the SPI, big-endian.
+	// Clause 4.1.1.2.1: bits 0-15 of the Security Header are the SPI, big-endian.
 	h := &sdls.SecurityHeader{SPI: 0xBEEF, IV: bytes.Repeat([]byte{1}, 12)}
 	encoded, err := h.Encode()
 	if err != nil {
@@ -115,7 +115,7 @@ func TestDecodeSecurityHeaderShortInput(t *testing.T) {
 }
 
 func TestSecurityHeaderTooLong(t *testing.T) {
-	// §4.1.1.1.4: a Security Header is at most 64 octets.
+	// Clause 4.1.1.1.4: a Security Header is at most 64 octets.
 	fl := sdls.FieldLengths{IV: 63, MAC: 16}
 	if err := fl.Validate(); !errors.Is(err, sdls.ErrHeaderTooLong) {
 		t.Errorf("error = %v, want ErrHeaderTooLong", err)
@@ -137,7 +137,7 @@ func TestSecurityAssociationValidate(t *testing.T) {
 	}{
 		{"valid authenticated encryption", func(*sdls.SecurityAssociation) {}, nil},
 		{"valid authentication", func(sa *sdls.SecurityAssociation) { sa.Mode = sdls.Authentication }, nil},
-		// §4.1.1.2.3 reserves both extremes.
+		// Clause 4.1.1.2.3 reserves both extremes.
 		{"SPI zero reserved", func(sa *sdls.SecurityAssociation) { sa.SPI = 0 }, sdls.ErrInvalidSPI},
 		{"SPI all ones reserved", func(sa *sdls.SecurityAssociation) { sa.SPI = 65535 }, sdls.ErrInvalidSPI},
 		{"mode zero", func(sa *sdls.SecurityAssociation) { sa.Mode = 0 }, sdls.ErrInvalidMode},
@@ -219,7 +219,7 @@ func TestApplyProcessRoundTrip(t *testing.T) {
 func TestApplySecurityLayoutMatchesRawGCM(t *testing.T) {
 	// Prove the wire layout by decrypting with a bare stdlib GCM call:
 	// Security Header || ciphertext || tag, associated data = masked prefix
-	// with the IV zeroed (§4.2.2.6.2 h).
+	// with the IV zeroed (clause 4.2.2.6.2 h).
 	sa := newTestSA(t, sdls.AuthenticatedEncryption)
 	frameHeader := []byte{0x01, 0xA2, 0x00, 0x00}
 	plaintext := []byte("payload")

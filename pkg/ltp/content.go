@@ -6,7 +6,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-// DataSegment is the content of a data segment, per RFC 5326 §3.2.1.
+// DataSegment is the content of a data segment, per RFC 5326 clause 3.2.1.
 //
 // Checkpoint segments carry two extra serial numbers. Non-checkpoint segments
 // must not: the spec is explicit that they "MUST continue on directly with the
@@ -35,7 +35,7 @@ func (d *DataSegment) End() uint64 { return d.Offset + uint64(len(d.Data)) }
 // segment type in the header, since the wire format is not self-describing.
 func (d *DataSegment) Encode(isCheckpoint bool) ([]byte, error) {
 	if isCheckpoint && d.CheckpointSerial == 0 {
-		// §3.2.1: "The checkpoint serial number MUST NOT be zero."
+		// Clause 3.2.1: "The checkpoint serial number MUST NOT be zero."
 		return nil, ErrInvalidSerialNumber
 	}
 
@@ -94,7 +94,7 @@ func (d *DataSegment) Humanize() string {
 		d.ClientServiceID, d.Offset, len(d.Data))
 }
 
-// ReceptionClaim is one run of successfully received data, per §3.2.2.
+// ReceptionClaim is one run of successfully received data, per clause 3.2.2.
 //
 // The offset is measured from the report's lower bound, NOT from the start of
 // the block. Add the lower bound to get a block offset.
@@ -103,7 +103,7 @@ type ReceptionClaim struct {
 	Length uint64
 }
 
-// ReportSegment is the content of a report segment, per §3.2.2. It tells the
+// ReportSegment is the content of a report segment, per clause 3.2.2. It tells the
 // sender which parts of the block arrived.
 type ReportSegment struct {
 	// ReportSerial identifies this report among the receiver's. Never zero.
@@ -120,23 +120,23 @@ type ReportSegment struct {
 	Claims []ReceptionClaim
 }
 
-// Validate checks the report against the rules of §3.2.2.
+// Validate checks the report against the rules of clause 3.2.2.
 func (r *ReportSegment) Validate() error {
 	if r.ReportSerial == 0 {
-		// §3.2.2: "The report serial number MUST NOT be zero."
+		// Clause 3.2.2: "The report serial number MUST NOT be zero."
 		return ErrInvalidSerialNumber
 	}
 	if r.UpperBound < r.LowerBound {
 		return ErrInvalidBounds
 	}
-	// §3.2.2: a report carries at least one reception claim.
+	// Clause 3.2.2: a report carries at least one reception claim.
 	if len(r.Claims) == 0 {
 		return ErrInvalidClaim
 	}
 	span := r.UpperBound - r.LowerBound
 	var next uint64 // earliest offset the next claim may start at
 	for i, c := range r.Claims {
-		// §3.2.2: a claim's length is never less than 1, and never more than
+		// Clause 3.2.2: a claim's length is never less than 1, and never more than
 		// the gap between the bounds.
 		if c.Length < 1 || c.Length > span {
 			return ErrInvalidClaim
@@ -212,7 +212,7 @@ func DecodeReportSegment(data []byte) (*ReportSegment, int, error) {
 }
 
 // ClaimedRanges returns the claims as absolute block offsets, having added the
-// lower bound that §3.2.2 measures them from.
+// lower bound that clause 3.2.2 measures them from.
 func (r *ReportSegment) ClaimedRanges() []ReceptionClaim {
 	out := make([]ReceptionClaim, 0, len(r.Claims))
 	for _, c := range r.Claims {
@@ -228,7 +228,7 @@ func (r *ReportSegment) Humanize() string {
 }
 
 // ReportAckSegment is the content of a report-acknowledgment segment, per
-// §3.2.3: just the serial number of the report being acknowledged.
+// Clause 3.2.3: just the serial number of the report being acknowledged.
 type ReportAckSegment struct {
 	ReportSerial uint64
 }
@@ -258,7 +258,7 @@ func (r *ReportAckSegment) Humanize() string {
 	return fmt.Sprintf("LTP Report Acknowledgment\n  Report serial ... %d", r.ReportSerial)
 }
 
-// CancelReason is the one-octet reason code of §3.2.4.
+// CancelReason is the one-octet reason code of clause 3.2.4.
 type CancelReason uint8
 
 const (
@@ -298,11 +298,11 @@ func (c CancelReason) String() string {
 	}
 }
 
-// Valid reports whether the reason code is one §3.2.4 defines. Codes 06 to FF
+// Valid reports whether the reason code is one clause 3.2.4 defines. Codes 06 to FF
 // are reserved.
 func (c CancelReason) Valid() bool { return c <= ReasonRetransmitCyclesExceeded }
 
-// CancelSegment is the content of a cancel segment, per §3.2.4: a single
+// CancelSegment is the content of a cancel segment, per clause 3.2.4: a single
 // reason-code octet.
 type CancelSegment struct {
 	Reason CancelReason

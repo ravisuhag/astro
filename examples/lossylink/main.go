@@ -1,4 +1,4 @@
-// Example: Lossy RF Link — Error Handling in CCSDS Telemetry
+// Example: Lossy RF Link, Error Handling in CCSDS Telemetry
 //
 // This example demonstrates how CCSDS protocols handle a noisy
 // communication channel. A spacecraft transmits 20 telemetry packets
@@ -11,10 +11,10 @@
 //   - FHP-based resync: after frame loss, the receiver re-synchronizes
 //     to the next packet boundary using the First Header Pointer
 //
-// The transmission chain per CCSDS 131.0-B-4:
+// The transmission chain per CCSDS 131.0-B-5:
 //
-//	Frame (128 bytes) → RS encode (128→160 bytes) → Randomize → ASM → CADU
-//	CADU → ASM strip → De-randomize → RS decode (160→128 bytes) → Frame
+//	Frame (128 bytes) -> RS encode (128->160 bytes) -> Randomize -> ASM -> CADU
+//	CADU -> ASM strip -> De-randomize -> RS decode (160->128 bytes) -> Frame
 //
 // Run with: go run ./examples/lossylink/
 package main
@@ -54,13 +54,13 @@ func newNoisyLink(seed uint64) *noisyLink {
 // transmit passes a CADU through the noisy channel.
 // Returns the (possibly corrupted) CADU and whether it arrived at all.
 func (l *noisyLink) transmit(cadu []byte) ([]byte, bool) {
-	// Random drop — CADU never reaches ground station
+	// Random drop, CADU never reaches ground station
 	if l.rng.Float64() < dropRate {
 		l.dropped++
 		return nil, false
 	}
 
-	// Random corruption — flip bits in the frame body (not ASM)
+	// Random corruption, flip bits in the frame body (not ASM)
 	if l.rng.Float64() < corruptRate {
 		corrupted := make([]byte, len(cadu))
 		copy(corrupted, cadu)
@@ -79,7 +79,7 @@ func (l *noisyLink) transmit(cadu []byte) ([]byte, bool) {
 }
 
 func main() {
-	fmt.Println("=== Lossy RF Link — CCSDS Error Handling Demo ===")
+	fmt.Println("=== Lossy RF Link, CCSDS Error Handling Demo ===")
 	fmt.Println()
 
 	config := tmdl.ChannelConfig{
@@ -161,7 +161,7 @@ func main() {
 	}
 
 	fmt.Printf("  Sent: %d packets (%d bytes) in %d frames\n", numPackets, sentBytes, totalFrames)
-	fmt.Printf("  Each frame: %d bytes → RS(%d bytes) → CADU(%d bytes)\n",
+	fmt.Printf("  Each frame: %d bytes -> RS(%d bytes) -> CADU(%d bytes)\n",
 		frameLength, rs.DataLen()+rs.NRoots(), 4+rs.DataLen()+rs.NRoots())
 	fmt.Printf("\nRF Link statistics:\n")
 	fmt.Printf("  Delivered intact:  %d frames\n", link.delivered)
@@ -197,14 +197,14 @@ func main() {
 	vcGapsTotal := 0
 
 	for _, cadu := range receivedCADUs {
-		// Step 1: Unwrap CADU — strip ASM, de-randomize.
+		// Step 1: Unwrap CADU, strip ASM, de-randomize.
 		rsData, err := tmsc.UnwrapCADU(cadu, nil, true)
 		if err != nil {
 			crcRejects++
 			continue
 		}
 
-		// Step 2: RS decode — correct symbol errors from the noisy channel.
+		// Step 2: RS decode, correct symbol errors from the noisy channel.
 		corrected, corr, err := rs.Decode(rsData)
 		if err != nil {
 			rsFailed++
@@ -251,7 +251,7 @@ func main() {
 	fmt.Printf("  MC frame gaps:         %d (frames lost in transit)\n", mcGapsTotal)
 	fmt.Println()
 
-	// Extract packets — VCP uses FHP to resync after frame loss.
+	// Extract packets, VCP uses FHP to resync after frame loss.
 	fmt.Println("Packet recovery (FHP-based resync after gaps):")
 	recovered := 0
 	crcFailed := 0
@@ -284,8 +284,8 @@ func main() {
 	fmt.Printf("  CRC failures:       %d (partial packet from lost frame)\n", crcFailed)
 	fmt.Println()
 	fmt.Println("This demonstrates why CCSDS uses four layers of protection:")
-	fmt.Println("  1. Reed-Solomon FEC — corrects corrupted frames before they reach the pipeline")
-	fmt.Println("  2. Frame CRC-16     — rejects frames with uncorrectable errors")
-	fmt.Println("  3. Frame counters   — detects gaps so the receiver knows data was lost")
-	fmt.Println("  4. First Header Ptr — re-syncs to the next intact packet after a gap")
+	fmt.Println("  1. Reed-Solomon FEC, corrects corrupted frames before they reach the pipeline")
+	fmt.Println("  2. Frame CRC-16, rejects frames with uncorrectable errors")
+	fmt.Println("  3. Frame counters, detects gaps so the receiver knows data was lost")
+	fmt.Println("  4. First Header Ptr, re-syncs to the next intact packet after a gap")
 }

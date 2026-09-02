@@ -143,7 +143,7 @@ func TestVerificationReportsRoundTrip(t *testing.T) {
 }
 
 func TestVerificationSubtypeClassification(t *testing.T) {
-	// Clause 8.1.2: odd subtypes are successes, even are failures — TM[1,10]
+	// Clause 8.1.2: odd subtypes are successes, even are failures, TM[1,10]
 	// included; only 5 and 6 carry a step ID.
 	for _, subtype := range []uint8{1, 2, 3, 4, 5, 6, 7, 8, 10} {
 		r := &pus.VerificationReport{Profile: pus.DefaultProfile(), Subtype: subtype}

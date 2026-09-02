@@ -8,7 +8,7 @@ import (
 )
 
 // TestBaselineAuthMaskLayouts pins the exact bytes of each per-frame-type
-// constructor: ones everywhere except the §4.2.2.6.2 mandatory exclusions.
+// constructor: ones everywhere except the clause 4.2.2.6.2 mandatory exclusions.
 func TestBaselineAuthMaskLayouts(t *testing.T) {
 	gcmFL := sdls.FieldLengths{IV: sdls.GCMIVSize, MAC: 16} // 14-octet header
 	tcFL := sdls.FieldLengths{SeqNum: 4, MAC: 16}           // 6-octet header
@@ -43,13 +43,13 @@ func TestBaselineAuthMaskLayouts(t *testing.T) {
 			want: cat(ones(2), zeros(1), ones(3), ones(4), gcmSecHeader),
 		},
 		{
-			// TC: nothing mandatorily excluded; §E2 layout has no IV.
+			// TC: nothing mandatorily excluded; clause E2 layout has no IV.
 			name: "TC without segment header",
 			got:  sdls.BaselineAuthMaskTC(false, tcFL),
 			want: cat(ones(5), ones(tcFL.HeaderSize())),
 		},
 		{
-			// TC segment header is covered per §4.2.2.6.2.
+			// TC segment header is covered per clause 4.2.2.6.2.
 			name: "TC with segment header",
 			got:  sdls.BaselineAuthMaskTC(true, tcFL),
 			want: cat(ones(6), ones(tcFL.HeaderSize())),

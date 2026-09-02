@@ -12,7 +12,7 @@ package ldc
 //	             so that small residuals of either sign become small values
 //
 // Both steps are integer arithmetic and both are reversible, which is what
-// makes the whole standard lossless. §4.2.3 also allows a bypass predictor
+// makes the whole standard lossless. Clause 4.2.3 also allows a bypass predictor
 // that predicts zero, keeping the mapper for data that is already
 // decorrelated but may be signed.
 
@@ -21,12 +21,12 @@ type Predictor int
 
 const (
 	// PredictorNone means no preprocessor at all: samples go to the entropy
-	// coder as they are. §4.1 allows this when the data is already suitable.
+	// coder as they are. Clause 4.1 allows this when the data is already suitable.
 	PredictorNone Predictor = iota
-	// PredictorUnitDelay predicts each sample from the one before, per §4.2.5.
+	// PredictorUnitDelay predicts each sample from the one before, per clause 4.2.5.
 	// This is the only predictor the standard specifies.
 	PredictorUnitDelay
-	// PredictorBypass predicts zero and keeps the mapper, per §4.2.3.
+	// PredictorBypass predicts zero and keeps the mapper, per clause 4.2.3.
 	PredictorBypass
 )
 
@@ -45,7 +45,7 @@ func (p Predictor) String() string {
 // NeedsReferenceSamples reports whether the decoder needs uncoded reference
 // samples to invert the preprocessing.
 //
-// §4.2.6: reference samples are required "when, and only when, a Unit-Delay
+// Clause 4.2.6: reference samples are required "when, and only when, a Unit-Delay
 // Predictor or other higher-order predictor that bases its predictions on
 // previous sample values is used. Otherwise, reference samples shall not be
 // employed." So the bypass predictor, which looks at nothing, needs none.
@@ -54,7 +54,7 @@ func (p Predictor) NeedsReferenceSamples() bool {
 }
 
 // sampleRange returns the smallest and largest values a sample may take, per
-// §4.4.
+// Clause 4.4.
 //
 // Signed samples are two's complement in the range [-2^(n-1), 2^(n-1)-1];
 // unsigned run from 0 to 2^n-1. The values are int64 because the mapper
@@ -67,7 +67,7 @@ func sampleRange(resolution uint, signed bool) (minimum, maximum int64) {
 }
 
 // mapError folds a signed prediction error onto a non-negative integer, per
-// the equation of §4.4:
+// the equation of clause 4.4:
 //
 //	        2*d              for 0 <= d <= theta
 //	delta = 2*|d| - 1        for -theta <= d < 0
@@ -78,7 +78,7 @@ func sampleRange(resolution uint, signed bool) (minimum, maximum int64) {
 // theta is how far the prediction sits from the nearer end of the sample
 // range. Within that distance the error can go either way, so the mapping
 // interleaves positives and negatives. Past it only one sign is possible, so
-// the mapping runs straight on without interleaving — which is what keeps the
+// the mapping runs straight on without interleaving, which is what keeps the
 // result inside n bits instead of spilling into n+1.
 func mapError(delta, predicted, minimum, maximum int64) uint32 {
 	theta := predicted - minimum
@@ -132,7 +132,7 @@ func unmapError(mapped uint32, predicted, minimum, maximum int64) int64 {
 // coder takes.
 //
 // blockSize and referenceInterval decide where reference samples fall: the
-// first sample of every reference interval is a reference, and §4.2.5 gives
+// first sample of every reference interval is a reference, and clause 4.2.5 gives
 // it a predicted value equal to itself, so its prediction error is zero. The
 // returned slice has one entry per input sample; the reference positions hold
 // zero and the caller emits the raw sample instead.
@@ -153,10 +153,10 @@ func Preprocess(samples []uint32, p Params) []uint32 {
 		var predicted int64
 		switch {
 		case p.Predictor == PredictorBypass:
-			// §4.2.3: predict zero, keep the mapper.
+			// Clause 4.2.3: predict zero, keep the mapper.
 			predicted = 0
 		case i%samplesPerInterval == 0:
-			// §4.2.5: the first sample of a reference interval predicts
+			// Clause 4.2.5: the first sample of a reference interval predicts
 			// itself, so the error is zero. The raw sample travels uncoded in
 			// the CDS, and the decoder starts from it.
 			predicted = value

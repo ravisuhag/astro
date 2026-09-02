@@ -117,7 +117,7 @@ func (s *SpaceSystem) problem(element, detail string, err error) *ValidationErro
 //
 // The keys are per SpaceSystem, not per document: two systems may each have a
 // Voltage, and that is the point of the tree. What they may not have is two
-// Voltages in the same system — and because parameterNameKey selects from both
+// Voltages in the same system, and because parameterNameKey selects from both
 // TelemetryMetaData and CommandMetaData, the two sides share one namespace.
 func (s *SpaceSystem) checkDuplicateNames() []*ValidationError {
 	var problems []*ValidationError
@@ -240,7 +240,7 @@ func (s *SpaceSystem) checkEntryRefs() []*ValidationError {
 
 // The legal members of the schema's encoding enumerations, from the XTCE 1.2
 // XSD: IntegerEncodingType, FloatEncodingType, StringEncodingType and
-// BitOrderType. An empty attribute is always legal — it means the default.
+// BitOrderType. An empty attribute is always legal. It means the default.
 var (
 	integerEncodings = map[string]bool{
 		"unsigned": true, "signMagnitude": true, "twosComplement": true,
@@ -260,11 +260,11 @@ var (
 	}
 )
 
-// checkEncodings makes sure every data encoding's enumerated attributes —
-// encoding, bitOrder, byteOrder — hold legal values.
+// checkEncodings makes sure every data encoding's enumerated attributes (
+// encoding, bitOrder, byteOrder) hold legal values.
 //
 // A misspelled member is otherwise invisible until decode time, where it
-// surfaces as ErrUnsupportedEncoding on every packet — indistinguishable from
+// surfaces as ErrUnsupportedEncoding on every packet, indistinguishable from
 // an encoding this package genuinely does not support. Catching it here names
 // the type and the attribute instead.
 func (s *SpaceSystem) checkEncodings() []*ValidationError {
@@ -314,7 +314,7 @@ func (s *SpaceSystem) checkEncodings() []*ValidationError {
 }
 
 // legalByteOrder reports whether a byteOrder attribute is legal. The schema's
-// ByteOrderType is a union: the two common orders, or the arbitrary form — a
+// ByteOrderType is a union: the two common orders, or the arbitrary form, a
 // comma-separated list of byte positions 0 through 15.
 func legalByteOrder(order string) bool {
 	if order == "mostSignificantByteFirst" || order == "leastSignificantByteFirst" {

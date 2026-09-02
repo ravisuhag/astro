@@ -134,7 +134,7 @@ func (t *IntegerParameterType) TypeKind() string { return "integer" }
 func (t *IntegerParameterType) IsSigned() bool { return t.Signed == nil || *t.Signed }
 
 // Size returns the value's width in bits, applying the schema's default of
-// 32. This is the width of the value, not the width on the wire — the
+// 32. This is the width of the value, not the width on the wire. The
 // encoding has its own Size.
 func (t *IntegerParameterType) Size() uint {
 	if t.SizeInBits == 0 {
@@ -245,7 +245,7 @@ func (t *BooleanParameterType) ZeroStringValueOrDefault() string {
 // It does not extend BaseDataType like the others: the schema gives it its own
 // base, where the encoding sits inside an Encoding element that adds units, a
 // scale and an offset. So a spacecraft clock reading is described as "this
-// many bits, in these units, counted from this epoch" — which is what
+// many bits, in these units, counted from this epoch", which is what
 // pkg/tcf's CUC and CDS codes need to turn it into a time.
 type AbsoluteTimeParameterType struct {
 	Name             string `xml:"name,attr"`
@@ -279,7 +279,7 @@ func (t *AbsoluteTimeParameterType) Encoding() *DataEncoding {
 
 // ArrayParameterType is an array of another type. It is kept opaque: the
 // name is decoded so references to it resolve, the contents stay raw, and it
-// has no encoding — so Layout refuses a parameter of this type rather than
+// has no encoding, so Layout refuses a parameter of this type rather than
 // guessing at its width.
 type ArrayParameterType struct {
 	Name             string `xml:"name,attr"`
@@ -287,7 +287,7 @@ type ArrayParameterType struct {
 	// ArrayTypeRef names the element type.
 	ArrayTypeRef string `xml:"arrayTypeRef,attr"`
 
-	// Raw holds the type's contents — the dimension list — undecoded.
+	// Raw holds the type's contents (the dimension list) undecoded.
 	Raw []byte `xml:",innerxml"`
 }
 
@@ -398,7 +398,7 @@ func (e *TimeEncoding) OffsetOrDefault() float64 {
 // ReferenceTime says what an absolute time is measured from: a named epoch, or
 // another parameter's value.
 type ReferenceTime struct {
-	// Epoch is a date, a dateTime, or one of the schema's named epochs —
+	// Epoch is a date, a dateTime, or one of the schema's named epochs,
 	// TAI, J2000, UNIX, GPS.
 	Epoch string `xml:"http://www.omg.org/spec/XTCE/20180204 Epoch"`
 	// OffsetFrom names another time parameter to count from. Kept raw.
@@ -453,7 +453,7 @@ func (d *DataEncoding) Kind() string {
 }
 
 // HasContextCalibrators reports whether the encoding carries a
-// ContextCalibratorList — calibration that depends on another parameter's
+// ContextCalibratorList, calibration that depends on another parameter's
 // value, which this package keeps raw. When it is true, the default
 // calibrator alone may be the wrong curve for a given packet, so a consumer
 // computing engineering values should not trust the default blindly.
@@ -680,7 +680,7 @@ type entryPayload struct {
 //
 // This is hand-written because encoding/xml cannot do it. Given a struct with
 // one slice field per element name, the decoder fills each slice with the
-// elements of that name and the interleaving is lost — and for a packet
+// elements of that name and the interleaving is lost, and for a packet
 // layout the interleaving is the whole point. So the tokens are walked
 // directly and everything lands in one slice.
 func (l *EntryList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

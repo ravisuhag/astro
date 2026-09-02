@@ -490,7 +490,7 @@ func TestFrameGapDetector_MCGap(t *testing.T) {
 		MCFrameCount: 0, VCFrameCount: 0, VirtualChannelID: 1, SegmentLengthID: 0b11,
 	}})
 
-	// Frame 1: MC=3 (skipped MC=1,2 → gap of 2)
+	// Frame 1: MC=3 (skipped MC=1,2 -> gap of 2)
 	mcGap, _ := d.Track(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{
 		MCFrameCount: 3, VCFrameCount: 1, VirtualChannelID: 1, SegmentLengthID: 0b11,
 	}})
@@ -510,7 +510,7 @@ func TestFrameGapDetector_VCGap(t *testing.T) {
 		MCFrameCount: 0, VCFrameCount: 0, VirtualChannelID: 1, SegmentLengthID: 0b11,
 	}})
 
-	// VC=5 (skipped VC=1,2,3,4 → gap of 4)
+	// VC=5 (skipped VC=1,2,3,4 -> gap of 4)
 	_, vcGap := d.Track(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{
 		MCFrameCount: 1, VCFrameCount: 5, VirtualChannelID: 1, SegmentLengthID: 0b11,
 	}})
@@ -580,7 +580,7 @@ func TestFrameGapDetector_MultipleVCIDs(t *testing.T) {
 		t.Errorf("Sequential VC1: VCGap = %d, want 0", vcGap)
 	}
 
-	// VC2: count 3 (skipped 1,2 → gap of 2)
+	// VC2: count 3 (skipped 1,2 -> gap of 2)
 	_, vcGap = d.Track(&tmdl.TMTransferFrame{Header: tmdl.PrimaryHeader{
 		MCFrameCount: 3, VCFrameCount: 3, VirtualChannelID: 2, SegmentLengthID: 0b11,
 	}})

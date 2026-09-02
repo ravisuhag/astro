@@ -13,7 +13,7 @@ The complete program is [`examples/lossylink`](https://github.com/ravisuhag/astr
 go run ./examples/lossylink/
 ```
 
-Output varies run to run — the link drops and corrupts at random.
+Output varies run to run, the link drops and corrupts at random.
 
 ## The four mechanisms
 
@@ -70,7 +70,7 @@ Frame reception summary:
 
 Both corrupted frames were **repaired**, not discarded. Reed-Solomon fixed three bad symbols across them and handed up clean frames. The CRC never had to reject anything.
 
-The dropped frame is a different problem. Nothing can fix a frame that did not arrive — but the Master Channel Frame Count jumps, so the receiver knows exactly that one is gone.
+The dropped frame is a different problem. Nothing can fix a frame that did not arrive, but the Master Channel Frame Count jumps, so the receiver knows exactly that one is gone.
 
 ## Getting the packet stream back
 
@@ -101,7 +101,7 @@ One lost frame cost exactly the packets that lived in it. Everything after resyn
 
 **Why not just retransmit?** The round trip is minutes to hours. Asking again does not finish in time. Everything on a downlink is forward error correction and graceful degradation.
 
-**Why RS *and* a CRC?** RS corrects up to 16 bad symbols per codeword. Past that it can fail loudly, or — worse — "correct" into wrong data. The frame CRC is the independent check that catches both cases.
+**Why RS *and* a CRC?** RS corrects up to 16 bad symbols per codeword. Past that it can fail loudly, or (worse) "correct" into wrong data. The frame CRC is the independent check that catches both cases.
 
 **Why two counters?** The Master Channel count says the spacecraft lost a frame. The Virtual Channel count says *this* channel lost one. An MC gap with no VC gap means the missing frame belonged to another channel, and your stream is intact.
 
@@ -109,7 +109,7 @@ One lost frame cost exactly the packets that lived in it. Everything after resyn
 
 ## Tuning it
 
-**Interleaving depth** spreads a burst error across codewords. Depth 5 with RS(255,223) means a 30-byte burst becomes 6 bytes in each of five codewords — all correctable, where one codeword alone would have failed.
+**Interleaving depth** spreads a burst error across codewords. Depth 5 with RS(255,223) means a 30-byte burst becomes 6 bytes in each of five codewords, all correctable, where one codeword alone would have failed.
 
 **RS(255,223) or RS(255,239).** The first corrects 16 symbols and costs 32 bytes of parity per codeword. The second corrects 8 and costs 16. Deep space takes the stronger code; a good LEO link often does not need it.
 
@@ -117,6 +117,6 @@ One lost frame cost exactly the packets that lived in it. Everything after resyn
 
 ## Next
 
-- [TMSC protocol page](/protocols/coding/tmsc) — Reed-Solomon, interleaving, virtual fill
-- [TM protocol page](/protocols/data-link/tmdl) — the FHP and the frame counters
-- [Build an uplink](/docs/guides/uplink) — where loss *is* recoverable, by asking again
+- [TMSC protocol page](/protocols/coding/tmsc), Reed-Solomon, interleaving, virtual fill
+- [TM protocol page](/protocols/data-link/tmdl), the FHP and the frame counters
+- [Build an uplink](/docs/guides/uplink), where loss *is* recoverable, by asking again

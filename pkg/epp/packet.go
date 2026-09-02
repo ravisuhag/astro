@@ -24,7 +24,7 @@ ID Extension field when the Protocol ID is '110').
 The Packet Length field carries the total packet length in octets, header
 included (4.1.2.8.2).
 
-Unlike SPP, EPP has no APID, sequence count, or error control field — it is a
+Unlike SPP, EPP has no APID, sequence count, or error control field. It is a
 thin encapsulation shim designed to carry network-layer PDUs over space links.
 */
 

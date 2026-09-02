@@ -1,7 +1,7 @@
 ---
 title: Unified Space Data Link Protocol
 short: USDL
-description: CCSDS 732.1-B-3 — one frame format that replaces TM, TC, and AOS.
+description: CCSDS 732.1-B-3, one frame format that replaces TM, TC, and AOS.
 order: 23
 ---
 
@@ -13,11 +13,11 @@ It is the protocol for a mission that would otherwise run three data link stacks
 
 ## Scope
 
-**Implemented.** The frame format, both fixed and variable length, truncated frames, all eight TFDZ construction rules, and the three MAP services — MAPP, MAPA, and MAPO. Master and virtual channel multiplexing, gap detection over a variable-width counter, and OID idle frames with the mandatory PN fill.
+**Implemented.** The frame format, both fixed and variable length, truncated frames, all eight TFDZ construction rules, and the three MAP services: MAPP, MAPA, and MAPO. Master and virtual channel multiplexing, gap detection over a variable-width counter, and OID idle frames with the mandatory PN fill.
 
 **Somewhere else.** Sync and coding are [`pkg/tmsc`](/protocols/coding/tmsc) or [`pkg/tcsc`](/protocols/coding/tcsc) depending on direction.
 
-**Left to you.** Insert zone contents, and the OCF — you install a supplier callback and Astro asks it for each frame.
+**Left to you.** Insert zone contents, and the OCF, you install a supplier callback and Astro asks it for each frame.
 
 ## Field map
 
@@ -59,21 +59,21 @@ The TFDF header's 3-bit rule says how to read the data zone. Rules `000`, `001`,
 | `000` | fixed | CCSDS packets, spanning frames | First Header Pointer (`0xFFFF` = none starts here) |
 | `001` | fixed | Start of a MAPA or VCA SDU | Last Valid Octet Pointer (`0xFFFF` = continues) |
 | `010` | fixed | Continuation of that SDU | Last Valid Octet Pointer |
-| `011` | variable | A continuous octet stream | — |
-| `100` | variable | First segment of an SDU | — |
-| `101` | variable | Middle segment | — |
-| `110` | variable | Last segment | — |
-| `111` | variable | Complete, unsegmented SDUs or packets | — |
+| `011` | variable | A continuous octet stream | - |
+| `100` | variable | First segment of an SDU | - |
+| `101` | variable | Middle segment | - |
+| `110` | variable | Last segment | - |
+| `111` | variable | Complete, unsegmented SDUs or packets | - |
 
 The 5-bit UPID names what is inside. Constants are in the package. The common ones: `0` Space or Encapsulation Packets, `1` COP-1 control, `2` COP-P control, `4` user octet stream, `5` Mission Specific Information-1, `7` Proximity-1 SPDUs, `31` Idle Data. UPID 3 is not assigned by SANA or by any USLP issue.
 
 ## Gotchas
 
-**Two different idle fills, and they are not interchangeable.** An OID frame's data zone carries the mandatory PN sequence from clause 4.1.4.1.10 — a 32-cell LFSR, polynomial D0+D1+D2+D22+D32, all-ones seed, never restarted. `MasterChannel` holds one persistent `OIDSequence` for this. Your `ChannelConfig.IdlePattern` is a different thing: it fills spare data-zone space *behind* a Last Valid Octet Pointer on a non-OID frame. Mixing them up puts a project pattern where the standard wants PN.
+**Two different idle fills, and they are not interchangeable.** An OID frame's data zone carries the mandatory PN sequence from clause 4.1.4.1.10, a 32-cell LFSR, polynomial D0+D1+D2+D22+D32, all-ones seed, never restarted. `MasterChannel` holds one persistent `OIDSequence` for this. Your `ChannelConfig.IdlePattern` is a different thing: it fills spare data-zone space *behind* a Last Valid Octet Pointer on a non-OID frame. Mixing them up puts a project pattern where the standard wants PN.
 
 **A partly full packet zone gets an Encapsulation Idle Packet.** Under rule `000`, Astro completes the zone with a real idle packet and points the First Header Pointer at it, so a receiver can resynchronize. Not raw fill.
 
-**Truncated frames give up almost everything.** No insert zone, no OCF, no FECF, no pointer — `ErrTruncatedFrameFields` if you try. The data zone needs at least one octet (`ErrTruncatedFrameTooShort`, minimum frame is 6 octets) and the whole frame stops at 32 octets (`ErrTruncatedFrameTooLong`).
+**Truncated frames give up almost everything.** No insert zone, no OCF, no FECF, no pointer, `ErrTruncatedFrameFields` if you try. The data zone needs at least one octet (`ErrTruncatedFrameTooShort`, minimum frame is 6 octets) and the whole frame stops at 32 octets (`ErrTruncatedFrameTooLong`).
 
 **An OCF channel needs a supplier or nothing sends.** Set one with `SetOCFSupplier` on each service, and on the `MasterChannel` for idle frames. Without it you get `ErrNoOCFSupplier`. Astro refuses rather than making up an all-zero Type-1 report, because a fabricated CLCW is worse than a missing frame.
 
@@ -105,7 +105,7 @@ fmt.Println(back.Header.SCID, back.Header.VCID, back.Header.MAPID, back.Header.V
 // 100 1 0 42
 ```
 
-Decoding takes two configuration arguments, not three — USLP signals OCF presence with a header flag, so the decoder works that one out for itself. That is a real improvement over [AOS](/protocols/data-link/aos).
+Decoding takes two configuration arguments, not three, USLP signals OCF presence with a header flag, so the decoder works that one out for itself. That is a real improvement over [AOS](/protocols/data-link/aos).
 
 ## Construction rules
 
@@ -147,7 +147,7 @@ For a very short telecommand, annex D allows a stripped-down frame:
 tc, err := usdl.NewTruncatedFrame(100, 1, 0, cmdBytes)
 ```
 
-The whole frame stays within 6 to 32 octets. No insert zone, no OCF, no FECF, no pointer — asking for any of those gives `ErrTruncatedFrameFields`.
+The whole frame stays within 6 to 32 octets. No insert zone, no OCF, no FECF, no pointer, asking for any of those gives `ErrTruncatedFrameFields`.
 
 ## Channel configuration
 
@@ -244,7 +244,7 @@ det := usdl.NewFrameGapDetector(config.VCFCountLen)
 | `ErrInvalidVCFCount` | Exceeds the configured field width |
 | `ErrInvalidConstructionRule` | Outside 0-7 |
 | `ErrInvalidPointer` | Exceeds the data zone length |
-| `ErrInvalidFECSize` | Not 0 or 2 — USLP has only the 16-bit FECF |
+| `ErrInvalidFECSize` | Not 0 or 2, USLP has only the 16-bit FECF |
 | `ErrTruncatedFrameFields` | Truncated frame asked for an insert zone, OCF, FECF, or pointer |
 | `ErrTruncatedFrameTooShort` | Data zone under 1 octet |
 | `ErrTruncatedFrameTooLong` | Frame over 32 octets |
@@ -268,6 +268,6 @@ Commentary, not sourced from the standard.
 
 ## Reference
 
-- [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf) — Unified Space Data Link Protocol (Blue Book)
-- [SANA UPID registry](https://sanaregistry.org/r/uslp_protocol_id) — USLP Protocol Identifiers
+- [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf), Unified Space Data Link Protocol (Blue Book)
+- [SANA UPID registry](https://sanaregistry.org/r/uslp_protocol_id), USLP Protocol Identifiers
 - [CLI](/cli/usdl) | [Conformance](/conformance/usdl) | [The stack](/docs/start/concepts)

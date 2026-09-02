@@ -11,7 +11,7 @@ type SALookup func(spi uint16) (*SecurityAssociation, error)
 
 // StaticLookup builds an SALookup over a fixed set of Security Associations,
 // keyed by their SPI. It is the common case: SAs preloaded before a mission
-// starts (§2.3.1.5).
+// starts (clause 2.3.1.5).
 func StaticLookup(sas ...*SecurityAssociation) SALookup {
 	table := make(map[uint16]*SecurityAssociation, len(sas))
 	for _, sa := range sas {
@@ -28,7 +28,7 @@ func StaticLookup(sas ...*SecurityAssociation) SALookup {
 	}
 }
 
-// ProcessSecurity reverses ApplySecurity, per CCSDS 355.0-B-2 §4.2.4.
+// ProcessSecurity reverses ApplySecurity, per CCSDS 355.0-B-2 clause 4.2.4.
 //
 // dataField is the carrier frame's data field: Security Header, then the
 // protected data, then the Security Trailer. frameHeader is the same header
@@ -36,13 +36,13 @@ func StaticLookup(sas ...*SecurityAssociation) SALookup {
 //
 // It returns the decoded Security Header and the recovered Transfer Frame Data
 // Field. On any verification failure it returns a nil data field: no partial
-// plaintext ever escapes, per §4.2.4.2.3.
+// plaintext ever escapes, per clause 4.2.4.2.3.
 //
 // GCM tag comparison is left to crypto/cipher's Open, which is constant time;
 // the CMAC path compares in constant time with crypto/subtle.
 //
 // ProcessSecurity verifies the SPI only. It has no way to know which channel
-// the frame arrived on, so the §4.2.4.3 check that the SA is the one agreed
+// the frame arrived on, so the clause 4.2.4.3 check that the SA is the one agreed
 // for that channel is left to the caller. Use ProcessSecurityForChannel to
 // have this package enforce it.
 func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityHeader, []byte, error) {
@@ -53,7 +53,7 @@ func ProcessSecurity(dataField, frameHeader []byte, lookup SALookup) (*SecurityH
 // hand: ch identifies the Global Virtual Channel (or Global MAP) the frame
 // arrived on. When the SA that the SPI names declares a channel binding in
 // its Channels list, the frame is rejected with ErrSAChannelMismatch unless
-// ch is in that list — the SA verification of §4.2.4.3 — before any
+// ch is in that list (the SA verification of clause 4.2.4.3) before any
 // cryptographic work. An SA with an empty Channels list accepts any channel.
 func ProcessSecurityForChannel(dataField, frameHeader []byte, ch ChannelID, lookup SALookup) (*SecurityHeader, []byte, error) {
 	return processSecurity(dataField, frameHeader, &ch, lookup)
@@ -65,7 +65,7 @@ func processSecurity(dataField, frameHeader []byte, ch *ChannelID, lookup SALook
 	if lookup == nil {
 		return nil, nil, ErrUnknownSPI
 	}
-	// The SPI is always the leading two octets, whatever the SA says (§4.1.1.2.1).
+	// The SPI is always the leading two octets, whatever the SA says (clause 4.1.1.2.1).
 	if len(dataField) < SPISize {
 		return nil, nil, ErrDataTooShort
 	}
@@ -81,7 +81,7 @@ func processSecurity(dataField, frameHeader []byte, ch *ChannelID, lookup SALook
 	if err := sa.Validate(); err != nil {
 		return nil, nil, err
 	}
-	// §4.2.4.3: the SA must be the one agreed for the channel the frame
+	// Clause 4.2.4.3: the SA must be the one agreed for the channel the frame
 	// arrived on. Checked before any cryptographic work, like the SPI.
 	if ch != nil && !sa.servesChannel(*ch) {
 		return nil, nil, ErrSAChannelMismatch
@@ -112,7 +112,7 @@ func processSecurity(dataField, frameHeader []byte, ch *ChannelID, lookup SALook
 	var plaintext []byte
 
 	// CMAC is not an AEAD: verify the tag directly and take the body as it
-	// stands, since §E2 authenticates without encrypting.
+	// stands, since clause E2 authenticates without encrypting.
 	if sa.usesCMAC() {
 		expected, err := sa.cmacTag(prefix, body)
 		if err != nil {
@@ -168,7 +168,7 @@ func processSecurity(dataField, frameHeader []byte, ch *ChannelID, lookup SALook
 // algorithm produced it: anti-replay, then padding removal.
 func (sa *SecurityAssociation) finishProcessing(header *SecurityHeader, plaintext []byte) (*SecurityHeader, []byte, error) {
 	// Anti-replay runs only now, after the MAC has verified, so a forged frame
-	// cannot advance the receiver's window (§4.2.4.4).
+	// cannot advance the receiver's window (clause 4.2.4.4).
 	counter := header.SeqNum
 	if sa.usesIVAsSequence() {
 		counter = header.IV
@@ -177,7 +177,7 @@ func (sa *SecurityAssociation) finishProcessing(header *SecurityHeader, plaintex
 		return nil, nil, err
 	}
 
-	// §4.2.3.3 b) records fill bytes in the Pad Length field; strip them.
+	// Clause 4.2.3.3 b) records fill bytes in the Pad Length field; strip them.
 	if pad := header.PadCount(); pad > 0 {
 		if pad > len(plaintext) {
 			return nil, nil, ErrInvalidPadLength

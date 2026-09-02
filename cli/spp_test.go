@@ -95,7 +95,7 @@ func TestSPPStreamThreePackets(t *testing.T) {
 
 func TestSPPStreamTrailingBytes(t *testing.T) {
 	// Documents today's behavior: whole packets are emitted, leftover bytes
-	// produce a warning on stderr and exit 0 — not an error. If streaming ever
+	// produce a warning on stderr and exit 0, not an error. If streaming ever
 	// becomes incremental, this expectation is meant to be revisited.
 	stream := encodeSPP(t, "100", "616161") + encodeSPP(t, "200", "626262") + "ffff"
 

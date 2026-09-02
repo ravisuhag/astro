@@ -1,7 +1,7 @@
 ---
 title: COP-1
 short: COP
-description: Communications Operation Procedure-1 (CCSDS 232.1-B-2) — reliable telecommand delivery with FOP-1 and FARM-1.
+description: Communications Operation Procedure-1 (CCSDS 232.1-B-2), reliable telecommand delivery with FOP-1 and FARM-1.
 order: 25
 ---
 
@@ -15,11 +15,11 @@ Most of this page is behaviour, not format. The state machines are the protocol.
 
 ## Scope
 
-**Implemented.** Both state machines in full — FOP-1's six states and FARM-1's three — every operator directive, the T1 timer, the sliding window with its positive and negative halves, and CLCW encode and decode.
+**Implemented.** Both state machines in full — FOP-1's six states and FARM-1's three: every operator directive, the T1 timer, the sliding window with its positive and negative halves, and CLCW encode and decode.
 
 **Caller-driven.** The T1 timer does not run itself. You set the initial value in whatever time units you like and call `Tick`. Astro has no opinion about your clock.
 
-**Somewhere else.** The Type-BC frames that carry Unlock and Set V(R) are built by [`pkg/tcdl`](/protocols/data-link/tcdl) — `NewUnlockFrame`, `NewSetVRFrame`, `ParseControlCommand`.
+**Somewhere else.** The Type-BC frames that carry Unlock and Set V(R) are built by [`pkg/tcdl`](/protocols/data-link/tcdl), `NewUnlockFrame`, `NewSetVRFrame`, `ParseControlCommand`.
 
 ## Field map
 
@@ -56,11 +56,11 @@ The Report Value is a cumulative acknowledgement. It means "I have everything be
 | S5 | Initialising with BC Frame | Unlock or Set V(R) is out; waiting for the CLCW to confirm. |
 | S6 | Initial | Not started, terminated, or an Alert fired. |
 
-An **Alert** — lockout seen, bad N(R), transmission limit hit, inconsistent CLCW, or an operator terminate — purges every queue and drops to S6 with a reason code. The errors carry it: `ErrFOPLockout`, `ErrFOPInvalidNR`, `ErrFOPLimit`, `ErrFOPSynch`, `ErrFOPInvalidCLCW`.
+An **Alert** (lockout seen, bad N(R), transmission limit hit, inconsistent CLCW, or an operator terminate) purges every queue and drops to S6 with a reason code. The errors carry it: `ErrFOPLockout`, `ErrFOPInvalidNR`, `ErrFOPLimit`, `ErrFOPSynch`, `ErrFOPInvalidCLCW`.
 
 The service can also **suspend** instead of alerting. Under timeout type TT1, a T1 expiry at the transmission limit remembers which state it was in (SS 1-4) so a later Resume picks up there.
 
-Directives, all implemented: Initiate AD Service — plain, with CLCW check, with Unlock, or with Set V(R) — plus Terminate, Resume, Set V(S), Set FOP Sliding Window, Set T1 Initial, Set Transmission Limit, and Set Timeout Type.
+Directives, all implemented: Initiate AD Service — plain, with CLCW check, with Unlock, or with Set V(R): plus Terminate, Resume, Set V(S), Set FOP Sliding Window, Set T1 Initial, Set Transmission Limit, and Set Timeout Type.
 
 ### The window
 
@@ -71,7 +71,7 @@ Directives, all implemented: Initiate AD Service — plain, with CLCW check, wit
               |<---- FW (window width) ---->|
 ```
 
-V(S) is the next number to assign. N(R) comes back in the CLCW. When `V(S) - N(R) >= FW` the window is full and nothing more goes out until an acknowledgement arrives — `ErrFOPWindowFull`. Width is 1-255.
+V(S) is the next number to assign. N(R) comes back in the CLCW. When `V(S) - N(R) >= FW` the window is full and nothing more goes out until an acknowledgement arrives, `ErrFOPWindowFull`. Width is 1-255.
 
 ## FARM-1, on the spacecraft
 
@@ -86,7 +86,7 @@ The window W is even and splits in half around V(R): a positive half PW = W/2 ah
 | Behind, within NW | **Discard silently.** A duplicate. No flags change, no lockout. |
 | Anything else | **Lockout.** |
 
-Type-B frames skip the whole check and are always accepted. Every accepted Type-B — expedited data and control commands alike — bumps the 2-bit FARM-B counter in the CLCW.
+Type-B frames skip the whole check and are always accepted. Every accepted Type-B (expedited data and control commands alike) bumps the 2-bit FARM-B counter in the CLCW.
 
 ### Control commands
 
@@ -105,7 +105,7 @@ A control command is Bypass=1 *and* Control Command=1. Bypass=0 with Control Com
 
 **The negative window is why duplicates are harmless.** Without NW, a retransmitted frame that crossed its own acknowledgement would look like a catastrophic sequence error and trigger lockout. That is the whole reason the window has a back half.
 
-**Directives are state-sensitive.** Several only work from a particular state — `ErrFOPNotActive`, `ErrFOPNotInitial`, `ErrFOPNotSuspended` tell you which. Resume only works from a suspended service, not from S6.
+**Directives are state-sensitive.** Several only work from a particular state, `ErrFOPNotActive`, `ErrFOPNotInitial`, `ErrFOPNotSuspended` tell you which. Resume only works from a suspended service, not from S6.
 
 **T1 will not fire unless you tick it.** No goroutine, no wall clock. If your loop forgets to call `Tick`, a lost CLCW stalls the machine forever, which is exactly what T1 exists to prevent.
 
@@ -169,7 +169,7 @@ The Flight Operations Procedure manages frame transmission with sliding window a
 // Create FOP-1 for SCID=0x1A, VCID=1 with sliding window width 10
 fop := cop.NewFOP(0x1A, 1, 10)
 
-// Initialize — sets V(S) to starting sequence number, enters Active state
+// Initialize, sets V(S) to starting sequence number, enters Active state
 fop.Initialize(0)
 ```
 
@@ -180,7 +180,7 @@ fop.Initialize(0)
 // The frame is assigned sequence number V(S), then V(S) increments
 err := fop.TransmitFrame(encodedFrame)
 if errors.Is(err, cop.ErrFOPWindowFull) {
-    // Window exhausted — wait for CLCW acknowledgment
+    // Window exhausted, wait for CLCW acknowledgment
 }
 
 // Get the next frame to send (from wait queue or retransmit queue)
@@ -199,7 +199,7 @@ clcw.Decode(clcwBytes)
 
 err := fop.ProcessCLCW(&clcw)
 if errors.Is(err, cop.ErrFOPLockout) {
-    // FARM-1 entered lockout — must send unlock command
+    // FARM-1 entered lockout, must send unlock command
 }
 ```
 
@@ -247,7 +247,7 @@ accepted, err := farm.ProcessFrame(bypassFlag, controlCommandFlag, frameSeqNum)
 **Control commands** (Type-A with ControlCommandFlag=1) clear lockout and reset V(R):
 
 ```go
-// Unlock directive — clears lockout, resets FARM to Open state
+// Unlock directive, clears lockout, resets FARM to Open state
 accepted, err := farm.ProcessFrame(0, 1, newVR)
 ```
 
@@ -265,7 +265,7 @@ encoded, _ := clcw.Encode()
 
 ```go
 state := farm.State() // FARMOpen, FARMWait, or FARMLockout
-vr := farm.VR()       // Current V(R) — next expected sequence number
+vr := farm.VR()       // Current V(R), next expected sequence number
 ```
 
 ## CLCW (Communications Link Control Word)
@@ -294,7 +294,7 @@ Byte 3: [ReportValue:8]
 | Wait Flag | 1 | FARM-1 is in wait state |
 | Retransmit Flag | 1 | FARM-1 requests retransmission |
 | FARM-B Counter | 2 | Type-B frame acceptance counter (0-3) |
-| Report Value | 8 | V(R) — next expected frame sequence number |
+| Report Value | 8 | V(R), next expected frame sequence number |
 
 ### Encoding and Decoding
 
@@ -399,5 +399,5 @@ Commentary, not sourced from the standard.
 
 ## Reference
 
-- [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) — Communications Operation Procedure-1 (Blue Book)
+- [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf), Communications Operation Procedure-1 (Blue Book)
 - [CLI](/cli/cop) | [Conformance](/conformance/cop) | [The stack](/docs/start/concepts)

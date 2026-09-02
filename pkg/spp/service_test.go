@@ -179,7 +179,7 @@ func TestServiceSendReceiveBytesWithErrorControl(t *testing.T) {
 		t.Fatalf("SendBytes failed: %v", err)
 	}
 
-	// Receive — Service should validate CRC
+	// Receive, Service should validate CRC
 	ind, err := svc.ReceiveBytes()
 	if err != nil {
 		t.Fatalf("ReceiveBytes failed: %v", err)
@@ -524,7 +524,7 @@ func TestReceivePacketGivesEachPacketItsOwnSecondaryHeader(t *testing.T) {
 }
 
 // sizedSecondaryHeader is a secondary header whose width lives in the value,
-// which is the usual shape for a real one — a PUS header reads its width from
+// which is the usual shape for a real one. A PUS header reads its width from
 // its mission profile. A service must decode into headers the caller's factory
 // built, never into something it constructed itself from the type, because
 // only the caller's value carries the width.
@@ -593,7 +593,7 @@ func TestReceivePacketUsesTheFactorysConfiguredHeader(t *testing.T) {
 		t.Errorf("decoded header payload = %d octets, want %d", len(sh.Payload), width)
 	}
 	if !bytes.Equal(got.UserData, userData) {
-		t.Errorf("UserData = %x, want %x — secondary header octets leaked into it",
+		t.Errorf("UserData = %x, want %x, secondary header octets leaked into it",
 			got.UserData, userData)
 	}
 }
@@ -1113,7 +1113,7 @@ func TestSendPacketRestoresTheCounterOnFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fits.PrimaryHeader.SequenceCount != 0 {
-		t.Errorf("first packet actually sent got count %d, want 0 — the rejected "+
+		t.Errorf("first packet actually sent got count %d, want 0, the rejected "+
 			"send consumed a count", fits.PrimaryHeader.SequenceCount)
 	}
 }
@@ -1304,7 +1304,7 @@ func TestReceivePacketResynchronizesAfterAnOversizePacket(t *testing.T) {
 		t.Fatalf("second ReceivePacket = %v, want the packet after the oversize one", err)
 	}
 	if got.PrimaryHeader.APID != 9 {
-		t.Errorf("APID = %d, want 9 — the reader resynchronized onto the wrong octet",
+		t.Errorf("APID = %d, want 9, the reader resynchronized onto the wrong octet",
 			got.PrimaryHeader.APID)
 	}
 	if !bytes.Equal(got.UserData, []byte{0xAB, 0xCD}) {
@@ -1402,7 +1402,7 @@ func TestSendPacketQoSOnPlainTransportIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.PrimaryHeader.SequenceCount != 0 {
-		t.Errorf("sequence count = %d, want 0 — the refused send left a hole",
+		t.Errorf("sequence count = %d, want 0, the refused send left a hole",
 			got.PrimaryHeader.SequenceCount)
 	}
 }

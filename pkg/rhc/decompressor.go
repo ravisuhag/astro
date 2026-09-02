@@ -5,10 +5,10 @@ import "fmt"
 // The decompressor.
 //
 // CCSDS 124.0-B-1 specifies the compressor and nothing else: its normative
-// sections are inputs (§3), mask update (§4) and encoder (§5), and its
+// sections are inputs (clause 3), mask update (clause 4) and encoder (clause 5), and its
 // conformance list (annex A2.2.1) has five items, all of them encoder items.
 // There is no decoder section to transcribe. What follows is the encoder run
-// backwards, which the standard promises is possible — §2.1 lists exactly what
+// backwards, which the standard promises is possible, clause 2.1 lists exactly what
 // a decompressor needs:
 //
 //	a) the last successfully reconstructed binary vector in the series;
@@ -20,17 +20,17 @@ import "fmt"
 //
 // # Loss
 //
-// §2.2 draws a line this type has to respect: the standard "describes a
+// Clause 2.2 draws a line this type has to respect: the standard "describes a
 // mechanism to ensure that the compressor and decompressor remain
 // synchronized in the event of the loss of a configurable number of sequential
 // output binary vectors. However, it does not provide a mechanism for
 // identifying the number of sequential output binary vectors that were lost."
 //
-// Detecting loss is therefore the caller's, and §2.2 suggests how: packet
+// Detecting loss is therefore the caller's, and clause 2.2 suggests how: packet
 // sequence counters, if the outputs travel in space packets. When the caller
 // notices a gap it calls NotifyLoss, and only then can this type tell whether
 // the next output reaches back far enough. Without that call a decompressor
-// cannot know a gap happened, and will happily produce wrong bytes — which is
+// cannot know a gap happened, and will happily produce wrong bytes, which is
 // a property of the standard, not of this code, and the reason NotifyLoss
 // exists.
 
@@ -57,9 +57,9 @@ type Decompressor struct {
 
 // NewDecompressor prepares a decompressor.
 //
-// The configuration's VectorLength must match the compressor's. §3.3.2's note
-// lists the parameters that need not be known in advance — M_0, R_t and the
-// three flags — and F is deliberately not among them.
+// The configuration's VectorLength must match the compressor's. Clause 3.3.2's note
+// lists the parameters that need not be known in advance (M_0, R_t and the
+// three flags) and F is deliberately not among them.
 func NewDecompressor(config Config) (*Decompressor, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func NewDecompressor(config Config) (*Decompressor, error) {
 }
 
 // Reset discards all state. The next output vector must carry the whole mask
-// and the whole input for decompression to resume, which §3.3.2 guarantees a
+// and the whole input for decompression to resume, which clause 3.3.2 guarantees a
 // compressor's own first output does.
 func (d *Decompressor) Reset() {
 	d.mask = NewVector(d.config.VectorLength)
@@ -84,8 +84,8 @@ func (d *Decompressor) Reset() {
 // the next one it will be given.
 //
 // Call it when a sequence counter shows a gap. Until an output arrives whose
-// effective robustness level covers the gap — or which carries the whole mask
-// and the whole input — Decompress will return an error rather than a vector
+// effective robustness level covers the gap (or which carries the whole mask
+// and the whole input) Decompress will return an error rather than a vector
 // it cannot vouch for.
 func (d *Decompressor) NotifyLoss(count int) {
 	if count > 0 {
@@ -366,8 +366,8 @@ func (d *Decompressor) checkRecoverable(out *decoded) error {
 		return ErrMaskUnavailable
 	}
 
-	// Strict mode: after a reported loss, only an uncompressed output — the
-	// one kind that proves itself, handled above — will do. The effective
+	// Strict mode: after a reported loss, only an uncompressed output (the
+	// one kind that proves itself, handled above) will do. The effective
 	// robustness gate below trusts the output's self-declared V_t, and strict
 	// mode exists for callers who will not extend that trust across a gap.
 	if d.config.Strict && d.pendingLoss > 0 {
@@ -377,13 +377,13 @@ func (d *Decompressor) checkRecoverable(out *decoded) error {
 	}
 
 	// A reported gap is survivable only when this output reaches back across
-	// it. §2.1 puts the bound on the effective robustness level: "the mask can
+	// it. Clause 2.1 puts the bound on the effective robustness level: "the mask can
 	// be synchronized even if the number of consecutive output binary vectors
 	// lost immediately before this output bit vector is equal to, or less
 	// than, the effective robustness level."
 	//
 	// Carrying the whole mask is not enough on its own. That fixes item (b) of
-	// §2.1's list and leaves item (a) — the last reconstructed vector — as
+	// Clause 2.1's list and leaves item (a) (the last reconstructed vector) as
 	// stale as it was, and the values needed to bring it up to date went out
 	// in the outputs that were lost. Only an uncompressed output, handled
 	// above, repairs both.
@@ -411,7 +411,7 @@ func (d *Decompressor) commit(out *decoded) ([]byte, error) {
 		current = out.wholeInput
 	} else {
 		// Every predictable position keeps the value it had; the extracted
-		// bits fill in the rest. That is the promise §2.1 makes about the
+		// bits fill in the rest. That is the promise clause 2.1 makes about the
 		// mask, run backwards.
 		current = d.previous.Clone()
 		index := 0

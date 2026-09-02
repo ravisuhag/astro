@@ -3,7 +3,7 @@ package cfdp
 import "fmt"
 
 // RecordContinuationState says how a File Data PDU's payload sits relative to
-// record boundaries, per CCSDS 727.0-B-5 §5.3. It is present only when the
+// record boundaries, per CCSDS 727.0-B-5 clause 5.3. It is present only when the
 // header's segment metadata flag is set.
 type RecordContinuationState uint8
 
@@ -35,7 +35,7 @@ func (r RecordContinuationState) String() string {
 }
 
 // MaxSegmentMetadataSize is the widest segment metadata a 6-bit length field
-// can describe (§5.3, table 5-14).
+// can describe (clause 5.3, table 5-14).
 const MaxSegmentMetadataSize = 63
 
 // FileDataPDU carries a run of file octets at a given offset.

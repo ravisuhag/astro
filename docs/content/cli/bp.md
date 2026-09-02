@@ -1,7 +1,7 @@
 ---
 title: astro bp
 short: BP
-description: Bundle Protocol v6 — decode bundles and administrative records.
+description: Bundle Protocol v6, decode bundles and administrative records.
 order: 210
 ---
 
@@ -43,7 +43,7 @@ astro bp decode --input hex < bundle.hex
 
 ## astro bp admin
 
-Decode an administrative record — a status report or a custody signal. This is what a bundle's payload holds when the bundle is an administrative one, so feed it the payload rather than the whole bundle.
+Decode an administrative record. A status report or a custody signal. This is what a bundle's payload holds when the bundle is an administrative one, so feed it the payload rather than the whole bundle.
 
 ```
 astro bp admin [file] [flags]
@@ -61,4 +61,4 @@ astro bp admin --input hex < record.hex
 
 ---
 
-**See also** — [the protocol page](/protocols/transport/bp) for the standard and the Go API, and the [conformance statement](/conformance/bp) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/transport/bp) for the standard and the Go API, and the [conformance statement](/conformance/bp) for what is and is not implemented.

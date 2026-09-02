@@ -7,7 +7,7 @@ package ldc
 // identifier is three to six bits. Nothing lands on an octet boundary until
 // the fill at the very end.
 //
-// Bit order is MSB first, per §1.5.2: "The first bit in the word to be
+// Bit order is MSB first, per clause 1.5.2: "The first bit in the word to be
 // transmitted ... is defined to be 'bit 0'", and for an unsigned value the
 // most significant bit corresponds to the highest power of two. So a value
 // written with WriteBits appears in the output most significant bit first,
@@ -85,7 +85,7 @@ func (w *BitWriter) BitLen() int { return len(w.data)*8 + int(w.used) }
 
 // Bytes returns the written bits, padding the last octet with zero fill.
 //
-// §7.2.3.2 requires fill bits to be zeros. This pads only to the next octet;
+// Clause 7.2.3.2 requires fill bits to be zeros. This pads only to the next octet;
 // padding to the output word size is the file writer's job, because only it
 // knows B.
 func (w *BitWriter) Bytes() []byte {
@@ -168,7 +168,7 @@ func (r *BitReader) ReadBits(n int) (uint64, error) {
 //
 // Table 3-1 makes an FS codeword m zeros followed by a one, so decoding is
 // just counting zeros. limit caps how many zeros are tolerated before the
-// stream is called malformed — without it, a run of zero octets would be read
+// stream is called malformed. Without it, a run of zero octets would be read
 // as an enormous sample value and the caller would allocate on it.
 func (r *BitReader) ReadFS(limit uint64) (uint64, error) {
 	var count uint64

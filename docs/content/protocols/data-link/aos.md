@@ -1,7 +1,7 @@
 ---
 title: AOS Space Data Link Protocol
 short: AOS
-description: CCSDS 732.0-B-4 — high-rate downlink frames for Earth observation and deep space.
+description: CCSDS 732.0-B-4, high-rate downlink frames for Earth observation and deep space.
 order: 22
 ---
 
@@ -13,7 +13,7 @@ Frames are fixed length per physical channel, same as TM.
 
 ## Scope
 
-**Implemented.** The frame format including the optional FHEC, all three data services — M_PDU, B_PDU, and VCA — plus the VC Frame pass-through, master and virtual channel multiplexing, gap detection, and idle frames.
+**Implemented.** The frame format including the optional FHEC, all three data services — M_PDU, B_PDU, and VCA: plus the VC Frame pass-through, master and virtual channel multiplexing, gap detection, and idle frames.
 
 **Somewhere else.** ASM, randomization, and CADU wrapping are [`pkg/tmsc`](/protocols/coding/tmsc).
 
@@ -21,7 +21,7 @@ Frames are fixed length per physical channel, same as TM.
 
 ## Field map
 
-The primary header — 6 bytes, or 8 with FHEC. Go fields on `aos.PrimaryHeader`.
+The primary header, 6 bytes, or 8 with FHEC. Go fields on `aos.PrimaryHeader`.
 
 | Field | Bits | Go | Notes |
 |---|---|---|---|
@@ -55,7 +55,7 @@ Channel-wide settings are on `aos.ChannelConfig`: `FrameLength`, `InsertZoneLen`
 | `0x7FE` | Idle data only |
 | `0x7FF` | No packet starts here |
 
-**B_PDU** carries an octet-aligned bitstream — data that is not packets at all. The 16-bit header is 2 reserved bits and a 14-bit Bitstream Data Pointer marking the last valid bit.
+**B_PDU** carries an octet-aligned bitstream, data that is not packets at all. The 16-bit header is 2 reserved bits and a 14-bit Bitstream Data Pointer marking the last valid bit.
 
 | BDP | Meaning |
 |---|---|
@@ -63,7 +63,7 @@ Channel-wide settings are on `aos.ChannelConfig`: `FrameLength`, `InsertZoneLen`
 | `0x3FFE` | All idle |
 | `0x3FFF` | All valid, nothing ends in this frame |
 
-**VCA** carries one opaque fixed-length SDU. No header at all — the data field *is* the SDU.
+**VCA** carries one opaque fixed-length SDU. No header at all. The data field *is* the SDU.
 
 ## Gotchas
 
@@ -77,7 +77,7 @@ Channel-wide settings are on `aos.ChannelConfig`: `FrameLength`, `InsertZoneLen`
 
 **The insert zone is the same length on every frame or it is absent.** It is channel configuration. A length that does not match gives `ErrInvalidInsertZoneLength`.
 
-**FHEC changes the header size.** Turning it on makes the primary header 8 bytes instead of 6, which eats into your data field. It protects only TFVN, SCID, VCID, and the signaling field — not the frame count.
+**FHEC changes the header size.** Turning it on makes the primary header 8 bytes instead of 6, which eats into your data field. It protects only TFVN, SCID, VCID, and the signaling field, not the frame count.
 
 **M_PDU receive needs a `PacketSizer`.** Same as TM and TC. Without one, `ErrNoPacketSizer`.
 
@@ -139,7 +139,7 @@ Unlike [USLP](/protocols/data-link/usdl), the OCF flag is not carried in the AOS
 
 Pick the service that matches what you are sending.
 
-### MultiplexingService — M_PDU
+### MultiplexingService, M_PDU
 
 For variable-length packets. This is the common case.
 
@@ -154,11 +154,11 @@ svc.Send(spacePacketBytes)
 svc.Flush()
 ```
 
-`SetPacketSizer` is required before you can receive — the service has to know how long the packet at the First Header Pointer claims to be. Without it you get `ErrNoPacketSizer`.
+`SetPacketSizer` is required before you can receive. The service has to know how long the packet at the First Header Pointer claims to be. Without it you get `ErrNoPacketSizer`.
 
 `Send` packs into the current frame and releases it when full. `Flush` emits whatever is left, completing the packet zone with a real idle packet at APID `0x7FF`. Skip the flush and your last packets never leave.
 
-### BitstreamService — B_PDU
+### BitstreamService, B_PDU
 
 For octet-aligned data that is not packets:
 
@@ -168,9 +168,9 @@ svc.Send(bitstreamBytes)
 svc.Flush()
 ```
 
-`Flush` splits an oversized partial payload across extra frames rather than writing a Bitstream Data Pointer that would mean something else — see [the gotchas](/protocols/data-link/aos#gotchas).
+`Flush` splits an oversized partial payload across extra frames rather than writing a Bitstream Data Pointer that would mean something else, see [the gotchas](/protocols/data-link/aos#gotchas).
 
-### VirtualChannelAccessService — VCA
+### VirtualChannelAccessService, VCA
 
 One fixed-length SDU per frame:
 
@@ -209,7 +209,7 @@ det := aos.NewFrameGapDetector()
 gap := det.Check(frame)
 ```
 
-AOS counts per virtual channel only — there is no master channel frame count. The 24-bit counter plus the 4-bit cycle field is why AOS survives high rates where [TM](/protocols/data-link/tmdl) would wrap.
+AOS counts per virtual channel only. There is no master channel frame count. The 24-bit counter plus the 4-bit cycle field is why AOS survives high rates where [TM](/protocols/data-link/tmdl) would wrap.
 
 ## Errors
 
@@ -238,11 +238,11 @@ Commentary, not sourced from the standard.
 
 **Why a smaller spacecraft ID than TM?** AOS spent those bits on the virtual channel field and the frame count. A mission running AOS knows which spacecraft it is talking to; it needs the counter more.
 
-**Why the insert zone?** Some data has to appear at a known offset in every single frame — a time code, a quality flag — so a receiver can find it without parsing the payload. Putting it in the data field would mean parsing packets first.
+**Why the insert zone?** Some data has to appear at a known offset in every single frame (a time code, a quality flag) so a receiver can find it without parsing the payload. Putting it in the data field would mean parsing packets first.
 
 **Why B_PDU?** Not everything is a packet. Instrument output is sometimes just a bit stream, and forcing packet framing onto it adds overhead and a boundary problem that nobody wanted.
 
 ## Reference
 
-- [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) — AOS Space Data Link Protocol (Blue Book)
+- [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf), AOS Space Data Link Protocol (Blue Book)
 - [CLI](/cli/aos) | [Conformance](/conformance/aos) | [The stack](/docs/start/concepts)

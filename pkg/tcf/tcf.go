@@ -23,8 +23,8 @@
 //	CCS   - CCSDS Calendar Segmented Time Code (BCD calendar fields)
 //	ASCII - Text-based time codes (Type A and Type B)
 //
-// Each binary format also has T-field-only ("implicit P-field") APIs —
-// EncodeTField and DecodeCUCTField / DecodeCDSTField / DecodeCCSTField — for
+// Each binary format also has T-field-only ("implicit P-field") APIs (
+// EncodeTField and DecodeCUCTField / DecodeCDSTField / DecodeCCSTField) for
 // contexts such as Space Packet secondary headers where the format is agreed
 // out of band and no P-field is transmitted.
 //

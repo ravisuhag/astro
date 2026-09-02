@@ -1,8 +1,8 @@
 package cfdp
 
 // FaultHandler is a disposition for a fault condition, per CCSDS 727.0-B-5
-// §4.8. Table 4-1 assigns every fault condition a default handler; a fault
-// handler override TLV (§5.4.4) or per-transaction configuration replaces it.
+// Clause 4.8. Table 4-1 assigns every fault condition a default handler; a fault
+// handler override TLV (clause 5.4.4) or per-transaction configuration replaces it.
 //
 // The numeric values are the handler codes of the fault handler override TLV,
 // so a FaultHandler travels on the wire unchanged.
@@ -19,7 +19,7 @@ const (
 	// carry on.
 	FaultHandlerIgnore FaultHandler = 0x3
 	// FaultHandlerAbandon abandons the transaction ('0100') with no further
-	// protocol activity — not even a Finished PDU.
+	// protocol activity, not even a Finished PDU.
 	FaultHandlerAbandon FaultHandler = 0x4
 )
 
@@ -50,7 +50,7 @@ func DefaultFaultHandler(ConditionCode) FaultHandler {
 	return FaultHandlerCancel
 }
 
-// FaultHandlerOverrideTLV builds the fault handler override TLV of §5.4.4:
+// FaultHandlerOverrideTLV builds the fault handler override TLV of clause 5.4.4:
 // one octet holding the condition code (4 bits) and the handler code (4 bits).
 func FaultHandlerOverrideTLV(cond ConditionCode, handler FaultHandler) (TLV, error) {
 	if !handler.Valid() {
@@ -62,7 +62,7 @@ func FaultHandlerOverrideTLV(cond ConditionCode, handler FaultHandler) (TLV, err
 	}, nil
 }
 
-// DecodeFaultHandlerOverride reads a fault handler override TLV (§5.4.4).
+// DecodeFaultHandlerOverride reads a fault handler override TLV (clause 5.4.4).
 func DecodeFaultHandlerOverride(t TLV) (ConditionCode, FaultHandler, error) {
 	if t.Type != TLVFaultHandlerOverride || len(t.Value) < 1 {
 		return 0, 0, ErrInvalidFaultHandler

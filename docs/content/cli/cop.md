@@ -1,7 +1,7 @@
 ---
 title: astro cop
 short: COP
-description: COP-1 — build and read the Communications Link Control Word.
+description: COP-1, build and read the Communications Link Control Word.
 order: 130
 ---
 
@@ -84,4 +84,4 @@ astro cop clcw-decode --input hex < ocf.hex
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/cop) for the standard and the Go API, and the [conformance statement](/conformance/cop) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/cop) for the standard and the Go API, and the [conformance statement](/conformance/cop) for what is and is not implemented.

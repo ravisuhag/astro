@@ -9,15 +9,15 @@ import (
 //
 // Every data link protocol in this repository counts frames per virtual
 // channel in a field that wraps: eight bits for TM and TC, twenty-four for
-// AOS, and a managed width for USLP — the USLP count length is a managed
+// AOS, and a managed width for USLP. The USLP count length is a managed
 // parameter of up to 56 bits (CCSDS 732.1-B-3 4.1.2.11), not a fixed size. A
 // receiver notices loss by comparing the count it got against the one it
 // expected, modulo that width.
 //
 // The arithmetic is identical in all four and only the width differs, so it
 // lives here once, parameterised by the counter type and its mask. The four
-// packages keep their own FrameGapDetector — the exported shapes differ, and
-// TM tracks a master channel count the others do not — but the counting is no
+// packages keep their own FrameGapDetector (the exported shapes differ, and
+// TM tracks a master channel count the others do not) but the counting is no
 // longer written out four times.
 
 // Counter is a frame count field. The protocols use widths from eight bits
@@ -46,7 +46,7 @@ type GapCounter[C Counter] struct {
 }
 
 // NewGapCounter returns a counter for a field of the given mask, which must be
-// all ones up to the field width — 0xFF for eight bits, 0xFFFFFF for
+// all ones up to the field width, 0xFF for eight bits, 0xFFFFFF for
 // twenty-four, up to 0xFFFFFFFFFFFFFF for USLP's 56-bit maximum.
 func NewGapCounter[C Counter](mask C) *GapCounter[C] {
 	return &GapCounter[C]{
@@ -62,7 +62,7 @@ func NewGapCounter[C Counter](mask C) *GapCounter[C] {
 //
 // The first frame on a channel reports a gap of zero. There is nothing to
 // compare it against, and reporting the distance from an assumed zero would
-// invent a loss that did not happen — a receiver joining a pass in progress
+// invent a loss that did not happen. A receiver joining a pass in progress
 // would report a gap of however far the counter had already run.
 func (g *GapCounter[C]) Track(channel uint8, count C) int {
 	g.mu.Lock()
@@ -78,7 +78,7 @@ func (g *GapCounter[C]) Track(channel uint8, count C) int {
 // one 28-bit count. cycleMask is the cycle field's width in the same
 // all-ones form as the count mask: 0xF for AOS's four bits.
 //
-// The combined count — cycle bits above the count bits — must fit in C. Do
+// The combined count (cycle bits above the count bits) must fit in C. Do
 // not mix Track and TrackWithCycle on the same channel: the two disagree
 // about the modulus, so a gap computed across the switch would be wrong.
 func (g *GapCounter[C]) TrackWithCycle(channel uint8, count C, cycle uint8, cycleMask uint8) int {

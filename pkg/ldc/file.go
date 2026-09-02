@@ -5,9 +5,9 @@ import "fmt"
 // The file format of CCSDS 121.0-B-3 section 7.
 //
 // A coded data set stream says nothing about how it was made: not the block
-// size, not the resolution, not whether a predictor ran. §5.3.2.2 spells the
-// consequence out — that information "must be communicated to the decoder a
-// priori" — and the standard offers two ways to do it. Section 6 defines a
+// size, not the resolution, not whether a predictor ran. Clause 5.3.2.2 spells the
+// consequence out (that information "must be communicated to the decoder a
+// priori") and the standard offers two ways to do it. Section 6 defines a
 // compression identification packet for the packet case; section 7 defines
 // this file header for the stored case.
 //
@@ -15,7 +15,7 @@ import "fmt"
 // including the sample count. So CompressFile and DecompressFile are the pair
 // to reach for when the two ends do not already share a configuration.
 
-// FileHeaderSize is the fixed width of the file header, per §7.2.2.
+// FileHeaderSize is the fixed width of the file header, per clause 7.2.2.
 const FileHeaderSize = 12
 
 // Predictor type codes from table 7-1.
@@ -37,7 +37,7 @@ var blockSizeCodes = map[int]uint64{8: 0, 16: 1, 32: 2, 64: 3}
 // FileHeader is the twelve-octet header of table 7-1.
 type FileHeader struct {
 	// WordSize is B, the output word size in octets, 1 to 8. The file is
-	// padded to a multiple of it (§7.2.1.2, §7.2.3.2).
+	// padded to a multiple of it (clause 7.2.1.2, clause 7.2.3.2).
 	WordSize int
 	// Params are the compression parameters the body was coded with.
 	Params Params
@@ -102,7 +102,7 @@ func (p Params) headerCodes() (predictorCode, mapperCode uint64, preprocessorPre
 	case PredictorBypass:
 		return predictorCodeBypass, mapperCodePredictionError, true
 	default:
-		// §7.2.2: with the preprocessor absent, the predictor field is '000'
+		// Clause 7.2.2: with the preprocessor absent, the predictor field is '000'
 		// and the mapper field '00', the same codes the bypass predictor uses.
 		// The Preprocessor Status bit is what tells them apart.
 		return predictorCodeBypass, mapperCodePredictionError, false
@@ -239,7 +239,7 @@ func CompressFile(samples []uint32, p Params, wordSize int) ([]byte, error) {
 	out = append(out, head...)
 	out = append(out, body...)
 
-	// §7.2.3.2: fill with zeros to a multiple of the output word size. The
+	// Clause 7.2.3.2: fill with zeros to a multiple of the output word size. The
 	// header is twelve octets, so the padding is measured over the whole file.
 	if remainder := len(out) % wordSize; remainder != 0 {
 		out = append(out, make([]byte, wordSize-remainder)...)
@@ -263,7 +263,7 @@ func DecompressFile(data []byte) ([]uint32, error) {
 // maxDecodableSamples caps what a header may ask a decoder to allocate.
 //
 // The Number of Samples field is 48 bits, so a hostile header can claim 2^48
-// samples — a terabyte of uint32 — and the decoder would size a slice from it
+// samples (a terabyte of uint32) and the decoder would size a slice from it
 // before reading a single coded bit. The cap is not in the standard; it is
 // what stops a twelve-octet file from exhausting memory.
 const maxDecodableSamples = 1 << 28

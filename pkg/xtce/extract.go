@@ -134,8 +134,8 @@ func (p *Packet) String() string {
 // Extract reads a packet against this layout.
 //
 // It returns an error only when the packet is too short for the layout to
-// apply at all. A field that cannot be decoded on its own — an encoding this
-// package does not support, a BCD nibble that is not a digit — is reported in
+// apply at all. A field that cannot be decoded on its own (an encoding this
+// package does not support, a BCD nibble that is not a digit) is reported in
 // that field's Err and the rest of the packet is still read.
 func (l *Layout) Extract(packet []byte) (*Packet, error) {
 	if bits := uint(len(packet)) * 8; bits < l.BitSize {

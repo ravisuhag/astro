@@ -5,7 +5,7 @@ description: ECSS-E-ST-50-03C conformance statement for the TM frame protocol.
 order: 65
 ---
 
-## Conformance Statement for `pkg/tmdl` — ECSS-E-ST-50-03C
+## Conformance Statement for `pkg/tmdl`, ECSS-E-ST-50-03C
 
 ---
 
@@ -33,7 +33,7 @@ order: 65
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/tmdl (Go package) |
 | System Name(s) | Astro |
 
@@ -41,10 +41,10 @@ order: 65
 
 | Field | Value |
 |---|---|
-| Specification | ECSS-E-ST-50-03C, *Space data links — Telemetry transfer frame protocol*, 31 July 2008 |
+| Specification | ECSS-E-ST-50-03C, *Space data links, Telemetry transfer frame protocol*, 31 July 2008 |
 | Relationship to CCSDS | The European profile of the CCSDS TM Space Data Link Protocol (CCSDS 132.0-B). It defines no new frame; it adopts the CCSDS frame and constrains its options. |
-| Obtained from | `https://ecss.nl/wp-content/uploads/standards/ecss-e/ECSS-E-ST-50-03C31July2008.pdf` — public, no registration required |
-| Have any exceptions been required? | **No** — the five gaps of the first pass were closed on 23/08/2026, and the idle-packet fill gap the second pass found was closed on 25/08/2026; see A3 |
+| Obtained from | `https://ecss.nl/wp-content/uploads/standards/ecss-e/ECSS-E-ST-50-03C31July2008.pdf`, public, no registration required |
+| Have any exceptions been required? | **No**, the five gaps of the first pass were closed on 23/08/2026, and the idle-packet fill gap the second pass found was closed on 25/08/2026; see A3 |
 
 **A note on the version.** Plan 024 called for "ECSS-E-ST-50-03C Rev.1". No such revision is published: the active document on ecss.nl is ECSS-E-ST-50-03C dated 31 July 2008, whose own change log records the 2008 issue as editorial renumbering of the 6 November 2007 text. This audit is against that document.
 
@@ -75,7 +75,7 @@ identifiers plus a paraphrase are enough to find the original.
 | Req | Requirement (paraphrase) | What it constrains | `pkg/tmdl` evidence | Verdict |
 |---|---|---|---|---|
 | 5.1a | The TM Transfer Frame shall encompass the major fields, positioned contiguously if present, in the sequence shown in... | field order in the frame | `frame.go` `EncodeWithoutFEC` assembles primary header, secondary header, data field, OCF in order; `frame.go` `EncodeWithConfig` appends the FECF last | **conforms** |
-| 5.1b | The maximum length for a TM Transfer Frame shall be 2048 octets. | maximum frame length 2048 octets | `physical.go` `ChannelConfig.Validate` rejects a `FrameLength` above `MaxFrameLength` (2048), but nothing calls it automatically — a CCSDS-only mission may exceed the European ceiling. Set 2048 or less and call `Validate` | **configurable** |
+| 5.1b | The maximum length for a TM Transfer Frame shall be 2048 octets. | maximum frame length 2048 octets | `physical.go` `ChannelConfig.Validate` rejects a `FrameLength` above `MaxFrameLength` (2048), but nothing calls it automatically, a CCSDS-only mission may exceed the European ceiling. Set 2048 or less and call `Validate` | **configurable** |
 | 5.1c | The TM Transfer Frame shall be of constant length throughout a specific mission phase. | constant frame length per mission phase | set `ChannelConfig.FrameLength`: `frame.go` `EncodeWithConfig` and `DecodeTMTransferFrameWithConfig` then reject any other length with `ErrFrameLengthMismatch`, and the VCP/VCA services build to that size. The legacy `FrameLength: 0` path still emits one variable-length frame per packet, so constancy holds only under the fixed-length configuration | **configurable** |
 | 5.1d | The TM Transfer Frame length shall be in conformance with the specifications contained in the standard for telemetry... | conformance with the channel coding standard | coding lives in `pkg/tmsc` (CCSDS 131.0-B); this package emits frames only | **out-of-scope** |
 | 5.1e | TM Transfer Frames shall be transferred over a physical channel at a constant rate. | constant transmission rate | a physical-layer property; no code owns it here | **out-of-scope** |
@@ -111,11 +111,11 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.2.4d | The Operational Control Field Flag shall be static in the associated master channel or virtual channel throughout a... | OCF Flag static per channel throughout a phase | `physical.go` `ChannelConfig.HasOCF` is fixed per channel; the caller must set the header flag to match | **configurable** |
 | 5.2.5a | The Master Channel Frame Count shall always be present in a Transfer Frame Primary Header. | Master Channel Frame Count present, bits 16-23 | `frame.go` `PrimaryHeader.MCFrameCount`; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
 | 5.2.5b | The Master Channel Frame Count shall be contained within bits 16-23 of the Transfer Frame Primary Header. | Master Channel Frame Count present, bits 16-23 | `frame.go` `PrimaryHeader.MCFrameCount`; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
-| 5.2.5c | The Master Channel Frame Count shall contain a sequential binary count (modulo 256) of each TM Transfer Frame... | sequential count modulo 256 per master channel | `service.go` `FrameCounter.Next` increments a `uint8`, wrapping at 256 — but the count is sequential across the master channel only when the caller wires one shared `FrameCounter` into every service on it and into `MasterChannel.SetFrameCounter` for idle frames. Nothing enforces the wiring | **configurable** |
+| 5.2.5c | The Master Channel Frame Count shall contain a sequential binary count (modulo 256) of each TM Transfer Frame... | sequential count modulo 256 per master channel | `service.go` `FrameCounter.Next` increments a `uint8`, wrapping at 256, but the count is sequential across the master channel only when the caller wires one shared `FrameCounter` into every service on it and into `MasterChannel.SetFrameCounter` for idle frames. Nothing enforces the wiring | **configurable** |
 | 5.2.5d | The Master Channel Frame Count shall not be reset before reaching 255 unless there is a major system reset. | count not reset before 255 | `service.go` `FrameCounter.Next` only ever increments; nothing resets it | **conforms** |
 | 5.2.6a | The Virtual Channel Frame Count shall always be present in a Transfer Frame Primary Header. | Virtual Channel Frame Count present, bits 24-31 | `frame.go` `PrimaryHeader.VCFrameCount`; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
 | 5.2.6b | The Virtual Channel Frame Count shall be contained within bits 24-31 of the Transfer Frame Primary Header. | Virtual Channel Frame Count present, bits 24-31 | `frame.go` `PrimaryHeader.VCFrameCount`; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
-| 5.2.6c | The Virtual Channel Frame Count shall contain a sequential binary count (modulo 256) of each TM Transfer Frame... | sequential count modulo 256 per virtual channel | `service.go` `FrameCounter` keeps one wrapping `uint8` per VCID — sequential only when the caller passes a counter to the channel's service and does not stamp counts by hand. Nothing enforces the wiring | **configurable** |
+| 5.2.6c | The Virtual Channel Frame Count shall contain a sequential binary count (modulo 256) of each TM Transfer Frame... | sequential count modulo 256 per virtual channel | `service.go` `FrameCounter` keeps one wrapping `uint8` per VCID, sequential only when the caller passes a counter to the channel's service and does not stamp counts by hand. Nothing enforces the wiring | **configurable** |
 | 5.2.6d | The Virtual Channel Frame Count shall not be reset before reaching 255 unless there is a major system reset. | count not reset before 255 | `service.go` `FrameCounter.Next` | **conforms** |
 | 5.2.7.1a | The Transfer Frame Data Field Status shall always be present in a Transfer Frame Primary Header. | Data Field Status present, bits 32-47, five subfields | `frame.go` `PrimaryHeader` (the five data-field-status fields) are the five subfields; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
 | 5.2.7.1b | The Transfer Frame Data Field Status shall be contained within bits 32-47 of the Transfer Frame Primary Header. | Data Field Status present, bits 32-47, five subfields | `frame.go` `PrimaryHeader` (the five data-field-status fields) are the five subfields; packed at `frame.go` `PrimaryHeader.Encode` | **conforms** |
@@ -168,7 +168,7 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.3.3a | The Transfer Frame Secondary Header Data Field shall always be present in a Transfer Frame Secondary Header. | data field present, follows the identification, carries the data | `frame.go` `SecondaryHeader.Encode` and `frame.go` `SecondaryHeader.Decode` | **conforms** |
 | 5.3.3b | The Transfer Frame Secondary Header Data Field shall follow, without gap, the Transfer Frame Secondary Header... | data field present, follows the identification, carries the data | `frame.go` `SecondaryHeader.Encode` and `frame.go` `SecondaryHeader.Decode` | **conforms** |
 | 5.3.3c | The Transfer Frame Secondary Header Data Field shall contain the Transfer Frame Secondary Header data. | data field present, follows the identification, carries the data | `frame.go` `SecondaryHeader.Encode` and `frame.go` `SecondaryHeader.Decode` | **conforms** |
-| 5.3.4.2a | The length of the Transfer Frame Secondary Header shall be 32 bits. | extended count needs a 32-bit secondary header | `frame.go` — closed together with 5.3.2.3c; a 4-octet header now writes 3 | **conforms** |
+| 5.3.4.2a | The length of the Transfer Frame Secondary Header shall be 32 bits. | extended count needs a 32-bit secondary header | `frame.go`, closed together with 5.3.2.3c; a 4-octet header now writes 3 | **conforms** |
 | 5.3.4.2b | The Transfer Frame Secondary Header Data Field shall contain the 24-bit extension to the virtual channel frame count. | 24-bit extension counting roll-overs of the 8-bit count | the caller places the extension in `frame.go` `SecondaryHeader.DataField` `DataField`; the package does not maintain the roll-over count | **configurable** |
 | 5.3.4.2c | The extension to the virtual channel frame count shall be a binary count of the roll-overs of the 8-bit value... | 24-bit extension counting roll-overs of the 8-bit count | the caller places the extension in `frame.go` `SecondaryHeader.DataField` `DataField`; the package does not maintain the roll-over count | **configurable** |
 | 5.3.4.2d | The use of the extended virtual channel frame count shall be associated with either a master channel or a virtual... | extended count associated with a channel and static | a caller-side convention | **configurable** |
@@ -184,7 +184,7 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.4.2d | If a Transfer Frame Secondary Header is not present, the Transfer Frame Primary. | data field follows the secondary or primary header without gap | `frame.go` `EncodeWithoutFEC` appends it directly after whichever header was written | **conforms** |
 | 5.4.2e | The length of the Transfer Frame Data Field shall be an integral number of octets and be constrained by the length... | integral octets, constrained by the frame length | `physical.go` `ChannelConfig.DataFieldCapacity` derives it; `frame.go` `padDataField` fills to capacity | **conforms** |
 | 5.4.3.3a | A packet handled by the packet processing and extraction functions shall have a defined Packet Version Number in... | packet version number conformance | packet formats belong to `pkg/spp`; this package treats the data field as octets | **out-of-scope** |
-| 5.4.3.3b | An idle packet shall be either: | idle packet definition | `service.go` `idleFillPacket` builds a real SPP idle packet — APID 0x7FF per CCSDS 133.0-B-2 — and `isIdlePacket` recognises one by that APID on extraction | **conforms** |
+| 5.4.3.3b | An idle packet shall be either: | idle packet definition | `service.go` `idleFillPacket` builds a real SPP idle packet, APID 0x7FF per CCSDS 133.0-B-2, and `isIdlePacket` recognises one by that APID on extraction | **conforms** |
 | 5.4.3.4a | The packet processing function shall be applied independently for each virtual channel. | packet processing applied per virtual channel | `service.go` `VirtualChannelPacketService` is constructed per VCID at `service.go` `NewVirtualChannelPacketService` | **conforms** |
 | 5.4.3.4b | The packet processing function shall place packets contiguously into the Transfer Frame Data Field. | packets placed contiguously | `service.go` `VirtualChannelPacketService.Send` appends to one buffer; `service.go` `emitFullFrames` slices it | **conforms** |
 | 5.4.3.4c | If the length of a packet exceeds the available space in the Transfer Frame Data Field, the packet processing... | packets longer than the space are split across frames | `service.go` `emitFullFrames` emits full frames and carries the remainder forward | **conforms** |
@@ -236,7 +236,7 @@ identifiers plus a paraphrase are enough to find the original.
 | 5.6.3b | The Frame Error Control Field shall not be used for error correction. | the FECF is not used for error correction | `frame.go` `DecodeTMTransferFrameWithConfig` rejects a mismatching frame; nothing attempts correction | **conforms** |
 ---
 
-## A3 GAPS — ALL CLOSED
+## A3 GAPS, ALL CLOSED
 
 The audit of 23/08/2026 found five gaps, fixed the same day in
 `fix(tmdl): correct four ECSS-E-ST-50-03C conformance defects`. A second pass
@@ -245,12 +245,12 @@ the underlying defect was fixed then. This section records all of them, since
 the reasoning is worth keeping and several describe a failure mode this
 codebase has now hit repeatedly.
 
-### 5.4.3.3b / 5.4.3.4g — raw 0xFF fill sold as "idle packets" (second pass)
+### 5.4.3.3b / 5.4.3.4g, raw 0xFF fill sold as "idle packets" (second pass)
 
 The first pass marked both rows *conforms* with `padDataField`'s raw 0xFF fill
 as evidence. That was wrong twice over: 0xFF fill is not an idle packet, and a
-conformant receiver parses the fill as a packet header — 0x7FF in the first
-two octets reads as the idle APID, but the length field is garbage — and loses
+conformant receiver parses the fill as a packet header (0x7FF in the first
+two octets reads as the idle APID, but the length field is garbage) and loses
 packet sync. The in-repo receiver survived only through a nonstandard
 all-0xFF heuristic no other implementation shares.
 
@@ -267,7 +267,7 @@ and 5.2.6c (counts are sequential only when one shared `FrameCounter` feeds
 every service and the idle-frame path) and 5.1c (length constancy holds only
 under a set `FrameLength`, which the codec now enforces on encode and decode).
 
-### 5.3.2.3c — the secondary header length field was one too small
+### 5.3.2.3c. The secondary header length field was one too small
 
 Clause 5.3.2.3c requires the six-bit field to hold *the total secondary header length
 in octets minus one*, the total being the identification octet plus the data
@@ -277,7 +277,7 @@ The code required it to equal `len(DataField)-1` and decoded with the same
 offset. A four-octet header went out saying 2 where the standard wants 3.
 
 Encoder and decoder agreed, so every round trip passed and the package's own
-tests were silent — one of them asserted the wrong value outright, which is how
+tests were silent, one of them asserted the wrong value outright, which is how
 the defect looked deliberate. A conforming receiver reading 2 computes a
 three-octet total and starts the Transfer Frame Data Field an octet early,
 corrupting every frame with a secondary header.
@@ -289,12 +289,12 @@ ECSS-only defect.
 the test asserts the octet on the wire plus the offset a receiver would compute
 from it.
 
-### 5.3.4.2a — the extended virtual channel frame count inherited it
+### 5.3.4.2a, the extended virtual channel frame count inherited it
 
 Clause 5.3.4.2a fixes the secondary header at 32 bits when it carries the extended
 count: four octets, so the field must read 3. Closed by the fix above.
 
-### 5.2.7.6g — idle frames used the wrong First Header Pointer
+### 5.2.7.6g, idle frames used the wrong First Header Pointer
 
 Clause 5.2.7.6 gives two codes to two conditions: `11111111111` (0x7FF) when no
 packet starts in the data field, `11111111110` (0x7FE) when the field holds
@@ -304,20 +304,20 @@ ones from other senders went unrecognised.
 
 Fixing this exposed a second defect the audit had not found: the packet service
 had the two codes **swapped on both paths at once**. It discarded continuation
-frames as idle — losing payload — and appended idle fill into the reassembly
+frames as idle (losing payload) and appended idle fill into the reassembly
 buffer. Consistent on both sides, so round trips passed here too.
 
 **Now:** both codes are named constants, `FHPNoPacketStart` and
 `FHPOnlyIdleData`, and the service uses each for its own condition.
 
-### 5.3.1c — the secondary header could exceed 64 octets
+### 5.3.1c. The secondary header could exceed 64 octets
 
 Clause 5.3.1c caps the whole secondary header at 64 octets. A 63-value length field
 with a 64-octet data field encoded to 65, and nothing rejected it.
 
 **Now:** `MaxSecondaryHeaderSize` is enforced by `Validate`.
 
-### 5.6.1c — the Frame Error Control Field could not be omitted
+### 5.6.1c. The Frame Error Control Field could not be omitted
 
 Clause 5.6.1b makes the field mandatory when the frame is not Reed-Solomon encoded,
 and its NOTE makes it optional inside a code block, which already protects the
@@ -325,8 +325,8 @@ frame. Clause 5.6.1c requires the choice to hold across the physical channel.
 
 Only "always present" was supported: `Encode` always appended the field,
 `DecodeTMTransferFrame` always verified it, and `ChannelConfig.HasFEC` was
-never consulted by the frame codec. A Reed-Solomon mission omitting the field —
-a normal configuration — could not use the package.
+never consulted by the frame codec. A Reed-Solomon mission omitting the field (
+a normal configuration) could not use the package.
 
 **Now:** `EncodeWithConfig` and `DecodeTMTransferFrameWithConfig` honour
 `HasFEC`. The original entry points keep the field, so existing callers are
@@ -336,8 +336,8 @@ choice through the pass-through path.
 ### And one that was recorded as configurable
 
 Clause 5.1b caps the frame at 2048 octets and nothing enforced it. It is still
-*configurable* rather than a gap — the caller sets `FrameLength`, and a
-CCSDS-only mission may legitimately exceed the European ceiling — but
+*configurable* rather than a gap (the caller sets `FrameLength`, and a
+CCSDS-only mission may legitimately exceed the European ceiling) but
 `ChannelConfig.Validate` now checks it for missions that care.
 
 ---
@@ -349,7 +349,7 @@ CCSDS-only mission may legitimately exceed the European ceiling — but
 | conforms | 95 | 70% |
 | configurable | 33 | 24% |
 | out-of-scope | 7 | 5% |
-| **gap** | **0** | — |
+| **gap** | **0** | - |
 | **Total** | **135** | |
 
 **Inventory total 135, matrix rows 135.** The two numbers are stated here so
@@ -371,8 +371,8 @@ Fixing the pointer exposed a further defect of the same shape in the packet
 service.
 
 That is the pattern worth carrying forward. Three separate defects in this
-codebase — the PN randomizer, this length field, and the swapped pointer codes
-— were each perfectly symmetric and perfectly wrong. A round trip cannot catch
+codebase (the PN randomizer, this length field, and the swapped pointer codes
+) were each perfectly symmetric and perfectly wrong. A round trip cannot catch
 any of them. Assert the octet.
 
 ### On the 24% "configurable" share
@@ -386,7 +386,7 @@ The threshold guards against guessing. These rows are not guesses. They fall
 into three groups, and every one names its exact configuration:
 
 - **Operational constancy (14 rows).** Clauses of the form "shall be static in
-  the associated master channel throughout a mission phase" — 5.2.2.3d,
+  the associated master channel throughout a mission phase", 5.2.2.3d,
   5.2.4d, 5.2.7.2d, 5.2.7.2e, 5.2.7.3d, 5.3.1d, 5.3.1e, 5.3.2.3d, 5.3.4.2d,
   5.3.4.2e and their neighbours. A stateless frame codec cannot *be* static
   across a mission phase; only the system operating it can. Marking these
@@ -409,10 +409,10 @@ Seven clauses are out-of-scope, and all seven point somewhere real:
 
 | Clause | Belongs to |
 |---|---|
-| 5.1d, 5.1e, 5.1f | channel coding and the physical layer — `pkg/tmsc` |
-| 5.4.3.3a | packet formats — `pkg/spp` |
-| 5.4.4.2d | synchronization markers — `pkg/tmsc` |
-| 5.4.4.2h, 5.5.3b | the CLCW — `pkg/cop` |
+| 5.1d, 5.1e, 5.1f | channel coding and the physical layer, `pkg/tmsc` |
+| 5.4.3.3a | packet formats, `pkg/spp` |
+| 5.4.4.2d | synchronization markers, `pkg/tmsc` |
+| 5.4.4.2h, 5.5.3b | the CLCW, `pkg/cop` |
 
 None was silently dropped.
 

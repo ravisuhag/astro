@@ -214,7 +214,7 @@ func TestRemoteCancelTerminatesReceive(t *testing.T) {
 		t.Errorf("condition = %s, want cancel request received", got)
 	}
 
-	// §4.11.1.2: the partial file is discarded and no more NAKs go out.
+	// Clause 4.11.1.2: the partial file is discarded and no more NAKs go out.
 	if dstFS.Exists("dst.dat") {
 		t.Error("the partial file survived the cancel")
 	}
@@ -283,7 +283,7 @@ func TestReceiverCancel(t *testing.T) {
 	}
 }
 
-// F4: the four fault dispositions of §4.8, exercised on a checksum failure.
+// F4: the four fault dispositions of clause 4.8, exercised on a checksum failure.
 func TestFaultDispositions(t *testing.T) {
 	run := func(t *testing.T, handler cfdp.FaultHandler, configure bool) (*cfdp.Receiver, *cfdp.MemoryFilestore) {
 		t.Helper()
@@ -411,7 +411,7 @@ func TestFaultHandlerOverrideTLVApplied(t *testing.T) {
 	}
 
 	if got := receiver.ConditionCode(); got != cfdp.CondNoError {
-		t.Errorf("condition = %s, want no error — the override TLV was not applied", got)
+		t.Errorf("condition = %s, want no error. The override TLV was not applied", got)
 	}
 	if !receiver.Complete() {
 		t.Error("transfer incomplete")
@@ -510,7 +510,7 @@ func TestOverlappingRetransmissionsDoNotCorruptChecksum(t *testing.T) {
 	}
 
 	if got := receiver.ConditionCode(); got != cfdp.CondNoError {
-		t.Errorf("condition = %s, want no error — the overlap was folded in twice", got)
+		t.Errorf("condition = %s, want no error. The overlap was folded in twice", got)
 	}
 	delivered, err := dstFS.Read("dst.dat")
 	if err != nil {

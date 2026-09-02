@@ -9,8 +9,8 @@ import (
 // Production: the transfer buffer and the production status.
 //
 // A return-service provider does two things beyond answering operations, and
-// service.go holds neither. It runs production — the antenna, the receiver,
-// the frame synchroniser — and reports what that is doing. And it batches what
+// service.go holds neither. It runs production (the antenna, the receiver,
+// the frame synchroniser) and reports what that is doing. And it batches what
 // production yields into a transfer buffer rather than sending one PDU per
 // frame, which is what lets RAF carry a line-rate downlink over a TCP
 // connection.
@@ -19,15 +19,15 @@ import (
 // to get subtly wrong:
 //
 //   - The release timer starts when a record goes into an *empty* buffer
-//     (§3.1.9.1.4), not on every insert. Restarting it per record would hold
+//     (clause 3.1.9.1.4), not on every insert. Restarting it per record would hold
 //     data indefinitely on a busy channel.
 //   - On backpressure the whole buffer is discarded, not the one record that
-//     would not fit (§3.1.9.1.9).
+//     would not fit (clause 3.1.9.1.9).
 //   - When the resulting 'data discarded due to excessive backlog'
 //     notification goes in, the buffer's size is incremented by one until the
-//     next release (§3.1.9.1.10). Without that, a channel configured with a
+//     next release (clause 3.1.9.1.10). Without that, a channel configured with a
 //     buffer size of one would send nothing but backlog notifications.
-//   - Production starts 'halted', not 'running' (§B2.3), because production
+//   - Production starts 'halted', not 'running' (clause B2.3), because production
 //     is not yet configured for the service instance.
 //   - halted goes to running and running goes to interrupted, but halted does
 //     not go straight to interrupted (table B-1).
@@ -42,16 +42,16 @@ import (
 // rather than protocol.
 
 // ProductionConfig is what service management sets for one service instance
-// (§3.1.9.1.5 and §3.1.9.1.6).
+// (clause 3.1.9.1.5 and clause 3.1.9.1.6).
 type ProductionConfig struct {
 	// BufferSize is transfer-buffer-size: how many transfer-data and
 	// sync-notify records the buffer holds before it must be released
-	// (§3.1.9.1.6). It must be at least one.
+	// (clause 3.1.9.1.6). It must be at least one.
 	BufferSize int
 
 	// LatencyLimit is how long the release timer runs from the moment a
-	// record enters an empty buffer (§3.1.9.1.5). Zero means no timer, which
-	// is the offline and complete-online case: §3.1.9.1 requires the timer
+	// record enters an empty buffer (clause 3.1.9.1.5). Zero means no timer, which
+	// is the offline and complete-online case: Clause 3.1.9.1 requires the timer
 	// only for timely online delivery, though the buffer itself is used in
 	// every mode.
 	LatencyLimit time.Duration
@@ -87,16 +87,16 @@ type Production struct {
 	status ProductionStatus
 
 	// buffer holds the records waiting to be released, in insertion order
-	// (§3.1.9.1.8).
+	// (clause 3.1.9.1.8).
 	buffer RAFTransferBuffer
 
 	// timerStarted is when the release timer began, and timerRunning whether
 	// it is running at all. The timer starts on insertion into an empty
-	// buffer (§3.1.9.1.4).
+	// buffer (clause 3.1.9.1.4).
 	timerStarted time.Time
 	timerRunning bool
 
-	// extraCapacity is the temporary increment of §3.1.9.1.10: one while a
+	// extraCapacity is the temporary increment of clause 3.1.9.1.10: one while a
 	// backlog notification is in the buffer, zero otherwise.
 	extraCapacity int
 
@@ -108,7 +108,7 @@ type Production struct {
 
 // NewProduction prepares production for one service instance.
 //
-// The initial status is halted, per §B2.3: production is not yet configured
+// The initial status is halted, per clause B2.3: production is not yet configured
 // for the instance. A caller that has configured it calls SetRunning.
 func NewProduction(config ProductionConfig) (*Production, error) {
 	if err := config.Validate(); err != nil {
@@ -135,7 +135,7 @@ func (p *Production) Pending() int {
 }
 
 // Capacity reports the buffer's current size, including the temporary
-// increment of §3.1.9.1.10 when one is in effect.
+// increment of clause 3.1.9.1.10 when one is in effect.
 func (p *Production) Capacity() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -157,7 +157,7 @@ func (p *Production) Counters() (released, discarded int) {
 // Table B-1 allows it from halted (management has configured production) and
 // from interrupted (the provider has detected the fault is corrected). It
 // returns the notification to deliver, which the caller inserts into the
-// buffer; §3.1.9.1.3 puts a status-change notification in sequence with the
+// buffer; clause 3.1.9.1.3 puts a status-change notification in sequence with the
 // frames, not out of band.
 //
 // Calling it when production is already running changes nothing and yields no
@@ -221,12 +221,12 @@ func permittedTransition(from, to ProductionStatus) bool {
 	}
 }
 
-// --- the transfer buffer, §3.1.9.1 ---
+// --- the transfer buffer, clause 3.1.9.1 ---
 
 // Insert puts one annotated frame into the transfer buffer.
 //
 // It reports whether the buffer is now due for release, which happens when
-// the buffer is full (§3.1.9.1.7a). A caller inserting frames checks the
+// the buffer is full (clause 3.1.9.1.7a). A caller inserting frames checks the
 // return and calls Release when it is true; it also has to check Expired
 // between inserts, because the release timer can fire while nothing is
 // arriving.
@@ -252,12 +252,12 @@ func (p *Production) Insert(frame *RAFTransferDataInvocation, now time.Time) (du
 // buffer.
 //
 // Notifications are accepted whatever production is doing, because the
-// notifications are how a user learns production stopped. §3.1.9.1.3 requires
+// notifications are how a user learns production stopped. Clause 3.1.9.1.3 requires
 // a status-change notification to sit in sequence between the frames acquired
 // before the event and those after it, which is only possible if it goes
 // through the same buffer.
 //
-// An 'end of data' notification releases the buffer at once (§3.1.9.1.7c),
+// An 'end of data' notification releases the buffer at once (clause 3.1.9.1.7c),
 // which is why this reports due as well.
 func (p *Production) InsertNotification(notification *SyncNotifyInvocation, now time.Time) (due bool, err error) {
 	if notification == nil {
@@ -269,7 +269,7 @@ func (p *Production) InsertNotification(notification *SyncNotifyInvocation, now 
 
 	due = p.insertLocked(TransferBufferEntry{Notification: notification}, now)
 
-	// §3.1.9.1.7c: an 'end of data' record releases the buffer immediately,
+	// Clause 3.1.9.1.7c: an 'end of data' record releases the buffer immediately,
 	// whether or not it is full.
 	if notification.Kind == NotifyEndOfData {
 		due = true
@@ -280,7 +280,7 @@ func (p *Production) InsertNotification(notification *SyncNotifyInvocation, now 
 // insertLocked appends a record and starts the release timer if the buffer
 // was empty. The lock must already be held.
 func (p *Production) insertLocked(entry TransferBufferEntry, now time.Time) bool {
-	// §3.1.9.1.4: the timer starts when a record enters an empty buffer, so
+	// Clause 3.1.9.1.4: the timer starts when a record enters an empty buffer, so
 	// it measures how long the oldest record has waited rather than the
 	// newest.
 	if len(p.buffer) == 0 && p.config.LatencyLimit > 0 {
@@ -311,7 +311,7 @@ func (p *Production) dueLocked(now time.Time) bool {
 	return p.expiredLocked(now)
 }
 
-// Expired reports whether the release timer has run out (§3.1.9.1.5).
+// Expired reports whether the release timer has run out (clause 3.1.9.1.5).
 //
 // It is false when no timer is running, which is the case for an empty buffer
 // and for a configuration with no latency limit.
@@ -345,11 +345,11 @@ func (p *Production) Deadline() (time.Time, bool) {
 
 // Release takes the buffer's contents to hand to the communications service.
 //
-// It returns the records in insertion order (§3.1.9.1.8) and clears the
+// It returns the records in insertion order (clause 3.1.9.1.8) and clears the
 // buffer, stopping the release timer. An empty buffer yields nil, which is
 // not an error: a caller may release on a schedule and find nothing waiting.
 //
-// The temporary size increment of §3.1.9.1.10 is given back here, since the
+// The temporary size increment of clause 3.1.9.1.10 is given back here, since the
 // clause ties it to the buffer being passed to the communications service.
 func (p *Production) Release() RAFTransferBuffer {
 	p.mu.Lock()
@@ -366,7 +366,7 @@ func (p *Production) releaseLocked() RAFTransferBuffer {
 	p.buffer = nil
 	p.timerRunning = false
 
-	// §3.1.9.1.10: the increment lasts until the contents are passed on.
+	// Clause 3.1.9.1.10: the increment lasts until the contents are passed on.
 	p.extraCapacity = 0
 	p.released++
 
@@ -374,11 +374,11 @@ func (p *Production) releaseLocked() RAFTransferBuffer {
 }
 
 // Backpressure handles the communications service refusing a released buffer
-// (§3.1.9.1.9).
+// (clause 3.1.9.1.9).
 //
 // The whole buffer is discarded rather than the one record that would not
 // fit, a 'data discarded due to excessive backlog' notification is inserted,
-// and the release timer is restarted. Per §3.1.9.1.10 the buffer's size is
+// and the release timer is restarted. Per clause 3.1.9.1.10 the buffer's size is
 // incremented by one while that notification waits, so a channel configured
 // with a buffer size of one still carries some telemetry rather than nothing
 // but notifications.
@@ -408,7 +408,7 @@ func (p *Production) Backpressure(now time.Time) bool {
 }
 
 // Stop builds the buffer for immediate delivery on an accepted STOP
-// invocation (§3.1.9.1.11).
+// invocation (clause 3.1.9.1.11).
 //
 // The clause requires the provider to build and pass the buffer at once
 // rather than waiting for the timer, so a user that stops a service gets what
@@ -419,7 +419,7 @@ func (p *Production) Stop() RAFTransferBuffer {
 	return p.releaseLocked()
 }
 
-// Abort clears the transfer buffer without delivering it (§3.1.9.1.12).
+// Abort clears the transfer buffer without delivering it (clause 3.1.9.1.12).
 //
 // An aborted association has nowhere to deliver to, so the contents go rather
 // than waiting for a connection that is not coming back. The counters are

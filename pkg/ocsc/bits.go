@@ -8,7 +8,7 @@ package ocsc
 // conditioning chain is bit-addressable, and these helpers carry it.
 //
 // A BitString stores bits most significant first within each octet, matching
-// the transmission order of §1.6.
+// the transmission order of clause 1.6.
 
 // BitString is a run of binary digits with a length that need not be a
 // multiple of eight.

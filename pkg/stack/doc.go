@@ -58,12 +58,12 @@
 // conversation: FOP-1 on the ground will not send past its sliding window
 // until a CLCW comes back on the telemetry link saying what the spacecraft
 // accepted. So a Commander sends packets and accepts CLCWs, while an Onboard
-// accepts frames and produces them — asymmetric in a way the two downlink
+// accepts frames and produces them, asymmetric in a way the two downlink
 // ends are not. See uplink.go for why that shapes the API.
 //
 // Reed-Solomon is deliberately absent. CCSDS 131.0 puts the codeblock between
 // the frame and the sync marker, and a caller who wants it can run
-// pkg/tmsc over the encoded frame before handing the octets on — but the
+// pkg/tmsc over the encoded frame before handing the octets on, but the
 // interleaving depth and the shortened-codeblock choices are real decisions
 // that a composer guessing at them would get wrong.
 package stack

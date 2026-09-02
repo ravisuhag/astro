@@ -95,7 +95,7 @@ func toUSDLFrameJSON(f *usdl.TransferFrame) usdlFrameJSON {
 
 // usdlFECSize maps the decode flags to the managed FECF size. The USLP
 // FECF, when present, is always the 16-bit CRC (CCSDS 732.1-B-3
-// §4.1.6.2.2).
+// Clause 4.1.6.2.2).
 func usdlFECSize(noFECF bool) int {
 	if noFECF {
 		return 0

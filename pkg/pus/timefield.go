@@ -9,7 +9,7 @@ import (
 // Absolute and relative time fields.
 //
 // The TM secondary header carries an absolute time, and so do several message
-// bodies — a scheduled activity's release time, a time window's tags. They all
+// bodies, a scheduled activity's release time, a time window's tags. They all
 // use the same field, so the codec lives here rather than on the header.
 //
 // Relative time is a different field type with its own PTC and its own PFC
@@ -97,7 +97,7 @@ func decodeAbsoluteTime(p MissionProfile, data []byte) (time.Time, []byte, int, 
 // and fractions of a second (clause 7.3.11).
 //
 // Clause 7.3.11b's note says "a negative time offset is expressed as the
-// '2's complement' of the corresponding positive time offset" — of the whole
+// '2's complement' of the corresponding positive time offset", of the whole
 // coarse-and-fine field, not of the coarse part alone. So the field is one
 // two's-complement integer, and that is what Ticks holds. Table 7-11's PFC 3
 // to 18 fix the split: coarse octets are (PFC+1)/4 and fine octets are

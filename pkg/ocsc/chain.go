@@ -1,12 +1,12 @@
 package ocsc
 
-// The conditioning chain, per CCSDS 142.0-B-1 §3.3 through §3.7, and the
-// receive-side frame recovery of §3.14 and §3.15.
+// The conditioning chain, per CCSDS 142.0-B-1 clause 3.3 through clause 3.7, and the
+// receive-side frame recovery of clause 3.14 and clause 3.15.
 //
 // These functions run the whole deterministic front half in one call, which is
 // how a ground pipeline actually uses it.
 
-// AttachTermination appends the two zero digits of §3.7, producing an SCPPM
+// AttachTermination appends the two zero digits of clause 3.7, producing an SCPPM
 // encoder input block of k-hat digits.
 func AttachTermination(block *BitString) *BitString {
 	out := NewBitString(0)
@@ -33,12 +33,12 @@ func StripTermination(block *BitString) (*BitString, error) {
 // Condition runs the full send-side chain over a run of transfer frames,
 // returning SCPPM encoder input blocks.
 //
-// Each frame gets a sync marker (§3.3), the marked frames are sliced into
-// k-digit blocks with zero fill (§3.4), each block is randomized (§3.5), gets
-// a CRC (§3.6), and gets two termination digits (§3.7).
+// Each frame gets a sync marker (clause 3.3), the marked frames are sliced into
+// k-digit blocks with zero fill (clause 3.4), each block is randomized (clause 3.5), gets
+// a CRC (clause 3.6), and gets two termination digits (clause 3.7).
 //
 // Condition is a batch call: it treats its input as a complete transmission,
-// so the call itself is the transmission closure of §3.4.2.1.1 and the final
+// so the call itself is the transmission closure of clause 3.4.2.1.1 and the final
 // block is zero-filled. Two Condition calls are two transmissions, not one.
 // To condition one transmission across several calls, carrying partial blocks
 // between them, use a Conditioner.
@@ -67,12 +67,12 @@ type RecoveredFrame struct {
 	// Data is the transfer frame.
 	Data []byte
 
-	// Valid is the Quality Indicator of §3.14.2: true when every block
+	// Valid is the Quality Indicator of clause 3.14.2: true when every block
 	// carrying any of this frame's bits verified its CRC, false when the
 	// frame was recovered from one or more bad blocks.
 	Valid bool
 
-	// Gap is the Sequence Indicator of §3.15: false ('zero') when this frame
+	// Gap is the Sequence Indicator of clause 3.15: false ('zero') when this frame
 	// is the direct successor of the previous one, true ('one') when a gap
 	// was detected before it.
 	Gap bool
@@ -81,8 +81,8 @@ type RecoveredFrame struct {
 // Recover reverses Condition: it takes SCPPM encoder input blocks, checks each
 // CRC, and returns the transfer frames.
 //
-// frameLength is the transfer frame size in octets, at most 65536 (§5.2). It
-// is needed because the slicer's zero fill (§3.4.2.1.1) is indistinguishable
+// frameLength is the transfer frame size in octets, at most 65536 (clause 5.2). It
+// is needed because the slicer's zero fill (clause 3.4.2.1.1) is indistinguishable
 // from frame data once it is in the stream: nothing in the conditioning chain
 // records where the real data stopped. Frame length is a managed parameter
 // fixed for a mission phase, so the receiver always knows it. Pass zero to
@@ -91,9 +91,9 @@ type RecoveredFrame struct {
 //
 // A block whose CRC fails is reported through badBlocks rather than silently
 // dropped, and every frame recovered from a failing block comes back with
-// Valid false, because §3.14.2 marks frames recovered from an incorrectly
+// Valid false, because clause 3.14.2 marks frames recovered from an incorrectly
 // decoded codeword as invalid rather than discarding them outright. Each
-// frame's Gap field is the Sequence Indicator of §3.15.
+// frame's Gap field is the Sequence Indicator of clause 3.15.
 func Recover(blocks []*BitString, rate CodeRate, frameLength int) (frames []RecoveredFrame, badBlocks []int, err error) {
 	if !rate.Valid() {
 		return nil, nil, ErrInvalidCodeRate
@@ -133,8 +133,8 @@ func Recover(blocks []*BitString, rate CodeRate, frameLength int) (frames []Reco
 		frame := make([]byte, octets)
 		copy(frame, body.Bytes()[:octets])
 
-		// §3.14.2: the frame is invalid if any of the blocks carrying its
-		// bits — sync marker included — failed verification. Block i holds
+		// Clause 3.14.2: the frame is invalid if any of the blocks carrying its
+		// bits (sync marker included) failed verification. Block i holds
 		// stream bits [i*k, (i+1)*k).
 		valid := true
 		for _, b := range badBlocks {
@@ -149,7 +149,7 @@ func Recover(blocks []*BitString, rate CodeRate, frameLength int) (frames []Reco
 }
 
 // frameSpan is one located frame: the bit range of its SMTF in the stream,
-// marker included, and whether a gap preceded it (§3.15).
+// marker included, and whether a gap preceded it (clause 3.15).
 type frameSpan struct {
 	start int // bit offset of the sync marker
 	end   int // one past the last frame bit
@@ -159,13 +159,13 @@ type frameSpan struct {
 // splitFramesAtASM locates transfer frames in a conditioned bit stream.
 //
 // With frameLength set, each frame is exactly that many octets after its
-// marker, which is what discards the slicer's trailing zero fill — and it is
-// what lets the receiver stay locked (§3.14.1): after a frame, the next
+// marker, which is what discards the slicer's trailing zero fill, and it is
+// what lets the receiver stay locked (clause 3.14.1): after a frame, the next
 // marker is expected immediately after it, checked at that one offset only.
 // This is what keeps frame data that happens to contain the marker pattern
 // from producing spurious frames. Only when the expected marker is missing
 // does the search fall back to hunting every bit offset, and a frame found
-// that way carries a Sequence Indicator of one (§3.15).
+// that way carries a Sequence Indicator of one (clause 3.15).
 //
 // With frameLength zero there is nothing to lock to: every marker is found by
 // hunting, a frame runs to the next marker or the end of the stream, and the

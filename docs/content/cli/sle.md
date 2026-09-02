@@ -1,7 +1,7 @@
 ---
 title: astro sle
 short: SLE
-description: Space Link Extension — decode transfer service PDUs.
+description: Space Link Extension, decode transfer service PDUs.
 order: 220
 ---
 
@@ -15,7 +15,7 @@ Decode SLE transfer service PDUs (CCSDS [911.1-B-5](https://public.ccsds.org/Pub
 
 ## Why --service is required
 
-An SLE PDU's wire tag means different things in different services. The same number is one operation in RAF and another in FCLTU, and nothing in the octets says which service they came from — the association does, and that is out of band.
+An SLE PDU's wire tag means different things in different services. The same number is one operation in RAF and another in FCLTU, and nothing in the octets says which service they came from. The association does, and that is out of band.
 
 So `--service` is required, and it is not a default worth guessing: guessing wrong names the wrong operation and reads the content against the wrong decoder.
 
@@ -52,9 +52,9 @@ astro sle decode --service fcltu --input hex < pdu.hex
 
 The same context tag names a different parameter in each service. Tag `[4]` is `requestedFrameQuality` in RAF, `reportingCycle` in RCF, `permittedControlWordTypeSet` in ROCF and `deliveryMode` in FCLTU. And `minReportingCycle`, added in a later issue, took the next free tag in each: `[7]` in RAF and RCF, `[13]` in ROCF, `[19]` in FCLTU.
 
-So decoding against the wrong service would report the wrong parameter with a plausible value. The schema constrains each alternative's `parameterName` to match its tag, and this checks that it does — which is what catches the mistake instead of passing it on.
+So decoding against the wrong service would report the wrong parameter with a plausible value. The schema constrains each alternative's `parameterName` to match its tag, and this checks that it does, which is what catches the mistake instead of passing it on.
 
-A value the schema makes structured — a set of GVCIDs, the online/offline choice of a latency limit — comes back as raw BER rather than a guessed-at Go type.
+A value the schema makes structured (a set of GVCIDs, the online/offline choice of a latency limit) comes back as raw BER rather than a guessed-at Go type.
 
 ## Limits
 
@@ -62,4 +62,4 @@ The provider runs production and the transfer buffer, and serves several service
 
 ---
 
-**See also** — [the protocol page](/protocols/ground/sle) for the standard and the Go API, and the [conformance statement](/conformance/sle) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/ground/sle) for the standard and the Go API, and the [conformance statement](/conformance/sle) for what is and is not implemented.

@@ -9,8 +9,8 @@ import (
 // Multiplexer handles frame scheduling from multiple channels
 // using weighted round-robin. F is the frame type.
 //
-// A Multiplexer is safe for concurrent use. Its own scheduling state — the
-// cursor and the remaining weight — is guarded here; the channels it draws
+// A Multiplexer is safe for concurrent use. Its own scheduling state (the
+// cursor and the remaining weight) is guarded here; the channels it draws
 // from carry their own locks.
 type Multiplexer[F any] struct {
 	mu              sync.Mutex

@@ -9,8 +9,8 @@ import "fmt"
 // protocol negotiates. What it changes is how the provider behaves when data
 // arrives faster than the user takes it.
 //
-// The three return modes, from CCSDS 911.1-B-5 §1.2.2 and the state table
-// rows 10 to 14 of §4.2.2:
+// The three return modes, from CCSDS 911.1-B-5 clause 1.2.2 and the state table
+// rows 10 to 14 of clause 4.2.2:
 //
 //	timely online     The provider may throw data away to stay current. When
 //	                  its buffer fills and the connection is congested, it
@@ -107,7 +107,7 @@ func (d DeliveryMode) IsOnline() bool {
 }
 
 // AllowsDiscard reports whether the provider may throw data away to keep up.
-// Only timely online may: state table row 14 of CCSDS 911.1-B-5 §4.2.2 is the
+// Only timely online may: state table row 14 of CCSDS 911.1-B-5 clause 4.2.2 is the
 // only cell that sends a 'data discarded' sync notification.
 func (d DeliveryMode) AllowsDiscard() bool {
 	return d == DeliveryReturnTimelyOnline

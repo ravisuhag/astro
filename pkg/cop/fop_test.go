@@ -248,7 +248,7 @@ func TestFOP_T1Expiry_RetransmitThenAlertT1(t *testing.T) {
 		t.Fatal("T1 must restart after a timer-driven retransmission")
 	}
 
-	// Second expiry: the limit is reached, so E17 gives Alert[T1] — not
+	// Second expiry: the limit is reached, so E17 gives Alert[T1], not
 	// Alert[Limit], which 5.1.9.1 reserves for no timer case at all.
 	err := fop.Tick(5)
 	if !errors.Is(err, cop.ErrFOPTimeout) {

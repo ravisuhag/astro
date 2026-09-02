@@ -1,7 +1,7 @@
 ---
 title: astro ldc
 short: LDC
-description: Lossless data compression — compress, decompress, inspect.
+description: Lossless data compression, compress, decompress, inspect.
 order: 170
 ---
 
@@ -127,4 +127,4 @@ The compression identification packet of section 6 is not built here, insertion 
 
 ---
 
-**See also** — [the protocol page](/protocols/compression/ldc) for the standard and the Go API, and the [conformance statement](/conformance/ldc) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/compression/ldc) for the standard and the Go API, and the [conformance statement](/conformance/ldc) for what is and is not implemented.

@@ -13,7 +13,7 @@ import (
 //
 //	go build -ldflags "-X github.com/ravisuhag/astro/cli.version=v1.2.3 ..."
 //
-// When they are unset — a `go install` or a local build — the values are
+// When they are unset (a `go install` or a local build) the values are
 // recovered from the module's build info instead, so a binary can always say
 // where it came from.
 var (
@@ -61,7 +61,7 @@ func buildInfo() BuildInfo {
 	}
 	// Whether the working tree was dirty describes the checkout this binary
 	// was built from. It only means anything when the commit came from that
-	// checkout too — a commit passed in at link time refers to whatever the
+	// checkout too, a commit passed in at link time refers to whatever the
 	// release workflow tagged, so decorating it here would be a lie.
 	stamped := info.Commit != ""
 	dirty := false

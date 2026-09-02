@@ -4,7 +4,7 @@
 //
 // SLE is how ground systems move space link data between each other. A mission
 // control centre opens a TCP connection to a ground station and either
-// receives telemetry — frames, channel frames, operational control fields — or
+// receives telemetry (frames, channel frames, operational control fields) or
 // sends telecommand transmission units. This library already produces and
 // consumes exactly those payloads: CADUs from pkg/tmsc, CLTUs from pkg/tcsc,
 // CLCWs from pkg/cop. SLE is the wire between ground systems.
@@ -39,21 +39,21 @@
 // It emits definite lengths only, and accepts the indefinite form on decode,
 // because real providers emit it.
 //
-// Third, ISP1 credentials hash with SHA-256, per CCSDS 913.1-B-2 §3.1.2.3.
+// Third, ISP1 credentials hash with SHA-256, per CCSDS 913.1-B-2 clause 3.1.2.3.
 // SHA-1 belonged to the previous issue of the standard. A 20-octet legacy
-// digest still decodes — no other length but 20 or 32 does — but it cannot be
+// digest still decodes (no other length but 20 or 32 does) but it cannot be
 // verified, because this package does not implement the superseded scheme:
 // verification requires SHA-256, and only SHA-256 is ever generated.
 //
 // # What is here
 //
 // The transport and the handshake: TML message framing, the context and
-// heartbeat messages, BER, credentials, and BIND, UNBIND and PEER-ABORT —
+// heartbeat messages, BER, credentials, and BIND, UNBIND and PEER-ABORT,
 // including the OBJECT IDENTIFIER form of the service instance identifier
 // and the primitive [104] PEER-ABORT encoding. On top of that, the four
 // transfer services themselves: RAF, RCF, ROCF and FCLTU, each as a
 // caller-pumped user machine and a provider. On the provider side, Production
-// runs the transfer buffer and the production status of §3.1.9 and annex B,
+// runs the transfer buffer and the production status of clause 3.1.9 and annex B,
 // and Complex serves several service instances and routes an inbound BIND
 // between them. GET-PARAMETER decodes and answers cleanly, and the
 // per-service parameter sets are named: all 50 alternatives across the four

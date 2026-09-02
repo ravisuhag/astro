@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ASCII time code format types per CCSDS 301.0-B-4 §3.5.
+// ASCII time code format types per CCSDS 301.0-B-4 clause 3.5.
 const (
 	// ASCIITypeA is the calendar date-time format: YYYY-MM-DDThh:mm:ss.dddZ
 	ASCIITypeA = "A"
@@ -13,7 +13,7 @@ const (
 	ASCIITypeB = "B"
 )
 
-// ASCIITime represents a CCSDS ASCII time code per CCSDS 301.0-B-4 §3.5.
+// ASCIITime represents a CCSDS ASCII time code per CCSDS 301.0-B-4 clause 3.5.
 //
 // Type A: YYYY-MM-DDThh:mm:ss.d...dZ (calendar date-time)
 // Type B: YYYY-DDDThh:mm:ss.d...dZ   (ordinal date-time)
@@ -94,7 +94,7 @@ func (a *ASCIITime) Encode(t time.Time) (string, error) {
 
 // parseFixedDigits parses exactly len(s) decimal digits. Unlike
 // strconv.Atoi it rejects signs, spaces, and any non-digit byte, enforcing
-// the fixed-width fields of the §3.5 subsets.
+// the fixed-width fields of the clause 3.5 subsets.
 func parseFixedDigits(s string) (int, bool) {
 	if len(s) == 0 {
 		return 0, false
@@ -112,7 +112,7 @@ func parseFixedDigits(s string) (int, bool) {
 
 // Decode parses a CCSDS ASCII time string into a Go time.Time value.
 //
-// The §3.5 subsets are enforced strictly: fixed field widths
+// The clause 3.5 subsets are enforced strictly: fixed field widths
 // (Type A "YYYY-MM-DDThh:mm:ss[.d...d][Z]", Type B
 // "YYYY-DDDThh:mm:ss[.d...d][Z]"), digits only, mandatory separators, a
 // fraction of 1-9 digits when present, and value ranges checked against the
@@ -123,7 +123,7 @@ func parseFixedDigits(s string) (int, bool) {
 // Go's time.Time cannot represent second 60, the returned value is
 // normalized to 00:00:00 of the following day.
 func (a *ASCIITime) Decode(s string) (time.Time, error) {
-	// Optional Z terminator per §3.5
+	// Optional Z terminator per clause 3.5
 	if len(s) > 0 && s[len(s)-1] == 'Z' {
 		s = s[:len(s)-1]
 	}

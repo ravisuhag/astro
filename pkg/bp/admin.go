@@ -6,7 +6,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-// RecordType is the 4-bit administrative record type code of RFC 5050 §6.1.
+// RecordType is the 4-bit administrative record type code of RFC 5050 clause 6.1.
 type RecordType uint8
 
 const (
@@ -30,14 +30,14 @@ func (r RecordType) String() string {
 
 // RecordFlagFragment is the administrative record flag saying the record
 // concerns a fragment, so the fragment offset and length fields are present
-// (§6.1, figure 9).
+// (clause 6.1, figure 9).
 const RecordFlagFragment uint8 = 0x01
 
-// DTNTime is a time in the representation §6.1 defines for administrative
+// DTNTime is a time in the representation clause 6.1 defines for administrative
 // records: seconds since the start of the year 2000, and nanoseconds within
 // that second.
 //
-// CCSDS 734.2-B-1 §3.4 relaxes the precision requirement: where a spacecraft
+// CCSDS 734.2-B-1 clause 3.4 relaxes the precision requirement: where a spacecraft
 // clock cannot produce meaningful nanoseconds, the onboard precision is used
 // instead, and this does not drive a requirement on the clock.
 type DTNTime struct {
@@ -60,7 +60,7 @@ func readDTNTime(data []byte) (DTNTime, int, error) {
 	return DTNTime{Seconds: fields[0], Nanoseconds: fields[1]}, n, nil
 }
 
-// StatusFlags are the status report flags of §6.1.1, figure 11. Each bit says
+// StatusFlags are the status report flags of clause 6.1.1, figure 11. Each bit says
 // what the reporting node did with the bundle.
 type StatusFlags uint8
 
@@ -80,7 +80,7 @@ const (
 // Has reports whether every flag in want is set.
 func (f StatusFlags) Has(want StatusFlags) bool { return f&want == want }
 
-// ReasonCode explains a status report or custody signal, per §6.1.1.
+// ReasonCode explains a status report or custody signal, per clause 6.1.1.
 //
 // The list is neither exhaustive nor exclusive: other DTN specifications may
 // define more.
@@ -134,7 +134,7 @@ func (r ReasonCode) String() string {
 	}
 }
 
-// StatusReport is a bundle status report, per §6.1.1, figure 10.
+// StatusReport is a bundle status report, per clause 6.1.1, figure 10.
 //
 // A time field is present only when its matching status flag is set, which is
 // what makes the record variable-length.
@@ -276,7 +276,7 @@ func (s *StatusReport) Humanize() string {
 	return out
 }
 
-// CustodySignal is a custody signal, per §6.1.2, figure 13. It tells the
+// CustodySignal is a custody signal, per clause 6.1.2, figure 13. It tells the
 // current custodian whether the reporting node took custody.
 type CustodySignal struct {
 	// Succeeded is the high bit of the status byte: custody was accepted.
@@ -377,7 +377,7 @@ func (c *CustodySignal) Humanize() string {
 }
 
 // AdminRecord is the payload of a bundle whose administrative-record flag is
-// set, per §6.1: a four-bit type code, four bits of flags, then type-specific
+// set, per clause 6.1: a four-bit type code, four bits of flags, then type-specific
 // content.
 //
 // Exactly one of StatusReport and CustodySignal is set.

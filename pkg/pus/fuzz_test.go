@@ -191,7 +191,7 @@ func FuzzDecodeScheduleMessages(f *testing.F) {
 		// own TestCUCFineTimeTruncates says why: rounding to nearest can carry
 		// the fine field past its width. Truncating twice loses a tick
 		// whenever a tick is not a whole number of nanoseconds, which is
-		// whenever 2^(8*fine) does not divide 10^9 — and since 10^9 is 2^9
+		// whenever 2^(8*fine) does not divide 10^9, and since 10^9 is 2^9
 		// times 5^9, that means whenever fine is 2 or 3. So a CUC field of two
 		// or three fine octets can come back one tick lower than it went out,
 		// and byte equality is asserted only where it cannot.

@@ -1,6 +1,6 @@
 package pxsc
 
-// Convolutional encoding, per CCSDS 211.2-B-3 §3.4.3.
+// Convolutional encoding, per CCSDS 211.2-B-3 clause 3.4.3.
 //
 // Proximity-1 offers the rate 1/2, constraint-length 7 convolutional code that
 // CCSDS 131.0-B defines. Each input bit produces two output symbols, so the
@@ -8,9 +8,9 @@ package pxsc
 // the link introduced.
 //
 // The matching decoder is in viterbi.go. It takes hard decisions by default
-// and soft ones through DecodeSoft, which is what §3.4.3.3 recommends.
+// and soft ones through DecodeSoft, which is what clause 3.4.3.3 recommends.
 
-// Convolutional code parameters, per CCSDS 131.0-B as referenced by §3.4.3.1.
+// Convolutional code parameters, per CCSDS 131.0-B as referenced by clause 3.4.3.1.
 const (
 	// ConstraintLength is the number of input bits each output symbol depends
 	// on, including the current one.
@@ -26,7 +26,7 @@ const (
 	// G1 is the first connection vector, 1111001 in binary.
 	G1 uint8 = 0o171
 	// G2 is the second connection vector, 1011011 in binary. Its output is
-	// inverted, per §3.4.3.1 note 1.
+	// inverted, per clause 3.4.3.1 note 1.
 	G2 uint8 = 0o133
 )
 
@@ -47,7 +47,7 @@ const (
 // ConvolutionalEncoder holds the shift register between calls, so a stream can
 // be encoded in pieces.
 //
-// The register is not reset between Encode calls. That is deliberate: §3.4.3.2
+// The register is not reset between Encode calls. That is deliberate: Clause 3.4.3.2
 // encodes everything transmitted as one continuous stream, PLTUs and idle data
 // alike, so the encoder state carries across unit boundaries.
 type ConvolutionalEncoder struct {
@@ -75,7 +75,7 @@ func parity(v uint8) uint8 {
 
 // EncodeBit encodes one input bit and returns the two output symbols.
 //
-// §3.4.3.1 note 1: the output on the G2 path is inverted.
+// Clause 3.4.3.1 note 1: the output on the G2 path is inverted.
 func (e *ConvolutionalEncoder) EncodeBit(bit uint8) (c1, c2 uint8) {
 	// Shift the new bit into the register, keeping ConstraintLength bits.
 	reg := e.state<<1 | bit&1
@@ -90,7 +90,7 @@ func (e *ConvolutionalEncoder) EncodeBit(bit uint8) (c1, c2 uint8) {
 // Encode convolutionally encodes data, returning twice as many octets.
 //
 // Bits are taken most significant first, matching the bit numbering
-// convention of §1.6.2. Each input bit yields two symbols, packed the same way.
+// convention of clause 1.6.2. Each input bit yields two symbols, packed the same way.
 func (e *ConvolutionalEncoder) Encode(data []byte) []byte {
 	if len(data) == 0 {
 		return nil

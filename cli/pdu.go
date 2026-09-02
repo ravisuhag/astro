@@ -110,7 +110,7 @@ func cfdpCmd() *cobra.Command {
 		"decode [file]",
 		"Decode a CFDP PDU",
 		"Decode a CFDP Protocol Data Unit: the fixed header, then the file directive or file data it carries.\n\n"+
-			"The CRC is verified when the header says one is present, and a mismatch is an error — §4.1.2 requires the receiver to discard such a PDU.",
+			"The CRC is verified when the header says one is present, and a mismatch is an error, clause 4.1.2 requires the receiver to discard such a PDU.",
 		`  # Decode a PDU
   astro cfdp decode --input hex < pdu.hex
 
@@ -244,8 +244,8 @@ func describeUserMessages(options []cfdp.TLV) string {
 }
 
 // describeUserMessageContent renders one message's body where the content is
-// modeled, and says nothing where it is not — an empty string rather than a
-// guess, so the caller prints just the type.
+// modeled. Where the content is not modeled it says nothing: an empty
+// string rather than a guess, so the caller prints just the type.
 func describeUserMessageContent(message *cfdp.UserMessage) string {
 	switch message.Type {
 	case cfdp.MsgOriginatingTransactionID:
@@ -397,7 +397,7 @@ func sleCmd() *cobra.Command {
 		Use:   "sle <command>",
 		Short: "Space Link Extension operations",
 		Long: "Decode SLE transfer service PDUs (CCSDS 911.1, 911.2, 911.5 and 912.1).\n\n" +
-			"An SLE PDU's wire tag means different things in different services — the same number is one operation in RAF and another in FCLTU — so --service is required and not guessable from the octets.",
+			"An SLE PDU's wire tag means different things in different services (the same number is one operation in RAF and another in FCLTU) so --service is required and not guessable from the octets.",
 		Annotations: map[string]string{
 			"group": "protocol",
 		},
@@ -418,7 +418,7 @@ func sleDecodeCmd() *cobra.Command {
 		Use:   "decode [file]",
 		Short: "Decode an SLE PDU envelope",
 		Long: "Decode the outer envelope of an SLE PDU: which service and operation it is, and the encoded content.\n\n" +
-			"The content is reported as octets. Decoding it further needs the operation's own decoder, and which one applies depends on the service, which is why that is a flag.",
+			"A GET-PARAMETER return is decoded further: the parameter it carries is named, and where the schema makes its value a single integer it is read. Everything else is reported as octets, because decoding it needs the operation's own decoder, and which one applies depends on the service, which is why that is a flag.",
 		Example: `  # Decode a RAF PDU
   astro sle decode --service raf --input hex < pdu.hex
 
@@ -492,8 +492,8 @@ func sleDecodeCmd() *cobra.Command {
 
 // describeSLEParameter renders the parameter a GET-PARAMETER return carries.
 //
-// A negative return has no parameter — the provider answering that it does
-// not have the one asked for, which the specs define — and a return this
+// A negative return has no parameter (the provider answering that it does
+// not have the one asked for, which the specs define) and a return this
 // cannot read is left to the raw-octet path rather than reported as a
 // failure, because the envelope decoded fine and that is what was asked for.
 func describeSLEParameter(content []byte, service sle.ServiceKind) (string, bool) {

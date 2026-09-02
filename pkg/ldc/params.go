@@ -5,7 +5,7 @@
 // is simple: decorrelate, then entropy code.
 //
 //	samples ──► preprocessor ──► adaptive entropy coder ──► coded data sets
-//	              §4              §3                         §5
+//	              Clause 4              clause 3                         clause 5
 //
 // The preprocessor subtracts a prediction from each sample and folds the
 // signed residual onto the non-negative integers. The entropy coder then takes
@@ -24,8 +24,8 @@
 //
 // CompressFile writes the file format of section 7, whose header carries the
 // parameters and the sample count. Compress and Decompress are the barer pair
-// for callers who already share a configuration — a mission putting coded data
-// sets straight into space packets, say, where §5.3 leaves the framing to the
+// for callers who already share a configuration. A mission putting coded data
+// sets straight into space packets, say, where clause 5.3 leaves the framing to the
 // packetizer.
 //
 // # Choosing parameters
@@ -47,7 +47,7 @@
 // and the restricted option set for four-bit and narrower samples.
 //
 // Not here: the compression identification packet of section 6, insertion into
-// space packets (§5.3, which the caller does), and the application-specific
+// space packets (clause 5.3, which the caller does), and the application-specific
 // predictor and mapper the standard names but does not define. See
 // docs/content/conformance/ldc.md.
 package ldc
@@ -57,18 +57,18 @@ import "fmt"
 // Params holds the compression parameters CCSDS 121.0-B-3 leaves to the user.
 //
 // None of these travel with a coded data set, so a decoder must be told them.
-// That is why the standard defines a file header (§7.2.2) and an optional
-// compression identification packet (§6): both exist to carry this struct's
+// That is why the standard defines a file header (clause 7.2.2) and an optional
+// compression identification packet (clause 6): both exist to carry this struct's
 // worth of information alongside the data.
 type Params struct {
 	// BlockSize is J, the number of samples the coder treats as one block.
-	// §3.1.6 allows 8, 16, 32 and 64.
+	// Clause 3.1.6 allows 8, 16, 32 and 64.
 	BlockSize int
 
-	// Resolution is n, the number of bits per input sample, 1 to 32 (§3.1.6).
+	// Resolution is n, the number of bits per input sample, 1 to 32 (clause 3.1.6).
 	Resolution uint
 
-	// Signed says whether samples are two's complement. §4.4 gives the sample
+	// Signed says whether samples are two's complement. Clause 4.4 gives the sample
 	// range either as [-2^(n-1), 2^(n-1)-1] or [0, 2^n-1], and the mapper
 	// needs to know which.
 	//
@@ -80,13 +80,13 @@ type Params struct {
 	Predictor Predictor
 
 	// ReferenceInterval is r, the number of blocks between reference samples,
-	// 1 to 4096 (§4.3).
+	// 1 to 4096 (clause 4.3).
 	//
-	// It matters even without reference samples: §3.5.2 uses it to bound the
+	// It matters even without reference samples: Clause 3.5.2 uses it to bound the
 	// segments the zero-block option counts within.
 	ReferenceInterval int
 
-	// Restricted selects the restricted set of code options. §5.2.1.1 allows
+	// Restricted selects the restricted set of code options. Clause 5.2.1.1 allows
 	// it only when the resolution is 4 bits or fewer, where it buys shorter
 	// option identifiers at the cost of dropping most of the split-sample
 	// options.
@@ -149,7 +149,7 @@ func (p Params) Validate() error {
 // the second-extension option.
 func (p Params) idWidth() int {
 	if p.Restricted {
-		// §5.2.1.1, the two restricted columns.
+		// Clause 5.2.1.1, the two restricted columns.
 		if p.Resolution <= 2 {
 			return 1
 		}
@@ -171,7 +171,7 @@ func (p Params) idWidth() int {
 // The identifier for option k is k+1, and all-ones is taken by no
 // compression, so the largest usable value is 2^w - 2, meaning k goes up to
 // 2^w - 3. That yields 5, 13 and 29 for the three basic columns and 1 for the
-// restricted n=3,4 column — exactly the table. At w=1 there is no room for
+// restricted n=3,4 column, exactly the table. At w=1 there is no room for
 // any k, nor for the FS option, which is again what the table shows.
 func (p Params) maxK() int {
 	return (1 << p.idWidth()) - 3

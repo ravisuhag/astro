@@ -1,7 +1,7 @@
 ---
 title: TM Sync and Channel Coding
 short: TMSC
-description: TM Synchronization and Channel Coding (CCSDS 131.0-B-5) — sync markers, randomization, and Reed-Solomon on the downlink.
+description: TM Synchronization and Channel Coding (CCSDS 131.0-B-5), sync markers, randomization, and Reed-Solomon on the downlink.
 order: 30
 ---
 
@@ -15,7 +15,7 @@ Everything here is undone at the other end. The data link layer never knows it h
 
 **Implemented.** The Attached Sync Marker and CADU wrap and unwrap, the 255-bit pseudo-randomizer, and Reed-Solomon RS(255,223) and RS(255,239) with interleaving, dual-basis conversion, and shortened codeblocks.
 
-**Not here.** The long 131,071-bit randomizer added in Issue 5 (clause 10.4.1) for high-rate links. Also no convolutional or LDPC/Turbo codes — the RS codes are what `pkg/tmsc` covers.
+**Not here.** The long 131,071-bit randomizer added in Issue 5 (clause 10.4.1) for high-rate links. Also no convolutional or LDPC/Turbo codes. The RS codes are what `pkg/tmsc` covers.
 
 **Also handles AOS.** [AOS frames](/protocols/data-link/aos) use this same sublayer. So do [USLP](/protocols/data-link/usdl) frames on a downlink.
 
@@ -26,7 +26,7 @@ There are no header fields here. The sublayer wraps rather than annotates.
 | Piece | Size | Go | Notes |
 |---|---|---|---|
 | Attached Sync Marker | 4 B | `DefaultASM()` | `0x1ACFFC1D`. Never randomized. |
-| Transfer Frame | fixed | — | Whatever the data link handed down |
+| Transfer Frame | fixed | - | Whatever the data link handed down |
 | Reed-Solomon parity | 32 or 16 B per codeword | `RSCodec` | RS(255,223) or RS(255,239) |
 
 A CADU is the ASM plus the coded, randomized frame. `WrapCADU(frame, asm, randomize)` builds one; `UnwrapCADU` takes it apart.
@@ -36,13 +36,13 @@ A CADU is the ASM plus the coded, randomized frame. `WrapCADU(frame, asm, random
 | RS(255,223) | `NewRS255_223()` | 32 symbols | up to 16 symbol errors |
 | RS(255,239) | `NewRS255_239()` | 16 symbols | up to 8 symbol errors |
 
-Interleave depths: 1, 2, 3, 4, 5, and 8. Depth 5 with RS(255,223) is common for deep space — 1275 bytes per interleaved block.
+Interleave depths: 1, 2, 3, 4, 5, and 8. Depth 5 with RS(255,223) is common for deep space, 1275 bytes per interleaved block.
 
 ## Gotchas
 
 **The ASM is never randomized.** Only the frame content is XORed. Randomizing the marker would defeat the point of having one, since the receiver has to find it before it can de-randomize anything.
 
-**Astro implements the 255-bit randomizer, not the long one.** Clause 10.4.2, the legacy sequence: LFSR polynomial `x^8 + x^7 + x^5 + x^3 + 1`, seeded all ones, period 255 bits. Issue 5 added a 131,071-bit sequence (`x^17 + x^14 + 1`, clause 10.4.1) to avoid spectral spikes at high data rates. Which randomizer a channel uses is a managed parameter — check yours matches.
+**Astro implements the 255-bit randomizer, not the long one.** Clause 10.4.2, the legacy sequence: LFSR polynomial `x^8 + x^7 + x^5 + x^3 + 1`, seeded all ones, period 255 bits. Issue 5 added a 131,071-bit sequence (`x^17 + x^14 + 1`, clause 10.4.1) to avoid spectral spikes at high data rates. Which randomizer a channel uses is a managed parameter, check yours matches.
 
 **`Randomize` is its own inverse.** XOR twice with the same sequence gives you back what you started with, so the same function serves transmit and receive. There is no `Derandomize`.
 
@@ -98,7 +98,7 @@ The ASM is a known 4-byte bit pattern prepended to each Transfer Frame. The rece
 asm := tmsc.DefaultASM() // Returns []byte{0x1A, 0xCF, 0xFC, 0x1D}
 ```
 
-The ASM was carefully chosen for its autocorrelation properties — it can be detected reliably even in the presence of noise. A fresh copy is returned each call to prevent accidental mutation.
+The ASM was carefully chosen for its autocorrelation properties. It can be detected reliably even in the presence of noise. A fresh copy is returned each call to prevent accidental mutation.
 
 ## CADU Wrapping and Unwrapping
 
@@ -147,7 +147,7 @@ CCSDS pseudo-randomization ensures good signal properties by preventing long run
 // Randomize data (XOR with PN sequence)
 randomized := tmsc.Randomize(data)
 
-// De-randomize (same operation — XOR is self-inverse)
+// De-randomize (same operation, XOR is self-inverse)
 original := tmsc.Randomize(randomized)
 ```
 
@@ -219,8 +219,8 @@ On decode, the reverse is performed. This means a burst error affecting consecut
 
 ```go
 rs := tmsc.NewRS255_223()
-rs.NRoots()  // 32 — number of parity symbols
-rs.DataLen() // 223 — data bytes per codeword
+rs.NRoots()  // 32 (number of parity symbols
+rs.DataLen() // 223) data bytes per codeword
 ```
 
 ## Full Pipeline Example
@@ -241,7 +241,7 @@ encoded, _ := frame.Encode()
 rs := tmsc.NewRS255_223()
 // Pad encoded frame to RS data length if needed, or use interleaving
 
-// 3. Wrap as CADU — randomize and prepend ASM
+// 3. Wrap as CADU, randomize and prepend ASM
 cadu := tmsc.WrapCADU(encoded, nil, true)
 
 // 4. Transmit CADU over the physical link
@@ -254,7 +254,7 @@ transmit(cadu)
 // 1. Receive CADU from physical link
 cadu := receive()
 
-// 2. Unwrap CADU — strip ASM and de-randomize
+// 2. Unwrap CADU, strip ASM and de-randomize
 frameData, err := tmsc.UnwrapCADU(cadu, nil, true)
 if err != nil { /* handle sync errors */ }
 
@@ -281,7 +281,7 @@ All errors are exported package-level variables, suitable for use with `errors.I
 
 Commentary, not sourced from the standard.
 
-**Why `0x1ACFFC1D`?** It was picked for its autocorrelation. Slide the pattern against itself at any offset other than zero and it matches poorly, so a correlator finds the true frame boundary and not a near-miss — even when a good fraction of the bits arrive wrong.
+**Why `0x1ACFFC1D`?** It was picked for its autocorrelation. Slide the pattern against itself at any offset other than zero and it matches poorly, so a correlator finds the true frame boundary and not a near-miss, even when a good fraction of the bits arrive wrong.
 
 **Why randomize at all?** A receiver recovers its clock from bit transitions. A long run of identical bits gives it nothing, and it drifts. Scrambling with a known sequence guarantees transitions without changing what is being sent.
 
@@ -291,6 +291,6 @@ Commentary, not sourced from the standard.
 
 ## Reference
 
-- [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) — TM Synchronization and Channel Coding (Blue Book)
-- [CCSDS 130.1-G-3](https://public.ccsds.org/Pubs/130x1g3.pdf) — TM Synchronization and Channel Coding Summary (Green Book)
+- [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf), TM Synchronization and Channel Coding (Blue Book)
+- [CCSDS 130.1-G-3](https://public.ccsds.org/Pubs/130x1g3.pdf), TM Synchronization and Channel Coding Summary (Green Book)
 - [CLI](/cli/cadu) | [Conformance](/conformance/tmsc) | [The stack](/docs/start/concepts)

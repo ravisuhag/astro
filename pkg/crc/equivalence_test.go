@@ -16,11 +16,11 @@ import (
 // reference and the table to survive.
 //
 // This is the only thing standing between a fast checksum and the failure
-// CONTRIBUTING describes: an implementation that is self-consistent and
-// wrong. A wrong table would round-trip perfectly and be rejected by every
+// the contributing guide describes: an implementation that is self-consistent
+// and wrong. A wrong table would round-trip perfectly and be rejected by every
 // conforming receiver.
 
-// bitwiseCRC16 is CCSDS 133.0-B-2 §4.1.4 written out: polynomial 0x1021,
+// bitwiseCRC16 is CCSDS 133.0-B-2 clause 4.1.4 written out: polynomial 0x1021,
 // register preset to all ones, no reflection, no final XOR.
 func bitwiseCRC16(data []byte) uint16 {
 	crc := uint16(0xFFFF)

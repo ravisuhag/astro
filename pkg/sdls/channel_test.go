@@ -7,7 +7,7 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdls"
 )
 
-// TestProcessSecurityForChannelBinding checks the §4.2.4.3 SA verification:
+// TestProcessSecurityForChannelBinding checks the clause 4.2.4.3 SA verification:
 // an SA bound to a channel set accepts frames from those channels only.
 func TestProcessSecurityForChannelBinding(t *testing.T) {
 	bound := sdls.ChannelID{TFVN: 0, SCID: 0x2A, VCID: 3, MAPID: sdls.NoMAP}

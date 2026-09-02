@@ -57,7 +57,7 @@ func TestRFC4493Vectors(t *testing.T) {
 
 // TestNISTAES256Vectors transcribes the CMAC-AES256 examples of the NIST
 // SP 800-38B example set. These are the ones that matter here: CCSDS
-// 355.0-B-2 §E2a requires a 256-bit key.
+// 355.0-B-2 clause E2a requires a 256-bit key.
 func TestNISTAES256Vectors(t *testing.T) {
 	key := unhex(t, "603DEB10 15CA71BE 2B73AEF0 857D7781"+
 		"1F352C07 3B6108D7 2D9810A3 0914DFF4")
@@ -98,7 +98,7 @@ func TestNISTAES256Vectors(t *testing.T) {
 // They are not exported, so they are checked through the tags they produce:
 // an empty message uses K2, and a single whole block uses K1. Both vectors
 // above already cover that, so this test instead pins the property the
-// doubling must have — that K2 is K1 doubled — by way of a key whose L has the
+// doubling must have (that K2 is K1 doubled) by way of a key whose L has the
 // top bit set, exercising the Rb fold.
 func TestSubkeyDerivationExercisesTheReduction(t *testing.T) {
 	// AES-128(0^128) under this key has its top bit set, so deriving K1 must
@@ -119,7 +119,7 @@ func TestSubkeyDerivationExercisesTheReduction(t *testing.T) {
 }
 
 // TestLengthBoundaries walks every length across two block boundaries. The
-// whole point of CMAC over CBC-MAC is that the two paths — padded and not —
+// whole point of CMAC over CBC-MAC is that the two paths (padded and not)
 // give different tags, so the boundary is where an off-by-one lives.
 func TestLengthBoundaries(t *testing.T) {
 	key := make([]byte, 32)

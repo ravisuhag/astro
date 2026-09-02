@@ -7,8 +7,8 @@ import (
 	"github.com/ravisuhag/astro/pkg/xtce"
 )
 
-// exprDB builds a database whose base container carries three octets — two
-// identifiers and a mode — and whose derived container is selected by
+// exprDB builds a database whose base container carries three octets (two
+// identifiers and a mode) and whose derived container is selected by
 // whatever criteria the test supplies.
 func exprDB(t *testing.T, criteria string) (*xtce.SpaceSystem, *xtce.SequenceContainer) {
 	t.Helper()

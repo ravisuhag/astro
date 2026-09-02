@@ -1,7 +1,7 @@
 ---
 title: Housekeeping Compression
 short: RHC
-description: Robust Compression of Housekeeping Data (CCSDS 124.0-B-1) — POCKET+, lossless compression that survives packet loss.
+description: Robust Compression of Housekeeping Data (CCSDS 124.0-B-1), POCKET+, lossless compression that survives packet loss.
 order: 51
 ---
 
@@ -23,7 +23,7 @@ that are not.
 ```
 
 The mechanism is a **mask**: one bit per position in the packet, saying whether
-that position is *predictable* — unchanged since the last packet — or not.
+that position is *predictable* (unchanged since the last packet) or not.
 Predictable positions are not transmitted at all, because the decompressor
 already knows them. Only the unpredictable ones travel.
 
@@ -43,7 +43,7 @@ last few can still catch up.
   uncompressed interval when the link degrades is a mission heuristic on top of
   `Config`, deliberately not built in.
 - **The application-specific predictor and mapper** named in the file header
-  fields of related standards — not applicable here.
+  fields of related standards, not applicable here.
 
 ## A worked run
 
@@ -68,7 +68,7 @@ for _, packet := range reports {
 }
 ```
 
-On 200 slowly changing 512-bit reports this gives about 2.5x — and the ratio
+On 200 slowly changing 512-bit reports this gives about 2.5x, and the ratio
 climbs the less the data moves.
 
 `bitLen` matters. An output vector is a whole number of *bits*, not octets, and
@@ -86,7 +86,7 @@ missed some of them still learns every position that moved. It also carries the
 effective robustness level, which says how far back that reach goes.
 
 **q_t** carries the whole mask, when the send mask flag is set. Mask changes
-alone are enough to track the mask, so this is redundant — until something is
+alone are enough to track the mask, so this is redundant, until something is
 lost, when it becomes the fastest way back.
 
 **u_t** carries the values: either the unpredictable bits, or the entire input
@@ -100,13 +100,13 @@ conformance list in annex A2.2.1 has five items, all encoder items. There is no
 decoder section.
 
 The decompressor in this package is therefore the encoder run backwards. That
-is legitimate — clause 2.1 lists exactly what a decompressor needs and the encoding
-is losslessly invertible — but it is derived rather than transcribed, and the
+is legitimate (clause 2.1 lists exactly what a decompressor needs and the encoding
+is losslessly invertible) but it is derived rather than transcribed, and the
 [PICS](/conformance/rhc) says so. The round-trip and loss tests are what
 stand behind it.
 
 One reading of the standard deserves a flag: equation 11's bit extraction
-emits the selected bits in the *reverse* of transmission order — the last
+emits the selected bits in the *reverse* of transmission order, the last
 selected position travels first. That falls out of clause 1.6.1's own conventions
 and matches the independent VisionSpace PocketPlus implementation, but no
 published test vector confirms it. The PICS records the full reasoning.
@@ -114,7 +114,7 @@ published test vector confirms it. The PICS records the full reasoning.
 ## Mask and build
 
 The mask only ever grows. Once a position changes, it is unpredictable and
-stays that way — otherwise the decompressor could not trust any position.
+stays that way, otherwise the decompressor could not trust any position.
 
 That would be a one-way ratchet, so there is a second vector, the **build**,
 accumulating the same changes in parallel. When the new mask flag fires
@@ -132,7 +132,7 @@ compressor.ForceNewMask()   // now the mask really does clear
 ```
 
 The first flag mostly serves to start a fresh build. Clause 2.1 puts it as positions
-moving to predictable "only on the cycle when the new mask is requested" — and
+moving to predictable "only on the cycle when the new mask is requested", and
 only if they have been quiet since the previous request.
 
 ## Loss, and what the caller must do
@@ -167,7 +167,7 @@ With `NotifyLoss`, the decompressor refuses anything it cannot vouch for.
 Without it, a stream with holes reconstructs wrong bytes and nobody notices.
 That is a property of the standard, not of this package.
 
-The same goes for framing. There are no sync markers — clause 2.2 again — so a
+The same goes for framing. There are no sync markers (clause 2.2 again) so a
 corrupt or foreign vector that happens to parse will be taken for a real one.
 Carry the outputs in something with a length field, such as space packets.
 
@@ -191,13 +191,13 @@ is the only unconditional repair.
 ### Strict mode
 
 The recovery rule trusts one thing it cannot check: after a gap, an output is
-accepted when the gap fits inside the output's effective robustness level —
+accepted when the gap fits inside the output's effective robustness level,
 a field the output declares about itself. The format has no way to verify it,
 so a corrupt vector arriving right after a gap can claim any reach and be
 believed.
 
 `Config.Strict` removes that trust. A strict decompressor, once told of a
-loss, refuses everything until the next uncompressed output — the one kind
+loss, refuses everything until the next uncompressed output. The one kind
 that carries the whole input and so proves itself. The trade is availability:
 honest outputs between the gap and that repair are refused too. It is this
 package's addition, not the standard's, and is off by default.
@@ -210,7 +210,7 @@ in the standard at all:
 | Knob | clause | Trade |
 |---|---|---|
 | `Robustness` | 3.3.2a | 0 to 7. Higher survives longer gaps; costs bits, because the change information is ORed over more cycles and so names more positions. |
-| `UncompressedInterval` | policy | How often to send a whole input. The recovery lever. Short means fast recovery and a much worse ratio — an uncompressed output is bigger than the input. |
+| `UncompressedInterval` | policy | How often to send a whole input. The recovery lever. Short means fast recovery and a much worse ratio, an uncompressed output is bigger than the input. |
 | `SendMaskInterval` | policy | How often to send the whole mask. Cheaper than an uncompressed output and fixes half the problem. |
 | `NewMaskInterval` | policy | How often to let positions go back to predictable. Never setting it means the mask fills with ones over a long run and compression decays. |
 | `Strict` | policy | Decompressor side. After a reported loss, accept only an uncompressed output rather than trusting an output's self-declared robustness reach. Safer against corruption; refuses more. |
@@ -218,7 +218,7 @@ in the standard at all:
 Only `Robustness` is normative. Clause 3.3.2 makes the three flags user-specified at
 every cycle and says nothing about when to set them, so the intervals here are
 this package's convenience and nothing more. `CompressWith` takes the flags
-directly if you want to drive them from your own logic — which clause 2.1 explicitly
+directly if you want to drive them from your own logic, which clause 2.1 explicitly
 allows, since "all the information required for decompression is contained in
 the output bit vectors".
 
@@ -231,6 +231,6 @@ The two ends need only agree on `VectorLength`.
 
 ## Reference
 
-- [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) — Robust
+- [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf), Robust
   Compression of Fixed-Length Housekeeping Data, February 2023
 - [CLI](/cli/rhc) | [Conformance](/conformance/rhc) | [The stack](/docs/start/concepts)

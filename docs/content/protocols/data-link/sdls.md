@@ -1,7 +1,7 @@
 ---
 title: Space Data Link Security
 short: SDLS
-description: CCSDS 355.0-B-2 — encrypting and authenticating transfer frame contents.
+description: CCSDS 355.0-B-2, encrypting and authenticating transfer frame contents.
 order: 26
 ---
 
@@ -47,7 +47,7 @@ The protected bytes become the frame's data field. Nothing in `pkg/tmdl`,
   the 16-bit Security Parameter Index travels in the clear, and it just names
   which agreement to use (clause 2.3.1.4).
 - **One service per association.** An SA does authentication, encryption, or
-  authenticated encryption — never a mix (clause 4.2.2.4).
+  authenticated encryption, never a mix (clause 4.2.2.4).
 - **The frame header is authenticated but not encrypted.** A receiver needs to
   read the header to route the frame, so SDLS covers it with the MAC instead of
   hiding it.
@@ -58,7 +58,7 @@ The protected bytes become the frame's data field. Nothing in `pkg/tmdl`,
 
 ## Scope
 
-**Implemented** — all four **baselines of Annex E**:
+**Implemented.** All four **baselines of Annex E**:
 
 - **AES-256-GCM** authenticated encryption, with a 96-bit initialization
   vector and a 128-bit MAC. That is the interoperability profile for TM
@@ -67,17 +67,17 @@ The protected bytes become the frame's data field. Nothing in `pkg/tmdl`,
   sequence number, and a 128-bit MAC. The Go standard library has no CMAC and
   this package takes no outside dependencies, so it is implemented in
   `internal/cmac` and verified against the RFC 4493 and NIST SP 800-38B
-  vectors. Select it with `AuthAlgorithm: sdls.AuthCMAC` — see
+  vectors. Select it with `AuthAlgorithm: sdls.AuthCMAC`, see
   [Telecommand: the clause E2 CMAC baseline](/protocols/data-link/sdls#telecommand-the-e2-cmac-baseline).
 
 It also offers **GMAC** for authentication without encryption. GMAC is not an
 annex baseline itself; it is the natural authentication-only companion of the
-GCM baselines — same cipher, same key and IV layout, nothing encrypted.
+GCM baselines, same cipher, same key and IV layout, nothing encrypted.
 
 **Not here, on purpose.** Encryption without authentication. Clause 2.3.3 warns
 against it, and so do we. Asking for it gives you `ErrUnsupportedMode`.
 
-**Not here yet.** A CLI — `astro sdls apply` and friends are a follow-up, once
+**Not here yet.** A CLI. `astro sdls apply` and friends are a follow-up, once
 this API has seen some use. And the SDLS Extended Procedures of CCSDS 355.1:
 key management and over-the-air rekeying are a separate standard.
 
@@ -92,8 +92,8 @@ Four fields, in this order, with no gaps between them (clause 4.1.1.1.3):
 |---|---|---|
 | Security Parameter Index | 16 bits, always present | Names the SA. 0 and 65535 are reserved (clause 4.1.1.2.3) |
 | Initialization Vector | managed, may be 0 | 96 bits in the baseline |
-| Sequence Number | managed, may be 0 | 0 in the baseline — the IV doubles as the counter |
-| Pad Length | managed, may be 0 | 0 in the baseline — GCM needs no padding |
+| Sequence Number | managed, may be 0 | 0 in the baseline, the IV doubles as the counter |
+| Pad Length | managed, may be 0 | 0 in the baseline, GCM needs no padding |
 
 The whole header is capped at 64 octets (clause 4.1.1.1.4). The baseline uses 14.
 
@@ -146,7 +146,7 @@ frame, err := aos.NewTransferFrame(scid, vcid, protected, aos.WithFECF())
 ```
 
 Every call advances the IV counter. It will never hand out the same IV twice
-for one key — when the counter space runs out it returns `ErrIVExhausted`
+for one key, when the counter space runs out it returns `ErrIVExhausted`
 rather than wrapping. Reusing an IV under one GCM key is catastrophic, so this
 is a refusal, not a warning.
 
@@ -188,7 +188,7 @@ header, payload, err := sdls.ProcessSecurityForChannel(frame.DataField, frameHea
 ## Telecommand: the clause E2 CMAC baseline
 
 The TC baseline authenticates with **AES-CMAC** instead of GMAC. There is no
-initialization vector at all: the Security Header is six octets — the 16-bit
+initialization vector at all: the Security Header is six octets, the 16-bit
 SPI and a 32-bit sequence number that carries the anti-replay counter.
 
 ```go
@@ -211,7 +211,7 @@ protected, err := sa.ApplySecurity(frameHeader, command)
 
 Sending and receiving work exactly as above; `ProcessSecurity` picks the
 right algorithm from the SA the SPI names. The MAC covers the same
-Authentication Payload as GMAC does — masked frame header, security header,
+Authentication Payload as GMAC does, masked frame header, security header,
 then the data field.
 
 ## The authentication bit mask
@@ -234,7 +234,7 @@ as zero". Clause 4.2.2.6.2 sets the rules:
 | Master Channel Frame Count (TM only) | all zeros | Changes as frames are multiplexed |
 | Frame Header Error Control (AOS only) | all zeros | Computed downstream |
 | Insert Zone (AOS and USLP) | all zeros | Not part of the secured data |
-| Everything else | all zeros by default | Missions may override — see clause 4.2.2.6.2 j |
+| Everything else | all zeros by default | Missions may override, see clause 4.2.2.6.2 j |
 
 Set the mask with `sa.AuthMask`. It must be at least as long as the frame
 header plus the security header. Don't build it by hand: one constructor per
@@ -261,7 +261,7 @@ A `nil` mask means every octet of the frame header is authenticated. For TM
 and AOS that violates the mandatory exclusions: the moment a multiplexer
 rewrites the MCFC or a coder fills in the FHEC, the MAC breaks at the
 receiver. Leave the mask `nil` only when the header you pass contains no
-field that changes in flight — otherwise use the constructors.
+field that changes in flight, otherwise use the constructors.
 
 **The IV is always excluded, whatever the mask says.** clause 4.2.2.6.2 h) makes that
 mandatory, so this package enforces it rather than trusting the mask.
@@ -283,6 +283,6 @@ Setting `SeqWindow` to 0 turns the check off. Only do that in tests.
 
 ## Reference
 
-- [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) — Space Data Link Security Protocol
-- [CCSDS 352.0-B-2](https://public.ccsds.org/Pubs/352x0b2.pdf) — Cryptographic Algorithms
+- [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf), Space Data Link Security Protocol
+- [CCSDS 352.0-B-2](https://public.ccsds.org/Pubs/352x0b2.pdf), Cryptographic Algorithms
 - [CLI](/cli/sdls) | [Conformance](/conformance/sdls) | [The stack](/docs/start/concepts)

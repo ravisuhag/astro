@@ -86,7 +86,7 @@ func TestOctetStringAndVisibleStringMatchStdlib(t *testing.T) {
 }
 
 func TestLongFormLength(t *testing.T) {
-	// X.690 §8.1.3: values of 128 octets or more use the long form.
+	// X.690 clause 8.1.3: values of 128 octets or more use the long form.
 	for _, size := range []int{127, 128, 255, 256, 65535, 65536} {
 		content := make([]byte, size)
 		encoded := sle.AppendOctetString(nil, content)
@@ -112,7 +112,7 @@ func TestLongFormLength(t *testing.T) {
 
 func TestHighTagNumberForm(t *testing.T) {
 	// SLE uses context tags like [100] for rafBindInvocation, which is past
-	// the 30 the low-tag form can hold (X.690 §8.1.2.4).
+	// the 30 the low-tag form can hold (X.690 clause 8.1.2.4).
 	for _, tag := range []uint32{0, 1, 30, 31, 100, 127, 128, 1000, 100000} {
 		encoded := sle.AppendElement(nil, sle.ClassContext, true, tag, []byte{0xAA})
 
@@ -190,7 +190,7 @@ func TestNullEncoding(t *testing.T) {
 }
 
 func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
-	// X.690 §8.1.3.6. Real providers emit it, so the decoder scans for the
+	// X.690 clause 8.1.3.6. Real providers emit it, so the decoder scans for the
 	// end-of-contents octets rather than refusing.
 	data := []byte{0x30, 0x80, 0x02, 0x01, 0x2A, 0x00, 0x00}
 	seq, err := sle.NewDecoder(data).Next()
@@ -220,7 +220,7 @@ func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
 }
 
 func TestDecoderRejectsPrimitiveIndefiniteLength(t *testing.T) {
-	// §8.1.3.2: only a constructed encoding may use the indefinite form.
+	// Clause 8.1.3.2: only a constructed encoding may use the indefinite form.
 	data := []byte{0x04, 0x80, 0x00, 0x00}
 	if _, err := sle.NewDecoder(data).Next(); !errors.Is(err, sle.ErrIndefiniteLength) {
 		t.Errorf("error = %v, want ErrIndefiniteLength", err)
@@ -245,7 +245,7 @@ func TestDecoderRejectsTruncatedInput(t *testing.T) {
 }
 
 func TestDecoderRejectsReservedLengthOctet(t *testing.T) {
-	// X.690 §8.1.3.5 c) reserves 0xFF.
+	// X.690 clause 8.1.3.5 c) reserves 0xFF.
 	if _, err := sle.NewDecoder([]byte{0x04, 0xFF, 0x00}).Next(); !errors.Is(err, sle.ErrInvalidLength) {
 		t.Errorf("error = %v, want ErrInvalidLength", err)
 	}

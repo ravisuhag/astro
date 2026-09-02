@@ -1,11 +1,11 @@
 ---
 title: astro aos
 short: AOS
-description: AOS transfer frames — encode, decode, inspect, gaps, demux.
+description: AOS transfer frames, encode, decode, inspect, gaps, demux.
 order: 50
 ---
 
-AOS Transfer Frame operations — encode, decode, inspect, and generate AOS Transfer Frames ([CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf)).
+AOS Transfer Frame operations: encode, decode, inspect, and generate AOS Transfer Frames ([CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf)).
 
 ## Subcommands
 
@@ -28,7 +28,7 @@ AOS Transfer Frame operations — encode, decode, inspect, and generate AOS Tran
 | `--ocf` (decode/inspect) | `false` | Frame includes a 4-byte OCF |
 | `--insert-len` | `0` | Insert zone length in bytes |
 
-Stream commands (`gaps`, `demux`) require `--frame-len`, because an AOS frame carries no length field — the length is a managed parameter agreed before the pass. They read as they go, so they work on a live pipe and on a capture larger than memory.
+Stream commands (`gaps`, `demux`) require `--frame-len`, because an AOS frame carries no length field. The length is a managed parameter agreed before the pass. They read as they go, so they work on a live pipe and on a capture larger than memory.
 
 ---
 
@@ -225,4 +225,4 @@ astro aos gen --scid 50 --vcid 1 --count 5 --data-size 32 --fecf --format hex
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/aos) for the standard and the Go API, and the [conformance statement](/conformance/aos) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/aos) for the standard and the Go API, and the [conformance statement](/conformance/aos) for what is and is not implemented.

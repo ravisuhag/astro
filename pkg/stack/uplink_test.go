@@ -86,7 +86,7 @@ func TestUplinkRoundTrip(t *testing.T) {
 
 // This is what makes an uplink different from a downlink. FOP-1 will not send
 // past its sliding window until a CLCW says the spacecraft has room, so a
-// commander that never receives one stops — and a test that never feeds one
+// commander that never receives one stops, and a test that never feeds one
 // back has to see it stop.
 func TestUplinkStopsAtTheSlidingWindow(t *testing.T) {
 	config := stack.Uplink{
@@ -319,7 +319,7 @@ func TestUplinkRandomized(t *testing.T) {
 }
 
 // A commander whose randomisation setting differs from the spacecraft's
-// cannot be understood — which is the failure the shared configuration
+// cannot be understood, which is the failure the shared configuration
 // prevents, forced here to show it is real.
 func TestUplinkMismatchedRandomizationFails(t *testing.T) {
 	sending := uplinkConfig()

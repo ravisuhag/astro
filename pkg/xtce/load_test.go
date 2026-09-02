@@ -896,7 +896,7 @@ func TestMoreSchemaDefaultsApply(t *testing.T) {
 		t.Fatalf("Load() = %v", err)
 	}
 
-	// The parameter type's own sizeInBits defaults to 32 — distinct from the
+	// The parameter type's own sizeInBits defaults to 32, distinct from the
 	// encoding's, which defaults to 8 for integers.
 	bare, _ := db.ResolveParameterType("Bare_t")
 	if got := bare.(*xtce.IntegerParameterType).Size(); got != 32 {

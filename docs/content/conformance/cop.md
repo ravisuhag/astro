@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 110
 ---
 
-## Conformance Statement for `pkg/cop` — CCSDS 232.1-B-2
+## Conformance Statement for `pkg/cop`, CCSDS 232.1-B-2
 
 ---
 
@@ -33,7 +33,7 @@ order: 110
 | Field | Value |
 |---|---|
 | Supplier | Ravi Suhag |
-| Contact Point for Queries | GitHub — github.com/ravisuhag/astro |
+| Contact Point for Queries | GitHub, github.com/ravisuhag/astro |
 | Implementation Name(s) and Version(s) | astro/pkg/cop (Go package) |
 | System Name(s) | Astro |
 
@@ -44,7 +44,7 @@ order: 110
 | Specification | CCSDS 232.1-B-2 (Communications Operation Procedure-1, Blue Book, Issue 2, October 2019) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE — The FOP-1 event/action behavior follows the state tables of the standard as closely as practical for a library API; simplifications are declared per item below and in the exceptions list.
+NOTE, The FOP-1 event/action behavior follows the state tables of the standard as closely as practical for a library API; simplifications are declared per item below and in the exceptions list.
 
 ---
 
@@ -54,12 +54,12 @@ NOTE — The FOP-1 event/action behavior follows the state tables of the standar
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| COP-1 | S1 — Active | 5.1, table 5-1 | M | Yes | `FOPActive`. Frames accepted, assigned V(S), transmitted within the sliding window. |
-| COP-2 | S2 — Retransmit without Wait | 5.1 | M | Yes | `FOPRetransmitWithoutWait`. Entered on a retransmit-requesting CLCW or T1 expiry; unacknowledged frames re-queued for transmission. |
-| COP-3 | S3 — Retransmit with Wait | 5.1 | M | Yes | `FOPRetransmitWithWait`. Entered on CLCW with Retransmit=1 and Wait=1; retransmissions held until the Wait flag clears. |
-| COP-4 | S4 — Initialising without BC Frame | 5.1 | M | Yes | `FOPInitialisingWithoutBC`. Entered by Initiate AD with CLCW check; completes on a clean CLCW, adopting its Report Value as V(S)/NN(R). |
-| COP-5 | S5 — Initialising with BC Frame | 5.1 | M | Yes | `FOPInitialisingWithBC`. Entered by Initiate AD with Unlock or Set V(R); the BC frame is served by `GetNextFrame()` and retransmitted on T1 expiry until a confirming CLCW arrives. |
-| COP-6 | S6 — Initial | 5.1 | M | Yes | `FOPInitial`. Start state, and target of every Alert. CLCWs are ignored in S6. |
+| COP-1 | S1, Active | 5.1, table 5-1 | M | Yes | `FOPActive`. Frames accepted, assigned V(S), transmitted within the sliding window. |
+| COP-2 | S2, Retransmit without Wait | 5.1 | M | Yes | `FOPRetransmitWithoutWait`. Entered on a retransmit-requesting CLCW or T1 expiry; unacknowledged frames re-queued for transmission. |
+| COP-3 | S3, Retransmit with Wait | 5.1 | M | Yes | `FOPRetransmitWithWait`. Entered on CLCW with Retransmit=1 and Wait=1; retransmissions held until the Wait flag clears. |
+| COP-4 | S4, Initialising without BC Frame | 5.1 | M | Yes | `FOPInitialisingWithoutBC`. Entered by Initiate AD with CLCW check; completes on a clean CLCW, adopting its Report Value as V(S)/NN(R). |
+| COP-5 | S5, Initialising with BC Frame | 5.1 | M | Yes | `FOPInitialisingWithBC`. Entered by Initiate AD with Unlock or Set V(R); the BC frame is served by `GetNextFrame()` and retransmitted on T1 expiry until a confirming CLCW arrives. |
+| COP-6 | S6, Initial | 5.1 | M | Yes | `FOPInitial`. Start state, and target of every Alert. CLCWs are ignored in S6. |
 | COP-7 | Suspend States SS 0-4 | 5.1.9 | M | Yes | `SuspendState()` returns SS (0 = not suspended, 1-4 = suspended from S1-S4). Entered on T1 expiry with the transmission limit reached and timeout type TT1. |
 | COP-8 | Alert with Reason Codes | 5.1.10 | M | Yes | Every Alert purges all queues, stops T1, and moves to S6. `LastAlert()` reports the reason: `AlertLimit`, `AlertLockout`, `AlertSynch`, `AlertNNR`, `AlertCLCW`, `AlertT1`, `AlertTerminate`. |
 
@@ -68,16 +68,16 @@ NOTE — The FOP-1 event/action behavior follows the state tables of the standar
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
 | COP-9 | Initiate AD Service (without CLCW check) | 5.2 (E23) | M | Yes | `InitiateADWithoutCLCW()`; `Initialize(vs)` combines it with Set V(S). |
-| COP-10 | Initiate AD Service with CLCW check | 5.2 (E24) | M | Yes | `InitiateADWithCLCWCheck()` — waits in S4 for a clean CLCW (Lockout=0, Wait=0, Retransmit=0) under T1. |
-| COP-11 | Initiate AD Service with Unlock | 5.2 (E25) | M | Yes | `InitiateADWithUnlock(bcFrame)` — transmits the encoded BC Unlock frame (built with `tcdl.NewUnlockFrame`), retransmits on T1 expiry, completes when the CLCW Lockout flag clears. |
-| COP-12 | Initiate AD Service with Set V(R) | 5.2 (E27) | M | Yes | `InitiateADWithSetVR(vr, bcFrame)` — completes when a CLCW with Lockout=0 and Report Value == vr arrives; V(S) and NN(R) are then set to vr. |
-| COP-13 | Terminate AD Service | 5.2 (E29) | M | Yes | `TerminateAD()` — purges all queues, stops T1, records `AlertTerminate`, moves to S6. |
-| COP-14 | Resume AD Service | 5.2 (E30-E33) | M | Yes | `ResumeAD()` — restores S1-S4 from SS 1-4 and restarts T1. Returns `ErrFOPNotSuspended` when SS = 0. |
-| COP-15 | Set V(S) | 5.2 (E35) | M | Yes | `SetVS(vs)` — only in S6 with SS = 0; sets V(S) and NN(R). |
-| COP-16 | Set FOP Sliding Window | 5.2 (E36) | M | Yes | `SetSlidingWindow(w)` — validates 1..255, rejects 0 with `ErrFOPInvalidWindow`. `NewFOP` clamps a zero width to 1. |
-| COP-17 | Set T1 Initial | 5.2 (E37) | M | Yes | `SetT1Initial(ticks)` — caller-defined tick units; 0 disables the timer. |
-| COP-18 | Set Transmission Limit | 5.2 (E38) | M | Yes | `SetTransmissionLimit(n)` — validates 1..255. Default 255. |
-| COP-19 | Set Timeout Type | 5.2 (E39) | M | Yes | `SetTimeoutType(tt)` — TT0 (Alert on expiry at limit) or TT1 (suspend). Default TT0. |
+| COP-10 | Initiate AD Service with CLCW check | 5.2 (E24) | M | Yes | `InitiateADWithCLCWCheck()`, waits in S4 for a clean CLCW (Lockout=0, Wait=0, Retransmit=0) under T1. |
+| COP-11 | Initiate AD Service with Unlock | 5.2 (E25) | M | Yes | `InitiateADWithUnlock(bcFrame)`, transmits the encoded BC Unlock frame (built with `tcdl.NewUnlockFrame`), retransmits on T1 expiry, completes when the CLCW Lockout flag clears. |
+| COP-12 | Initiate AD Service with Set V(R) | 5.2 (E27) | M | Yes | `InitiateADWithSetVR(vr, bcFrame)`, completes when a CLCW with Lockout=0 and Report Value == vr arrives; V(S) and NN(R) are then set to vr. |
+| COP-13 | Terminate AD Service | 5.2 (E29) | M | Yes | `TerminateAD()`, purges all queues, stops T1, records `AlertTerminate`, moves to S6. |
+| COP-14 | Resume AD Service | 5.2 (E30-E33) | M | Yes | `ResumeAD()`, restores S1-S4 from SS 1-4 and restarts T1. Returns `ErrFOPNotSuspended` when SS = 0. |
+| COP-15 | Set V(S) | 5.2 (E35) | M | Yes | `SetVS(vs)`, only in S6 with SS = 0; sets V(S) and NN(R). |
+| COP-16 | Set FOP Sliding Window | 5.2 (E36) | M | Yes | `SetSlidingWindow(w)`, validates 1..255, rejects 0 with `ErrFOPInvalidWindow`. `NewFOP` clamps a zero width to 1. |
+| COP-17 | Set T1 Initial | 5.2 (E37) | M | Yes | `SetT1Initial(ticks)`, caller-defined tick units; 0 disables the timer. |
+| COP-18 | Set Transmission Limit | 5.2 (E38) | M | Yes | `SetTransmissionLimit(n)`, validates 1..255. Default 255. |
+| COP-19 | Set Timeout Type | 5.2 (E39) | M | Yes | `SetTimeoutType(tt)`, TT0 (Alert on expiry at limit) or TT1 (suspend). Default TT0. |
 
 ### Table A-3: FOP-1 Timer and Transmission Limit
 
@@ -103,27 +103,27 @@ NOTE — The FOP-1 event/action behavior follows the state tables of the standar
 |------|-------------|-----------|--------|---------|-------|
 | COP-28 | AD frame transmission | 5.1 | M | Yes | `TransmitFrame()` in S1-S3, assigns V(S), enforces the sliding window (`ErrFOPWindowFull`), starts T1. `ErrFOPNotActive` elsewhere. |
 | COP-29 | BC frame transmission | 5.1 | M | Yes | BC frames carried by the Initiate-with-Unlock / Set V(R) directives; served first by `GetNextFrame()` (N(S)=0) and retransmitted under T1. |
-| COP-30 | BD frame transmission | 5.1 | M | Yes | `TransmitBDFrame()` — expedited frames bypass sequence control, served ahead of AD frames, allowed in any state. |
+| COP-30 | BD frame transmission | 5.1 | M | Yes | `TransmitBDFrame()`, expedited frames bypass sequence control, served ahead of AD frames, allowed in any state. |
 
 ### Table A-6: FARM-1 (section 6)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| COP-31 | S1 — Open | 6.1 | M | Yes | `FARMOpen`. |
-| COP-32 | S2 — Wait | 6.1 (E2/E10) | M | Yes | `FARMWait`. Entered when an in-sequence frame arrives with no buffer free (frame discarded, Wait and Retransmit flags set); left when `ReleaseBuffer()` frees one. Buffer accounting configured with `SetBuffers(n)`; disabled by default. |
-| COP-33 | S3 — Lockout | 6.1 (E5) | M | Yes | `FARMLockout`. Entered when N(S) falls outside both windows. The Retransmit flag is left untouched on entry. Cleared only by a BC Unlock. |
-| COP-34 | Positive/negative window | 6.1.5 (E1-E5) | M | Yes | W is even (clamped/rounded by `NewFARM`); PW = NW = W/2. N(S)=V(R): accept (E1) or Wait-discard (E2). V(R) < N(S) <= V(R)+PW-1: discard, set Retransmit (E3). V(R)-NW <= N(S) < V(R): duplicate — discarded silently, no flags, no lockout (E4). Otherwise: Lockout (E5). |
+| COP-31 | S1, Open | 6.1 | M | Yes | `FARMOpen`. |
+| COP-32 | S2, Wait | 6.1 (E2/E10) | M | Yes | `FARMWait`. Entered when an in-sequence frame arrives with no buffer free (frame discarded, Wait and Retransmit flags set); left when `ReleaseBuffer()` frees one. Buffer accounting configured with `SetBuffers(n)`; disabled by default. |
+| COP-33 | S3, Lockout | 6.1 (E5) | M | Yes | `FARMLockout`. Entered when N(S) falls outside both windows. The Retransmit flag is left untouched on entry. Cleared only by a BC Unlock. |
+| COP-34 | Positive/negative window | 6.1.5 (E1-E5) | M | Yes | W is even (clamped/rounded by `NewFARM`); PW = NW = W/2. N(S)=V(R): accept (E1) or Wait-discard (E2). V(R) < N(S) <= V(R)+PW-1: discard, set Retransmit (E3). V(R)-NW <= N(S) < V(R): duplicate, discarded silently, no flags, no lockout (E4). Otherwise: Lockout (E5). |
 | COP-35 | Type-BC identification | 232.0-B-4 4.1.2.3 | M | Yes | BC = Bypass=1 AND Control Command=1. Bypass=0 with CC=1 is rejected as an invalid frame type. Type-BD (Bypass=1, CC=0) is always accepted. |
 | COP-36 | Unlock control command | 4.1.3.3 / E7 | M | Yes | Data field `0x00`: clears Lockout, Wait, and Retransmit; V(R) is NOT modified. |
 | COP-37 | Set V(R) control command | 4.1.3.3 / E8 | M | Yes | Data field `0x82 0x00 <V(R)>`: sets V(R) from the directive payload (not from the frame sequence number) and clears Retransmit. In Lockout it only increments the FARM-B counter. Malformed contents are discarded (E9, `ErrInvalidControlCommand`). |
-| COP-38 | FARM-B counter | 6.1.7 | M | Yes | Incremented (mod 4) for EVERY accepted Type-B frame — BD data frames and BC control commands alike. |
+| COP-38 | FARM-B counter | 6.1.7 | M | Yes | Incremented (mod 4) for EVERY accepted Type-B frame, BD data frames and BC control commands alike. |
 | COP-39 | CLCW generation | 6.2 | M | Yes | `GenerateCLCW()` reports Lockout/Wait/Retransmit flags, FARM-B counter, and V(R). |
 
 ### Table A-7: CLCW Format (section 4.2)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| COP-40 | CLCW field layout | 4.2 | M | Yes | `CLCW` struct — 4 bytes, all 12 fields (Control Word Type, Version, Status, COP in Effect, VCID, No RF Available, No Bit Lock, Lockout, Wait, Retransmit, FARM-B, Report Value) with bit-exact `Encode()`/`Decode()` and validation. |
+| COP-40 | CLCW field layout | 4.2 | M | Yes | `CLCW` struct, 4 bytes, all 12 fields (Control Word Type, Version, Status, COP in Effect, VCID, No RF Available, No Bit Lock, Lockout, Wait, Retransmit, FARM-B, Report Value) with bit-exact `Encode()`/`Decode()` and validation. |
 
 ---
 

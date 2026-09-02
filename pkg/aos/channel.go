@@ -161,7 +161,7 @@ func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 		return nil, err
 	}
 	// OID frames run their own VC frame count on VC 63 (CCSDS 732.0-B-4
-	// §4.1.2.5.2: the count is maintained per Virtual Channel).
+	// Clause 4.1.2.5.2: the count is maintained per Virtual Channel).
 	if err := stampFrame(idle, mc.idleCounter, OIDVCID); err != nil {
 		return nil, err
 	}

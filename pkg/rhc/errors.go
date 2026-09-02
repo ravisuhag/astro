@@ -9,7 +9,7 @@ var (
 	ErrDataTooShort = errors.New("data too short: the coded bit stream ended early")
 
 	// ErrInvalidVectorLength indicates an input vector length outside the
-	// 1 to 65535 of CCSDS 124.0-B-1 §3.2.
+	// 1 to 65535 of CCSDS 124.0-B-1 clause 3.2.
 	ErrInvalidVectorLength = errors.New("invalid vector length: must be 1 to 65535 bits")
 
 	// ErrInvalidPacketLength indicates an input packet that is not the
@@ -17,7 +17,7 @@ var (
 	ErrInvalidPacketLength = errors.New("input packet is not the configured vector length")
 
 	// ErrInvalidRobustness indicates a robustness level outside the 0 to 7 of
-	// §3.3.2a.
+	// Clause 3.3.2a.
 	ErrInvalidRobustness = errors.New("invalid robustness level: must be 0 to 7")
 
 	// ErrInvalidInterval indicates a negative flag interval in the Config.
@@ -25,7 +25,7 @@ var (
 	// disables one, and nothing below zero means anything.
 	ErrInvalidInterval = errors.New("invalid flag interval: must not be negative")
 
-	// ErrInvalidCount indicates a counter codeword the table of §5.2.2 does
+	// ErrInvalidCount indicates a counter codeword the table of clause 5.2.2 does
 	// not define.
 	ErrInvalidCount = errors.New("invalid counter codeword")
 
@@ -35,11 +35,11 @@ var (
 
 	// ErrNotSynchronized indicates the decompressor has no state to work from.
 	//
-	// §3.3.2 forces the send mask and uncompressed flags to one while
+	// Clause 3.3.2 forces the send mask and uncompressed flags to one while
 	// t <= R_t, so a compressor's first output always carries a whole mask and
-	// a whole input vector. Until one of those arrives — at the start, or
+	// a whole input vector. Until one of those arrives (at the start, or
 	// after Reset, or after losing more packets than the robustness level
-	// covers — the decompressor cannot vouch for anything and says so rather
+	// covers) the decompressor cannot vouch for anything and says so rather
 	// than guessing.
 	ErrNotSynchronized = errors.New("decompressor is not synchronized: waiting for an uncompressed output vector")
 

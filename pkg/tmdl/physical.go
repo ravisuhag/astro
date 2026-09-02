@@ -24,15 +24,15 @@ type ChannelConfig struct {
 
 	// FSHDataLength is the length in octets of the Transfer Frame Secondary
 	// Header Data Field carried by every frame on the channel, or 0 when the
-	// channel carries no secondary header. CCSDS 132.0-B-3 §4.1.3.1.6 fixes
+	// channel carries no secondary header. CCSDS 132.0-B-3 clause 4.1.3.1.6 fixes
 	// the secondary header length for the associated channel throughout a
 	// Mission Phase, which is why it is channel configuration rather than a
 	// per-frame choice. The encoded header adds one identification octet, so
 	// a value of N costs N+1 octets of frame space. Range 1 to 63.
 	//
 	// Services fill the header from their FSH supplier (the VC_FSH service of
-	// §3.5) or with zeros when none is installed; MasterChannel's supplier
-	// (the MC_FSH service of §3.8) overwrites it at frame release.
+	// Clause 3.5) or with zeros when none is installed; MasterChannel's supplier
+	// (the MC_FSH service of clause 3.8) overwrites it at frame release.
 	FSHDataLength int
 }
 
@@ -77,7 +77,7 @@ func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
 // that carries one or more Master Channels. It handles MC-level
 // multiplexing (send path) and demultiplexing (receive path)
 // per CCSDS 132.0-B-3. For sync-layer operations (ASM, randomization,
-// CADU wrapping), use the tmsc package (CCSDS 131.0-B-4).
+// CADU wrapping), use the tmsc package (CCSDS 131.0-B-5).
 type PhysicalChannel struct {
 	Name           string // Channel identifier (e.g., "X-band")
 	config         ChannelConfig
@@ -115,8 +115,8 @@ func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
 // or an idle frame if no Master Channel has pending data.
 //
-// The idle frame comes from a deterministically chosen Master Channel — the
-// lowest registered SCID — which builds it per CCSDS 132.0-B-3 §4.2.6.4: on a
+// The idle frame comes from a deterministically chosen Master Channel (the
+// lowest registered SCID) which builds it per CCSDS 132.0-B-3 clause 4.2.6.4: on a
 // packet-carrying VCID, counted by the channel's FrameCounter, filled from
 // its persistent PN generator, and carrying its MC_FSH/MC_OCF SDUs when
 // suppliers are installed. With no Master Channel registered at all, a bare

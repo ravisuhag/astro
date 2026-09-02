@@ -47,7 +47,7 @@ func (s *Segment) Validate() error {
 			return ErrWrongSegmentType
 		}
 	case t.IsCancelAck():
-		// No content, per §3.2.5.
+		// No content, per clause 3.2.5.
 	default:
 		return ErrUndefinedSegmentType
 	}
@@ -81,7 +81,7 @@ func (s *Segment) Encode() ([]byte, error) {
 	}
 	out = append(out, content...)
 
-	// §3.1.4: trailer extensions follow the content.
+	// Clause 3.1.4: trailer extensions follow the content.
 	for _, e := range s.Header.TrailerExtensions {
 		out = append(out, e.Encode()...)
 	}
@@ -108,7 +108,7 @@ func DecodeSegment(data []byte) (*Segment, error) {
 	case t.IsCancel():
 		s.Cancel, consumed, err = DecodeCancelSegment(data[offset:])
 	case t.IsCancelAck():
-		// §3.2.5: no content.
+		// Clause 3.2.5: no content.
 	default:
 		return nil, ErrUndefinedSegmentType
 	}

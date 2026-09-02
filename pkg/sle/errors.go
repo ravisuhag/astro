@@ -15,7 +15,7 @@ var (
 	ErrInvalidLength = errors.New("invalid BER length")
 
 	// ErrIndefiniteLength indicates the indefinite-length form on a primitive
-	// encoding, which X.690 §8.1.3.2 forbids. Constructed indefinite-length
+	// encoding, which X.690 clause 8.1.3.2 forbids. Constructed indefinite-length
 	// encodings are accepted.
 	ErrIndefiniteLength = errors.New("indefinite BER length on a primitive encoding")
 
@@ -45,7 +45,7 @@ var (
 	ErrInvalidProtocolVersion = errors.New("invalid TML protocol version")
 
 	// ErrInvalidContextLength indicates a TML context message body that is not
-	// the 12 octets §3.3.2.2.4 requires.
+	// the 12 octets clause 3.3.2.2.4 requires.
 	ErrInvalidContextLength = errors.New("TML context message body must be 12 octets")
 
 	// ErrInvalidContextParameters indicates a TML context message whose
@@ -54,7 +54,7 @@ var (
 	ErrInvalidContextParameters = errors.New("invalid TML context parameters")
 
 	// ErrNonEmptyHeartbeat indicates a heartbeat message carrying a body,
-	// contrary to §3.3.2.2.5.
+	// contrary to clause 3.3.2.2.5.
 	ErrNonEmptyHeartbeat = errors.New("TML heartbeat message must have an empty body")
 
 	// ErrMessageTooLarge indicates a TML message body beyond the configured
@@ -68,7 +68,7 @@ var (
 	ErrAuthenticationFailed = errors.New("authentication failed")
 
 	// ErrCredentialsExpired indicates credentials whose time is further from
-	// now than the acceptable delay, per §3.1.2.2.1.
+	// now than the acceptable delay, per clause 3.1.2.2.1.
 	ErrCredentialsExpired = errors.New("credentials are outside the acceptable time window")
 
 	// ErrInvalidIdentifier indicates an authority identifier outside the
@@ -140,6 +140,6 @@ var (
 	ErrDuplicateInvokeId = errors.New("invoke identifier already used on this association")
 
 	// ErrCltuOutOfSequence indicates a CLTU identification that is not the one
-	// the provider expects next, per CCSDS 912.1-B-5 §3.6.2.5.
+	// the provider expects next, per CCSDS 912.1-B-5 clause 3.6.2.5.
 	ErrCltuOutOfSequence = errors.New("CLTU identification is out of sequence")
 )

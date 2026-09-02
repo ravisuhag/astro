@@ -11,8 +11,8 @@ import (
 //
 // IdlePattern is the project-specified idle pattern that fills the unused
 // tail of fixed-length TFDZs behind the Last Valid Octet Pointer and the
-// body of Encapsulation Idle Packets (§4.1.4.3 note 1). It does not fill
-// OID frames: their TFDZ carries the mandatory PN sequence (§4.1.4.1.10).
+// body of Encapsulation Idle Packets (clause 4.1.4.3 note 1). It does not fill
+// OID frames: their TFDZ carries the mandatory PN sequence (clause 4.1.4.1.10).
 type ChannelConfig struct {
 	FrameLength   int    // Total frame length in octets (fixed per physical channel; 0 = variable)
 	HasOCF        bool   // Whether the Operational Control Field (4 bytes) is carried
@@ -41,7 +41,7 @@ func (c ChannelConfig) DataFieldCapacity(dfhSize int) int {
 
 // VirtualChannel is a frame buffer for a single USLP virtual channel. It
 // owns the MAP demultiplexer for the up-to-16 MAP channels it carries
-// (§4.3): services pull their own MAP's frames via NextForMAP, and frames
+// (clause 4.3): services pull their own MAP's frames via NextForMAP, and frames
 // for other MAP channels are held for their services rather than lost.
 type VirtualChannel struct {
 	*sdl.Channel[*TransferFrame]
@@ -57,7 +57,7 @@ func NewVirtualChannel(vcid uint8, bufferSize int) *VirtualChannel {
 
 // NextForMAP returns the next frame for the given MAP channel. Frames of
 // other MAP IDs pulled from the shared VC buffer are queued for their own
-// services instead of being discarded (§4.3 MAP demultiplexing); OID
+// services instead of being discarded (clause 4.3 MAP demultiplexing); OID
 // frames carry no service data and are dropped.
 func (vc *VirtualChannel) NextForMAP(mapid uint8) (*TransferFrame, error) {
 	vc.mu.Lock()
@@ -104,10 +104,10 @@ func NewUSDLServiceManager() *USDLServiceManager {
 }
 
 // FrameGapDetector tracks per-VC Virtual Channel Frame Counts to detect
-// gaps caused by lost frames (CCSDS 732.1-B-3 §4.1.2.12). The count width
-// is the managed VCF Count Length of the channel (§4.1.2.11). Sequence-
+// gaps caused by lost frames (CCSDS 732.1-B-3 clause 4.1.2.12). The count width
+// is the managed VCF Count Length of the channel (clause 4.1.2.11). Sequence-
 // controlled and expedited frames keep separate counts per VC
-// (§4.1.2.12.4-12.5), so tracking is keyed by both the VCID and the
+// (clause 4.1.2.12.4-12.5), so tracking is keyed by both the VCID and the
 // Bypass/Sequence Control Flag.
 type FrameGapDetector struct {
 	countLen uint8
@@ -133,7 +133,7 @@ func (d *FrameGapDetector) Track(frame *TransferFrame) int {
 	if d.countLen == 0 || frame.Header.VCFCountLen == 0 {
 		return 0
 	}
-	// §4.1.2.12.4-12.5: the sequence-controlled and expedited counts are
+	// Clause 4.1.2.12.4-12.5: the sequence-controlled and expedited counts are
 	// independent per VC. The VCID is 6 bits, so the bypass flag rides in
 	// bit 6 of the tracking key.
 	key := frame.Header.VCID
@@ -212,7 +212,7 @@ func (mc *MasterChannel) GetNextFrame() (*TransferFrame, error) {
 // GetNextFrameOrIdle returns the next frame or an OID idle frame if none
 // is available. OID frames exist only on fixed-length physical channels.
 // Their TFDZ is drawn from the master channel's persistent PN sequence,
-// which is never restarted across frames (§4.1.4.1.10).
+// which is never restarted across frames (clause 4.1.4.1.10).
 func (mc *MasterChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	frame, err := mc.mux.Next()
 	if err == nil {

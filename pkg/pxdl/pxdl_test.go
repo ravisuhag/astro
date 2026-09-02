@@ -39,7 +39,7 @@ func TestFrameRoundTrip(t *testing.T) {
 }
 
 func TestVersionBitsAreBinaryTen(t *testing.T) {
-	// §3.2.2.2.2: the version field contains binary '10'.
+	// Clause 3.2.2.2.2: the version field contains binary '10'.
 	f, err := pxdl.NewTransferFrame(1, 0, []byte("x"))
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestVersionBitsAreBinaryTen(t *testing.T) {
 }
 
 func TestFrameLengthIsCountLessOne(t *testing.T) {
-	// §3.2.2.10.2: the field holds C = total octets − 1.
+	// Clause 3.2.2.10.2: the field holds C = total octets - 1.
 	data := make([]byte, 100)
 	f, err := pxdl.NewTransferFrame(1, 0, data)
 	if err != nil {
@@ -141,13 +141,13 @@ func TestHeaderValidation(t *testing.T) {
 		{"port ID past 3 bits", func(h *pxdl.Header) { h.PortID = 8 }, pxdl.ErrInvalidPortID},
 		{"frame shorter than the header", func(h *pxdl.Header) { h.FrameLength = 4 }, pxdl.ErrInvalidFrameLength},
 		{"frame past the maximum", func(h *pxdl.Header) { h.FrameLength = 2049 }, pxdl.ErrInvalidFrameLength},
-		// §3.2.2.5.2: a P-frame's DFC ID is '00'.
+		// Clause 3.2.2.5.2: a P-frame's DFC ID is '00'.
 		{"P-frame with a DFC ID", func(h *pxdl.Header) {
 			h.PDUType = pxdl.SupervisoryData
 			h.QoS = pxdl.Expedited
 			h.DFCID = pxdl.DFCPackets + 1
 		}, pxdl.ErrInvalidDFCID},
-		// §3.2.4.1: SPDUs travel only on Expedited.
+		// Clause 3.2.4.1: SPDUs travel only on Expedited.
 		{"P-frame on sequence controlled", func(h *pxdl.Header) {
 			h.PDUType = pxdl.SupervisoryData
 			h.QoS = pxdl.SequenceControlled
@@ -156,13 +156,13 @@ func TestHeaderValidation(t *testing.T) {
 		{"U-frame with the reserved DFC ID", func(h *pxdl.Header) {
 			h.DFCID = pxdl.DFCReserved
 		}, pxdl.ErrInvalidDFCID},
-		// §3.2.2.8.2: a P-frame's Port ID is '0'.
+		// Clause 3.2.2.8.2: a P-frame's Port ID is '0'.
 		{"P-frame with a port ID", func(h *pxdl.Header) {
 			h.PDUType = pxdl.SupervisoryData
 			h.QoS = pxdl.Expedited
 			h.PortID = 5
 		}, pxdl.ErrPortIDOnSupervisoryFrame},
-		// §3.2.2.8.3: a U-frame's Port ID is the routing target, untouched.
+		// Clause 3.2.2.8.3: a U-frame's Port ID is the routing target, untouched.
 		{"U-frame with a port ID", func(h *pxdl.Header) {
 			h.PortID = 5
 		}, nil},
@@ -219,7 +219,7 @@ func TestDecodeRejectsShortInput(t *testing.T) {
 }
 
 func TestDataFieldSizeLimit(t *testing.T) {
-	// §3.2.1 b): up to 2043 octets.
+	// Clause 3.2.1 b): up to 2043 octets.
 	if _, err := pxdl.NewTransferFrame(1, 0, make([]byte, pxdl.MaxDataFieldSize)); err != nil {
 		t.Errorf("the maximum data field was rejected: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestMaximumFrameFitsTheLengthField(t *testing.T) {
 }
 
 func TestSupervisoryFrameForcesExpedited(t *testing.T) {
-	// §3.2.4.1 and §3.2.2.5.2 both constrain a P-frame, so the constructor
+	// Clause 3.2.4.1 and clause 3.2.2.5.2 both constrain a P-frame, so the constructor
 	// applies them rather than letting a caller build an invalid frame.
 	f, err := pxdl.NewSupervisoryFrame(42, 0, []byte{0x80, 0x00},
 		pxdl.WithQoS(pxdl.SequenceControlled), pxdl.WithDFCID(pxdl.DFCUserDefined))
@@ -270,7 +270,7 @@ func TestSupervisoryFrameForcesExpedited(t *testing.T) {
 }
 
 func TestSupervisoryFrameRejectsEmptySPDURun(t *testing.T) {
-	// §3.2.4.1: a P-frame exists to carry SPDUs, so an empty run is refused.
+	// Clause 3.2.4.1: a P-frame exists to carry SPDUs, so an empty run is refused.
 	if _, err := pxdl.NewSupervisoryFrame(42, 0, nil); !errors.Is(err, pxdl.ErrInvalidSPDU) {
 		t.Errorf("error = %v, want ErrInvalidSPDU", err)
 	}
@@ -280,7 +280,7 @@ func TestSupervisoryFrameRejectsEmptySPDURun(t *testing.T) {
 }
 
 func TestSupervisoryFrameRejectsPortID(t *testing.T) {
-	// §3.2.2.8.2: in a P-frame the Port ID is not used and is set to '0'.
+	// Clause 3.2.2.8.2: in a P-frame the Port ID is not used and is set to '0'.
 	// A port belongs to a U-frame, so the constructor refuses it instead of
 	// zeroing it and sending a frame the caller did not ask for.
 	for _, portID := range []uint8{1, 5, 7} {
@@ -294,7 +294,7 @@ func TestSupervisoryFrameRejectsPortID(t *testing.T) {
 func TestEncodeRejectsPortIDSetOnAPFrameAfterConstruction(t *testing.T) {
 	// PDUType and PortID are exported, so the illegal pair can be assembled
 	// past the constructor. Encode is the last place to stop it reaching the
-	// link (§3.2.2.8.2).
+	// link (clause 3.2.2.8.2).
 	f, err := pxdl.NewSupervisoryFrame(42, 0, []byte{0x80, 0x00})
 	if err != nil {
 		t.Fatal(err)
@@ -319,7 +319,7 @@ func TestEncodeRejectsPortIDSetOnAPFrameAfterConstruction(t *testing.T) {
 }
 
 func TestPortIDBitsOnTheWire(t *testing.T) {
-	// §3.2.2.8.1 puts the Port ID in bits 17–19, which are bits 4–6 of octet
+	// Clause 3.2.2.8.1 puts the Port ID in bits 17-19, which are bits 4-6 of octet
 	// 2. A P-frame must show '000' there; a U-frame must show what it was
 	// given, so the zeroing rule cannot quietly spread to user data.
 	p, err := pxdl.NewSupervisoryFrame(1, 0, []byte{0x80, 0x00})
@@ -358,7 +358,7 @@ func TestPortIDBitsOnTheWire(t *testing.T) {
 }
 
 func TestSourceOrDestPolarityOnTheWire(t *testing.T) {
-	// §3.2.2.9.2, table 3-2: '0' means the SCID names the source spacecraft,
+	// Clause 3.2.2.9.2, table 3-2: '0' means the SCID names the source spacecraft,
 	// '1' means it names the destination. Bit 20 of the header is bit 3 of
 	// octet 2. Getting this backwards misroutes every frame, so the wire bit
 	// is pinned here, not just round-tripped.

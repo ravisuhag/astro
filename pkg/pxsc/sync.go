@@ -2,12 +2,12 @@ package pxsc
 
 import "bytes"
 
-// Synchronizer finds PLTUs in a byte stream, per CCSDS 211.2-B-3 §3.6.
+// Synchronizer finds PLTUs in a byte stream, per CCSDS 211.2-B-3 clause 3.6.
 //
 // A Proximity-1 stream is not a tidy sequence of units. PLTUs of different
 // lengths are separated by runs of idle data, and the receiver has to hunt for
 // each sync marker in turn. Worse, the marker is only 24 bits, so a random
-// match happens roughly once every 16 million octets — the CRC is what
+// match happens roughly once every 16 million octets. The CRC is what
 // separates a real PLTU from a coincidence.
 //
 // That is why this scans rather than parses: find a marker, try the frame
@@ -24,7 +24,7 @@ type Synchronizer struct {
 }
 
 // DefaultMinFrameLength is the shortest Version-3 Transfer Frame: the header
-// alone, per CCSDS 211.0-B-6 §3.2.2.10.2.
+// alone, per CCSDS 211.0-B-6 clause 3.2.2.10.2.
 const DefaultMinFrameLength = 5
 
 // NewSynchronizer returns a synchronizer with the Version-3 frame bounds.
@@ -83,10 +83,10 @@ func (s *Synchronizer) Scan(data []byte) []PLTU {
 
 // tryAt attempts to read a PLTU beginning at start.
 //
-// §3.6 describes a receiver that reads the frame's own Length field to find
+// Clause 3.6 describes a receiver that reads the frame's own Length field to find
 // the end of the PLTU, so the length the header implies is checked first.
-// Only when that fails — a corrupted header, or a frame this synchronizer
-// cannot parse — does it fall back to scanning every length in bounds.
+// Only when that fails (a corrupted header, or a frame this synchronizer
+// cannot parse) does it fall back to scanning every length in bounds.
 func (s *Synchronizer) tryAt(data []byte, start, minLen, maxLen int) (PLTU, bool) {
 	available := len(data) - start - PLTUOverhead
 	if available < minLen {
@@ -137,7 +137,7 @@ func (s *Synchronizer) checkAt(data []byte, start, frameLen int) (PLTU, bool) {
 // impliedFrameLength reads the frame length a Version-3 Transfer Frame header
 // claims for itself, or -1 when the octets do not look like one.
 //
-// Per CCSDS 211.0-B-6 §3.2.2.10, the 11-bit Frame Length field spans the low
+// Per CCSDS 211.0-B-6 clause 3.2.2.10, the 11-bit Frame Length field spans the low
 // three bits of header octet 2 and all of octet 3, carrying a count one less
 // than the total frame length.
 func impliedFrameLength(body []byte) int {

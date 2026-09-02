@@ -1,7 +1,7 @@
 ---
 title: Space Link Extension
 short: SLE
-description: CCSDS 911.x, 912.1, 913.1 — getting frames to and from a ground station over the internet.
+description: CCSDS 911.x, 912.1, 913.1, getting frames to and from a ground station over the internet.
 order: 40
 ---
 
@@ -45,12 +45,12 @@ The SLE suite is easy to misattribute, so for the record:
 | CCSDS 911.5-B-4 | Return Operational Control Fields |
 | CCSDS 912.1-B-5 | Forward CLTU |
 
-CCSDS 914.0-M-2 is the SLE Application Program Interface — a Recommended
+CCSDS 914.0-M-2 is the SLE Application Program Interface, a Recommended
 Practice describing an API, not a wire format.
 
 ## Scope
 
-**Implemented** — the transport and the handshake:
+**Implemented.** The transport and the handshake:
 
 - **TML**, the Transport Mapping Layer: message framing over TCP, the context
   message, the heartbeat
@@ -60,11 +60,11 @@ Practice describing an API, not a wire format.
 
 And the four transfer services built on it:
 
-- **RAF**, Return All Frames — every frame off a physical channel
-- **RCF**, Return Channel Frames — one virtual or master channel's frames
-- **ROCF**, Return Operational Control Fields — the four-octet control field,
+- **RAF** (Return All Frames): every frame off a physical channel
+- **RCF** (Return Channel Frames): one virtual or master channel's frames
+- **ROCF** (Return Operational Control Fields): the four-octet control field,
   usually a CLCW
-- **FCLTU**, Forward CLTU — telecommand units going up
+- **FCLTU** (Forward CLTU): telecommand units going up
 
 **Not here yet.**
 
@@ -72,11 +72,11 @@ And the four transfer services built on it:
   and scheduling that service management hands down are configuration a
   mission supplies, and modelling them would be modelling a mission rather
   than a protocol. `Complex` refuses a BIND for the reasons the instance set
-  settles — unknown instance, already bound, wrong version — and leaves the
+  settles (unknown instance, already bound, wrong version) and leaves the
   agreement's reasons to you.
 - **Structured GET-PARAMETER values.** All 50 parameter alternatives are named
-  and the integer ones read. A value the schema makes structured — a set of
-  GVCIDs, a latency limit's online/offline choice — comes back as raw BER,
+  and the integer ones read. A value the schema makes structured (a set of
+  GVCIDs, a latency limit's online/offline choice) comes back as raw BER,
   because typing each would commit the package to shapes it has no real
   vectors to test against.
 - **TLS or any transport security** beyond ISP1's own credentials.
@@ -86,7 +86,7 @@ And the four transfer services built on it:
 ### No goroutines, no timers
 
 This package owns neither. Every codec is pure, and the association machine is
-caller-pumped — the same contract as `pkg/cop`'s FOP-1.
+caller-pumped. The same contract as `pkg/cop`'s FOP-1.
 
 ISP1 has a heartbeat interval and a dead factor, so there *is* timing involved.
 Rather than run a clock, the association answers questions about a time you
@@ -115,12 +115,12 @@ which the BIND's service instance identifier needs), context-specific tags in
 both primitive and constructed form, multi-octet tag numbers (SLE uses `[100]`
 and up), and definite lengths in both forms.
 
-The **indefinite-length form** is accepted on decode — real providers emit
-it — by scanning for the end-of-contents octets. This package always emits
+The **indefinite-length form** is accepted on decode (real providers emit
+it) by scanning for the end-of-contents octets. This package always emits
 the definite form itself. The one refusal left is an indefinite length on a
 primitive encoding, which X.690 forbids.
 
-The integer encoding is tested against `encoding/asn1` as an oracle — for
+The integer encoding is tested against `encoding/asn1` as an oracle, for
 plain universal INTEGERs, BER and DER agree, so the stdlib pins the minimal
 two's complement encoding without hand-writing every vector.
 
@@ -129,7 +129,7 @@ two's complement encoding without hand-writing every vector.
 Clause 3.1.2.3 requires SHA-256. SHA-1 belonged to the previous issue of the
 standard. Clause 3.2.3's note keeps a 20-octet digest recognizable only so a new
 implementation can talk to an old one: this package decodes a digest only at
-20 or 32 octets — no other length is a digest either issue defines — never
+20 or 32 octets (no other length is a digest either issue defines) never
 generates the 20-octet form, and cannot verify one, because it does not
 implement the superseded scheme. Verification requires SHA-256.
 
@@ -263,7 +263,7 @@ Each service is a user half and a provider half over one association. The user
 is the mission-control side. The provider is the ground-station side: it
 answers the operations, runs production and the transfer buffer, and serves
 several service instances through `Complex`. What it does not hold is a service
-agreement — see [the PICS](/conformance/sle) for the row-by-row picture.
+agreement, see [the PICS](/conformance/sle) for the row-by-row picture.
 
 | Service | Go types | What it carries |
 |---|---|---|
@@ -289,7 +289,7 @@ way the specs do so a logged state matches the table you are reading:
 
 Data moves only in state 3. An operation the state does not allow is refused
 before anything goes on the wire, and a PDU that arrives in the wrong state
-draws a PEER-ABORT for protocol error — which is what the state tables say to
+draws a PEER-ABORT for protocol error, which is what the state tables say to
 do.
 
 ### A user-side session
@@ -344,7 +344,7 @@ for {
 ```
 
 The loop is yours. The machine holds no socket, starts no goroutine and runs
-no clock — `time.Now()` goes in as an argument. `Association.HeartbeatDue` and
+no clock, `time.Now()` goes in as an argument. `Association.HeartbeatDue` and
 `Association.PeerDead` are deadline hints for the same loop.
 
 ### Timers are the caller's
@@ -356,8 +356,8 @@ waiting, so your loop can time them however it already times things.
 
 ### What each service does differently
 
-**RCF** filters by channel. Its START carries a `GVCID` — spacecraft, frame
-version, virtual channel — instead of a frame quality, because RCF only ever
+**RCF** filters by channel. Its START carries a `GVCID` (spacecraft, frame
+version, virtual channel) instead of a frame quality, because RCF only ever
 delivers good frames. Watch the version number: USLP is 12, not 4. The name is
 "Version 4" but the wire field is the four-bit Transfer Frame Version Number,
 `'1100'`.
@@ -369,7 +369,7 @@ many frames. The four octets it delivers go to `pkg/cop`'s CLCW decoder.
 
 **FCLTU** runs the other way and is the only one with counters. Every CLTU
 carries an identification number that must climb without gaps: the first is
-the number the START asked for, and the count advances as each CLTU is sent —
+the number the START asked for, and the count advances as each CLTU is sent,
 so CLTUs pipeline without waiting for returns, which is how the spec expects
 an uplink to run. `FCLTUUser` keeps the count for you and `TransferData`
 returns the number it used. When the provider refuses a CLTU it says which
@@ -393,7 +393,7 @@ takes it:
 | return complete online | delivers everything in order | must be the brake |
 | return offline | reads a store, not a channel | may ask for a past time range |
 | forward online | radiates as CLTUs arrive | watches the buffer figure |
-| forward offline | queues for a later pass | — |
+| forward offline | queues for a later pass | - |
 
 The mode itself is state, not an engine. What the library does with it is
 refuse what the mode forbids and tell you what the mode asks of you, through
@@ -435,7 +435,7 @@ let a steady trickle hold a record forever.
 **Backpressure discards the whole buffer** (clause 3.1.9.1.9), not the one record
 that would not fit, and inserts a 'data discarded due to excessive backlog'
 notification. And while that notification waits, the buffer size is
-temporarily one larger (clause 3.1.9.1.10) — without that, a channel configured with
+temporarily one larger (clause 3.1.9.1.10), without that, a channel configured with
 a buffer size of one would carry nothing but backlog notifications.
 
 **A status change is notified in sequence.** `SetRunning`, `SetInterrupted` and
@@ -446,7 +446,7 @@ running->interrupted, interrupted->running, and anything->halted. A
 halted->interrupted is refused, because it is not a row in the table.
 
 Nothing here reads a clock. Every method that involves time takes the time,
-and the timer is read through `Due`, `Expired` and `Deadline` — the same
+and the timer is read through `Due`, `Expired` and `Deadline`, the same
 decision as everywhere else in the package.
 
 ## Serving several service instances
@@ -479,8 +479,8 @@ unknown identifier is `BindNoSuchServiceInstance`, an instance already bound is
 `BindVersionNotSupported`. It hands back the instance even when it refuses, so
 you can answer on the right association.
 
-The other four BIND diagnostics — access denied, not accessible to this
-initiator, invalid time, out of service — depend on a **service agreement**,
+The other four BIND diagnostics (access denied, not accessible to this
+initiator, invalid time, out of service) depend on a **service agreement**,
 and that is the one provider-side thing this package does not hold. Provision
 periods, permitted parameter ranges and which initiator may bind to what are a
 mission's configuration, not the protocol. Check them yourself and answer with
@@ -492,9 +492,9 @@ be.
 
 ## Aborts and authentication levels
 
-A PEER-ABORT goes out twice under ISP1 (clause 3.4): as the `[104]` PDU — a
+A PEER-ABORT goes out twice under ISP1 (clause 3.4): as the `[104]` PDU (a
 primitive element holding the bare diagnostic octet, `9F 68 01 xx` on the
-wire — and as one octet of TCP **urgent data** before the connection closes.
+wire) and as one octet of TCP **urgent data** before the connection closes.
 The library encodes the PDU and gives you the octet (`PeerAbort.UrgentData`);
 writing it out of band (`MSG_OOB`) and closing the socket are yours, because
 the socket is. An urgent octet you read lands in
@@ -503,16 +503,16 @@ the socket is. An urgent octet you read lands in
 Authentication has three levels, picked by the service agreement and set on
 `AssociationConfig.AuthLevel`: `AuthLevelNone` checks nothing,
 `AuthLevelBind` (the default) checks the BIND exchange, and `AuthLevelAll`
-checks every PDU — each `HandlePDU` path verifies the credentials, transfer
+checks every PDU, each `HandlePDU` path verifies the credentials, transfer
 buffer entries included, before the machine acts on the PDU.
 
 ## Reference
 
-- [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) — Internet Protocol for Transfer Services
-- [CCSDS 911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf) — Return All Frames, whose annex A carries the common ASN.1 modules
-- [CCSDS 911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf) — Return Channel Frames
-- [CCSDS 911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf) — Return Operational Control Fields
-- [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) — Forward CLTU
-- [CCSDS 910.4-B-2](https://ccsds.org/wp-content/uploads/gravity_forms/5-448e85c647331d9cbaf66c096458bdd5/2025/01//910x4b2e1s.pdf) — Cross Support Reference Model, where the vocabulary is defined. Retired in December 2023 with nothing named in its place, but still reference [1] of 911.1-B-5.
-- [ITU-T X.690](https://www.itu.int/rec/T-REC-X.690) — BER, CER and DER
+- [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf), Internet Protocol for Transfer Services
+- [CCSDS 911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf), Return All Frames, whose annex A carries the common ASN.1 modules
+- [CCSDS 911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf), Return Channel Frames
+- [CCSDS 911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf), Return Operational Control Fields
+- [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf), Forward CLTU
+- [CCSDS 910.4-B-2](https://ccsds.org/wp-content/uploads/gravity_forms/5-448e85c647331d9cbaf66c096458bdd5/2025/01//910x4b2e1s.pdf), Cross Support Reference Model, where the vocabulary is defined. Retired in December 2023 with nothing named in its place, but still reference [1] of 911.1-B-5.
+- [ITU-T X.690](https://www.itu.int/rec/T-REC-X.690), BER, CER and DER
 - [CLI](/cli/sle) | [Conformance](/conformance/sle) | [The stack](/docs/start/concepts)

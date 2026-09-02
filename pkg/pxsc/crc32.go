@@ -31,7 +31,7 @@ package pxsc
 // the implicit X^32 term dropped.
 const CRC32Polynomial uint32 = 0x00A00805
 
-// CRC32Size is the width of the attached CRC in octets (§3.2.2 c).
+// CRC32Size is the width of the attached CRC in octets (clause 3.2.2 c).
 const CRC32Size = 4
 
 // crc32Table is the byte-at-a-time lookup table for the Proximity-1 generator.

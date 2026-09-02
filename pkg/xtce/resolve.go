@@ -80,7 +80,7 @@ func splitRef(ref string) (segments []string, absolute bool, err error) {
 		}
 		// The NameReferenceType pattern allows a segment to be "." or ".."
 		// exactly, or a name containing none of '.', ':', '[' and ']'. A dot
-		// inside a name — "A.B" — matches neither arm, so it is rejected here
+		// inside a name ("A.B") matches neither arm, so it is rejected here
 		// the way the schema's pattern rejects it.
 		if segment != "." && segment != ".." && strings.ContainsAny(segment, ".:[]") {
 			return nil, false, fmt.Errorf("%w: %q has an illegal character", ErrInvalidReference, ref)
@@ -103,7 +103,7 @@ func (s *SpaceSystem) findSubSystem(name string) *SpaceSystem {
 // resolveRef follows a reference from the system it was written in, and
 // returns the system holding the named thing along with the bare name.
 //
-// It does not look the name up — the caller does that, because the same path
+// It does not look the name up. The caller does that, because the same path
 // walk serves parameters, types and containers. What it settles is the harder
 // half: which SpaceSystem to look in.
 func resolveRef(from *SpaceSystem, ref string) (holder *SpaceSystem, name string, err error) {
@@ -126,8 +126,8 @@ func resolveRef(from *SpaceSystem, ref string) (holder *SpaceSystem, name string
 		current = from.Root()
 		// Absolute references are read two ways in the wild, and this
 		// accepts both. The schema's own example spells the root system's
-		// name out — /SimpleSat/Bus/Voltage — but some tools treat "/" as
-		// already being the root, so the first segment names a child of it —
+		// name out (/SimpleSat/Bus/Voltage) but some tools treat "/" as
+		// already being the root, so the first segment names a child of it,
 		// /Bus/Voltage for the same parameter. When the first segment matches
 		// the root's name it is taken as the spelled-out form and skipped;
 		// otherwise it is looked up among the root's children. The ambiguous
@@ -296,7 +296,7 @@ func (s *SpaceSystem) localContainer(name string) *SequenceContainer {
 
 // All returns every parameter type in the set, whatever its kind, in a stable
 // order: integers, floats, enumerations, strings, binaries, booleans, times,
-// then the opaque kinds — arrays, aggregates, relative times.
+// then the opaque kinds, arrays, aggregates, relative times.
 //
 // The order is this package's, not the document's. The schema makes
 // ParameterTypeSet a Set, so document order carries no meaning, and a stable

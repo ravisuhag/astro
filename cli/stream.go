@@ -20,8 +20,8 @@ import (
 // maxStreamUnit caps how large one unit may be, and is also the read buffer
 // size.
 //
-// A unit's length comes from the data itself — a length field a corrupt stream
-// controls — so it needs a ceiling. A Space Packet stops at 65542 octets and
+// A unit's length comes from the data itself (a length field a corrupt stream
+// controls) so it needs a ceiling. A Space Packet stops at 65542 octets and
 // every frame here is smaller, so 128 KiB accepts anything legal with room to
 // spare. Buffering that much up front means a unit never fails to fit, which
 // is what lets the reader peek at a whole one without growing.
@@ -118,7 +118,7 @@ type UnitSizer func(data []byte) int
 // TM and AOS frames carry no length field: the length is a managed parameter
 // agreed before the pass, which is why every command over them takes
 // --frame-len. That means no header probing, so this does not go through
-// UnitSizer at all — a sizer is bounded by maxUnitHeader, and a frame length
+// UnitSizer at all. A sizer is bounded by maxUnitHeader, and a frame length
 // is routinely larger than that.
 //
 // The slice handed to handle aliases the read buffer and is only valid for
@@ -174,7 +174,7 @@ func streamUnits(source io.Reader, sizer UnitSizer, minimum int, handle func(uni
 	for {
 		// Read enough of the front to learn how long this unit is. A sizer
 		// reports "not yet" by returning a value below one, which happens
-		// where the header itself is variable-length — an Encapsulation
+		// where the header itself is variable-length. An Encapsulation
 		// Packet's length field is one, two or four octets, and which it is
 		// only becomes clear from the first. So peek wider until the sizer
 		// can answer.
@@ -248,9 +248,9 @@ type markedHandler func(unit []byte, offset int64) error
 // streamMarked reads marker-delimited units: it searches for marker, then
 // takes size octets starting at the marker itself.
 //
-// This is how a CADU stream is framed. Nothing in it carries a length —
+// This is how a CADU stream is framed. Nothing in it carries a length (
 // CCSDS 131.0-B-5 attaches the sync marker ahead of each codeblock and the
-// receiver finds frame alignment by searching for it — so the reader has to
+// receiver finds frame alignment by searching for it) so the reader has to
 // search, and a stream that has lost alignment picks up again at the next
 // marker rather than giving up.
 //

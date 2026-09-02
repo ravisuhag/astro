@@ -2,12 +2,12 @@ package sdls_test
 
 // Frame-level known-answer tests.
 //
-// Each test pins the exact wire bytes of one protected frame — Security
-// Header, data field, and MAC — under a fixed key, a fixed frame header, and
+// Each test pins the exact wire bytes of one protected frame (Security
+// Header, data field, and MAC) under a fixed key, a fixed frame header, and
 // the SA's first counter value. The expected bytes are computed two ways:
 // once by ApplySecurity, and once here from first principles with the
 // standard library, building the Authentication Payload by hand in the
-// §4.2.3 order (masked frame header, then the security header with a zeroed
+// Clause 4.2.3 order (masked frame header, then the security header with a zeroed
 // IV, then the data field). Both must equal the pinned constant, so any
 // change to the AAD ordering, the IV placement, or the header layout fails
 // loudly rather than round-tripping quietly.
@@ -94,7 +94,7 @@ func checkKAT(t *testing.T, sa *sdls.SecurityAssociation, independent []byte, wa
 	}
 }
 
-// TestKnownAnswerGCM pins the §E1/§E3/§E4 baseline: AES-256-GCM
+// TestKnownAnswerGCM pins the clause E1/clause E3/clause E4 baseline: AES-256-GCM
 // authenticated encryption, 96-bit IV, 128-bit MAC. The first frame carries
 // IV counter value 1. The associated data is the frame header followed by
 // the security header with the IV zeroed.
@@ -105,8 +105,8 @@ func TestKnownAnswerGCM(t *testing.T) {
 	iv := mustHex("000000000000000000000001")
 	spi := []byte{0x00, katSPI}
 
-	// AAD per §4.2.3.2.2.3 a): frame header, SPI, then the IV field as zeros
-	// (§4.2.2.6.2 h) excludes the IV from the authenticated data).
+	// AAD per clause 4.2.3.2.2.3 a): frame header, SPI, then the IV field as zeros
+	// (clause 4.2.2.6.2 h) excludes the IV from the authenticated data).
 	aad := concat(katFrameHeader, spi, make([]byte, sdls.GCMIVSize))
 
 	block, err := aes.NewCipher(katKey)
@@ -129,7 +129,7 @@ func TestKnownAnswerGCM(t *testing.T) {
 
 // TestKnownAnswerGMAC pins the authentication-only GMAC companion of the GCM
 // baseline: nothing is encrypted, and the MAC covers the whole
-// Authentication Payload — masked prefix, then the data field — as
+// Authentication Payload (masked prefix, then the data field) as
 // associated data over an empty plaintext.
 func TestKnownAnswerGMAC(t *testing.T) {
 	fl := sdls.FieldLengths{IV: sdls.GCMIVSize, MAC: 16}
@@ -138,7 +138,7 @@ func TestKnownAnswerGMAC(t *testing.T) {
 	iv := mustHex("000000000000000000000001")
 	spi := []byte{0x00, katSPI}
 
-	// §4.2.3.2.2.2: the Authentication Payload is prefix then data field.
+	// Clause 4.2.3.2.2.2: the Authentication Payload is prefix then data field.
 	aad := concat(katFrameHeader, spi, make([]byte, sdls.GCMIVSize), katPlaintext)
 
 	block, err := aes.NewCipher(katKey)
@@ -159,7 +159,7 @@ func TestKnownAnswerGMAC(t *testing.T) {
 			"01473b4b99175664d8ee702ed7ff135d") // 16-octet GMAC tag
 }
 
-// TestKnownAnswerCMAC pins the §E2 telecommand baseline: AES-CMAC with a
+// TestKnownAnswerCMAC pins the clause E2 telecommand baseline: AES-CMAC with a
 // 256-bit key, a 32-bit sequence number, a 6-octet security header, and a
 // 128-bit MAC. The first frame carries sequence number 1. There is no IV to
 // zero: the MAC covers the frame header, the full security header, and the

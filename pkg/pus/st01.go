@@ -23,7 +23,7 @@ const (
 // RequestIDSize is the encoded width of a request ID, in octets. Figure 8-1
 // lays it out as packet version number (3) + packet type (1) + secondary
 // header flag (1) + APID (11) + sequence flags (2) + sequence count (14),
-// which is 32 bits — exactly the first four octets of a CCSDS primary header.
+// which is 32 bits, exactly the first four octets of a CCSDS primary header.
 const RequestIDSize = 4
 
 // RequestID identifies the telecommand a verification report concerns
@@ -97,7 +97,7 @@ type VerificationReport struct {
 }
 
 // IsFailure reports whether this subtype carries a failure notice. The even
-// subtypes are the failures, per clause 8.1.2 — including TM[1,10], whose
+// subtypes are the failures, per clause 8.1.2, including TM[1,10], whose
 // body is a request ID and a failure notice, like TM[1,2].
 func (r *VerificationReport) IsFailure() bool { return r.Subtype%2 == 0 }
 

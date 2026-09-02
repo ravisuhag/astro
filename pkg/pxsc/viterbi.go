@@ -3,13 +3,13 @@ package pxsc
 import "fmt"
 
 // Viterbi decoding of the rate 1/2, constraint-length 7 convolutional code,
-// per CCSDS 211.2-B-3 §3.4.3.
+// per CCSDS 211.2-B-3 clause 3.4.3.
 //
 // The encoder turns each input bit into two symbols whose values depend on the
 // last seven input bits. A receiver cannot invert that bit by bit, because any
 // single symbol pair is consistent with many histories. What it can do is
 // track every history at once and keep only the cheapest way to reach each
-// one — which is what the Viterbi algorithm is.
+// one, which is what the Viterbi algorithm is.
 //
 // # The trellis
 //
@@ -21,10 +21,10 @@ import "fmt"
 //
 // # Hard decisions
 //
-// This decoder takes hard decisions: each symbol is already a bit. §3.4.3.3
+// This decoder takes hard decisions: each symbol is already a bit. Clause 3.4.3.3
 // recommends three-bit soft decisions instead, which buy roughly 2 dB, but
 // soft symbols have to come from the demodulator and nothing in this library
-// produces them — DecodeSoft is there for a receiver that has them.
+// produces them, DecodeSoft is there for a receiver that has them.
 
 // numStates is the number of trellis states: two to the power of the
 // constraint length less one.
@@ -44,7 +44,7 @@ const tracebackDepth = 5 * ConstraintLength
 
 // survivorRing is the size of the survivor history buffer. It only has to hold
 // tracebackDepth steps plus the one just taken, but it is rounded up to a
-// power of two so the ring index is a mask rather than a division — the
+// power of two so the ring index is a mask rather than a division. The
 // traceback does tracebackDepth of them for every decoded bit.
 const survivorRing = 64
 
@@ -68,7 +68,7 @@ func init() {
 			reg &= 1<<ConstraintLength - 1
 
 			c1 := parity(reg & g1Mask)
-			c2 := parity(reg&g2Mask) ^ 1 // §3.4.3.1 note 1: the G2 path is inverted
+			c2 := parity(reg&g2Mask) ^ 1 // clause 3.4.3.1 note 1: the G2 path is inverted
 
 			outputTable[state<<1|bit] = c1<<1 | c2
 			nextState[state<<1|bit] = reg & stateMask
@@ -79,7 +79,7 @@ func init() {
 // ViterbiDecoder decodes a continuous convolutionally encoded stream.
 //
 // It holds the trellis between calls, so a stream arriving in pieces decodes
-// as one — which matters because §3.4.3.2 encodes everything transmitted as a
+// as one, which matters because clause 3.4.3.2 encodes everything transmitted as a
 // single stream, PLTUs and idle data alike.
 //
 // A ViterbiDecoder is not safe for concurrent use.
@@ -164,14 +164,14 @@ func (d *ViterbiDecoder) Decode(symbols []byte) ([]byte, error) {
 	return d.decodeSoft(soft)
 }
 
-// DecodeSoft decodes from soft decisions, which §3.4.3.3 recommends over hard
+// DecodeSoft decodes from soft decisions, which clause 3.4.3.3 recommends over hard
 // ones.
 //
 // Each entry is the demodulator's confidence in one coded symbol: positive for
 // a one, negative for a zero, and further from zero for more confident. Two
 // entries per input bit, so the slice length must be even. The scale does not
 // matter, only the sign and the relative magnitude; three-bit decisions in the
-// range -4 to 3 are what §3.4.3.3 has in mind.
+// range -4 to 3 are what clause 3.4.3.3 has in mind.
 func (d *ViterbiDecoder) DecodeSoft(symbols []int8) ([]byte, error) {
 	if len(symbols)%2 != 0 {
 		return nil, fmt.Errorf("%w: %d soft symbols is not a whole number of input bits",
@@ -227,7 +227,7 @@ func (d *ViterbiDecoder) step(s1, s2 int8) {
 
 				// Record which predecessor won. A transition shifts the state
 				// left, so the target keeps all of the predecessor except its
-				// top bit — and that top bit is the only thing distinguishing
+				// top bit, and that top bit is the only thing distinguishing
 				// the two states that lead here. Storing it is what makes the
 				// walk back unambiguous.
 				//
@@ -281,7 +281,7 @@ func symbolCost(want uint8, got int8) uint32 {
 // no decision.
 //
 // The state holding the smallest metric is where the traceback starts.
-// §3.4.3.2 encodes a continuous stream with no tail bits, so the decoder
+// Clause 3.4.3.2 encodes a continuous stream with no tail bits, so the decoder
 // cannot assume it finishes in state zero the way a terminated block would; it
 // takes whichever state the evidence favours.
 func (d *ViterbiDecoder) normalise() {
@@ -329,7 +329,7 @@ func (d *ViterbiDecoder) traceback() uint8 {
 //
 // A transition shifts the state left by one, so the predecessor is the target
 // shifted back down with that lost top bit put back. The bit is not
-// recoverable from the target alone — it is what the survivor record holds.
+// recoverable from the target alone. It is what the survivor record holds.
 func predecessor(target int, high uint8) int {
 	return (target >> 1) | int(high)<<(ConstraintLength-2)
 }
@@ -351,7 +351,7 @@ func (d *ViterbiDecoder) emit(out []byte, bit uint8) []byte {
 // Decode only emits a bit once the survivor paths have had tracebackDepth
 // steps to converge, so the last few decisions are still pending when the
 // symbols run out. Flush forces them out along the best surviving path, where
-// the usual convergence argument no longer applies — the final few bits are
+// the usual convergence argument no longer applies. The final few bits are
 // the least reliable in the stream.
 func (d *ViterbiDecoder) Flush() []byte {
 	var out []byte

@@ -1,7 +1,7 @@
 ---
 title: Proximity-1 Data Link Layer
 short: PXDL
-description: CCSDS 211.0-B-6 — the short-range link between an orbiter and a lander or rover.
+description: CCSDS 211.0-B-6, the short-range link between an orbiter and a lander or rover.
 order: 24
 ---
 
@@ -10,7 +10,7 @@ order: 24
 ## Overview
 
 Proximity-1 is the short-range link protocol: orbiter to lander, orbiter to
-rover, spacecraft to spacecraft. It is what the Mars relay network runs on —
+rover, spacecraft to spacecraft. It is what the Mars relay network runs on,
 a rover talks to an orbiter overhead, and the orbiter relays to Earth on a
 different link entirely.
 
@@ -22,7 +22,7 @@ protocols this library also ships:
 | Range | Planet to Earth | A few thousand km |
 | Frame size | Up to 65535 octets | Up to 2048 |
 | Header | 5 to 14 octets | 5 octets, fixed |
-| Error control | Frame Error Control Field | None — the coding layer handles it |
+| Error control | Frame Error Control Field | None, the coding layer handles it |
 | Frame types | Separate protocols per direction | One frame, both directions |
 
 That last row is the interesting one. Proximity-1 uses a single frame type for
@@ -51,7 +51,7 @@ P-frame:  header │ supervisory PDUs (link control words, directives)
 segmentation and reassembly, and supervisory PDUs including the Proximity Link
 Control Word.
 
-**Not here yet.** COP-P, the retransmission procedure — sequence numbers are
+**Not here yet.** COP-P, the retransmission procedure, sequence numbers are
 carried, but the state machine that acts on them is a follow-up. The contents of
 directives and status reports from annex B: variable-length SPDUs encode and
 decode, and this package moves the payload without reading it. The MAC and PHY
@@ -87,9 +87,9 @@ frame.
 
 One bit, two services (clause 3.2.2.3):
 
-- **Sequence controlled** (`0`) — COP-P checks the frame sequence number.
+- **Sequence controlled** (`0`), COP-P checks the frame sequence number.
   Lost frames are retransmitted.
-- **Expedited** (`1`) — the sequence check is bypassed. Supervisory PDUs travel
+- **Expedited** (`1`). The sequence check is bypassed. Supervisory PDUs travel
   only here.
 
 ### Source or destination
@@ -146,7 +146,7 @@ The sequence flag values are not what you would guess (table 3-4):
 | `01` | First segment |
 | `00` | Continuing segment |
 | `10` | Last segment |
-| `11` | No segmentation — the whole packet |
+| `11` | No segmentation, the whole packet |
 
 Note `01` is *first* and `00` is *continuing*. Getting those backwards produces
 a reassembler that never starts.
@@ -196,8 +196,8 @@ P-frames carry the protocol talking to itself. Two shapes, told apart by the
 leading bit (clause 3.2.4.2):
 
 ```
-fixed:     format '1' │ type(1) │ data(14 bits)      — 2 octets
-variable:  format '0' │ type(3) │ length(4) │ data   — 1 to 16 octets
+fixed:     format '1' │ type(1) │ data(14 bits)      (2 octets
+variable:  format '0' │ type(3) │ length(4) │ data) 1 to 16 octets
 ```
 
 SPDUs are self-identifying and self-delimiting, so a decoder walks a run of
@@ -209,8 +209,8 @@ everything else in CCSDS goes the other way.
 
 ### The Proximity Link Control Word
 
-The one fixed-length SPDU defined so far. It is Proximity-1's acknowledgement —
-the same job COP-1's CLCW does for TC links (clause 3.2.4.3.2):
+The one fixed-length SPDU defined so far. It is Proximity-1's acknowledgement.
+The same job COP-1's CLCW does for TC links (clause 3.2.4.3.2):
 
 ```go
 plcw := &pxdl.PLCW{
@@ -239,6 +239,6 @@ constructor.
 
 ## Reference
 
-- [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) — Proximity-1 Space Link Protocol, Data Link Layer
-- [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3e1.pdf) — Coding and Synchronization Layer
+- [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf), Proximity-1 Space Link Protocol, Data Link Layer
+- [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3e1.pdf), Coding and Synchronization Layer
 - [CLI](/cli/pxdl) | [Conformance](/conformance/pxdl) | [The stack](/docs/start/concepts)

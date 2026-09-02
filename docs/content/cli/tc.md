@@ -1,11 +1,11 @@
 ---
 title: astro tc
 short: TC
-description: TC transfer frames — encode, decode, inspect.
+description: TC transfer frames, encode, decode, inspect.
 order: 40
 ---
 
-TC Transfer Frame operations — encode, decode, and inspect CCSDS TC Transfer Frames ([CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf)).
+TC Transfer Frame operations: encode, decode, and inspect CCSDS TC Transfer Frames ([CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf)).
 
 ## Subcommands
 
@@ -180,4 +180,4 @@ astro tc encode --scid 26 --vcid 1 --data 0102030405 --bypass --seq-num 42 | ast
 
 ---
 
-**See also** — [the protocol page](/protocols/data-link/tcdl) for the standard and the Go API, and the [conformance statement](/conformance/tcdl) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/data-link/tcdl) for the standard and the Go API, and the [conformance statement](/conformance/tcdl) for what is and is not implemented.

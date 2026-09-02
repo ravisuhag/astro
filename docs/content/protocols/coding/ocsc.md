@@ -1,7 +1,7 @@
 ---
 title: Optical Coding and Sync
 short: OCSC
-description: Optical Communications Coding and Synchronization (CCSDS 142.0-B-1) — the coding layer for a laser downlink.
+description: Optical Communications Coding and Synchronization (CCSDS 142.0-B-1), the coding layer for a laser downlink.
 order: 33
 ---
 
@@ -12,13 +12,13 @@ order: 33
 This is deep-space laser communication. A spacecraft points a laser at Earth
 and pulses it; a ground telescope counts photons. In the **High Photon
 Efficiency** regime, so few photons arrive that the coding has to be
-extraordinary — this is the standard behind NASA's Deep Space Optical
+extraordinary. This is the standard behind NASA's Deep Space Optical
 Communications demonstration.
 
 The full standard specifies **SCPPM**: serially concatenated convolutional
 coding with pulse-position modulation, a large channel interleaver, and an
 iterative decoder. This package implements the deterministic front half of
-that chain — the part that is pure bit manipulation:
+that chain. The part that is pure bit manipulation:
 
 ```
 transfer frames
@@ -30,8 +30,8 @@ transfer frames
   -> SCPPM encoder input block
 ```
 
-Everything after that — the SCPPM encoder proper, the channel interleaver, the
-codeword sync marker, the slot mapper — is coupled to the modulation and is not
+Everything after that (the SCPPM encoder proper, the channel interleaver, the
+codeword sync marker, the slot mapper) is coupled to the modulation and is not
 here. Neither is iterative SCPPM decoding: that is a research-grade job, and it
 does not belong in a wire-format library. What **is** here on the receive side
 is everything after the decoder: `Recover` finds the frames again (clause 3.14.1) and
@@ -40,22 +40,22 @@ delivers each with its quality indicator (clause 3.14.2) and sequence indicator
 
 ## Scope
 
-**Implemented.** The transmit chain from frame to bits — CRC-32, the pseudo-randomizer, and streaming. On receive: frame synchronization, the quality indicator, and the sequence indicator.
+**Implemented.** The transmit chain from frame to bits: CRC-32, the pseudo-randomizer, and streaming. On receive: frame synchronization, the quality indicator, and the sequence indicator.
 
 **Not here yet.**
 
-- **The SCPPM encoder** (clause 3.8) — the convolutional and accumulator stages
+- **The SCPPM encoder** (clause 3.8), the convolutional and accumulator stages
   coupled to PPM mapping.
-- **The channel interleaver** (clause 3.9) and **codeword sync marker** (clause 3.10) —
+- **The channel interleaver** (clause 3.9) and **codeword sync marker** (clause 3.10),
   both operate on PPM symbols, not bits.
 - **The repeater and slot mapper** (clause 3.11, clause 3.12).
-- **The receive side up to and including the decoder** — iterative SCPPM
+- **The receive side up to and including the decoder**: iterative SCPPM
   decoding, slot and symbol timing, soft decisions, channel estimation. (The
-  steps after the decoder — frame synchronization, the quality indicator, the
-  sequence indicator — are here, in `Recover`.)
-- **HPE beacon and optional accompanying data transmission signaling** of clause 4 —
+  steps after the decoder (frame synchronization, the quality indicator, the
+  sequence indicator) are here, in `Recover`.)
+- **HPE beacon and optional accompanying data transmission signaling** of clause 4,
   the uplink beacon carrying LDPC-coded AOS or USLP transfer frames.
-- **CLI subcommands** — a follow-up once the API settles.
+- **CLI subcommands**: a follow-up once the API settles.
 
 ## Everything is bits
 
@@ -119,7 +119,7 @@ publishes the first 40 digits precisely so an implementer can check:
 
 `TestPNSequenceMatchesTheSpecVector` asserts exactly that. If you are
 implementing this elsewhere, check against those digits before trusting your
-taps — the failure mode is silent and total.
+taps. The failure mode is silent and total.
 
 ## Running the chain
 
@@ -136,7 +136,7 @@ if err != nil {
 `Condition` is a **batch** call: it treats its input as one complete
 transmission, so the call itself is the transmission closure of clause 3.4.2.1.1 and
 the final block gets zero-filled. Call it twice and you have two transmissions,
-not one. Frames may be at most 65536 octets — the frame-length managed
+not one. Frames may be at most 65536 octets, the frame-length managed
 parameter's bound from clause 5.2, exposed as `ocsc.MaxFrameLength`.
 
 And back:
@@ -150,8 +150,8 @@ for _, f := range recovered {
 }
 ```
 
-Or run the stages individually — `AttachASM`, `Slice`, `Randomize`,
-`AttachCRC`, `AttachTermination` — if you need to inspect between them.
+Or run the stages individually (`AttachASM`, `Slice`, `Randomize`,
+`AttachCRC`, `AttachTermination`) if you need to inspect between them.
 
 ## Streaming a transmission
 
@@ -179,7 +179,7 @@ if err != nil {
 emit(tail)
 ```
 
-Bits short of a full block carry between `Push` calls — no fill is inserted
+Bits short of a full block carry between `Push` calls. No fill is inserted
 mid-stream, because clause 3.4.2.1.1 permits zero fill only at transmission closure.
 `Close` is that closure, and afterwards the conditioner refuses further use.
 Pushing the same frames through one conditioner produces bit-for-bit the same
@@ -190,14 +190,14 @@ blocks as one batch `Condition` call.
 `Recover` implements the receive side downstream of the SCPPM decoder.
 
 **Quality Indicator (clause 3.14.2).** A frame is marked valid only if every block
-carrying any of its bits — sync marker included — verified its CRC. A frame
+carrying any of its bits (sync marker included) verified its CRC. A frame
 straddling a corrupt block comes back with `Valid` false rather than being
 dropped: the standard delivers invalid frames marked, it does not discard
 them.
 
 **Sequence Indicator (clause 3.15).** `Gap` is 'zero' (false) when a frame is the
 direct successor of the previous one and 'one' (true) when a gap was detected
-— the next frame did not start where it should have, and synchronization had
+. The next frame did not start where it should have, and synchronization had
 to hunt for it.
 
 **Locked synchronization (clause 3.14.1).** With a frame length given, `Recover`
@@ -212,7 +212,7 @@ sequence indicator.
 
 The slicer zero-fills its output to a whole number of blocks (clause 3.4.2.1.1).
 Once that fill is in the stream, **nothing distinguishes it from real frame
-data** — the conditioning chain records nowhere that the data stopped.
+data**, the conditioning chain records nowhere that the data stopped.
 
 Frame length is a managed parameter, fixed for a mission phase, so a real
 receiver always knows it. Pass it and the fill is trimmed. Pass zero and each
@@ -220,5 +220,5 @@ frame runs to the next sync marker, leaving the fill attached to the last one.
 
 ## Reference
 
-- [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) — Optical Communications Coding and Synchronization
+- [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf), Optical Communications Coding and Synchronization
 - [CLI](/cli/ocsc) | [Conformance](/conformance/ocsc) | [The stack](/docs/start/concepts)

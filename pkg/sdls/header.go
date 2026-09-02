@@ -13,11 +13,11 @@
 //
 // The wire layout of the Security Header is not self-describing. Field widths
 // come from the Security Association named by the Security Parameter Index,
-// which both ends agree on before the link opens (§2.3.1.4).
+// which both ends agree on before the link opens (clause 2.3.1.4).
 //
 // This package ships the annex baselines: the AES-256-GCM authenticated
-// encryption of §E1 (TM), §E3 (AOS) and §E4 (USLP), and the AES-CMAC
-// authentication of §E2 (telecommand). It also offers GMAC — not an annex
+// encryption of clause E1 (TM), clause E3 (AOS) and clause E4 (USLP), and the AES-CMAC
+// authentication of clause E2 (telecommand). It also offers GMAC, not an annex
 // baseline itself, but the authentication-only companion of the GCM
 // baselines. Pick between the two MAC algorithms with
 // SecurityAssociation.AuthAlgorithm.
@@ -26,14 +26,14 @@ package sdls
 import "encoding/binary"
 
 // MaxSecurityHeaderSize is the largest permitted Security Header, per
-// CCSDS 355.0-B-2 §4.1.1.1.4.
+// CCSDS 355.0-B-2 clause 4.1.1.1.4.
 const MaxSecurityHeaderSize = 64
 
 // SPISize is the width of the Security Parameter Index field in bytes
-// (16 bits, per §4.1.1.2.1).
+// (16 bits, per clause 4.1.1.2.1).
 const SPISize = 2
 
-// Reserved Security Parameter Index values, per §4.1.1.2.3.
+// Reserved Security Parameter Index values, per clause 4.1.1.2.3.
 const (
 	// SPIReservedZero is reserved by CCSDS for future use.
 	SPIReservedZero uint16 = 0
@@ -43,15 +43,15 @@ const (
 
 // FieldLengths gives the octet widths of the managed Security Header and
 // Security Trailer fields for one Security Association. Every width is fixed
-// for the lifetime of the SA (§2.3.1.4, §4.2.2.5).
+// for the lifetime of the SA (clause 2.3.1.4, clause 4.2.2.5).
 //
-// A width of zero means the field is absent: §4.1.1.3.4 for the IV,
-// §4.1.1.4.4 for the Sequence Number, §4.1.1.5.3 for Pad Length.
+// A width of zero means the field is absent: Clause 4.1.1.3.4 for the IV,
+// Clause 4.1.1.4.4 for the Sequence Number, clause 4.1.1.5.3 for Pad Length.
 type FieldLengths struct {
-	IV     int // Initialization Vector, §4.1.1.3
-	SeqNum int // anti-replay Sequence Number, §4.1.1.4
-	PadLen int // Pad Length, §4.1.1.5
-	MAC    int // Message Authentication Code in the trailer, §4.1.2.3
+	IV     int // Initialization Vector, clause 4.1.1.3
+	SeqNum int // anti-replay Sequence Number, clause 4.1.1.4
+	PadLen int // Pad Length, clause 4.1.1.5
+	MAC    int // Message Authentication Code in the trailer, clause 4.1.2.3
 }
 
 // HeaderSize returns the encoded width of a Security Header with these field
@@ -71,13 +71,13 @@ func (fl FieldLengths) Validate() error {
 	return nil
 }
 
-// SecurityHeader is the Security Header of §4.1.1: a mandatory SPI followed by
+// SecurityHeader is the Security Header of clause 4.1.1: a mandatory SPI followed by
 // three optional fields, contiguous and in this order.
 type SecurityHeader struct {
 	SPI       uint16
-	IV        []byte // §4.1.1.3
-	SeqNum    []byte // §4.1.1.4
-	PadLength []byte // §4.1.1.5
+	IV        []byte // clause 4.1.1.3
+	SeqNum    []byte // clause 4.1.1.4
+	PadLength []byte // clause 4.1.1.5
 }
 
 // Encode serializes the Security Header. Field widths come from the values

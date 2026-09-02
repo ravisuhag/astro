@@ -85,10 +85,10 @@ type SenderConfig struct {
 
 	// FaultHandlers overrides the default disposition for the given fault
 	// conditions at this entity. Table 4-1 defaults every condition to a
-	// Notice of Cancellation (§4.8).
+	// Notice of Cancellation (clause 4.8).
 	FaultHandlers map[ConditionCode]FaultHandler
 
-	// FaultHandlerOverrides travel as TLVs in the Metadata PDU (§5.4.4) and
+	// FaultHandlerOverrides travel as TLVs in the Metadata PDU (clause 5.4.4) and
 	// change the receiver's disposition for the named conditions.
 	FaultHandlerOverrides map[ConditionCode]FaultHandler
 }
@@ -128,7 +128,7 @@ type Sender struct {
 
 	// progress is how far the fresh data stream had got when the transaction
 	// was cancelled; the EOF (cancel) reports it instead of the full file size
-	// (§4.11.2.2).
+	// (clause 4.11.2.2).
 	progress uint64
 
 	// nextOffset is where the next fresh File Data PDU starts.
@@ -155,7 +155,7 @@ type Sender struct {
 // up front and computes its checksum, so the file must be readable now.
 //
 // A transaction with an empty source filename carries metadata only, which is
-// how proxy operations and pure filestore requests travel (§5.2.5).
+// how proxy operations and pure filestore requests travel (clause 5.2.5).
 func NewSender(fs Filestore, config SenderConfig) (*Sender, error) {
 	if config.SegmentSize <= 0 {
 		config.SegmentSize = DefaultSegmentSize
@@ -191,7 +191,7 @@ func NewSender(fs Filestore, config SenderConfig) (*Sender, error) {
 		s.checksum = sum.Sum()
 	}
 
-	// §5.1.10: files too big for a 32-bit size must be flagged large.
+	// Clause 5.1.10: files too big for a 32-bit size must be flagged large.
 	s.largeFile = s.fileSize > 0xFFFFFFFF
 
 	return s, nil
@@ -235,7 +235,7 @@ func (s *Sender) metadataPDU() (*PDU, error) {
 		meta.Options = append(meta.Options, TLV{Type: TLVMessageToUser, Value: msg})
 	}
 
-	// Fault handler overrides ride in the Metadata PDU (§5.4.4), in condition
+	// Fault handler overrides ride in the Metadata PDU (clause 5.4.4), in condition
 	// code order so the encoding is deterministic.
 	if len(s.config.FaultHandlerOverrides) > 0 {
 		conds := make([]ConditionCode, 0, len(s.config.FaultHandlerOverrides))
@@ -281,8 +281,8 @@ func (s *Sender) eofPDU() (*PDU, error) {
 	size := s.fileSize
 	sum := s.checksum
 	if s.cancelled {
-		// §4.11.2.2: the EOF (cancel) carries the transaction's progress —
-		// how much file data went out — and the checksum of only that much.
+		// Clause 4.11.2.2: the EOF (cancel) carries the transaction's progress (
+		// how much file data went out) and the checksum of only that much.
 		size = s.progress
 		if c, err := NewChecksum(s.config.ChecksumType); err == nil {
 			c.Update(0, s.fileData[:size])
@@ -385,7 +385,7 @@ func (s *Sender) NextPDU() (*PDU, bool, error) {
 }
 
 // ResendEOF re-queues the EOF PDU. The caller invokes this from its own timer
-// when an EOF ACK does not arrive; §4.2 leaves the timing to the
+// when an EOF ACK does not arrive; clause 4.2 leaves the timing to the
 // implementation and this library owns no clock.
 func (s *Sender) ResendEOF() {
 	s.mu.Lock()
@@ -407,7 +407,7 @@ func (s *Sender) HandlePDU(pdu *PDU) error {
 	if pdu == nil || pdu.Header == nil {
 		return ErrDataTooShort
 	}
-	// §5.1: a PDU for another transaction is not ours to act on.
+	// Clause 5.1: a PDU for another transaction is not ours to act on.
 	if !s.matchesTransaction(pdu.Header) {
 		return nil
 	}
@@ -454,7 +454,7 @@ func (s *Sender) HandlePDU(pdu *PDU) error {
 			return err
 		}
 		s.finished = fin
-		// §4.11.1: a Finished with a fault condition is the receiver
+		// Clause 4.11.1: a Finished with a fault condition is the receiver
 		// cancelling the transaction; stop sending file data.
 		if fin.ConditionCode != CondNoError {
 			s.condition = fin.ConditionCode
@@ -465,7 +465,7 @@ func (s *Sender) HandlePDU(pdu *PDU) error {
 		s.state = s.terminalState()
 
 	case DirectiveKeepAlive, DirectivePrompt:
-		// Informational for this implementation; §4.6 leaves the reaction to
+		// Informational for this implementation; clause 4.6 leaves the reaction to
 		// flow-control policy the caller owns.
 
 	default:
@@ -475,7 +475,7 @@ func (s *Sender) HandlePDU(pdu *PDU) error {
 }
 
 // AckFinished builds the ACK a Class 2 sender owes for a Finished PDU
-// (§5.2.4). Returns ok == false when no Finished PDU has arrived.
+// (clause 5.2.4). Returns ok == false when no Finished PDU has arrived.
 func (s *Sender) AckFinished() (*PDU, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -517,7 +517,7 @@ func (s *Sender) Suspended() bool {
 	return s.suspended
 }
 
-// Cancel cancels the transaction (§4.11.1). The next PDU out is an EOF
+// Cancel cancels the transaction (clause 4.11.1). The next PDU out is an EOF
 // carrying the cancel condition code of table 5-5 and the transaction's
 // progress so far.
 func (s *Sender) Cancel() {
@@ -526,8 +526,8 @@ func (s *Sender) Cancel() {
 	s.cancelWith(CondCancelRequestReceived)
 }
 
-// DeclareFault raises a fault the caller's own timers detected — the positive
-// ACK limit of §4.7, a keep-alive limit, or inactivity (table 5-5) — and
+// DeclareFault raises a fault the caller's own timers detected (the positive
+// ACK limit of clause 4.7, a keep-alive limit, or inactivity (table 5-5)) and
 // applies the fault handler configured for it, defaulting to the table 4-1
 // disposition (cancel). The library owns no clock, so counting those limits
 // is the caller's job.
@@ -546,15 +546,15 @@ func (s *Sender) handlerFor(cond ConditionCode) FaultHandler {
 	return DefaultFaultHandler(cond)
 }
 
-// fault applies the configured handler for a fault condition (§4.8).
+// fault applies the configured handler for a fault condition (clause 4.8).
 func (s *Sender) fault(cond ConditionCode) {
 	switch s.handlerFor(cond) {
 	case FaultHandlerIgnore:
 	case FaultHandlerSuspend:
 		s.suspended = true
 	case FaultHandlerAbandon:
-		// §4.11.4: abandonment ends the transaction with no further protocol
-		// activity — no EOF (cancel) goes out.
+		// Clause 4.11.4: abandonment ends the transaction with no further protocol
+		// activity, no EOF (cancel) goes out.
 		s.condition = cond
 		s.cancelled = true
 		s.state = StateCancelled
@@ -563,7 +563,7 @@ func (s *Sender) fault(cond ConditionCode) {
 	}
 }
 
-// cancelWith runs the sender's Notice of Cancellation (§4.11.2): retransmission
+// cancelWith runs the sender's Notice of Cancellation (clause 4.11.2): retransmission
 // stops and an EOF (cancel) carrying the fault's condition code goes out.
 func (s *Sender) cancelWith(cond ConditionCode) {
 	if s.state == StateFinished || s.state == StateCancelled {
@@ -586,8 +586,8 @@ func (s *Sender) terminalState() TransactionState {
 }
 
 // matchesTransaction reports whether a PDU belongs to this transaction: same
-// source entity ID and transaction sequence number (§5.1). Values compare
-// numerically, since §5.1.7 note 3 zero-pads differing widths.
+// source entity ID and transaction sequence number (clause 5.1). Values compare
+// numerically, since clause 5.1.7 note 3 zero-pads differing widths.
 func (s *Sender) matchesTransaction(h *PDUHeader) bool {
 	if s.config.Source.Width == 0 && s.config.TransactionSeq.Width == 0 {
 		return true

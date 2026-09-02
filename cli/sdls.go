@@ -38,7 +38,7 @@ func sdlsInspectCmd() *cobra.Command {
 		Use:   "inspect [file]",
 		Short: "Decode a Security Header",
 		Long: "Decode the Security Header at the front of a protected frame's data field: the Security Parameter Index, and whichever of the initialisation vector, sequence number and pad length the Security Association carries.\n\n" +
-			"The field widths are per Security Association, not per frame, and nothing in the header states them — so they are flags. Getting them wrong shifts everything after the SPI, which is why the SPI is reported separately: it is the one field whose position is fixed.",
+			"The field widths are per Security Association, not per frame, and nothing in the header states them, so they are flags. Getting them wrong shifts everything after the SPI, which is why the SPI is reported separately: it is the one field whose position is fixed.",
 		Example: `  # A header with a 12-octet IV and nothing else
   astro sdls inspect --input hex --iv 12 < frame-data.hex
 

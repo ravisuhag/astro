@@ -162,7 +162,7 @@ func pxscSyncCmd() *cobra.Command {
 // A Viterbi decoder does not commit a bit until it has seen enough of what
 // follows to be sure of it: pkg/pxsc looks back five constraint lengths, 35
 // bits, before deciding. Without a tail, the last 35 bits of a stream never
-// come out, and a round trip silently loses its last few octets — which is
+// come out, and a round trip silently loses its last few octets, which is
 // what this exists to prevent.
 //
 // Five octets is 40 bits, the smallest whole number of octets that covers 35.
@@ -178,7 +178,7 @@ func pxscEncodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "encode [file]",
 		Short: "Apply the convolutional code",
-		Long: "Encode octets with the rate-1/2 convolutional code of CCSDS 211.2-B-3 §3.3: constraint length 7, generators 171 and 133 in octal.\n\n" +
+		Long: "Encode octets with the rate-1/2 convolutional code of CCSDS 211.2-B-3 clause 3.3: constraint length 7, generators 171 and 133 in octal.\n\n" +
 			"Every input bit becomes two output bits, so the output is twice the input. The output here is one octet per code symbol pair, which is how the decoder wants it back.\n\n" +
 			"A tail of zero octets is appended by default. A Viterbi decoder holds back the last 35 bits of a stream until it has seen enough of what follows to be sure of them, so without the tail a round trip loses its last few octets. Use --flush=false when you are appending more data yourself.",
 		Example: `  # Encode a PLTU for transmission

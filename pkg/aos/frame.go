@@ -36,21 +36,21 @@ const OIDVCID = 63
 // MaxVCFrameCount is the maximum value of the 24-bit VC Frame Count.
 const MaxVCFrameCount = 0xFFFFFF
 
-// M_PDU header constants (CCSDS 732.0-B-4 §4.1.4.2).
+// M_PDU header constants (CCSDS 732.0-B-4 clause 4.1.4.2).
 const (
 	// MPDUHeaderSize is the encoded size of the M_PDU header in bytes.
 	MPDUHeaderSize = 2
 	// MPDUMaxFirstHeaderPointer is the maximum value of the 11-bit FHP.
 	MPDUMaxFirstHeaderPointer = 0x07FF
 	// FHPNoPacketStart marks a frame in which no packet starts
-	// (CCSDS 732.0-B-4 §4.1.4.2.3.4: FHP set to 'all ones').
+	// (CCSDS 732.0-B-4 clause 4.1.4.2.3.4: FHP set to 'all ones').
 	FHPNoPacketStart uint16 = 0x07FF
 	// FHPAllIdle marks an M_PDU that contains only idle data
-	// (CCSDS 732.0-B-4 §4.1.4.2.3.5: FHP set to 'all ones minus one').
+	// (CCSDS 732.0-B-4 clause 4.1.4.2.3.5: FHP set to 'all ones minus one').
 	FHPAllIdle uint16 = 0x07FE
 )
 
-// B_PDU header constants (CCSDS 732.0-B-4 §4.1.4.3).
+// B_PDU header constants (CCSDS 732.0-B-4 clause 4.1.4.3).
 const (
 	// BPDUHeaderSize is the encoded size of the B_PDU header in bytes.
 	BPDUHeaderSize = 2
@@ -64,7 +64,7 @@ const (
 
 // PrimaryHeader represents the AOS Transfer Frame Primary Header.
 //
-// Bit layout (CCSDS 732.0-B-4 §4.1.2):
+// Bit layout (CCSDS 732.0-B-4 clause 4.1.2):
 //
 //	Byte 0:  TFVN[1:0]  | SCID[7:2]
 //	Byte 1:  SCID[1:0]  | VCID[5:0]
@@ -133,7 +133,7 @@ func (h *PrimaryHeader) Decode(data []byte) error {
 	h.VCFrameCount = uint32(data[2])<<16 | uint32(data[3])<<8 | uint32(data[4])
 	h.ReplayFlag = data[5]&(1<<7) != 0
 	h.VCFCUsageFlag = data[5]&(1<<6) != 0
-	// CCSDS 732.0-B-4 §4.1.2.6.5 (signaling field): bits 42-43 are reserved
+	// CCSDS 732.0-B-4 clause 4.1.2.6.5 (signaling field): bits 42-43 are reserved
 	// spares and shall be set to '00'.
 	if data[5]&0x30 != 0 {
 		return ErrInvalidSignalingSpare
@@ -177,7 +177,7 @@ func (h *PrimaryHeader) Humanize() string {
 // MPDUHeader represents an M_PDU header carried at the start of a
 // Transfer Frame Data Field that uses the M_PDU service.
 //
-// Bit layout (CCSDS 732.0-B-4 §4.1.4.2):
+// Bit layout (CCSDS 732.0-B-4 clause 4.1.4.2):
 //
 //	Byte 0: reserved(5) | FHP[10:8]
 //	Byte 1: FHP[7:0]
@@ -208,7 +208,7 @@ func (h *MPDUHeader) Decode(data []byte) error {
 // BPDUHeader represents a B_PDU header carried at the start of a
 // Transfer Frame Data Field that uses the B_PDU service.
 //
-// Bit layout (CCSDS 732.0-B-4 §4.1.4.3):
+// Bit layout (CCSDS 732.0-B-4 clause 4.1.4.3):
 //
 //	Byte 0: reserved(2) | BDP[13:8]
 //	Byte 1: BDP[7:0]
@@ -242,7 +242,7 @@ func (h *BPDUHeader) Decode(data []byte) error {
 //
 // The DataField carries one of M_PDU, B_PDU, or VCA payload depending on
 // the Virtual Channel configuration. The frame structure does not encode
-// which PDU type is in use — that is determined per-VC by mission config.
+// which PDU type is in use. That is determined per-VC by mission config.
 type TransferFrame struct {
 	Header     PrimaryHeader
 	FHEC       []byte // 2 bytes when present (Frame Header Error Control)
@@ -273,7 +273,7 @@ func WithFECF() FrameOption {
 }
 
 // WithFHEC enables the Frame Header Error Control (RS(10,6) check symbols
-// over the protected header octets, CCSDS 732.0-B-4 §4.1.2.6).
+// over the protected header octets, CCSDS 732.0-B-4 clause 4.1.2.6).
 func WithFHEC() FrameOption {
 	return func(f *TransferFrame) { f.HasFHEC = true }
 }
@@ -524,7 +524,7 @@ func decodeFrame(data []byte, insertZoneLen int, hasOCF, hasFECF, hasFHEC bool) 
 }
 
 // IsIdleFrame reports whether the frame is an Only Idle Data frame.
-// Per CCSDS 732.0-B-4 §4.1.2.2.4, OID frames use VCID 63.
+// Per CCSDS 732.0-B-4 clause 4.1.2.2.4, OID frames use VCID 63.
 func IsIdleFrame(frame *TransferFrame) bool {
 	return frame.Header.VCID == OIDVCID
 }

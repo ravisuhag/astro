@@ -1,11 +1,11 @@
 ---
 title: astro xtce
 short: XTCE
-description: XTCE mission databases — validate, list, layout, decode, match.
+description: XTCE mission databases, validate, list, layout, decode, match.
 order: 150
 ---
 
-XTCE mission database operations — validate a database, see what it defines, and decode packets against it ([XTCE 1.2](https://www.omg.org/spec/XTCE/), [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf)).
+XTCE mission database operations: validate a database, see what it defines, and decode packets against it ([XTCE 1.2](https://www.omg.org/spec/XTCE/), [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf)).
 
 ## Subcommands
 
@@ -17,7 +17,7 @@ XTCE mission database operations — validate a database, see what it defines, a
 | `astro xtce decode` | Decode a packet against a named container |
 | `astro xtce match` | Work out which container a packet is, then decode it |
 
-Names are qualified paths — `/Sat/Telemetry`, not `Telemetry`. `list` prints them in that form so its output can be pasted straight into the other commands.
+Names are qualified paths, `/Sat/Telemetry`, not `Telemetry`. `list` prints them in that form so its output can be pasted straight into the other commands.
 
 ---
 
@@ -109,7 +109,7 @@ Values are the engineering ones by default: calibrated numbers and enumeration l
 
 A field that cannot be decoded is reported on stderr and the rest of the packet still comes out, so one unsupported encoding in the middle does not hide everything after it.
 
-A container whose shape depends on its own contents — a delimited string, a blob sized by a length field, a packet-decided repeat count — is resolved against the packet being decoded, and the text output says so. The field map that results describes that packet only: the same container may read a different shape from the next one.
+A container whose shape depends on its own contents (a delimited string, a blob sized by a length field, a packet-decided repeat count) is resolved against the packet being decoded, and the text output says so. The field map that results describes that packet only: the same container may read a different shape from the next one.
 
 ```
 astro xtce decode <file> [packet-file] [flags]
@@ -142,7 +142,7 @@ astro xtce decode mission.xml packet.bin --input bin \
 
 Search down from a root container for the one whose restriction criteria the packet satisfies, and decode it against that. This is what a ground station does with an unlabelled packet.
 
-The deepest match wins, so a packet that is both a telemetry packet and a housekeeping telemetry packet is reported as the latter. A packet that satisfies nothing is an error — a normal thing for a ground station to see, but you have to be told.
+The deepest match wins, so a packet that is both a telemetry packet and a housekeeping telemetry packet is reported as the latter. A packet that satisfies nothing is an error, a normal thing for a ground station to see, but you have to be told.
 
 ```
 astro xtce match <file> [packet-file] [flags]
@@ -177,4 +177,4 @@ astro xtce match mission.xml --root /Sat/Packet --format name < packet.hex
 
 ---
 
-**See also** — [the protocol page](/protocols/mission/xtce) for the standard and the Go API, and the [conformance statement](/conformance/xtce) for what is and is not implemented.
+**See also**: [the protocol page](/protocols/mission/xtce) for the standard and the Go API, and the [conformance statement](/conformance/xtce) for what is and is not implemented.
