@@ -2,7 +2,7 @@ site:
   title: Astro
   description: Conformance-tested CCSDS and ECSS protocols for building spacecraft and ground software.
 
-url: https://astro-docs.vercel.app
+url: https://astro.ravisuhag.com
 preset: vercel
 
 theme:
@@ -23,7 +23,7 @@ content:
     description: What each package implements clause by clause, and what it does not.
 
 latest:
-  label: "0.3"
+  label: "0.4"
   landing: true
 
 navigation:
