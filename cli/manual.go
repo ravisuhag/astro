@@ -24,6 +24,11 @@ var protocols = map[string]string{
 	"pus":  "pus.md",
 	"ldc":  "ldc.md",
 	"rhc":  "rhc.md",
+	"cop":  "cop.md",
+	"pxdl": "pxdl.md",
+	"pxsc": "pxsc.md",
+	"ocsc": "ocsc.md",
+	"sdls": "sdls.md",
 	"cfdp": "cfdp.md",
 	"ltp":  "ltp.md",
 	"bp":   "bp.md",
@@ -74,6 +79,11 @@ func printManualIndex() error {
 	sb.WriteString("| Licklider Transmission Protocol | `astro manual ltp` |\n")
 	sb.WriteString("| Bundle Protocol | `astro manual bp` |\n")
 	sb.WriteString("| Space Link Extension | `astro manual sle` |\n")
+	sb.WriteString("| COP-1 Control Words | `astro manual cop` |\n")
+	sb.WriteString("| Proximity-1 Data Link | `astro manual pxdl` |\n")
+	sb.WriteString("| Proximity-1 Coding | `astro manual pxsc` |\n")
+	sb.WriteString("| Optical Coding | `astro manual ocsc` |\n")
+	sb.WriteString("| Space Data Link Security | `astro manual sdls` |\n")
 
 	out, err := printer.Markdown(sb.String())
 	if err != nil {
