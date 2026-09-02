@@ -47,6 +47,22 @@ var (
 	// than silently truncated.
 	ErrTrailingBytes = errors.New("trailing octets after a fixed-size PUS message body")
 
+	// ErrInvalidTimeWindow indicates a time-window type outside Table 8-5's
+	// four values, or a "from time tag" greater than the "to time tag".
+	// Clause 6.11.10.3d makes both a rejection.
+	ErrInvalidTimeWindow = errors.New("invalid ST[11] time window")
+
+	// ErrCapabilityNotSupported indicates a message carrying sub-schedule or
+	// group identifiers while the profile declares that the subservice does
+	// not support them (clause 6.11.4.1). Encoding them would produce octets
+	// the peer is not expecting the fields for and so cannot parse.
+	ErrCapabilityNotSupported = errors.New("mission profile does not declare this ST[11] capability")
+
+	// ErrPacketLengthMismatch indicates an embedded telecommand packet whose
+	// own length field disagrees with the octets supplied. In a scheduled
+	// activity list that would desynchronise every activity after it.
+	ErrPacketLengthMismatch = errors.New("embedded packet length field disagrees with the octets given")
+
 	// ErrHeaderNotWordAligned indicates a secondary header whose size is not a
 	// whole number of mission words (clauses 7.4.3.1l and 7.4.4.1g), when the
 	// profile declares a word size to check against.

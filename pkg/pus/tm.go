@@ -105,34 +105,11 @@ func (p MissionProfile) epoch() time.Time {
 }
 
 // encodeTime serializes the absolute time field per the profile.
+//
+// The same field appears in ST[11] message bodies, so the codec is shared;
+// see timefield.go.
 func (h *TMHeader) encodeTime() ([]byte, error) {
-	switch h.Profile.TimeFormat {
-	case TimeNone:
-		return nil, nil
-	case TimeRaw:
-		return h.RawTime, nil
-	case TimeCUC, TimeCUCExplicit:
-		c, err := tcf.NewCUC(h.Time, h.Profile.cucOptions()...)
-		if err != nil {
-			return nil, err
-		}
-		encoded, err := c.Encode()
-		if err != nil {
-			return nil, err
-		}
-		if h.Profile.TimeFormat == TimeCUCExplicit {
-			return encoded, nil
-		}
-		// PFC 3 to 46 carry the T-field alone; pkg/tcf always prefixes the
-		// P-field, so strip it back off (Table 7-10).
-		pSize := c.PField.Size()
-		if len(encoded) < pSize {
-			return nil, ErrUnsupportedTimeFormat
-		}
-		return encoded[pSize:], nil
-	default:
-		return nil, ErrUnsupportedTimeFormat
-	}
+	return encodeAbsoluteTime(h.Profile, h.Time, h.RawTime)
 }
 
 // Encode serializes the header per Figure 7-7.
@@ -201,31 +178,11 @@ func (h *TMHeader) Decode(data []byte) error {
 	offset += DestinationIDSize
 
 	timeSize := h.Profile.TimeSize()
-	switch h.Profile.TimeFormat {
-	case TimeCUCExplicit:
-		c, err := tcf.DecodeCUC(data[offset:offset+timeSize], h.Profile.epoch())
-		if err != nil {
-			return err
-		}
-		h.Time = c.Time()
-	case TimeCUC:
-		// Rebuild the P-field the PFC implies, then hand the whole thing to
-		// pkg/tcf (Table 7-10: "the P-field is implicit and derived from the
-		// PFC").
-		field := make([]byte, 0, cucPFieldSize+timeSize)
-		field = append(field, h.Profile.implicitCUCPField())
-		field = append(field, data[offset:offset+timeSize]...)
-
-		c, err := tcf.DecodeCUC(field, h.Profile.epoch())
-		if err != nil {
-			return err
-		}
-		h.Time = c.Time()
-	case TimeRaw:
-		h.RawTime = make([]byte, timeSize)
-		copy(h.RawTime, data[offset:offset+timeSize])
-	case TimeNone:
+	stamp, raw, _, err := decodeAbsoluteTime(h.Profile, data[offset:offset+timeSize])
+	if err != nil {
+		return err
 	}
+	h.Time, h.RawTime = stamp, raw
 	offset += timeSize
 
 	if h.Profile.TMSpareBytes > 0 {

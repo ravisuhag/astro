@@ -25,6 +25,7 @@ Services are numbered. A few you will meet constantly:
 | ST[03] | Housekeeping | Defines periodic parameter reports and carries their values |
 | ST[05] | Event reporting | On-board events at four severities |
 | ST[08] | Function management | Tells a process to run one of its own functions |
+| ST[11] | Time-based scheduling | Holds telecommands to release at a given time |
 | ST[17] | Test | "Are you alive?" |
 
 A message type is written `TC[3,1]` for a telecommand and `TM[1,2]` for
@@ -47,7 +48,7 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 
 ## Scope
 
-**Implemented.** Five services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, and ST[17] test — plus the PUS secondary headers, mission profiles, and the time field.
+**Implemented.** Six services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, and ST[17] test — plus the PUS secondary headers, mission profiles, and both time fields.
 
 **Not here yet.**
 
@@ -55,13 +56,16 @@ The standard defines twenty-plus services, and the rest are deliberate
 follow-ups:
 
 ST[02] device access, ST[04] parameter statistics, ST[06] memory management,
-ST[09] time management, ST[11] time-based scheduling, ST[12] on-board
-monitoring, ST[13] large packet transfer, ST[14] real-time forwarding, ST[15]
-storage and retrieval, ST[18] on-board control procedures, ST[19] event-action,
-ST[20] parameter management, ST[21] request sequencing, ST[22] position-based
-scheduling, ST[23] file management.
+ST[09] time management, ST[12] on-board monitoring, ST[13] large packet
+transfer, ST[14] real-time forwarding, ST[15] storage and retrieval, ST[18]
+on-board control procedures, ST[19] event-action, ST[20] parameter management,
+ST[21] request sequencing, ST[22] position-based scheduling, ST[23] file
+management.
 
-Also absent: on-board scheduling semantics of any kind, and CLI subcommands.
+Also absent: the schedule itself. ST[11] gives you the wire format of all
+twenty-seven message types; running the schedule — sub-schedule and group
+state, the release window, interlocks between activities — is flight
+software's job, and clause 6.11 is where its rules live.
 
 ## Mission profiles
 
@@ -257,6 +261,129 @@ their structure are checked exactly. A body with octets left over decodes to
 `ErrTrailingBytes` rather than being silently truncated, matching the PUS
 acceptance checks. Bodies that end in caller-interpreted data — failure data,
 auxiliary data, parameter values — carry those octets verbatim by design.
+
+## Function management, ST[08]
+
+One message type: `TC[8,1]` tells an application process to run one of the
+functions it declares. Everything interesting is outside the standard — which
+functions exist, what their arguments mean, what running one does — so the
+envelope is all there is.
+
+The argument group is optional, and nothing in the message flags it. Clause
+6.8.4c makes it conditional on the function taking arguments, so a function
+that takes none carries no count field at all rather than a count of zero. The
+decoder works this out from the body length, which is the one thing it can read
+without the mission's function declarations.
+
+Each argument value is "deduced" too, and that width really does come from the
+mission. So the argument block travels verbatim, and `SplitArguments` splits it
+against a width function you supply:
+
+```go
+args, err := request.Arguments.SplitArguments(profile, func(id uint64) (int, error) {
+    return myFunctionDeclaration[id], nil
+})
+```
+
+The count in the message is a claim to check, not a length to trust. A block
+holding a different number of arguments is an error, because that means the two
+ends disagree about the declaration.
+
+The standard says missions should prefer their own service types, and that
+ST[08] "remains in this version of the Standard for backward compatibility
+reasons". It is here because packets carrying it still fly.
+
+## Time-based scheduling, ST[11]
+
+Twenty-seven message types, all implemented. The schedule holds telecommands
+with a release time; the ground inserts them, shifts them, deletes them and
+asks what is in there.
+
+```go
+request := pus.InsertActivitiesRequest{
+    Profile:       profile,
+    SubScheduleID: 3,
+    Activities: []pus.ScheduledActivity{
+        {GroupID: 7, ReleaseTime: releaseAt, Request: tcPacketBytes},
+    },
+}
+```
+
+The `Request` field is a whole CCSDS telecommand packet, primary header
+included. Its length comes from the packet's own length field, which is what
+makes a list of variable-length activities splittable at all.
+
+### Two capabilities decide the layout
+
+Clause 6.11.4.1 says whether a subservice supports sub-schedules and groups is
+declared per mission. Those two declarations decide whether the sub-schedule ID
+and group ID fields are present, so they are in the profile:
+
+```go
+profile.SupportsSubSchedules = true
+profile.SupportsGroups = true
+```
+
+Get them wrong and every activity in a list is split at the wrong offset. There
+is no flag in the message to fall back on.
+
+### Filters
+
+Four of the requests select activities by filter rather than by name: a time
+window, then optionally a list of sub-schedules, then optionally a list of
+groups. The three parts are intersected, not unioned (clause 6.11.10.2.5).
+
+The window has four types, and which time tags travel depends on the type:
+
+| Type | Meaning | Tags on the wire |
+|---|---|---|
+| `WindowSelectAll` | everything | none |
+| `WindowFromTo` | between and including both | from, then to |
+| `WindowFrom` | at and after the from tag | from only |
+| `WindowTo` | before and at the to tag | **to only** |
+
+That last row is the one to get right. `WindowTo` carries its tag in the *to*
+slot with the from slot absent — clause 6.11.10.3c item (c) — not a single tag
+in the first slot. A codec that put it first would encode a `WindowFrom`
+message's bytes under a `WindowTo` type.
+
+### An N of zero means all
+
+`TC[11,20]`, `TC[11,21]`, `TC[11,23]`, `TC[11,24]` and `TC[11,25]` all say that
+a count of zero applies to every sub-schedule or group. So an empty ID list is
+not an empty request, and `IsAll()` says so rather than leaving you to
+remember.
+
+### Two different "request ID" fields
+
+Figure 8-1 and Figure 8-92 both call their field a request ID and they are not
+the same field. `pus.RequestID`, the ST[01] one, is a bit-packed 32-bit copy of
+the CCSDS primary header. `pus.ScheduleRequestID`, the ST[11] one, carries a
+source ID as well and uses whole octets at mission-declared widths.
+
+Figure 8-1's own note explains why: its request ID "cannot be used to identify
+the request since it does not contain the identifier of the source of that
+request". Figure 8-92 fixes exactly that. The two are separate Go types
+because using one where the other belongs produces wrong bytes and no error.
+
+### Time offsets
+
+A shift carries a relative time, which clause 7.3.11 makes signed — a negative
+offset is the two's complement of the positive one, over the whole
+coarse-and-fine field.
+
+`RelativeTime` stores the field as ticks rather than a `time.Duration`, because
+the two do not round-trip. Three fine octets resolve about 60 ns, and the
+nearest whole nanosecond is a different number: a `Duration` would lose the low
+bits and re-encode different octets. `Duration()` is there for arithmetic, not
+for storage.
+
+The same caution applies to the absolute time field, and there the loss is not
+avoidable here. `pkg/tcf` truncates in both directions by design — rounding to
+nearest can carry the fine field past its width — so a CUC field of two or
+three fine octets can come back one tick lower than it went out. It matters if
+you decode a scheduled release time and re-encode it: compare the octets, not
+the `time.Time`.
 
 ## Reference
 

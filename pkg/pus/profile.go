@@ -135,6 +135,35 @@ type MissionProfile struct {
 	CollectionIntervalBytes      int
 	CountBytes                   int
 
+	// RelativeTimeCoarseBytes and RelativeTimeFineBytes size a PTC 10
+	// relative time field: the time offsets of ST[11]. Table 7-11's PFC 3 to
+	// 18 allow 1 to 4 coarse octets and 0 to 3 fine, and the split is the
+	// PFC's, not the absolute time field's — a mission may declare a different
+	// width for the two. Zero selects 4 coarse and 0 fine, whole seconds,
+	// which is what a schedule shift usually needs.
+	RelativeTimeCoarseBytes int
+	RelativeTimeFineBytes   int
+
+	// Time-based scheduling widths for ST[11] (Figures 8-91 to 8-110). Every
+	// one of these is enumerated or an unsigned integer with no stated width.
+	SubScheduleIDBytes    int
+	GroupIDBytes          int
+	ScheduleCountBytes    int
+	ScheduleStatusBytes   int
+	TimeWindowTypeBytes   int
+	ScheduleSourceIDBytes int
+	ScheduleAPIDBytes     int
+	ScheduleSeqCountBytes int
+
+	// SupportsSubSchedules and SupportsGroups declare the two capabilities of
+	// clause 6.11.4.1. They are not widths but they decide field presence:
+	// figures 8-91, 8-93, 8-97, 8-100 and their siblings mark the sub-schedule
+	// ID and group ID optional, and what makes them present is the subservice
+	// supporting the capability. A decoder that guessed would mis-split every
+	// activity in the list.
+	SupportsSubSchedules bool
+	SupportsGroups       bool
+
 	// Function management widths for ST[08] (Figure 8-87).
 	//
 	// FunctionIDBytes is the width of the fixed character-string that names
@@ -178,11 +207,117 @@ func DefaultProfile() MissionProfile {
 		ParameterIDBytes:             2,
 		CollectionIntervalBytes:      4,
 		CountBytes:                   1,
+		RelativeTimeCoarseBytes:      4,
+		RelativeTimeFineBytes:        0,
+		SubScheduleIDBytes:           1,
+		GroupIDBytes:                 1,
+		ScheduleCountBytes:           1,
+		ScheduleStatusBytes:          1,
+		TimeWindowTypeBytes:          1,
+		ScheduleSourceIDBytes:        2,
+		ScheduleAPIDBytes:            2,
+		ScheduleSeqCountBytes:        2,
+		SupportsSubSchedules:         true,
+		SupportsGroups:               true,
 		FunctionIDBytes:              8,
 		FunctionArgumentCountBytes:   1,
 		FunctionArgumentIDBytes:      1,
 		APIDBytes:                    2,
 	}
+}
+
+// RelativeCoarseSize returns the coarse octets of a relative time field, or 4
+// when the profile leaves it zero.
+func (p MissionProfile) RelativeCoarseSize() int {
+	if p.RelativeTimeCoarseBytes == 0 {
+		return 4
+	}
+	return p.RelativeTimeCoarseBytes
+}
+
+// RelativeFineSize returns the fine octets of a relative time field. Zero is
+// a real answer here — whole seconds — so there is no default to substitute.
+func (p MissionProfile) RelativeFineSize() int { return p.RelativeTimeFineBytes }
+
+// RelativeTimeSize returns the width of a PTC 10 relative time field in
+// octets: coarse plus fine, with no P-field, since Table 7-11 makes it
+// implicit for every PFC it lists.
+func (p MissionProfile) RelativeTimeSize() int {
+	return p.RelativeCoarseSize() + p.RelativeFineSize()
+}
+
+// SubScheduleIDSize returns the width of an ST[11] sub-schedule ID, or 1 when
+// the profile leaves it zero.
+func (p MissionProfile) SubScheduleIDSize() int {
+	if p.SubScheduleIDBytes == 0 {
+		return 1
+	}
+	return p.SubScheduleIDBytes
+}
+
+// GroupIDSize returns the width of an ST[11] group ID, or 1 by default.
+func (p MissionProfile) GroupIDSize() int {
+	if p.GroupIDBytes == 0 {
+		return 1
+	}
+	return p.GroupIDBytes
+}
+
+// ScheduleCountSize returns the width of an ST[11] N field, or 1 by default.
+func (p MissionProfile) ScheduleCountSize() int {
+	if p.ScheduleCountBytes == 0 {
+		return 1
+	}
+	return p.ScheduleCountBytes
+}
+
+// ScheduleStatusSize returns the width of an ST[11] sub-schedule or group
+// status field, or 1 by default. Tables 8-3 and 8-4 give both the same two
+// values, so one width covers both.
+func (p MissionProfile) ScheduleStatusSize() int {
+	if p.ScheduleStatusBytes == 0 {
+		return 1
+	}
+	return p.ScheduleStatusBytes
+}
+
+// TimeWindowTypeSize returns the width of an ST[11] time window type field, or
+// 1 by default.
+func (p MissionProfile) TimeWindowTypeSize() int {
+	if p.TimeWindowTypeBytes == 0 {
+		return 1
+	}
+	return p.TimeWindowTypeBytes
+}
+
+// ScheduleSourceIDSize, ScheduleAPIDSize and ScheduleSeqCountSize return the
+// three widths of an ST[11] request ID (Figure 8-92), each defaulting to 2.
+func (p MissionProfile) ScheduleSourceIDSize() int {
+	if p.ScheduleSourceIDBytes == 0 {
+		return 2
+	}
+	return p.ScheduleSourceIDBytes
+}
+
+// ScheduleAPIDSize returns the width of an ST[11] application process ID.
+func (p MissionProfile) ScheduleAPIDSize() int {
+	if p.ScheduleAPIDBytes == 0 {
+		return 2
+	}
+	return p.ScheduleAPIDBytes
+}
+
+// ScheduleSeqCountSize returns the width of an ST[11] sequence count.
+func (p MissionProfile) ScheduleSeqCountSize() int {
+	if p.ScheduleSeqCountBytes == 0 {
+		return 2
+	}
+	return p.ScheduleSeqCountBytes
+}
+
+// ScheduleRequestIDSize returns the width of a whole ST[11] request ID.
+func (p MissionProfile) ScheduleRequestIDSize() int {
+	return p.ScheduleSourceIDSize() + p.ScheduleAPIDSize() + p.ScheduleSeqCountSize()
 }
 
 // FunctionIDSize returns the width of the ST[08] function ID field in octets:
@@ -269,6 +404,10 @@ func (p MissionProfile) Validate() error {
 		p.TimeRawBytes, p.StepIDBytes, p.FailureCodeBytes,
 		p.EventDefinitionIDBytes, p.HousekeepingStructureIDBytes,
 		p.ParameterIDBytes, p.CollectionIntervalBytes, p.CountBytes,
+		p.RelativeTimeCoarseBytes, p.RelativeTimeFineBytes,
+		p.SubScheduleIDBytes, p.GroupIDBytes, p.ScheduleCountBytes,
+		p.ScheduleStatusBytes, p.TimeWindowTypeBytes,
+		p.ScheduleSourceIDBytes, p.ScheduleAPIDBytes, p.ScheduleSeqCountBytes,
 		p.FunctionIDBytes, p.FunctionArgumentCountBytes,
 		p.FunctionArgumentIDBytes,
 		p.APIDBytes, p.WordSizeBytes,
@@ -300,6 +439,16 @@ func (p MissionProfile) Validate() error {
 		}
 	default:
 		return ErrUnsupportedTimeFormat
+	}
+
+	// Table 7-11's PFC 3 to 18: coarse is (PFC+1)/4 and fine is (PFC+1) mod 4,
+	// so coarse runs 1 to 4 and fine runs 0 to 3, the same bounds Table 7-10
+	// gives the absolute field.
+	if p.RelativeCoarseSize() < 1 || p.RelativeCoarseSize() > 4 {
+		return ErrInvalidProfile
+	}
+	if p.RelativeFineSize() < 0 || p.RelativeFineSize() > 3 {
+		return ErrInvalidProfile
 	}
 
 	// A mission-profile sanity bound, not a CCSDS 133.0-B-2 rule; see the

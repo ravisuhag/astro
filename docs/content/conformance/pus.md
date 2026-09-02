@@ -26,7 +26,7 @@ order: 210
 | Implementation Name | astro/pkg/pus |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | Every codec is parameterized by an explicit `MissionProfile`; there is no package-level default |
-| Other Information | Go library implementing PUS-C secondary headers and five services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
+| Other Information | Go library implementing PUS-C secondary headers and six services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -111,6 +111,33 @@ order: 210
 | TM[5,8] disabled events list report | 8.5.2.8 | O | Y |
 | ST[08] function management | 8.8 | O | Y — the one message type the service defines |
 | TC[8,1] perform a function | 8.8.2.1 | O | Y — function ID, the optional argument group, and a caller-driven split of the argument block |
+| ST[11] time-based scheduling | 8.11 | O | Y — all twenty-seven message types |
+| TC[11,1] / TC[11,2] enable and disable schedule execution | 8.11.2.1, 8.11.2.2 | O | Y — empty bodies |
+| TC[11,3] reset the schedule | 8.11.2.3 | O | Y — empty body |
+| TC[11,4] insert activities | 8.11.2.4 | O | Y — one sub-schedule per request, then the activity list; each activity carries a whole TC packet |
+| TC[11,5] delete by request identifier | 8.11.2.5 | O | Y |
+| TC[11,6] delete by filter | 8.11.2.6 | O | Y — including the from-greater-than-to rejection of 6.11.10.3d |
+| TC[11,7] time-shift by request identifier | 8.11.2.7 | O | Y — signed offset |
+| TC[11,8] time-shift by filter | 8.11.2.8 | O | Y |
+| TC[11,9] detail-report by request identifier | 8.11.2.9 | O | Y |
+| TM[11,10] schedule detail report | 8.11.2.10 | O | Y — sub-schedule ID per activity, unlike the insert request |
+| TC[11,11] detail-report by filter | 8.11.2.11 | O | Y |
+| TC[11,12] summary-report by request identifier | 8.11.2.12 | O | Y |
+| TM[11,13] schedule summary report | 8.11.2.13 | O | Y |
+| TC[11,14] summary-report by filter | 8.11.2.14 | O | Y |
+| TC[11,15] time-shift all | 8.11.2.15 | O | Y |
+| TC[11,16] / TC[11,17] detail- and summary-report all | 8.11.2.16, 8.11.2.17 | O | Y — empty bodies |
+| TC[11,18] report sub-schedule status | 8.11.2.18 | O | Y — empty body |
+| TM[11,19] sub-schedule status report | 8.11.2.19 | O | Y |
+| TC[11,20] / TC[11,21] enable and disable sub-schedules | 8.11.2.20, 8.11.2.21 | O | Y — including the N-of-zero-means-all rule of 8.11.2.20c and 8.11.2.21c |
+| TC[11,22] create scheduling groups | 8.11.2.22 | O | Y |
+| TC[11,23] to TC[11,25] delete, enable and disable groups | 8.11.2.23 to 8.11.2.25 | O | Y — including N of zero |
+| TC[11,26] report group status | 8.11.2.26 | O | Y — empty body |
+| TM[11,27] scheduling group status report | 8.11.2.27 | O | Y |
+| Sub-schedule and group status enumerations | Tables 8-3, 8-4 | O | Y — disabled 0, enabled 1 |
+| Time window type enumeration | Table 8-5 | O | Y — all four, and a fifth value is rejected |
+| Time window tag presence | 6.11.10.3c | O | Y — the from tag for "from" and "from-to", the to tag for "to" and "from-to" |
+| Relative time, PTC 10 | 7.3.11, Table 7-11 | O | Y — signed, two's complement over the whole field, PFC 3 to 18 widths |
 | ST[17] test | 8.17 | O | Y |
 | TC[17,1] / TM[17,2] are-you-alive | 8.17.2.1, 8.17.2.2 | O | Y |
 | TC[17,3] / TM[17,4] on-board connection | 8.17.2.3, 8.17.2.4 | O | Y — APID width declared by `APIDBytes`, two octets by default |
@@ -139,10 +166,12 @@ those trailing octets verbatim by design.
 | ST[03] parameter functional reporting, subtypes [3,37] to [3,44] | 8.3.2 | N | The whole functional-reporting capability is excluded. A follow-up. |
 | Packet error control field | 7.4.3.2d to f, 7.4.4.2d | N | Checksumming is declared per mission; `pkg/spp` offers the CRC-16 alternative via `WithErrorControl`. The ISO 16-bit checksum alternative the standard also allows is not implemented anywhere in this stack, so a mission declaring it cannot use these packages unmodified. |
 | User data spare and padding word size | 7.4.3.2b, 7.4.4.2b | N | Padding of the user data field to the mission word size is left to the caller. For the secondary headers, a declared `WordSizeBytes` makes `MissionProfile.Validate` check word alignment; zero leaves it unchecked. |
-| ST[02], ST[04], ST[06], ST[09], ST[11] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[02], ST[04], ST[06], ST[09], ST[12] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[11] schedule state and execution | 6.11 | N by design | The wire format of all twenty-seven messages is here; the schedule is not. Sub-schedule and group state, the release window, and the interlocks between activities are flight software. Every check the codecs make is one a message can fail on its own. |
+| Absolute time field byte fidelity across a decode and re-encode | 7.3.10, Table 7-10 | P | `pkg/tcf` truncates a CUC fractional second in both directions by design — rounding to nearest can carry the fine field past its width — so a field of two or three fine octets can come back one tick lower. It affects the TM header time and every ST[11] release time and window tag equally. `RelativeTime` sidesteps it by storing the field rather than a `time.Time`; the absolute field cannot, because its Go type is a `time.Time`. |
 | ST[08] argument values | 8.8.2.1, 6.8.3.1b | N by design | Figure 8-87 types each argument value as "deduced": its width comes from the function's argument declaration, which is mission configuration. The block is carried verbatim, and `FunctionArguments.SplitArguments` splits it against a width function the caller supplies. |
 | ST[08] function and argument semantics | 6.8.1.1, 6.8.4d | N by design | Which functions exist, what their arguments mean and what running one does are outside the standard. The three rejection conditions of 6.8.4d all test a request against the mission's declarations, so only the flight software can apply them. |
-| On-board scheduling semantics | 6.11, 6.22 | N | Out of scope. |
+| Position-based scheduling semantics | 6.22 | N | Out of scope. |
 
 ---
 
@@ -163,6 +192,10 @@ standard leaves it to the mission:
 | `APIDBytes` | 8.17.2.3, 8.17.2.4 (the ST[17] APID is enumerated, no stated width; zero selects the common 2-octet width) |
 | `FunctionIDBytes` | Figure 8-87 (a fixed character-string, no stated width; zero selects 8 octets, this package's choice) |
 | `FunctionArgumentCountBytes`, `FunctionArgumentIDBytes` | Figure 8-87 (unsigned integer and enumerated, neither with a stated width; zero selects 1 octet) |
+| `RelativeTimeCoarseBytes`, `RelativeTimeFineBytes` | 7.3.11, Table 7-11 (PFC 3 to 18: coarse 1 to 4, fine 0 to 3; zero selects 4 and 0, whole seconds) |
+| `SubScheduleIDBytes`, `GroupIDBytes`, `ScheduleCountBytes`, `ScheduleStatusBytes`, `TimeWindowTypeBytes` | Figures 8-91 to 8-110 (all enumerated or unsigned integer with no stated width; zero selects 1 octet) |
+| `ScheduleSourceIDBytes`, `ScheduleAPIDBytes`, `ScheduleSeqCountBytes` | Figure 8-92 (the three fields of an ST[11] request ID; zero selects 2 octets each) |
+| `SupportsSubSchedules`, `SupportsGroups` | 6.11.4.1 (not widths but capability declarations; they decide whether the sub-schedule ID and group ID fields are present at all) |
 | `WordSizeBytes` | 7.4.3.1l, 7.4.4.1g (when non-zero, `Validate` requires both secondary header sizes to be whole multiples of it) |
 
 Widths the standard fixes, and this implementation therefore treats as
