@@ -120,7 +120,7 @@ marked so on every row it touches.
 | SLE-37 | RAF-SYNC-NOTIFY | 3.7 | M | Yes | `SyncNotifyInvocation`, all four alternatives. The lossFrameSync report's fields sit directly under the implicit `[0]`, per the IMPLICIT TAGS module. Shared with RCF and ROCF, which define it identically. |
 | SLE-38 | RAF-STATUS-REPORT | 3.8 | M | Yes | `RAFStatusReportInvocation`, both frame counters and all four lock statuses. |
 | SLE-39 | RAF-SCHEDULE-STATUS-REPORT | 3.9 | M | Yes | `ScheduleStatusReportInvocation` and its return, with the 2-to-600 second cycle enforced. |
-| SLE-40 | RAF-GET-PARAMETER | 3.10 | M | Partial | `GetParameterInvocation` and `GetParameterReturn` encode and decode in full, and receiving one no longer aborts the association. `ServiceUser.GetParameter` asks; `ServiceProvider.HandleGetParameterInvocation` answers, negatively with 'unknown parameter' when the caller has no value. The `RafGetParameter` CHOICE itself travels as raw BER rather than typed values. |
+| SLE-40 | RAF-GET-PARAMETER | 3.10 | M | Yes | `GetParameterInvocation` and `GetParameterReturn` encode and decode in full, and receiving one no longer aborts the association. `ServiceUser.GetParameter` asks; `ServiceProvider.HandleGetParameterInvocation` answers, negatively with 'unknown parameter' when the caller has no value. All 8 alternatives of `RafGetParameter` are named through `DecodeParameter`, with integer values read and structured ones (`latencyLimit`'s CHOICE, `permittedFrameQuality`'s SET) handed back as raw BER. |
 | SLE-41 | Requested frame quality | 3.4.2 | M | Yes | `RequestedFrameQuality`: good only, erred only, all. |
 
 ### Table A-7: Return Channel Frames (CCSDS 911.2-B-4)
@@ -133,7 +133,7 @@ marked so on every row it touches.
 | SLE-45 | RCF-TRANSFER-DATA | 3.6 | M | Yes | `RCFTransferDataInvocation`. No delivered-frame-quality field. |
 | SLE-46 | RCF transfer buffer | 3.1.9 | M | Yes | `RCFTransferBuffer`. |
 | SLE-47 | RCF-STATUS-REPORT | 3.8 | M | Yes | `RCFStatusReportInvocation`, one frame counter rather than RAF's two. |
-| SLE-48 | RCF-GET-PARAMETER | 3.10 | M | Partial | As SLE-40. |
+| SLE-48 | RCF-GET-PARAMETER | 3.10 | M | Yes | As SLE-40, with the 8 alternatives of `RcfGetParameter`. |
 
 ### Table A-8: Return Operational Control Fields (CCSDS 911.5-B-4)
 
@@ -145,7 +145,7 @@ marked so on every row it touches.
 | SLE-52 | ROCF-TRANSFER-DATA | 3.6 | M | Yes | `ROCFTransferDataInvocation` carrying the four-octet control field. `pkg/cop` decodes a CLCW from it. |
 | SLE-53 | ROCF transfer buffer | 3.1.9 | M | Yes | `ROCFTransferBuffer`. |
 | SLE-54 | ROCF-STATUS-REPORT | 3.8 | M | Yes | `ROCFStatusReportInvocation`: frames processed and OCFs delivered, counted separately. |
-| SLE-55 | ROCF-GET-PARAMETER | 3.10 | M | Partial | As SLE-40. |
+| SLE-55 | ROCF-GET-PARAMETER | 3.10 | M | Yes | As SLE-40, with the 14 alternatives of `RocfGetParameter`. |
 
 ### Table A-9: Forward CLTU (CCSDS 912.1-B-5)
 
@@ -160,7 +160,7 @@ marked so on every row it touches.
 | SLE-62 | CLTU-STATUS-REPORT | 3.8 | M | Yes | `FCLTUStatusReportInvocation`: CLTUs received, processed and radiated, plus buffer and uplink status. |
 | SLE-63 | FCLTU production status | annex A | M | Yes | `FCLTUProductionStatus`, four values. Deliberately a separate Go type from the return services' three-value `ProductionStatus`: the numbers disagree. |
 | SLE-64 | CltuStatus values | annex A | M | Yes | `CltuStatus`: 0, 1, 2, 4, 5. Value 3 is FSP's 'acknowledged' and is rejected. |
-| SLE-65 | CLTU-GET-PARAMETER | 3.10 | M | Partial | As SLE-40. |
+| SLE-65 | CLTU-GET-PARAMETER | 3.10 | M | Yes | As SLE-40, with the 20 alternatives of `CltuGetParameter`. |
 
 ### Table A-10: Delivery modes
 
@@ -189,7 +189,7 @@ marked so on every row it touches.
 |------|-------------|-----------------|
 | SLE-5, SLE-31 | Heartbeat and return timers | The library runs no clock. It reports when a heartbeat is due, when a peer looks dead and which invocations are outstanding; the caller's loop acts. This is deliberate — see the guide's "No goroutines, no timers". |
 | SLE-20 | Version negotiation | Version 5 PDU semantics only. The number is carried and checked, but there is no fallback to an earlier version's PDU set. |
-| SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | The envelope, the invocation and both return alternatives encode and decode, receiving one no longer aborts the association, and a provider with no value answers 'unknown parameter'. What is not built is the per-service parameter CHOICE as typed values: each is a large enumeration of provider configuration, so the chosen alternative travels as raw BER for the caller to interpret. |
+| SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | Complete. All 50 alternatives across the four services are named, `parameterName` is checked against its tag so decoding against the wrong service is caught rather than mis-reported, and values the schema makes a single integer are read. Structured values — sets, nested CHOICEs — are handed back as raw BER rather than as guessed-at Go types. |
 | SLE-66 to SLE-71 | Delivery modes | Modeled as configuration and predicates, not as a buffering engine. All buffering is caller-side. |
 | The provider role, throughout | `ServiceProvider` and the four per-service providers | They answer a user, hold the three states correctly and let the caller push data. They do not manage multiple associations, size or release transfer buffers, run production, or enforce a service agreement. Use them to test a user or to prototype; do not run a ground station on them. |
 
@@ -199,8 +199,9 @@ The user role is complete for all four services: BIND, UNBIND, PEER-ABORT,
 START, STOP, SCHEDULE-STATUS-REPORT, and each service's data operations —
 TRANSFER-DATA and SYNC-NOTIFY and STATUS-REPORT for the return services,
 TRANSFER-DATA and THROW-EVENT and ASYNC-NOTIFY and STATUS-REPORT for FCLTU.
-GET-PARAMETER decodes and answers cleanly, though its per-service parameter
-CHOICEs travel as raw BER rather than typed values.
+GET-PARAMETER decodes and answers cleanly, and its per-service parameter
+CHOICEs are named: all 50 alternatives across the four services, with integer
+values read and structured ones left as raw BER.
 
 | Area | Items | Implementation |
 |------|-------|----------------|

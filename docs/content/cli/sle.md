@@ -4,7 +4,7 @@ description: Space Link Extension — decode transfer service PDUs.
 order: 56
 ---
 
-Decode SLE transfer service PDUs (CCSDS [911.1](https://public.ccsds.org/Pubs/911x1b4.pdf), [911.2](https://public.ccsds.org/Pubs/911x2b3.pdf), [911.5](https://public.ccsds.org/Pubs/911x5b3.pdf), [912.1](https://public.ccsds.org/Pubs/912x1b4.pdf)).
+Decode SLE transfer service PDUs (CCSDS [911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf), [911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf), [911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf), [912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf)).
 
 ## Subcommands
 
@@ -24,7 +24,9 @@ So `--service` is required, and it is not a default worth guessing: guessing wro
 
 Decode the outer envelope: which service and operation the PDU is, its wire tag, and the encoded content.
 
-The content is reported as octets. Decoding it further needs the operation's own decoder, and which one applies depends on the service.
+A **GET-PARAMETER return** is decoded further: the parameter it carries is named and, where the schema makes its value a single integer, read. That is the one operation whose content this package models, because the per-service parameter sets are the part of SLE most often needed and least often the same between services.
+
+Everything else is reported as octets. Decoding it further needs the operation's own decoder, and which one applies depends on the service.
 
 ```
 astro sle decode [file] [flags]
@@ -45,6 +47,14 @@ astro sle decode --service raf --input hex < pdu.hex
 astro sle decode --service fcltu --input hex < pdu.hex
 ```
 
+## Why the parameter sets need the service
+
+The same context tag names a different parameter in each service. Tag `[4]` is `requestedFrameQuality` in RAF, `reportingCycle` in RCF, `permittedControlWordTypeSet` in ROCF and `deliveryMode` in FCLTU. And `minReportingCycle`, added in a later issue, took the next free tag in each: `[7]` in RAF and RCF, `[13]` in ROCF, `[19]` in FCLTU.
+
+So decoding against the wrong service would report the wrong parameter with a plausible value. The schema constrains each alternative's `parameterName` to match its tag, and this checks that it does — which is what catches the mistake instead of passing it on.
+
+A value the schema makes structured — a set of GVCIDs, the online/offline choice of a latency limit — comes back as raw BER rather than a guessed-at Go type.
+
 ## Limits
 
-The per-service GET-PARAMETER parameter sets are carried as raw BER rather than typed values, and the provider role is a test double rather than a production implementation. See the [conformance statement](/conformance/sle).
+The provider role is a test double rather than a production implementation. See the [conformance statement](/conformance/sle).

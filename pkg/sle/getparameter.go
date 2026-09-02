@@ -11,11 +11,11 @@ import "fmt"
 // them. The return's positive alternative differs: each service defines its
 // own parameter CHOICE, a large enumeration of provider configuration.
 //
-// This package carries that CHOICE opaquely. The invocation and both return
-// alternatives encode and decode in full; the chosen parameter itself is
-// surfaced as its raw BER element, for the caller to interpret against the
-// service's ASN.1. A provider with nothing to say answers negatively with
-// 'unknown parameter', which the specs define for exactly this.
+// The invocation and both return alternatives encode and decode here. The
+// chosen parameter is surfaced as its raw BER element, and parameters.go
+// reads it: DecodeParameter names the alternative against the service's own
+// table. A provider with nothing to say answers negatively with 'unknown
+// parameter', which the specs define for exactly this.
 
 // GetParameterDiagnostic is the specific alternative of the
 // DiagnosticRafGet / DiagnosticRcfGet / DiagnosticRocfGet /

@@ -53,7 +53,8 @@
 // and the primitive [104] PEER-ABORT encoding. On top of that, the four
 // transfer services themselves: RAF, RCF, ROCF and FCLTU, each as a
 // caller-pumped user machine and a partial provider. GET-PARAMETER decodes
-// and answers cleanly, though the per-service parameter CHOICEs travel as
-// raw BER rather than typed values. See docs/content/conformance/sle.md
+// and answers cleanly, and the per-service parameter sets are named: all 50
+// alternatives across the four services, with integer values read and
+// structured ones left as raw BER. See docs/content/conformance/sle.md
 // for the row-by-row conformance picture.
 package sle

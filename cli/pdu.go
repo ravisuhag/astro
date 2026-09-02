@@ -364,6 +364,17 @@ func sleDecodeCmd() *cobra.Command {
 				Note:   "the operation content is not decoded further",
 			}
 
+			// A GET-PARAMETER return is the one operation whose content this
+			// package can read, now that the per-service parameter sets are
+			// modeled. Which parameter a tag names depends on the service,
+			// which is why --service is required.
+			if pdu.Operation == sle.OpGetParameterReturn {
+				if summary, ok := describeSLEParameter(pdu.Content, kind); ok {
+					described.Summary += "\n" + summary
+					described.Note = ""
+				}
+			}
+
 			switch outputFmt {
 			case "json":
 				b, err := json.MarshalIndent(described, "", "  ")
@@ -375,7 +386,9 @@ func sleDecodeCmd() *cobra.Command {
 				fmt.Println(described.Kind)
 				fmt.Println(described.Summary)
 				fmt.Printf("Content: %d octets\n  %s\n", len(pdu.Content), described.Body)
-				fmt.Printf("  [%s]\n", described.Note)
+				if described.Note != "" {
+					fmt.Printf("  [%s]\n", described.Note)
+				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}
@@ -389,6 +402,28 @@ func sleDecodeCmd() *cobra.Command {
 
 	_ = cmd.MarkFlagRequired("service")
 	return cmd
+}
+
+// describeSLEParameter renders the parameter a GET-PARAMETER return carries.
+//
+// A negative return has no parameter — the provider answering that it does
+// not have the one asked for, which the specs define — and a return this
+// cannot read is left to the raw-octet path rather than reported as a
+// failure, because the envelope decoded fine and that is what was asked for.
+func describeSLEParameter(content []byte, service sle.ServiceKind) (string, bool) {
+	ret, err := sle.DecodeGetParameterReturn(content)
+	if err != nil {
+		return "", false
+	}
+
+	parameter, ok, err := ret.DecodeParameter(service)
+	if err != nil {
+		return fmt.Sprintf("  [parameter not decoded: %v]", err), true
+	}
+	if !ok {
+		return fmt.Sprintf("  Negative: %s", ret.SpecificDiagnostic), true
+	}
+	return parameter.Humanize(), true
 }
 
 // sleServiceKind maps the flag to the service, which the wire tag alone
