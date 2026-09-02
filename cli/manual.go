@@ -23,6 +23,7 @@ var protocols = map[string]string{
 	"xtce": "xtce.md",
 	"pus":  "pus.md",
 	"ldc":  "ldc.md",
+	"rhc":  "rhc.md",
 	"cfdp": "cfdp.md",
 	"ltp":  "ltp.md",
 	"bp":   "bp.md",
@@ -68,6 +69,7 @@ func printManualIndex() error {
 	sb.WriteString("| XTCE Mission Databases | `astro manual xtce` |\n")
 	sb.WriteString("| PUS Packet Utilisation Services | `astro manual pus` |\n")
 	sb.WriteString("| Lossless Data Compression | `astro manual ldc` |\n")
+	sb.WriteString("| Robust Housekeeping Compression | `astro manual rhc` |\n")
 	sb.WriteString("| CCSDS File Delivery Protocol | `astro manual cfdp` |\n")
 	sb.WriteString("| Licklider Transmission Protocol | `astro manual ltp` |\n")
 	sb.WriteString("| Bundle Protocol | `astro manual bp` |\n")
