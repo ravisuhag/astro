@@ -16,12 +16,15 @@ cover:
 vet:
 	go vet ./...
 
-# The paths a ground station runs at frame rate. -count 3 because a laptop's
-# clock speed is not constant and one sample of a 5-microsecond operation says
-# very little; compare medians, not single runs.
+# The paths a ground station runs at frame rate: packets, frames, the coding
+# layers underneath them, and the compressors.
+#
+# -count 3 because a laptop's clock speed is not constant and one sample of a
+# few-microsecond operation says very little; compare medians, not single runs.
 BENCHTIME ?= 2s
+BENCHPKGS ?= ./pkg/crc/ ./pkg/spp/ ./pkg/tmdl/ ./pkg/aos/ ./pkg/usdl/ ./pkg/tmsc/ ./pkg/tcsc/ ./pkg/ldc/
 bench:
-	go test -bench . -benchmem -benchtime $(BENCHTIME) -count 3 ./pkg/crc/ ./pkg/tmdl/
+	go test -bench . -benchmem -benchtime $(BENCHTIME) -count 3 $(BENCHPKGS)
 
 lint:
 	golangci-lint run

@@ -169,15 +169,40 @@ func (rs *RSCodec) Decode(codeword []byte) ([]byte, int, error) {
 // generator roots β^(FCR+i) and reports whether every syndrome is zero,
 // which is the definition of a valid codeword.
 func (rs *RSCodec) syndromes(work []byte) ([]byte, bool) {
+	// The logarithm of each root, taken once. A root is a power of alpha and
+	// so never zero, which is what lets the multiply below drop to a single
+	// table lookup: gfMul's zero test is only needed for the accumulator.
+	var logRoots [rsNN]int
+	for i := range rs.nroots {
+		logRoots[i] = int(gfLog[gfPowB(rsFCR+i)])
+	}
+
+	// Horner's method, evaluated at every root in one pass over the codeword.
+	//
+	// The obvious shape is a pass per root, but each pass is a serial chain:
+	// every octet's accumulator depends on the one before, so the processor
+	// waits on two dependent table lookups per octet with nothing else to do.
+	// The roots are independent of one another, so interleaving them gives it
+	// nroots chains to overlap instead. The accumulators live in a stack
+	// array for the same reason — a slice would add a bounds check and a
+	// store to memory on every step.
+	var acc [rsNN]byte
+
+	for _, octet := range work {
+		for i := range rs.nroots {
+			s := acc[i]
+			if s != 0 {
+				s = gfExp[int(gfLog[s])+logRoots[i]]
+			}
+			acc[i] = s ^ octet
+		}
+	}
+
 	syndromes := make([]byte, rs.nroots)
 	allZero := true
 	for i := range rs.nroots {
-		s := byte(0)
-		for j := range work {
-			s = gfMul(s, gfPowB(rsFCR+i)) ^ work[j]
-		}
-		syndromes[i] = s
-		if s != 0 {
+		syndromes[i] = acc[i]
+		if acc[i] != 0 {
 			allZero = false
 		}
 	}
