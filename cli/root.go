@@ -34,6 +34,10 @@ func New(docsFS embed.FS) *cobra.Command {
 	cmd.AddCommand(xtceCmd())
 	cmd.AddCommand(pusCmd())
 	cmd.AddCommand(ldcCmd())
+	cmd.AddCommand(cfdpCmd())
+	cmd.AddCommand(ltpCmd())
+	cmd.AddCommand(bpCmd())
+	cmd.AddCommand(sleCmd())
 	cmd.AddCommand(manualCmd(docsFS))
 	cmd.AddCommand(versionCmd())
 

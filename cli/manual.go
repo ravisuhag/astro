@@ -23,6 +23,10 @@ var protocols = map[string]string{
 	"xtce": "xtce.md",
 	"pus":  "pus.md",
 	"ldc":  "ldc.md",
+	"cfdp": "cfdp.md",
+	"ltp":  "ltp.md",
+	"bp":   "bp.md",
+	"sle":  "sle.md",
 }
 
 func manualCmd(docsFS embed.FS) *cobra.Command {
@@ -64,6 +68,10 @@ func printManualIndex() error {
 	sb.WriteString("| XTCE Mission Databases | `astro manual xtce` |\n")
 	sb.WriteString("| PUS Packet Utilisation Services | `astro manual pus` |\n")
 	sb.WriteString("| Lossless Data Compression | `astro manual ldc` |\n")
+	sb.WriteString("| CCSDS File Delivery Protocol | `astro manual cfdp` |\n")
+	sb.WriteString("| Licklider Transmission Protocol | `astro manual ltp` |\n")
+	sb.WriteString("| Bundle Protocol | `astro manual bp` |\n")
+	sb.WriteString("| Space Link Extension | `astro manual sle` |\n")
 
 	out, err := printer.Markdown(sb.String())
 	if err != nil {
