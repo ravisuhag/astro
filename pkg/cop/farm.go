@@ -11,6 +11,24 @@ const (
 	FARMLockout                  // S3: lockout (requires Unlock BC frame)
 )
 
+// String names the state.
+//
+// Lockout is the one worth reading in a log: a FARM-1 in lockout accepts
+// nothing until an Unlock BC frame arrives, and setting V(R) will not clear
+// it (CCSDS 232.1-B-2 clause 6.1).
+func (s FARMState) String() string {
+	switch s {
+	case FARMOpen:
+		return "open"
+	case FARMWait:
+		return "wait"
+	case FARMLockout:
+		return "lockout"
+	default:
+		return "unknown"
+	}
+}
+
 // FARM implements the Frame Acceptance and Reporting Mechanism (FARM-1)
 // per CCSDS 232.1-B-2 Section 6.
 //

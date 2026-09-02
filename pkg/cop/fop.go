@@ -15,6 +15,26 @@ const (
 	FOPInitial                               // S6: Initial
 )
 
+// String names the state, using the names of table 5-1.
+func (s FOPState) String() string {
+	switch s {
+	case FOPActive:
+		return "active"
+	case FOPRetransmitWithoutWait:
+		return "retransmit without wait"
+	case FOPRetransmitWithWait:
+		return "retransmit with wait"
+	case FOPInitialisingWithoutBC:
+		return "initialising without BC frame"
+	case FOPInitialisingWithBC:
+		return "initialising with BC frame"
+	case FOPInitial:
+		return "initial"
+	default:
+		return "unknown"
+	}
+}
+
 // AlertReason identifies why FOP-1 raised an Alert and went to Initial.
 type AlertReason int
 
@@ -28,6 +48,35 @@ const (
 	AlertT1                    // T1 timeout with no retransmission allowed
 	AlertTerminate             // Terminate AD Service directive
 )
+
+// String says why the Alert was raised.
+//
+// The reasons are the ones CCSDS 232.1-B-2 clause 5.2 names when FOP-1 leaves
+// the Active state for Initial. AlertNone reads as "none" rather than as an
+// empty string, so a log line saying which alert is pending never looks like
+// a missing field.
+func (r AlertReason) String() string {
+	switch r {
+	case AlertNone:
+		return "none"
+	case AlertLimit:
+		return "transmission limit reached"
+	case AlertLockout:
+		return "CLCW lockout flag set"
+	case AlertSynch:
+		return "CLCW inconsistent with the FOP state"
+	case AlertNNR:
+		return "invalid N(R) in the CLCW"
+	case AlertCLCW:
+		return "invalid CLCW flag combination"
+	case AlertT1:
+		return "T1 timeout with no retransmission allowed"
+	case AlertTerminate:
+		return "Terminate AD Service directive"
+	default:
+		return "unknown"
+	}
+}
 
 // Timeout types for the T1 timer expiry with the transmission limit
 // reached (CCSDS 232.1-B-2 5.2.6).
