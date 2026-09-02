@@ -50,6 +50,17 @@
 // (131.0-B-5), with the frame error control field and pseudo-randomization
 // as configured.
 //
+// Uplink is packets to CLTUs and back: Space Packets through TC Transfer
+// Frames (232.0-B-4) into Command Link Transmission Units (231.0-B-4), with
+// COP-1 (232.1-B-2) providing sequence-controlled delivery.
+//
+// The uplink is deliberately not the downlink backwards. Commanding is a
+// conversation: FOP-1 on the ground will not send past its sliding window
+// until a CLCW comes back on the telemetry link saying what the spacecraft
+// accepted. So a Commander sends packets and accepts CLCWs, while an Onboard
+// accepts frames and produces them — asymmetric in a way the two downlink
+// ends are not. See uplink.go for why that shapes the API.
+//
 // Reed-Solomon is deliberately absent. CCSDS 131.0 puts the codeblock between
 // the frame and the sync marker, and a caller who wants it can run
 // pkg/tmsc over the encoded frame before handing the octets on — but the

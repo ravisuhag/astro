@@ -1,6 +1,6 @@
 ---
-title: Compose a downlink
-description: One configuration builds both ends of a telemetry link, so they cannot drift apart.
+title: Compose a link
+description: One configuration builds both ends of a downlink or an uplink, so they cannot drift apart.
 order: 4
 ---
 
@@ -91,8 +91,59 @@ Reed-Solomon is deliberately absent. CCSDS 131.0 puts the codeblock between the 
 
 The layers underneath are still there and still separately usable. This is a convenience over them, not a replacement. Anything the composer cannot express is a reason to drop down a layer, not a reason to grow it until it can express everything.
 
+## The uplink
+
+`pkg/stack` composes an uplink too, and it is deliberately **not** the downlink backwards.
+
+A downlink is a stream: the spacecraft sends, the ground receives, and nothing the ground does changes what arrives. Commanding is a conversation. COP-1 gives the ground a sequence-controlled service that guarantees delivery in order, and it pays for that with feedback — FOP-1 on the ground will not send past its sliding window until a CLCW comes back on the telemetry link saying what the spacecraft has accepted.
+
+So the two ends are asymmetric. The ground side sends packets and accepts CLCWs; the spacecraft side accepts frames and produces them.
+
+```go
+config := stack.Uplink{
+    SpacecraftID: 42,
+    Channels: []stack.UplinkVC{
+        {ID: 0, Window: 10}, // critical
+        {ID: 1, Window: 10}, // routine
+    },
+}
+
+commander, err := stack.NewCommander(config)
+onboard, err := stack.NewOnboard(config)   // the same config
+
+// Queue a command. Succeeding means queued, not sent.
+telecommand, _ := spp.NewTCPacket(100, []byte("SET MODE 3"))
+commander.SendPacket(0, telecommand)
+
+for cltu, err := range commander.CLTUs() {
+    accepted, err := onboard.Accept(cltu)
+    _ = accepted
+}
+
+// The spacecraft reports what it took; the ground acts on it, and the
+// window moves.
+clcw, _ := onboard.CLCW(0)
+commander.AcceptCLCW(clcw)
+```
+
+### What the window means
+
+`Send` queues a command. `CLTUs` yields only what FOP-1 will release, which stops at the sliding window — so a commander that never receives a CLCW sends its window's worth and then nothing. That is sequence control working, not a fault, and `State` and `Pending` are what tell you which.
+
+The composer holds the backlog itself. FOP-1 refuses a frame outright once its window is full, but a caller offering a command wants it queued: the window is a transmission constraint, not a limit on how much a pass may hold. Frames wait in the commander and are offered again whenever a CLCW might have moved the window.
+
+### Two services, not one
+
+`SendExpedited` bypasses the sequence check. Type BD frames are not counted, not retransmitted and not acknowledged, and they arrive whatever state FOP-1 is in — which is what you use when the sequence machinery is the thing that is broken, such as an unlock after a lockout.
+
+They need their own packet service, because the bypass flag is stamped into the frame header when the frame is built, not chosen when it is transmitted. Sending an AD-shaped frame down FOP-1's BD path gets it rejected on arrival.
+
+### Rejection is not failure
+
+`Accept` returns whether FARM-1 took the frame. A retransmission of something already accepted, or a frame outside the window, is exactly what the procedure exists to filter — so that comes back as `false`, not as an error. An error means the CLTU would not decode at all.
+
 ## Next
 
 - [Build a downlink](/docs/guides/downlink) — the same chain with every layer visible
-- [Build an uplink](/docs/guides/uplink) — the other direction, with retransmission
+- [Build an uplink](/docs/guides/uplink) — the same commanding chain with every layer visible
 - [Handle a lossy link](/docs/guides/lossy-link) — what happens when frames get dropped

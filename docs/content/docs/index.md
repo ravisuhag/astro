@@ -25,7 +25,7 @@ Three worked chains, each backed by a runnable program in the repository:
 - [Downlink](/docs/guides/downlink) — telemetry from a spacecraft to the ground, packets through frames to CADUs.
 - [Uplink](/docs/guides/uplink) — commands from the ground to a spacecraft, with reliable delivery.
 - [A lossy link](/docs/guides/lossy-link) — what happens when frames get dropped and corrupted, and how the protocols cope.
-- [Compose a downlink](/docs/guides/composed-downlink) — one configuration builds both ends, so they cannot drift apart.
+- [Compose a link](/docs/guides/composed-downlink) — one configuration builds both ends of a downlink or an uplink, so they cannot drift apart.
 
 ## What is covered
 

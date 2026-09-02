@@ -6,7 +6,7 @@ url: https://astro-docs.vercel.app
 preset: vercel
 
 theme:
-  name: paper
+  name: greenbar
 
 content:
   - dir: docs
