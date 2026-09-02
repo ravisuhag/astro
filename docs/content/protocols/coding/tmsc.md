@@ -5,15 +5,15 @@ description: TM Synchronization and Channel Coding (CCSDS 131.0-B-5) — sync ma
 order: 30
 ---
 
-> **CCSDS 131.0-B-5** · [Blue Book](https://public.ccsds.org/Pubs/131x0b5.pdf) · [`pkg/tmsc`](https://github.com/ravisuhag/astro/tree/main/pkg/tmsc) · [`astro cadu`](/cli/cadu)
+> **CCSDS 131.0-B-5** | [Blue Book](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](https://github.com/ravisuhag/astro/tree/main/pkg/tmsc) | [`astro cadu`](/cli/cadu)
 
-This is the layer between a [TM frame](/protocols/data-link/tmdl) and the radio. It does three things: puts a known pattern in front of each frame so a receiver can find frame boundaries in a continuous bitstream, scrambles the bits so the receiver's clock recovery has transitions to lock onto, and adds Reed–Solomon parity so bit errors can be corrected without asking for a resend.
+This is the layer between a [TM frame](/protocols/data-link/tmdl) and the radio. It does three things: puts a known pattern in front of each frame so a receiver can find frame boundaries in a continuous bitstream, scrambles the bits so the receiver's clock recovery has transitions to lock onto, and adds Reed-Solomon parity so bit errors can be corrected without asking for a resend.
 
 Everything here is undone at the other end. The data link layer never knows it happened.
 
 ## Scope
 
-**Implemented.** The Attached Sync Marker and CADU wrap and unwrap, the 255-bit pseudo-randomizer, and Reed–Solomon RS(255,223) and RS(255,239) with interleaving, dual-basis conversion, and shortened codeblocks.
+**Implemented.** The Attached Sync Marker and CADU wrap and unwrap, the 255-bit pseudo-randomizer, and Reed-Solomon RS(255,223) and RS(255,239) with interleaving, dual-basis conversion, and shortened codeblocks.
 
 **Not here.** The long 131,071-bit randomizer added in Issue 5 (clause 10.4.1) for high-rate links. Also no convolutional or LDPC/Turbo codes — the RS codes are what `pkg/tmsc` covers.
 
@@ -27,7 +27,7 @@ There are no header fields here. The sublayer wraps rather than annotates.
 |---|---|---|---|
 | Attached Sync Marker | 4 B | `DefaultASM()` | `0x1ACFFC1D`. Never randomized. |
 | Transfer Frame | fixed | — | Whatever the data link handed down |
-| Reed–Solomon parity | 32 or 16 B per codeword | `RSCodec` | RS(255,223) or RS(255,239) |
+| Reed-Solomon parity | 32 or 16 B per codeword | `RSCodec` | RS(255,223) or RS(255,239) |
 
 A CADU is the ASM plus the coded, randomized frame. `WrapCADU(frame, asm, randomize)` builds one; `UnwrapCADU` takes it apart.
 
@@ -42,11 +42,11 @@ Interleave depths: 1, 2, 3, 4, 5, and 8. Depth 5 with RS(255,223) is common for 
 
 **The ASM is never randomized.** Only the frame content is XORed. Randomizing the marker would defeat the point of having one, since the receiver has to find it before it can de-randomize anything.
 
-**Astro implements the 255-bit randomizer, not the long one.** Clause 10.4.2, the legacy sequence: LFSR polynomial `x⁸ + x⁷ + x⁵ + x³ + 1`, seeded all ones, period 255 bits. Issue 5 added a 131,071-bit sequence (`x¹⁷ + x¹⁴ + 1`, clause 10.4.1) to avoid spectral spikes at high data rates. Which randomizer a channel uses is a managed parameter — check yours matches.
+**Astro implements the 255-bit randomizer, not the long one.** Clause 10.4.2, the legacy sequence: LFSR polynomial `x^8 + x^7 + x^5 + x^3 + 1`, seeded all ones, period 255 bits. Issue 5 added a 131,071-bit sequence (`x^17 + x^14 + 1`, clause 10.4.1) to avoid spectral spikes at high data rates. Which randomizer a channel uses is a managed parameter — check yours matches.
 
 **`Randomize` is its own inverse.** XOR twice with the same sequence gives you back what you started with, so the same function serves transmit and receive. There is no `Derandomize`.
 
-**CCSDS Reed–Solomon uses the dual basis.** Symbols are converted to the Berlekamp dual basis before encoding and back afterwards. A textbook RS(255,223) implementation will not interoperate. Astro handles the conversion, but this is why you cannot swap in another library.
+**CCSDS Reed-Solomon uses the dual basis.** Symbols are converted to the Berlekamp dual basis before encoding and back afterwards. A textbook RS(255,223) implementation will not interoperate. Astro handles the conversion, but this is why you cannot swap in another library.
 
 **Virtual fill is a managed parameter, not a signaled one.** Shortened codeblocks (clauses 4.3.7 and 4.3.8) work by both ends agreeing that Q zero symbols sit at the front. Nothing in the stream says so. Configure encoder and decoder with the same Q or nothing decodes.
 
@@ -285,7 +285,7 @@ Commentary, not sourced from the standard.
 
 **Why randomize at all?** A receiver recovers its clock from bit transitions. A long run of identical bits gives it nothing, and it drifts. Scrambling with a known sequence guarantees transitions without changing what is being sent.
 
-**Why Reed–Solomon rather than a retransmission scheme?** The downlink is one-way and the round trip is minutes to hours. Correcting errors where they land is the only option that finishes in time.
+**Why Reed-Solomon rather than a retransmission scheme?** The downlink is one-way and the round trip is minutes to hours. Correcting errors where they land is the only option that finishes in time.
 
 **Why symbol-oriented coding?** RS works on bytes, not bits, so a byte with eight wrong bits costs the same as a byte with one. Space channel errors arrive in bursts, which is exactly the shape RS is good at.
 
@@ -293,4 +293,4 @@ Commentary, not sourced from the standard.
 
 - [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) — TM Synchronization and Channel Coding (Blue Book)
 - [CCSDS 130.1-G-3](https://public.ccsds.org/Pubs/130x1g3.pdf) — TM Synchronization and Channel Coding Summary (Green Book)
-- [CLI](/cli/cadu) · [Conformance](/conformance/tmsc)
+- [CLI](/cli/cadu) | [Conformance](/conformance/tmsc) | [The stack](/docs/start/concepts)

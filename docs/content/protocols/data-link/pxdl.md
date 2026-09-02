@@ -5,7 +5,7 @@ description: CCSDS 211.0-B-6 — the short-range link between an orbiter and a l
 order: 24
 ---
 
-> **CCSDS 211.0-B-6** · [Blue Book](https://public.ccsds.org/Pubs/211x0b6e1.pdf) · [`pkg/pxdl`](https://github.com/ravisuhag/astro/tree/main/pkg/pxdl)
+> **CCSDS 211.0-B-6** | [Blue Book](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | [`pkg/pxdl`](https://github.com/ravisuhag/astro/tree/main/pkg/pxdl) | [`astro pxdl`](/cli/pxdl)
 
 ## Overview
 
@@ -39,7 +39,7 @@ P-frame:  header │ supervisory PDUs (link control words, directives)
 ┌─────────────────────────────────────────────┐
 │  Packets (pkg/spp, pkg/epp) or raw data     │
 ├─────────────────────────────────────────────┤
-│  Proximity-1 Data Link (pkg/pxdl)           │  ← this package
+│  Proximity-1 Data Link (pkg/pxdl)           │  <- this package
 ├─────────────────────────────────────────────┤
 │  Proximity-1 Coding and Sync (pkg/pxsc)     │
 └─────────────────────────────────────────────┘
@@ -63,7 +63,7 @@ sublayers, and session establishment. A CLI, once the API settles.
 ## Field map: the Transfer Frame
 
 Five octets of header, then up to 2043 octets of data. Ten fields, packed
-tight (§3.2.2, figure 3-3):
+tight (clause 3.2.2, figure 3-3):
 
 ```
 Octet 0:  version(2) │ QoS(1) │ PDU type(1) │ DFC ID(2) │ SCID[9:8](2)
@@ -76,16 +76,16 @@ Octet 4:  frame sequence number(8)
 Two details worth pinning down.
 
 **The version field is binary `10`**, not `11` or `3`. It identifies a
-"Version-3" frame, which is confusing but is what §3.2.2.2.2 says.
+"Version-3" frame, which is confusing but is what clause 3.2.2.2.2 says.
 
-**The frame length field holds one less than the total.** §3.2.2.10.2:
-`C = total octets − 1`, measured from the first octet of the header to the last
+**The frame length field holds one less than the total.** clause 3.2.2.10.2:
+`C = total octets - 1`, measured from the first octet of the header to the last
 octet of the data field. An 11-bit field therefore tops out at a 2048-octet
 frame.
 
 ### Quality of Service
 
-One bit, two services (§3.2.2.3):
+One bit, two services (clause 3.2.2.3):
 
 - **Sequence controlled** (`0`) — COP-P checks the frame sequence number.
   Lost frames are retransmitted.
@@ -95,7 +95,7 @@ One bit, two services (§3.2.2.3):
 ### Source or destination
 
 A single SCID field serves both directions, and one bit says which end it
-names (§3.2.2.9). The polarity comes from table 3-2: `0` means the SCID is the
+names (clause 3.2.2.9). The polarity comes from table 3-2: `0` means the SCID is the
 **source** spacecraft (the sender's own ID), `1` means it is the
 **destination**. Set `WithSourceSCID()` when the SCID is yours; leave it
 alone when it is the far end's.
@@ -117,7 +117,7 @@ raw, err := frame.Encode()
 ```
 
 The **Data Field Construction ID** says how the data field is arranged
-(§3.2.2.5, table 3-1):
+(clause 3.2.2.5, table 3-1):
 
 | DFC ID | Content |
 |---|---|
@@ -132,7 +132,7 @@ the wire.
 ## Segmentation
 
 A packet too big for one frame gets cut up. Each piece rides behind a one-octet
-segment header (§3.2.3.3):
+segment header (clause 3.2.3.3):
 
 ```
 bits 0-1: sequence flags
@@ -165,7 +165,7 @@ for _, seg := range segments {
 
 Segments of one packet must travel with the same PCID and Port ID. Segments of
 *different* packets may interleave, as long as they differ in one of those
-(§3.2.3.3.2 c). So the reassembler keys on a **routing ID**: PCID, Port ID, and
+(clause 3.2.3.3.2 c). So the reassembler keys on a **routing ID**: PCID, Port ID, and
 pseudo packet ID together.
 
 ```go
@@ -183,8 +183,8 @@ for frame := range incoming {
 }
 ```
 
-§3.2.3.3.4 is strict: **only complete packets are delivered**. A stream that
-starts mid-packet is rejected rather than guessed at, per §3.2.3.3.5 b).
+Clause 3.2.3.3.4 is strict: **only complete packets are delivered**. A stream that
+starts mid-packet is rejected rather than guessed at, per clause 3.2.3.3.5 b).
 
 Set `MaxPacketSize` to bound an accumulating packet. The default is 64 KiB. The
 standard sets no ceiling, but a run of "continuing" segments that never ends
@@ -193,7 +193,7 @@ would otherwise grow without limit.
 ## Supervisory PDUs
 
 P-frames carry the protocol talking to itself. Two shapes, told apart by the
-leading bit (§3.2.4.2):
+leading bit (clause 3.2.4.2):
 
 ```
 fixed:     format '1' │ type(1) │ data(14 bits)      — 2 octets
@@ -204,13 +204,13 @@ SPDUs are self-identifying and self-delimiting, so a decoder walks a run of
 them without being told how many there are.
 
 One quirk: **the variable-length SPDU's length field is the actual count, not
-a count-less-one.** §3.2.4.2.2 calls this out explicitly, presumably because
+a count-less-one.** clause 3.2.4.2.2 calls this out explicitly, presumably because
 everything else in CCSDS goes the other way.
 
 ### The Proximity Link Control Word
 
 The one fixed-length SPDU defined so far. It is Proximity-1's acknowledgement —
-the same job COP-1's CLCW does for TC links (§3.2.4.3.2):
+the same job COP-1's CLCW does for TC links (clause 3.2.4.3.2):
 
 ```go
 plcw := &pxdl.PLCW{
@@ -226,13 +226,13 @@ frame, _ := pxdl.NewSupervisoryFrame(scid, 0, body)
 
 `NewSupervisoryFrame` applies three rules the protocol fixes, so you cannot
 build an invalid frame by accident: SPDUs travel only on the Expedited service
-(§3.2.4.1), a P-frame's DFC ID is zero (§3.2.2.5.2), and a P-frame's Port ID is
-zero (§3.2.2.8.2).
+(clause 3.2.4.1), a P-frame's DFC ID is zero (clause 3.2.2.5.2), and a P-frame's Port ID is
+zero (clause 3.2.2.8.2).
 
 The first two are set for you whatever you pass. The port is different: it is
 an argument, so a non-zero value is refused with `ErrPortIDOnSupervisoryFrame`
 rather than quietly zeroed. A port names the output the I/O Sublayer delivers a
-U-frame's data to (§3.2.2.8.3), and a P-frame reaches no port at all, so a port
+U-frame's data to (clause 3.2.2.8.3), and a P-frame reaches no port at all, so a port
 here means you wanted `NewTransferFrame`. The same check runs on `Encode`,
 because `PDUType` and `PortID` are exported and can be set past the
 constructor.
@@ -241,4 +241,4 @@ constructor.
 
 - [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) — Proximity-1 Space Link Protocol, Data Link Layer
 - [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3e1.pdf) — Coding and Synchronization Layer
-- [Conformance](/conformance/pxdl)
+- [CLI](/cli/pxdl) | [Conformance](/conformance/pxdl) | [The stack](/docs/start/concepts)

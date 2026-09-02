@@ -5,7 +5,7 @@ description: CCSDS 301.0-B-4 — how spacecraft timestamps are encoded, and what
 order: 60
 ---
 
-> **CCSDS 301.0-B-4** · [Blue Book](https://public.ccsds.org/Pubs/301x0b4e1.pdf) · [`pkg/tcf`](https://github.com/ravisuhag/astro/tree/main/pkg/tcf) · [`astro time`](/cli/time)
+> **CCSDS 301.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](https://github.com/ravisuhag/astro/tree/main/pkg/tcf) | [`astro time`](/cli/time)
 
 When a sensor reading, an image, or a command acknowledgement needs a timestamp, this is how it gets written. The standard gives four formats with different trade-offs between size, precision, and how easy they are to read.
 
@@ -17,7 +17,7 @@ Most of what is hard here is not the encoding. It is [leap seconds](#tai-utc-and
 
 **Implemented.** All four formats — CUC, CDS, CCS, and ASCII — at both epoch levels where the format allows, with the full P-field, and with bare T-field encode and decode for streams that carry no preamble.
 
-**Included.** The complete integer TAI–UTC leap second table, applied automatically for CUC Level 1. `TAIUTCOffsetAt(t)` exposes it.
+**Included.** The complete integer TAI-UTC leap second table, applied automatically for CUC Level 1. `TAIUTCOffsetAt(t)` exposes it.
 
 **For the Go API** — constructors, options, and per-format detail — see the [API page](/protocols/mission/tcf).
 
@@ -50,10 +50,10 @@ Second octet (only when E = 1):
 
 | | CUC | CDS | CCS | ASCII |
 |---|---|---|---|---|
-| Size | 2–19 B | 7–12 B | 8–14 B | 20–30+ chars |
+| Size | 2-19 B | 7-12 B | 8-14 B | 20-30+ chars |
 | Human-readable | No | Partly | Yes (BCD) | Yes |
 | Epoch | Level 1 or 2 | Level 1 or 2 | Level 1 only (UTC) | UTC |
-| Precision | 1 s to 2⁻⁸⁰ s | 1 ms to 1 ps | 1 s to 1 ps | 1 s to 1 ns |
+| Precision | 1 s to 2^-80 s | 1 ms to 1 ps | 1 s to 1 ps | 1 s to 1 ns |
 | Hardware cost | Trivial — it is a counter | Moderate | High (BCD) | N/A |
 
 Rules of thumb: **CUC** if it runs on a spacecraft processor. **CDS** if it runs on the ground and you want to debug it. **CCS** if it has to be calendar-readable while still binary. **ASCII Type A** (calendar) or **Type B** (ordinal) if it is text.
@@ -72,13 +72,13 @@ Rules of thumb: **CUC** if it runs on a spacecraft processor. **CDS** if it runs
 
 This is where time codes actually go wrong.
 
-**TAI** is continuous atomic time. No adjustments, ever. **UTC** is civil time, kept within 0.9 seconds of Earth's rotation by inserting leap seconds every year or three. During one, the clock reads `23:59:59 → 23:59:60 → 00:00:00`.
+**TAI** is continuous atomic time. No adjustments, ever. **UTC** is civil time, kept within 0.9 seconds of Earth's rotation by inserting leap seconds every year or three. During one, the clock reads `23:59:59 -> 23:59:60 -> 00:00:00`.
 
 Since 1972 the offset has been a whole number of seconds, growing from 10 to **37** at 2017-01-01, where it still stands. The CCSDS epoch of 1958 predates all of it.
 
 ### What Astro does with each format
 
-The full table of integer TAI–UTC offsets is embedded in the package. They are historical facts and cannot change.
+The full table of integer TAI-UTC offsets is embedded in the package. They are historical facts and cannot change.
 
 - **CUC Level 1** — the coarse count is **true TAI seconds**. `NewCUC` adds the offset in effect at that instant and `Time()` subtracts it again. A UTC instant round-trips exactly, and the count on the wire matches what real TAI-referenced hardware produces.
 - **CUC Level 2** — **purely arithmetic**. Elapsed seconds between your epoch and the instant, no correction either way. If your mission epoch is itself TAI-referenced, apply your own convention on top.
@@ -119,7 +119,7 @@ fmt.Println(decoded.Time()) // Go time.Time
 | **CCS** | Calendar Segmented Time Code | BCD-encoded calendar fields | Human-readable binary timestamps |
 | **ASCII** | Text Time Codes (Type A/B) | ISO 8601-derived strings | Logs, displays, interchange |
 
-All binary formats share a common structure: **P-field** (preamble, 1–2 bytes) identifying the format, followed by a **T-field** (time data, variable length).
+All binary formats share a common structure: **P-field** (preamble, 1-2 bytes) identifying the format, followed by a **T-field** (time data, variable length).
 
 ```
 +----------------------+--------------------------+
@@ -135,7 +135,7 @@ All binary formats share a common structure: **P-field** (preamble, 1–2 bytes)
 tcf.CCSDSEpoch // time.Time
 
 // Current TAI-UTC offset (leap seconds, update when IERS announces new ones)
-tcf.TAIUTCOffset // 37 (as of 2025)
+tcf.TAIUTCOffsetAt(t) // 37 for any t after 2017-01-01
 ```
 
 **Level 1** time codes use `CCSDSEpoch`. **Level 2** time codes use an agency-defined custom epoch.
@@ -212,8 +212,8 @@ Day count since epoch plus milliseconds of day, with optional sub-millisecond pr
 | Sub-ms Bytes | Resolution |
 |--------------|------------|
 | 0 | 1 ms |
-| 2 | microseconds (0–999) |
-| 4 | picoseconds (0–999999999) |
+| 2 | microseconds (0-999) |
+| 4 | picoseconds (0-999999999) |
 
 ### Creating
 
@@ -270,7 +270,7 @@ Two calendar variants:
 +----------+------+-------+------+------+------+------------------+
 ```
 
-Sub-second precision: 0–6 octets, each containing 2 BCD digits, giving 10^-2 to 10^-12 second resolution. The Second field allows value 60 for leap seconds.
+Sub-second precision: 0-6 octets, each containing 2 BCD digits, giving 10^-2 to 10^-12 second resolution. The Second field allows value 60 for leap seconds.
 
 ### Creating
 
@@ -322,7 +322,7 @@ ascii, err := tcf.NewASCIITime(tcf.ASCIITypeB, tcf.WithASCIIPrecision(6))
 
 // Encode time to string
 s, err := ascii.Encode(time.Now())
-// → "2026-077T14:30:15.123456Z"
+// -> "2026-077T14:30:15.123456Z"
 
 // Decode string back to time
 t, err := ascii.Decode("2026-03-18T14:30:15.123Z")
@@ -360,10 +360,10 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrDataTooShort` | Data too short to decode time code |
 | `ErrInvalidPField` | P-field doesn't conform to CCSDS 301.0-B-4 |
 | `ErrInvalidTimeCodeID` | Unrecognized time code identification |
-| `ErrInvalidCoarseOctets` | Coarse time octets out of range (1–4 basic, up to 7 with extension) |
-| `ErrInvalidFineOctets` | Fine time octets out of range (0–3 basic, up to 6 with extension) |
+| `ErrInvalidCoarseOctets` | Coarse time octets out of range (1-4 basic, up to 7 with extension) |
+| `ErrInvalidFineOctets` | Fine time octets out of range (0-3 basic, up to 6 with extension) |
 | `ErrInvalidDaySegment` | Day count out of range |
-| `ErrInvalidMilliseconds` | Milliseconds-of-day outside 0–86399999 |
+| `ErrInvalidMilliseconds` | Milliseconds-of-day outside 0-86399999 |
 | `ErrInvalidCalendarTime` | Calendar field value out of range |
 | `ErrInvalidASCIIFormat` | ASCII time string format mismatch |
 | `ErrEpochRequired` | Agency-defined epoch required for Level 2 but not provided |
@@ -375,7 +375,7 @@ Commentary, not sourced from the standard.
 
 **Why four formats instead of one?** They serve genuinely different consumers. A spacecraft counter wants CUC because incrementing a binary number is free in hardware. A human reading an event log wants CCS or ASCII. Forcing either to use the other's format costs real money in one case and real debugging time in the other.
 
-**Why is the P-field optional in practice?** It is 1–2 bytes on every timestamp, and a mission with a fixed format already knows what it is. On a link where a housekeeping packet is 30 bytes, dropping the preamble is a measurable win.
+**Why is the P-field optional in practice?** It is 1-2 bytes on every timestamp, and a mission with a fixed format already knows what it is. On a link where a housekeeping packet is 30 bytes, dropping the preamble is a measurable win.
 
 **Why did CCSDS pick a 1958 epoch?** It predates the standard by decades and lines up with the start of the atomic time record. Choosing it meant no mission would ever need a negative timestamp.
 
@@ -383,4 +383,4 @@ Commentary, not sourced from the standard.
 
 - [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) — Time Code Formats (Blue Book)
 - [CCSDS 301.0-G-1](https://public.ccsds.org/Pubs/301x0g1.pdf) — Time Code Formats Summary (Green Book)
-- [CLI](/cli/time) · [Conformance](/conformance/tcf)
+- [CLI](/cli/time) | [Conformance](/conformance/tcf) | [The stack](/docs/start/concepts)

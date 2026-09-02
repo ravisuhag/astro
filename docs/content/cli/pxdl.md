@@ -2,7 +2,7 @@
 title: astro pxdl
 short: PXDL
 description: Proximity-1 data link — encode, decode, SPDUs.
-order: 59
+order: 70
 ---
 
 Proximity-1 transfer frames and supervisory protocol data units ([CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6.pdf)).
@@ -83,4 +83,6 @@ astro pxdl spdu [file] [flags]
 
 Same as `decode`.
 
-See the [conformance statement](/conformance/pxdl).
+---
+
+**See also** — [the protocol page](/protocols/data-link/pxdl) for the standard and the Go API, and the [conformance statement](/conformance/pxdl) for what is and is not implemented.

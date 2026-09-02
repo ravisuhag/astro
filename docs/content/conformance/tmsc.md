@@ -67,7 +67,7 @@ NOTE — Of the coding methods, only Reed-Solomon is implemented. Convolutional 
 | TMSC-2 | ASM attachment: the ASM immediately precedes the codeblock or Transfer Frame, with no intervening bits | 9.4.1, 9.4.2 | M | Yes | `WrapCADU()` prepends the ASM directly to the (optionally randomized) codeblock or frame data. Custom ASM supported via parameter. |
 | TMSC-3 | ASM detection/stripping (receive) | 9.1, 9.4 | M | Yes | `UnwrapCADU()` validates and strips the ASM. Returns `ErrSyncMarkerMismatch` if the ASM is not found at the expected position. |
 | TMSC-4 | ASM excluded from the Reed-Solomon encoder/decoder data space | 9.5.1 | M | Yes | The ASM is handled by `WrapCADU()`/`UnwrapCADU()` entirely outside `RSCodec`; it is never randomized or encoded. |
-| TMSC-5 | Scheme-specific ASMs (64-bit for rate-1/2 turbo and rates 1/2, 2/3, 4/5 LDPC; 96/128/192-bit for low-rate turbo) | 9.3.2–9.3.5 | O.1 | No | Not applicable: the corresponding turbo and LDPC coding schemes are not implemented (see table A-4). |
+| TMSC-5 | Scheme-specific ASMs (64-bit for rate-1/2 turbo and rates 1/2, 2/3, 4/5 LDPC; 96/128/192-bit for low-rate turbo) | 9.3.2-9.3.5 | O.1 | No | Not applicable: the corresponding turbo and LDPC coding schemes are not implemented (see table A-4). |
 | TMSC-6 | ASM for embedded data stream (0x352EF853) | 9.6 | O | No | Not implemented. A custom ASM can be passed to `WrapCADU()`/`UnwrapCADU()` if needed. |
 
 ### Table A-2: Pseudo-Randomizer (section 10)
@@ -86,20 +86,20 @@ NOTE — Of the coding methods, only Reed-Solomon is implemented. Convolutional 
 |------|-------------|-----------|--------|---------|-------|
 | TMSC-12 | Parameters: J = 8 bits per symbol; E = 16 (255,223) | 4.3.1 | M | Yes | `NewRS255_223()` — 32 check symbols, corrects up to 16 symbol errors per codeword. |
 | TMSC-13 | Parameters: J = 8 bits per symbol; E = 8 (255,239) | 4.3.1 | M | Yes | `NewRS255_239()` — 16 check symbols, corrects up to 8 symbol errors per codeword. E is a mission-selected managed parameter (12.5, table 12-3). |
-| TMSC-14 | General characteristics: n = 255 symbols per codeword, 2E check symbols, k = n − 2E information symbols | 4.3.2 | M | Yes | `DataLen()` = 223 or 239; `NRoots()` = 32 or 16. |
+| TMSC-14 | General characteristics: n = 255 symbols per codeword, 2E check symbols, k = n - 2E information symbols | 4.3.2 | M | Yes | `DataLen()` = 223 or 239; `NRoots()` = 32 or 16. |
 | TMSC-15 | Field generator polynomial F(x) = x^8 + x^7 + x^2 + x + 1 over GF(2) | 4.3.3 | M | Yes | 0x187; lookup tables (`gfExp[512]`, `gfLog[256]`) precomputed in `init()`. |
-| TMSC-16 | Code generator polynomial g(x) = ∏(x − α^11j) for j = 128−E … 127+E; equivalently roots β^(112+j), j = 0 … 2E−1, with β = α^11 | 4.3.4 | M | Yes | Generator built from roots β^112 … β^(111+2E) with β = α^11 (`rsFCR` = 112, `rsPrim` = 11 in `rs.go`). |
+| TMSC-16 | Code generator polynomial g(x) = ∏(x - α^11j) for j = 128-E ... 127+E; equivalently roots β^(112+j), j = 0 ... 2E-1, with β = α^11 | 4.3.4 | M | Yes | Generator built from roots β^112 ... β^(111+2E) with β = α^11 (`rsFCR` = 112, `rsPrim` = 11 in `rs.go`). |
 | TMSC-17 | Systematic code: information symbols unchanged, check symbols appended | 4.3.4 NOTE 2 | M | Yes | `Encode()` copies data and appends parity; data portion is byte-identical on the wire. |
 | TMSC-18 | Symbol interleaving, depth I ∈ {1, 2, 3, 4, 5, 8} | 4.3.5.1 | M | Yes | `EncodeInterleaved()` / `DecodeInterleaved()`. `validInterleaveDepth()` rejects other depths with `ErrInvalidInterleaveDepth`. I is a managed parameter (12.5). |
-| TMSC-19 | Maximum codeblock length 255·I symbols | 4.3.6 | M | Yes | Enforced by exact input length checks. |
+| TMSC-19 | Maximum codeblock length 255,I symbols | 4.3.6 | M | Yes | Enforced by exact input length checks. |
 | TMSC-20 | Shortened codeblock length via virtual fill | 4.3.7 | O.3 | Yes | `EncodeShortened(data, depth, virtualFill)` / `DecodeShortened(...)` logically prepend Q zero symbols before encoding and strip them after decoding; the fill is never transmitted. |
-| TMSC-21 | Virtual fill constraints: all zeros, not transmitted, at the beginning of the codeblock only, an integer multiple of 8·I bits (Q a multiple of I), Q < kI, fixed per Mission Phase | 4.3.7.3, 4.3.8.2 | M | Yes | Validated: Q must be a non-negative multiple of the depth and smaller than depth × DataLen(), else `ErrInvalidVirtualFill`. Q is a managed parameter that both ends must agree on (12.5, table 12-3). |
+| TMSC-21 | Virtual fill constraints: all zeros, not transmitted, at the beginning of the codeblock only, an integer multiple of 8,I bits (Q a multiple of I), Q < kI, fixed per Mission Phase | 4.3.7.3, 4.3.8.2 | M | Yes | Validated: Q must be a non-negative multiple of the depth and smaller than depth x DataLen(), else `ErrInvalidVirtualFill`. Q is a managed parameter that both ends must agree on (12.5, table 12-3). |
 | TMSC-22 | Dual basis representation: symbols cross the channel in the dual (Berlekamp) basis, z0 transmitted first | 4.3.9 | M | Yes | Wire bytes are dual-basis; encoder/decoder arithmetic runs in the conventional basis. Transform per 4.3.9.3 and annex F in `tal.go`; verified against libfec-compatible golden vectors. |
 | TMSC-23 | Codeblock synchronization achieved via the ASM | 4.3.10 | M | Yes | Fixed-length codeblocks delimited by the ASM through `WrapCADU()`/`UnwrapCADU()`. |
-| TMSC-24 | Error-correcting decoder | 4.1 | M | Yes | The Blue Book specifies the code, not a decoding algorithm. Implementation: syndromes, Berlekamp-Massey, Chien search, Forney, then a post-correction syndrome recheck; any inconsistency (including σ′(X⁻¹) = 0) returns `ErrUncorrectable` rather than silently mis-decoding. |
+| TMSC-24 | Error-correcting decoder | 4.1 | M | Yes | The Blue Book specifies the code, not a decoding algorithm. Implementation: syndromes, Berlekamp-Massey, Chien search, Forney, then a post-correction syndrome recheck; any inconsistency (including σ′(X^-1) = 0) returns `ErrUncorrectable` rather than silently mis-decoding. |
 | TMSC-25 | Uncorrectable error detection | 4.1, 4.2.2 | M | Yes | Returns `ErrUncorrectable` when errors exceed E per codeword or the corrected word fails the syndrome recheck. |
 
-### Table A-4: Coding Methods (sections 3, 5–8; selection per table 12-1)
+### Table A-4: Coding Methods (sections 3, 5-8; selection per table 12-1)
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
@@ -148,6 +148,6 @@ None. Every mandatory requirement of the supported options — Reed-Solomon codi
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| Frame synchronization | TMSC-1–4 | `DefaultASM()`, `WrapCADU()`, `UnwrapCADU()`; ASM outside the coded/randomized data space. |
+| Frame synchronization | TMSC-1-4 | `DefaultASM()`, `WrapCADU()`, `UnwrapCADU()`; ASM outside the coded/randomized data space. |
 | Pseudo-randomization (255-bit) | TMSC-7, 8, 10, 11 | `GeneratePNSequence()`, `Randomize()` (self-inverse), integrated into the CADU pipeline. |
-| Reed-Solomon coding | TMSC-12–25 | GF(2^8) over 0x187, roots β^(112+j) with β = α^11, dual-basis wire representation, systematic encode, full decode pipeline with post-correction syndrome recheck, shortened codeblocks via virtual fill, interleaving depths 1, 2, 3, 4, 5, 8. |
+| Reed-Solomon coding | TMSC-12-25 | GF(2^8) over 0x187, roots β^(112+j) with β = α^11, dual-basis wire representation, systematic encode, full decode pipeline with post-correction syndrome recheck, shortened codeblocks via virtual fill, interleaving depths 1, 2, 3, 4, 5, 8. |

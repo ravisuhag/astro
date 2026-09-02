@@ -1,5 +1,6 @@
 ---
 title: Quickstart — Go
+short: Go
 description: Build a Space Packet, frame it, and wrap it for transmission.
 order: 2
 ---

@@ -50,12 +50,12 @@ order: 50
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Bundle Protocol version 6 per RFC 5050 | §3.1 | M | Y — not BPv7, which is wire-incompatible |
-| IPN naming scheme | §3.2.1, RFC 6260 §2.1 | M | Y — `IPNEndpoint`, node 1 to 2^64−1, service 0 to 2^64−1 |
-| Compressed Bundle Header Encoding | §3.2, RFC 6260 §2 | M | Y — when all four endpoints are ipn (dtn:none as node 0, service 0) the dictionary length encodes as zero and node/service numbers ride in the offset fields; a decoded dictionary length of zero is parsed as CBHE |
-| Node number range enforced | §3.2.1 | M | Y — node 0 rejected; on CBHE decode, node 0 with a nonzero service rejected |
-| Extended Class of Service block | §3.3, annex C | M | Y |
-| DTN time precision relaxation | §3.4 | O | Y — nanoseconds carried, precision left to the caller |
+| Bundle Protocol version 6 per RFC 5050 | clause 3.1 | M | Y — not BPv7, which is wire-incompatible |
+| IPN naming scheme | clause 3.2.1, RFC 6260 clause 2.1 | M | Y — `IPNEndpoint`, node 1 to 2^64-1, service 0 to 2^64-1 |
+| Compressed Bundle Header Encoding | clause 3.2, RFC 6260 clause 2 | M | Y — when all four endpoints are ipn (dtn:none as node 0, service 0) the dictionary length encodes as zero and node/service numbers ride in the offset fields; a decoded dictionary length of zero is parsed as CBHE |
+| Node number range enforced | clause 3.2.1 | M | Y — node 0 rejected; on CBHE decode, node 0 with a nonzero service rejected |
+| Extended Class of Service block | clause 3.3, annex C | M | Y |
+| DTN time precision relaxation | clause 3.4 | O | Y — nanoseconds carried, precision left to the caller |
 
 ---
 
@@ -63,26 +63,26 @@ order: 50
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Primary bundle block | RFC 5050 §4.5.1 | M | Y |
-| Version field = 6 | §4.5.1 | M | Y — other versions rejected on decode |
-| Bundle processing control flags | §4.2 | M | Y — SDNV, all defined bits |
-| Class of service, bits 7 to 8 | §4.2 | M | Y — bulk, normal, expedited; the reserved value 3 rejected |
-| Status report request flags, bits 14 to 18 | §4.2 | O | Y |
-| Administrative record flag constraints | §4.2 | M | Y — custody and report flags rejected together with it |
-| Anonymous-source constraints | §4.2 | M | Y — source dtn:none must not request custody and must set the no-fragment flag |
-| Contradictory fragment flags rejected | §4.2 | M | Y — a fragment cannot also forbid fragmentation |
-| Bundle ends at the last block | §4.1 | M | Y — trailing octets rejected (`ErrTrailingBytes`); `DecodeBundleN` returns consumed length for concatenated streams |
-| Dictionary with endpoint offsets | §4.4, §4.5.1 | M | Y — repeated strings interned once |
-| Creation timestamp and sequence number | §4.5.1 | M | Y |
-| Lifetime | §4.5.1 | M | Y |
-| Fragment offset and total ADU length | §4.5.1 | O | Y — present only with the fragment flag |
-| Canonical block format | §4.5.2 | M | Y |
-| Block type code | §4.5.2 | M | Y |
-| Block processing control flags | §4.5.2 | M | Y — all seven defined bits |
-| EID reference field | §4.5.2 | O | Y — present if and only if the flag is set |
-| Block data length and body | §4.5.2 | M | Y |
-| Payload block, type 1 | §4.5.2 | M | Y — exactly one per bundle |
-| Last-block flag on the final block | §4.5.2 | M | Y — validated |
+| Primary bundle block | RFC 5050 clause 4.5.1 | M | Y |
+| Version field = 6 | clause 4.5.1 | M | Y — other versions rejected on decode |
+| Bundle processing control flags | clause 4.2 | M | Y — SDNV, all defined bits |
+| Class of service, bits 7 to 8 | clause 4.2 | M | Y — bulk, normal, expedited; the reserved value 3 rejected |
+| Status report request flags, bits 14 to 18 | clause 4.2 | O | Y |
+| Administrative record flag constraints | clause 4.2 | M | Y — custody and report flags rejected together with it |
+| Anonymous-source constraints | clause 4.2 | M | Y — source dtn:none must not request custody and must set the no-fragment flag |
+| Contradictory fragment flags rejected | clause 4.2 | M | Y — a fragment cannot also forbid fragmentation |
+| Bundle ends at the last block | clause 4.1 | M | Y — trailing octets rejected (`ErrTrailingBytes`); `DecodeBundleN` returns consumed length for concatenated streams |
+| Dictionary with endpoint offsets | clause 4.4, clause 4.5.1 | M | Y — repeated strings interned once |
+| Creation timestamp and sequence number | clause 4.5.1 | M | Y |
+| Lifetime | clause 4.5.1 | M | Y |
+| Fragment offset and total ADU length | clause 4.5.1 | O | Y — present only with the fragment flag |
+| Canonical block format | clause 4.5.2 | M | Y |
+| Block type code | clause 4.5.2 | M | Y |
+| Block processing control flags | clause 4.5.2 | M | Y — all seven defined bits |
+| EID reference field | clause 4.5.2 | O | Y — present if and only if the flag is set |
+| Block data length and body | clause 4.5.2 | M | Y |
+| Payload block, type 1 | clause 4.5.2 | M | Y — exactly one per bundle |
+| Last-block flag on the final block | clause 4.5.2 | M | Y — validated |
 
 ---
 
@@ -90,7 +90,7 @@ order: 50
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| ECOS block conforms to §4.5.2 and §4.6 | annex C, C2 | M | Y |
+| ECOS block conforms to clause 4.5.2 and clause 4.6 | annex C, C2 | M | Y |
 | Replicate-in-every-fragment flag set | C2 b) | M | Y — enforced by bundle validation and decode, not just the construction helper |
 | No EID references | C2 c) | M | Y — enforced by bundle validation and decode |
 | Block data length 2 + N | C2 d) | M | Y |
@@ -111,18 +111,18 @@ order: 50
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Fragmentation | RFC 5050 §5.8 | O | Y |
-| Replicated blocks copied to every fragment | §5.8 | M | Y |
-| Blocks preceding the payload replicated in the first fragment; blocks following the payload in the last | §5.8 | M | Y |
-| "Must not be fragmented" respected | §4.2 | M | Y |
-| Reassembly | §5.9 | O | Y — any order, overlaps tolerated, gaps rejected |
-| Administrative record framing | §6.1 | M | Y — 4-bit type, 4-bit flags |
-| DTN time representation | §6.1 | M | Y — seconds and nanoseconds as SDNVs |
-| Bundle status report | §6.1.1 | O | Y — times present only for set status flags |
-| Status flags | §6.1.1, figure 11 | M | Y — all five |
-| Reason codes | §6.1.1 | M | Y — the nine RFC 5050 defines |
-| Custody signal | §6.1.2 | O | Y — succeeded bit plus 7-bit reason |
-| Fragment fields in administrative records | §6.1, figure 9 | O | Y |
+| Fragmentation | RFC 5050 clause 5.8 | O | Y |
+| Replicated blocks copied to every fragment | clause 5.8 | M | Y |
+| Blocks preceding the payload replicated in the first fragment; blocks following the payload in the last | clause 5.8 | M | Y |
+| "Must not be fragmented" respected | clause 4.2 | M | Y |
+| Reassembly | clause 5.9 | O | Y — any order, overlaps tolerated, gaps rejected |
+| Administrative record framing | clause 6.1 | M | Y — 4-bit type, 4-bit flags |
+| DTN time representation | clause 6.1 | M | Y — seconds and nanoseconds as SDNVs |
+| Bundle status report | clause 6.1.1 | O | Y — times present only for set status flags |
+| Status flags | clause 6.1.1, figure 11 | M | Y — all five |
+| Reason codes | clause 6.1.1 | M | Y — the nine RFC 5050 defines |
+| Custody signal | clause 6.1.2 | O | Y — succeeded bit plus 7-bit reason |
+| Fragment fields in administrative records | clause 6.1, figure 9 | O | Y |
 
 ---
 
@@ -130,8 +130,8 @@ order: 50
 
 | Feature | Reference | Support | Rationale |
 |---|---|---|---|
-| Bundle protocol agent: routing, storage, forwarding | RFC 5050 §5 | N | This package is the wire format and block structure. Forwarding policy, contact graphs and storage belong to a layer above. |
-| Custody transfer timers and retransmission | §5.10, §6.3 | N | Requires an agent and a clock; the same reasoning as `pkg/ltp`. |
+| Bundle protocol agent: routing, storage, forwarding | RFC 5050 clause 5 | N | This package is the wire format and block structure. Forwarding policy, contact graphs and storage belong to a layer above. |
+| Custody transfer timers and retransmission | clause 5.10, clause 6.3 | N | Requires an agent and a clock; the same reasoning as `pkg/ltp`. |
 | Aggregate Custody Signals | CCSDS 734.2-B-1 annex D | N | A separate normative annex; a follow-up. |
 | Delay-Tolerant Payload Conditioning | annex E | N | A separate normative annex; a follow-up. |
 | Bundle Security Protocol blocks | [BSP] | N | A separate specification. |
@@ -145,7 +145,7 @@ order: 50
 
 | Limit | Value | Source |
 |---|---|---|
-| SDNV value range | 0 to 2^64 − 1 | `pkg/sdnv` |
+| SDNV value range | 0 to 2^64 - 1 | `pkg/sdnv` |
 | Block body length | `MaxBlockLength`, default 16 MiB | Implementation choice; RFC 5050 states no ceiling, but a block length is an SDNV reaching 2^64 and would otherwise size an allocation |
 | Blocks per bundle | `MaxBlocks`, default 64 | Same reasoning |
 | Reassembled application data unit | 16 MiB | Bounded by the same block-length cap |

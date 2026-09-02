@@ -1,7 +1,7 @@
 ---
 title: XTCE
 short: XTCE
-description: "PICS proforma: what this package implements, clause by clause."
+description: "Element coverage matrix: what pkg/xtce does with each schema element, and why XTCE has no PICS."
 order: 220
 ---
 

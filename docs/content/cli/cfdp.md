@@ -2,7 +2,7 @@
 title: astro cfdp
 short: CFDP
 description: CCSDS File Delivery Protocol — decode PDUs.
-order: 53
+order: 190
 ---
 
 Decode CFDP Protocol Data Units ([CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5.pdf)).
@@ -23,7 +23,7 @@ A file directive names itself in the first octet of its data field ([table 5-4](
 
 File data is **not** interpreted — it is your file, and the PDU says nothing about its contents — so it comes back as octets with a note saying so.
 
-The CRC is verified when the header says one is present, and a mismatch is an error. §4.1.2 requires the receiver to discard such a PDU, so decoding it into something plausible would be wrong.
+The CRC is verified when the header says one is present, and a mismatch is an error. Clause 4.1.2 requires the receiver to discard such a PDU, so decoding it into something plausible would be wrong.
 
 ```
 astro cfdp decode [file] [flags]
@@ -67,6 +67,8 @@ User operations (2 message(s)):
 
 ## Limits
 
-The message **formats** of Part 2 are implemented. The user **behaviour** around them is not, and the standard makes that the CFDP user's job — which primitive to call on receipt, and how to queue concurrent suspension orders, which §6.5.4.1.2 says outright is "an implementation matter".
+The message **formats** of Part 2 are implemented. The user **behaviour** around them is not, and the standard makes that the CFDP user's job — which primitive to call on receipt, and how to queue concurrent suspension orders, which clause 6.5.4.1.2 says outright is "an implementation matter".
 
-See the [conformance statement](/conformance/cfdp).
+---
+
+**See also** — [the protocol page](/protocols/transport/cfdp) for the standard and the Go API, and the [conformance statement](/conformance/cfdp) for what is and is not implemented.

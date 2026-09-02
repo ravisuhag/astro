@@ -1,5 +1,6 @@
 ---
 title: Handle a lossy link
+short: Lossy link
 description: What happens when frames are dropped and corrupted, and how the protocols cope.
 order: 3
 ---
@@ -18,7 +19,7 @@ Output varies run to run — the link drops and corrupts at random.
 
 | Layer | Mechanism | Catches |
 |---|---|---|
-| [Coding](/protocols/coding/tmsc) | Reed–Solomon | Bit errors, up to 16 bad bytes per codeword |
+| [Coding](/protocols/coding/tmsc) | Reed-Solomon | Bit errors, up to 16 bad bytes per codeword |
 | [Frame](/protocols/data-link/tmdl) | CRC-16 | Anything RS could not fix |
 | [Frame](/protocols/data-link/tmdl) | MC and VC counters | Frames that never arrived |
 | [Frame](/protocols/data-link/tmdl) | First Header Pointer | Where to start reading again after a gap |
@@ -30,7 +31,7 @@ They are layered on purpose. RS fixes what it can. CRC rejects what RS could not
 Smaller frames than [the downlink guide](/docs/guides/downlink), to make packets span more often:
 
 ```
-Frame (128 B) → RS encode (128→160 B) → randomize → ASM → CADU (259 B)
+Frame (128 B) -> RS encode (128->160 B) -> randomize -> ASM -> CADU (259 B)
 ```
 
 and backwards on the ground.
@@ -40,7 +41,7 @@ and backwards on the ground.
 ```
 Spacecraft: generating 20 telemetry packets...
   Sent: 20 packets (2233 bytes) in 19 frames
-  Each frame: 128 bytes → RS(255 bytes) → CADU(259 bytes)
+  Each frame: 128 bytes -> RS(255 bytes) -> CADU(259 bytes)
 
 RF Link statistics:
   Delivered intact:  16 frames
@@ -67,7 +68,7 @@ Frame reception summary:
   MC frame gaps:         1 (frames lost in transit)
 ```
 
-Both corrupted frames were **repaired**, not discarded. Reed–Solomon fixed three bad symbols across them and handed up clean frames. The CRC never had to reject anything.
+Both corrupted frames were **repaired**, not discarded. Reed-Solomon fixed three bad symbols across them and handed up clean frames. The CRC never had to reject anything.
 
 The dropped frame is a different problem. Nothing can fix a frame that did not arrive — but the Master Channel Frame Count jumps, so the receiver knows exactly that one is gone.
 
@@ -116,6 +117,6 @@ One lost frame cost exactly the packets that lived in it. Everything after resyn
 
 ## Next
 
-- [TMSC protocol page](/protocols/coding/tmsc) — Reed–Solomon, interleaving, virtual fill
+- [TMSC protocol page](/protocols/coding/tmsc) — Reed-Solomon, interleaving, virtual fill
 - [TM protocol page](/protocols/data-link/tmdl) — the FHP and the frame counters
 - [Build an uplink](/docs/guides/uplink) — where loss *is* recoverable, by asking again

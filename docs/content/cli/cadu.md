@@ -2,10 +2,10 @@
 title: astro cadu
 short: CADU
 description: Channel Access Data Units — wrap, unwrap, inspect, sync.
-order: 30
+order: 80
 ---
 
-Channel Access Data Unit operations — wrap, unwrap, inspect, and sync CADUs ([CCSDS 131.0-B-4](https://public.ccsds.org/Pubs/131x0b5.pdf)).
+Channel Access Data Unit operations — wrap, unwrap, inspect, and sync CADUs ([CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf)).
 
 ## Subcommands
 
@@ -15,6 +15,7 @@ Channel Access Data Unit operations — wrap, unwrap, inspect, and sync CADUs ([
 | `astro cadu unwrap` | Strip ASM and optionally de-randomize to extract TM frame |
 | `astro cadu inspect` | Annotated CADU breakdown with ASM validation and hex dump |
 | `astro cadu sync` | Scan a byte stream for ASM markers and extract aligned CADUs |
+| `astro cadu gen` | Generate synthetic CADUs |
 
 ---
 
@@ -128,15 +129,50 @@ astro cadu sync --input hex --frame-len 17 --format json stream.hex
 
 ---
 
+## astro cadu gen
+
+Generate a stream of synthetic CADUs — an ASM followed by a TM frame — with incrementing counters and random data.
+
+```
+astro cadu gen [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scid` | `0` | Spacecraft ID (0-1023) |
+| `--vcid` | `0` | Virtual Channel ID (0-7) |
+| `--count` | `10` | Number of CADUs to generate |
+| `--data-size` | `1024` | TM frame data field size in bytes |
+| `--randomize` | `false` | Apply CCSDS pseudo-randomization |
+| `--format` | `bin` | Output format: `bin` or `hex` |
+
+**Examples**
+
+```bash
+# Generate 100 CADUs
+astro cadu gen --scid 1 --vcid 0 --count 100 --data-size 1024
+
+# Generate randomized CADUs and sync them back
+astro cadu gen --scid 1 --count 10 --data-size 100 --format bin | astro cadu sync --input bin --frame-len 112
+```
+
+---
+
 ## Piping
 
 ```bash
-# Full TM chain: encode frame → wrap CADU → inspect
+# Full TM chain: encode frame -> wrap CADU -> inspect
 astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input hex | astro cadu inspect --input hex
 
-# Wrap → Unwrap round-trip
+# Wrap -> Unwrap round-trip
 astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input hex | astro cadu unwrap --input hex
 
-# Wrap with randomize → Unwrap with derandomize
+# Wrap with randomize -> Unwrap with derandomize
 astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input hex --randomize | astro cadu unwrap --input hex --derandomize
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/coding/tmsc) for the standard and the Go API, and the [conformance statement](/conformance/tmsc) for what is and is not implemented.

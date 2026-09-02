@@ -2,7 +2,7 @@
 title: astro pus
 short: PUS
 description: PUS packet utilisation services — encode, decode, list what is implemented.
-order: 51
+order: 160
 ---
 
 PUS packet utilisation service operations — build and read ECSS PUS-C secondary headers and message bodies ([ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/)).
@@ -57,6 +57,8 @@ astro pus encode [flags]
 | `--ack` | `0` | Acknowledgement flags, for a TC (4 bits) |
 | `--time-tag` | *(now)* | RFC 3339 time tag for a TM report |
 | `--format` | `hex` | Output format: `text` or `hex` |
+
+Plus the profile flags above — both ends of a round trip need the same ones.
 
 A TM report is time tagged. The default is now; `--time-tag` pins it, which is what you want in a test.
 
@@ -143,4 +145,10 @@ astro pus services
 
 ## Limits
 
-The implemented services are ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling and ST[17] test. ST[12] monitoring is not implemented, so its bodies come back as octets. See the [conformance statement](/conformance/pus).
+The implemented services are ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, ST[12] on-board monitoring and ST[17] test.
+
+Seven ST[12] message types — TC[12,5], TC[12,7], TC[12,23], TM[12,9], TM[12,11], TM[12,12] and TM[12,26] — carry fields whose widths come from your mission's parameter definitions. The CLI has no way to know those, so it reports them as needing a parameter resolver rather than guessing. Decode those from Go, passing `pus.WithParameterResolver`.
+
+---
+
+**See also** — [the protocol page](/protocols/mission/pus) for the standard and the Go API, and the [conformance statement](/conformance/pus) for what is and is not implemented.

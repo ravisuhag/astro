@@ -26,7 +26,7 @@ order: 210
 | Implementation Name | astro/pkg/pus |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | Every codec is parameterized by an explicit `MissionProfile`; there is no package-level default |
-| Other Information | Go library implementing PUS-C secondary headers and six services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
+| Other Information | Go library implementing PUS-C secondary headers and seven services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -138,6 +138,33 @@ order: 210
 | Time window type enumeration | Table 8-5 | O | Y — all four, and a fifth value is rejected |
 | Time window tag presence | 6.11.10.3c | O | Y — the from tag for "from" and "from-to", the to tag for "to" and "from-to" |
 | Relative time, PTC 10 | 7.3.11, Table 7-11 | O | Y — signed, two's complement over the whole field, PFC 3 to 18 widths |
+| ST[12] on-board monitoring | 8.12 | O | Y — all twenty-eight message types |
+| TC[12,1] / TC[12,2] enable and disable PMON definitions | 8.12.2.1, 8.12.2.2 | O | Y |
+| TC[12,3] change the maximum transition reporting delay | 8.12.2.3 | O | Y |
+| TC[12,4] delete all PMON definitions | 8.12.2.4 | O | Y — empty body |
+| TC[12,5] add PMON definitions | 8.12.2.5 | O | Y — all three criteria shapes; needs a `ParameterResolver` |
+| TC[12,6] delete PMON definitions | 8.12.2.6 | O | Y |
+| TC[12,7] modify PMON definitions | 8.12.2.7 | O | Y — no validity condition and no interval, per 6.12.3.9.4; needs a resolver |
+| TC[12,8] report PMON definitions | 8.12.2.8 | O | Y — including the N-of-zero-means-all rule of 8.12.2.8c |
+| TM[12,9] PMON definition report | 8.12.2.9 | O | Y — leads with the transition delay when 6.12.3.8a applies; needs a resolver |
+| TC[12,10] report the out-of-limits | 8.12.2.10 | O | Y — empty body |
+| TM[12,11] out-of-limits report | 8.12.2.11 | O | Y — needs a resolver |
+| TM[12,12] check transition report | 8.12.2.12 | O | Y — the expected-value mask travels only for expected-value checks, per Figure 8-128 note 1; needs a resolver |
+| TC[12,13] report each PMON status | 8.12.2.13 | O | Y — empty body |
+| TM[12,14] PMON status report | 8.12.2.14 | O | Y |
+| TC[12,15] to TC[12,18] enable and disable the two functions | 8.12.2.15 to 8.12.2.18 | O | Y — empty bodies |
+| TC[12,19] / TC[12,20] enable and disable FMON definitions | 8.12.2.19, 8.12.2.20 | O | Y |
+| TC[12,21] / TC[12,22] protect and unprotect FMON definitions | 8.12.2.21, 8.12.2.22 | O | Y |
+| TC[12,23] add FMON definitions | 8.12.2.23 | O | Y — with the nested PMON ID list; needs a resolver when 6.12.4.2.1c applies |
+| TC[12,24] delete FMON definitions | 8.12.2.24 | O | Y |
+| TC[12,25] report FMON definitions | 8.12.2.25 | O | Y — including N of zero, per 8.12.2.25c |
+| TM[12,26] FMON definition report | 8.12.2.26 | O | Y — needs a resolver when 6.12.4.2.1c applies |
+| TC[12,27] report each FMON status | 8.12.2.27 | O | Y — empty body |
+| TM[12,28] FMON status report | 8.12.2.28 | O | Y |
+| Check type enumeration | Table 8-6 | O | Y — all three, and a fourth value is rejected |
+| PMON checking status enumerations | Tables 8-7, 8-8, 8-9 | O | Y — all three tables, and `NameFor` takes the check type because raw 3 means something different in each |
+| PMON status enumeration | Table 8-10 | O | Y |
+| FMON protection, status and checking status enumerations | Tables 8-11, 8-12, 8-13 | O | Y |
 | ST[17] test | 8.17 | O | Y |
 | TC[17,1] / TM[17,2] are-you-alive | 8.17.2.1, 8.17.2.2 | O | Y |
 | TC[17,3] / TM[17,4] on-board connection | 8.17.2.3, 8.17.2.4 | O | Y — APID width declared by `APIDBytes`, two octets by default |
@@ -166,7 +193,9 @@ those trailing octets verbatim by design.
 | ST[03] parameter functional reporting, subtypes [3,37] to [3,44] | 8.3.2 | N | The whole functional-reporting capability is excluded. A follow-up. |
 | Packet error control field | 7.4.3.2d to f, 7.4.4.2d | N | Checksumming is declared per mission; `pkg/spp` offers the CRC-16 alternative via `WithErrorControl`. The ISO 16-bit checksum alternative the standard also allows is not implemented anywhere in this stack, so a mission declaring it cannot use these packages unmodified. |
 | User data spare and padding word size | 7.4.3.2b, 7.4.4.2b | N | Padding of the user data field to the mission word size is left to the caller. For the secondary headers, a declared `WordSizeBytes` makes `MissionProfile.Validate` check word alignment; zero leaves it unchecked. |
-| ST[02], ST[04], ST[06], ST[09], ST[12] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[02], ST[04], ST[06], ST[09], ST[13] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[12] deduced field widths | 8.12.2.5 to 8.12.2.9, Figures 8-114 to 8-129 | Caller-supplied | The limits, delta thresholds, expected values and masks are all typed "deduced", derived from the monitored parameter's own definition. That is mission configuration. Unlike ST[03]'s parameter values, these fields sit in the middle of a repeated group, so carrying them raw would leave the list unsplittable. A `ParameterResolver` supplies the widths; a registry without one decodes twenty-one of the twenty-eight types and returns `ErrNoParameterResolver` for the seven that need it. |
+| ST[12] monitoring itself | 6.12 | N by design | The wire format of all twenty-eight messages is here; evaluating the checks is not. Sampling parameters, applying masks, counting repetitions and raising events are flight software. Clause 8.12.2.7c's rule that a modify request must keep the original check type also needs the original, which only the flight software holds. |
 | ST[11] schedule state and execution | 6.11 | N by design | The wire format of all twenty-seven messages is here; the schedule is not. Sub-schedule and group state, the release window, and the interlocks between activities are flight software. Every check the codecs make is one a message can fail on its own. |
 | Absolute time field byte fidelity across a decode and re-encode | 7.3.10, Table 7-10 | P | `pkg/tcf` truncates a CUC fractional second in both directions by design — rounding to nearest can carry the fine field past its width — so a field of two or three fine octets can come back one tick lower. It affects the TM header time and every ST[11] release time and window tag equally. `RelativeTime` sidesteps it by storing the field rather than a `time.Time`; the absolute field cannot, because its Go type is a `time.Time`. |
 | ST[08] argument values | 8.8.2.1, 6.8.3.1b | N by design | Figure 8-87 types each argument value as "deduced": its width comes from the function's argument declaration, which is mission configuration. The block is carried verbatim, and `FunctionArguments.SplitArguments` splits it against a width function the caller supplies. |
@@ -196,6 +225,14 @@ standard leaves it to the mission:
 | `SubScheduleIDBytes`, `GroupIDBytes`, `ScheduleCountBytes`, `ScheduleStatusBytes`, `TimeWindowTypeBytes` | Figures 8-91 to 8-110 (all enumerated or unsigned integer with no stated width; zero selects 1 octet) |
 | `ScheduleSourceIDBytes`, `ScheduleAPIDBytes`, `ScheduleSeqCountBytes` | Figure 8-92 (the three fields of an ST[11] request ID; zero selects 2 octets each) |
 | `SupportsSubSchedules`, `SupportsGroups` | 6.11.4.1 (not widths but capability declarations; they decide whether the sub-schedule ID and group ID fields are present at all) |
+| `PMONIDBytes`, `FMONIDBytes`, `MonitorCountBytes`, `CheckTypeBytes`, `PMONStatusBytes`, `PMONCheckingStatusBytes`, `FMONStatusBytes`, `FMONProtectionStatusBytes`, `FMONCheckingStatusBytes`, `MonitoringIntervalBytes`, `RepetitionNumberBytes`, `TransitionDelayBytes`, `MinPMONFailingBytes`, `DeltaValueCountBytes` | Figures 8-111 to 8-139 (all enumerated or unsigned integer with no stated width) |
+| `SupportsConditionalChecking` | 6.12.3.3c, via 6.12.3.3g item 3 (whether a PMON definition carries a check validity condition) |
+| `PerDefinitionMonitoringInterval` | 6.12.3.3d, via 6.12.3.3g item 4 (whether it carries its own monitoring interval) |
+| `SupportsTransitionDelayChange` | 6.12.3.8a, via 6.12.3.10i item 1 (whether TM[12,9] leads with the delay) |
+| `ExpectedValueSpare` | 8.12.2.5d, 8.12.2.7e, 8.12.2.9d (a spare as wide as an event definition ID, per Figure 8-115 note 2) |
+| `SupportsFMONConditionalChecking` | 6.12.4.2.1c, via 6.12.4.2.1f item 2 |
+| `SupportsMinPMONFailingNumber` | 6.12.4.2.1d, via 6.12.4.2.1f item 4 |
+| `SupportsFMONProtection` | 6.12.4.6.1a (whether an FMON status carries a protection status) |
 | `WordSizeBytes` | 7.4.3.1l, 7.4.4.1g (when non-zero, `Validate` requires both secondary header sizes to be whole multiples of it) |
 
 Widths the standard fixes, and this implementation therefore treats as

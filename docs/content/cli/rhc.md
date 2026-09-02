@@ -2,7 +2,7 @@
 title: astro rhc
 short: RHC
 description: Robust housekeeping compression (POCKET+) — compress, decompress.
-order: 57
+order: 180
 ---
 
 Compress and decompress housekeeping vectors with POCKET+ ([CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf)).
@@ -53,7 +53,7 @@ astro rhc compress [file] [flags]
 | `--uncompressed` | `0` | Set the uncompressed flag every N cycles (0 never) |
 | `--input` | `bin` | Input format: `hex` or `bin` |
 
-The three interval flags are policy, not protocol. §3.3.2 makes each flag user-specified at every cycle and says nothing about when to set them. Higher robustness costs bits; sending the whole mask periodically lets a receiver that has lost its place recover; an uncompressed output is the only thing that restores a decompressor's state after a gap.
+The three interval flags are policy, not protocol. Clause 3.3.2 makes each flag user-specified at every cycle and says nothing about when to set them. Higher robustness costs bits; sending the whole mask periodically lets a receiver that has lost its place recover; an uncompressed output is the only thing that restores a decompressor's state after a gap.
 
 The compression ratio is reported on stderr, so it does not get mixed into the listing on stdout.
 
@@ -95,4 +95,8 @@ cmp housekeeping.bin recovered.bin
 
 ## Limits
 
-The standard specifies no decoder section — its annex A conformance list holds only encoder items — so the decompressor is the encoder run backwards, which §2.1 lays out the requirements for. See the [conformance statement](/conformance/rhc).
+The standard specifies no decoder section — its annex A conformance list holds only encoder items — so the decompressor is the encoder run backwards, which clause 2.1 lays out the requirements for.
+
+---
+
+**See also** — [the protocol page](/protocols/compression/rhc) for the standard and the Go API, and the [conformance statement](/conformance/rhc) for what is and is not implemented.

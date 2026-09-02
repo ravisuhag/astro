@@ -2,7 +2,7 @@
 title: astro tc
 short: TC
 description: TC transfer frames — encode, decode, inspect.
-order: 21
+order: 40
 ---
 
 TC Transfer Frame operations — encode, decode, and inspect CCSDS TC Transfer Frames ([CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf)).
@@ -14,6 +14,7 @@ TC Transfer Frame operations — encode, decode, and inspect CCSDS TC Transfer F
 | `astro tc decode` | Decode a TC Transfer Frame with CRC verification |
 | `astro tc encode` | Construct a TC Transfer Frame from fields |
 | `astro tc inspect` | Annotated frame breakdown with hex dump |
+| `astro tc gen` | Generate synthetic TC Transfer Frames |
 
 ---
 
@@ -133,15 +134,50 @@ Raw Frame (12 bytes)
 
 ---
 
+## astro tc gen
+
+Generate a stream of synthetic TC Transfer Frames with incrementing sequence numbers and random data.
+
+```
+astro tc gen [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scid` | `0` | Spacecraft ID (0-1023) |
+| `--vcid` | `0` | Virtual Channel ID (0-63) |
+| `--count` | `10` | Number of frames to generate |
+| `--data-size` | `64` | Data field size in bytes per frame |
+| `--bypass` | `false` | Set the Type-B (expedited) bypass flag |
+| `--format` | `bin` | Output format: `bin` or `hex` |
+
+**Examples**
+
+```bash
+# Generate 10 TC frames
+astro tc gen --scid 26 --vcid 1 --count 10 --data-size 64
+
+# Generate bypass frames
+astro tc gen --scid 26 --vcid 1 --count 5 --data-size 32 --bypass
+```
+
+---
+
 ## Piping
 
 ```bash
-# Encode → Inspect
+# Encode -> Inspect
 astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro tc inspect --input hex
 
-# Encode → Decode as JSON
+# Encode -> Decode as JSON
 astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro tc decode --input hex --format json
 
-# Encode bypass → Decode
+# Encode bypass -> Decode
 astro tc encode --scid 26 --vcid 1 --data 0102030405 --bypass --seq-num 42 | astro tc decode --input hex --format json
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/data-link/tcdl) for the standard and the Go API, and the [conformance statement](/conformance/tcdl) for what is and is not implemented.

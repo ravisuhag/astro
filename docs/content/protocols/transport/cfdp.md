@@ -5,7 +5,7 @@ description: CCSDS 727.0-B-5 — moving files across a space link, reliably or n
 order: 12
 ---
 
-> **CCSDS 727.0-B-5** · [Blue Book](https://public.ccsds.org/Pubs/727x0b5e1.pdf) · [`pkg/cfdp`](https://github.com/ravisuhag/astro/tree/main/pkg/cfdp)
+> **CCSDS 727.0-B-5** | [Blue Book](https://public.ccsds.org/Pubs/727x0b5e1.pdf) | [`pkg/cfdp`](https://github.com/ravisuhag/astro/tree/main/pkg/cfdp) | [`astro cfdp`](/cli/cfdp)
 
 ## Overview
 
@@ -16,7 +16,7 @@ CFDP is the layer that turns a stream of bytes back into a file on the far end.
 One file transfer is a **transaction**. It runs as a sequence of PDUs:
 
 ```
-Metadata  →  File Data  →  File Data  →  ...  →  EOF
+Metadata  ->  File Data  ->  File Data  ->  ...  ->  EOF
 ```
 
 The Metadata PDU names the file and its size. File Data PDUs carry the
@@ -34,9 +34,9 @@ rather than changing them.
 ┌─────────────────────────────────────────────┐
 │  Files (images, logs, software loads)       │
 ├─────────────────────────────────────────────┤
-│  CFDP — transactions, PDUs, checksums       │  ← this package
+│  CFDP — transactions, PDUs, checksums       │  <- this package
 ├─────────────────────────────────────────────┤
-│  Space Packet / Encapsulation Packet        │  ← carries the PDU bytes
+│  Space Packet / Encapsulation Packet        │  <- carries the PDU bytes
 ├─────────────────────────────────────────────┤
 │  TM / TC / AOS / USLP Transfer Frame        │
 └─────────────────────────────────────────────┘
@@ -50,11 +50,11 @@ The library owns no clock. You drive every timer yourself — see below.
 
 **Not here yet.**
 
-- **Part 2 user behaviour** — the message formats of §6 are here; what is not
+- **Part 2 user behaviour** — the message formats of clause 6 are here; what is not
   is which primitive to call on receipt, and how to queue concurrent
-  suspension orders, which §6.5.4.1.2 calls "an implementation matter".
+  suspension orders, which clause 6.5.4.1.2 calls "an implementation matter".
 - **Store-and-forward overlay** (Appendix A) — a separate overlay service, and
-  §6.2's note is explicit that the proxy mechanism may not invoke it.
+  Clause 6.2's note is explicit that the proxy mechanism may not invoke it.
 - **Extended filestore actions** — append, replace, and directory operations
   decode but do not execute.
 - **Adaptive flow control** — Keep Alive and Prompt PDUs encode and decode, but
@@ -195,7 +195,7 @@ policy stays where the mission can set it.
 ## Faults and cancellation
 
 When something goes wrong — a checksum failure, a filestore rejection, a
-retry limit — CFDP looks up a **fault handler** for that condition (§4.8).
+retry limit — CFDP looks up a **fault handler** for that condition (clause 4.8).
 There are four: cancel, suspend, ignore, and abandon. Table 4-1 defaults
 every condition to cancel: the transaction closes out with a Finished PDU
 carrying the fault's condition code, and the partial file is discarded.
@@ -223,14 +223,14 @@ closes out with Finished.
 
 ## Checksums
 
-Every file carries a 32-bit checksum, verified on receipt (§4.2).
+Every file carries a 32-bit checksum, verified on receipt (clause 4.2).
 
 | Type | Algorithm | Notes |
 |---|---|---|
-| 0 | Modular | Required by §4.2.2.3. The legacy default |
+| 0 | Modular | Required by clause 4.2.2.3. The legacy default |
 | 2 | CRC-32C (Castagnoli) | Stronger; recommended for large files |
 | 3 | CRC-32 | |
-| 15 | Null | Required by §4.2.2.4. Always zero, protects nothing |
+| 15 | Null | Required by clause 4.2.2.4. Always zero, protects nothing |
 
 The modular checksum is unusual and worth understanding. The file is cut into
 4-octet words aligned to file offsets that are multiples of 4, each read
@@ -276,16 +276,16 @@ replace, and the directory actions — decode correctly but come back with statu
 "not performed", which table 5-18 provides for.
 
 A transaction with empty filenames carries no file at all. That is how a pure
-filestore request travels, and how proxy operations work (§5.2.5).
+filestore request travels, and how proxy operations work (clause 5.2.5).
 
 ## The optional PDU CRC
 
 Set `CRCFlag` and every PDU gets a trailing CRC-16, the same CCSDS Telecommand
-CRC the frame protocols use (§4.1.3.1). A PDU that fails it is discarded.
+CRC the frame protocols use (clause 4.1.3.1). A PDU that fails it is discarded.
 
 Two details worth knowing: the CRC covers everything from the first octet of
 the header, and its two octets count toward the PDU data field length
-(§4.1.3.2).
+(clause 4.1.3.2).
 
 Whether you need it depends on what is underneath. If your frames already carry
 a Frame Error Control Field, this is a second layer.
@@ -294,4 +294,4 @@ a Frame Error Control Field, this is a second layer.
 
 - [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf) — CCSDS File Delivery Protocol
 - [CCSDS 720.1-G-4](https://public.ccsds.org/Pubs/720x1g4.pdf) — CFDP Part 1: Introduction and Overview (Green Book)
-- [Conformance](/conformance/cfdp)
+- [CLI](/cli/cfdp) | [Conformance](/conformance/cfdp) | [The stack](/docs/start/concepts)

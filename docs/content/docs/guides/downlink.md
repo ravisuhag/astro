@@ -1,5 +1,6 @@
 ---
 title: Build a downlink
+short: Downlink
 description: Telemetry from a spacecraft to the ground — packets, frames, CADUs, and back.
 order: 1
 ---
@@ -160,4 +161,4 @@ Five packets in, five out. Note the arithmetic: two 408-byte science packets do 
 
 - [Handle a lossy link](/docs/guides/lossy-link) — what happens when frames get dropped
 - [Build an uplink](/docs/guides/uplink) — the other direction, with retransmission
-- [TM protocol page](/protocols/data-link/tmdl) · [TMSC](/protocols/coding/tmsc) · [SPP](/protocols/transport/spp)
+- [TM protocol page](/protocols/data-link/tmdl) | [TMSC](/protocols/coding/tmsc) | [SPP](/protocols/transport/spp)

@@ -2,7 +2,7 @@
 title: astro sdls
 short: SDLS
 description: Space Data Link Security — read a Security Header.
-order: 62
+order: 120
 ---
 
 Read the Security Header of a protected frame ([CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf)).
@@ -56,4 +56,6 @@ astro sdls inspect --input hex --iv 12 --mac 16 < frame-data.hex
 astro sdls inspect --input hex --seq 4 --mac 16 < frame-data.hex
 ```
 
-See the [conformance statement](/conformance/sdls).
+---
+
+**See also** — [the protocol page](/protocols/data-link/sdls) for the standard and the Go API, and the [conformance statement](/conformance/sdls) for what is and is not implemented.

@@ -2,7 +2,7 @@
 title: astro ldc
 short: LDC
 description: Lossless data compression — compress, decompress, inspect.
-order: 52
+order: 170
 ---
 
 Lossless data compression with Rice coding ([CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf)).
@@ -123,4 +123,8 @@ LDC Parameters
 
 ## Limits
 
-The compression identification packet of section 6 is not built here, insertion into Space Packets is the caller's job, and the application-specific predictor and mapper the standard names but does not define are absent. See the [conformance statement](/conformance/ldc).
+The compression identification packet of section 6 is not built here, insertion into Space Packets is the caller's job, and the application-specific predictor and mapper the standard names but does not define are absent.
+
+---
+
+**See also** — [the protocol page](/protocols/compression/ldc) for the standard and the Go API, and the [conformance statement](/conformance/ldc) for what is and is not implemented.

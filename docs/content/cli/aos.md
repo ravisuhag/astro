@@ -2,7 +2,7 @@
 title: astro aos
 short: AOS
 description: AOS transfer frames — encode, decode, inspect, gaps, demux.
-order: 22
+order: 50
 ---
 
 AOS Transfer Frame operations — encode, decode, inspect, and generate AOS Transfer Frames ([CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf)).
@@ -132,7 +132,7 @@ astro aos inspect --input bin frame.bin
 
 Scan a stream of concatenated AOS Transfer Frames and report gaps in the Virtual Channel frame counter. Each gap line gives the number of frames that went missing, not just that the counter jumped.
 
-AOS has no Master Channel frame count, so only virtual channel gaps are reported. Where a frame sets the VC Frame Count Usage Flag, the 4-bit cycle is folded in above the 24-bit count and the pair is treated as one 28-bit counter ([§4.1.2.5.5.3](https://public.ccsds.org/Pubs/732x0b4.pdf)), so a wrap of the count reads as contiguous rather than as sixteen million missing frames.
+AOS has no Master Channel frame count, so only virtual channel gaps are reported. Where a frame sets the VC Frame Count Usage Flag, the 4-bit cycle is folded in above the 24-bit count and the pair is treated as one 28-bit counter ([clause 4.1.2.5.5.3](https://public.ccsds.org/Pubs/732x0b4.pdf)), so a wrap of the count reads as contiguous rather than as sixteen million missing frames.
 
 Counters are tracked per spacecraft. A capture holding two SCIDs is compared within each, never across them.
 
@@ -222,3 +222,7 @@ astro aos gen --scid 50 --vcid 1 --count 10 --data-size 64
 # Generate with FECF and hex output
 astro aos gen --scid 50 --vcid 1 --count 5 --data-size 32 --fecf --format hex
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/data-link/aos) for the standard and the Go API, and the [conformance statement](/conformance/aos) for what is and is not implemented.

@@ -44,6 +44,23 @@ type RequestDecoder func(profile MissionProfile, data []byte) (Request, error)
 // ReportDecoder parses the source data of one report type.
 type ReportDecoder func(profile MissionProfile, data []byte) (Report, error)
 
+// RegistryOption configures a Registry at construction.
+type RegistryOption func(*Registry)
+
+// WithParameterResolver supplies the mission's on-board parameter layouts.
+//
+// ST[12] needs them: seven of its twenty-eight message types carry limits,
+// thresholds, expected values and masks whose widths come from the monitored
+// parameter's own definition, and those fields sit in the middle of a repeated
+// group rather than at the end of the message. Without the widths there is no
+// way to find where the next definition starts.
+//
+// A registry built without one still decodes the other twenty-one ST[12]
+// types. The seven return ErrNoParameterResolver rather than guessing.
+func WithParameterResolver(resolve ParameterResolver) RegistryOption {
+	return func(r *Registry) { r.parameters = resolve }
+}
+
 // Registry maps message types to the codecs that handle them.
 //
 // A mission registers the services it supports; anything unregistered decodes
@@ -57,19 +74,31 @@ type Registry struct {
 	profile  MissionProfile
 	requests map[MessageKey]RequestDecoder
 	reports  map[MessageKey]ReportDecoder
+
+	// parameters resolves on-board parameter layouts for ST[12]. It is set
+	// at construction and read, never written, afterwards.
+	parameters ParameterResolver
 }
 
 // NewRegistry returns an empty registry bound to a mission profile.
-func NewRegistry(profile MissionProfile) (*Registry, error) {
+func NewRegistry(profile MissionProfile, opts ...RegistryOption) (*Registry, error) {
 	if err := profile.Validate(); err != nil {
 		return nil, err
 	}
-	return &Registry{
+	r := &Registry{
 		profile:  profile,
 		requests: make(map[MessageKey]RequestDecoder),
 		reports:  make(map[MessageKey]ReportDecoder),
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r, nil
 }
+
+// ParameterResolver returns the resolver this registry decodes ST[12] against,
+// or nil if it was built without one.
+func (r *Registry) ParameterResolver() ParameterResolver { return r.parameters }
 
 // Profile returns the mission profile this registry decodes against.
 func (r *Registry) Profile() MissionProfile { return r.profile }
@@ -144,15 +173,18 @@ func (r *Registry) KnownReports() []MessageKey {
 // NewDefaultRegistry returns a registry with every service this package
 // implements already registered: ST[01] request verification, ST[03]
 // housekeeping, ST[05] event reporting, ST[08] function management, ST[11]
-// time-based scheduling, and ST[17] test.
-func NewDefaultRegistry(profile MissionProfile) (*Registry, error) {
-	r, err := NewRegistry(profile)
+// time-based scheduling, ST[12] on-board monitoring, and ST[17] test.
+//
+// Pass WithParameterResolver to decode the seven ST[12] message types that
+// carry fields sized by the mission's parameter definitions.
+func NewDefaultRegistry(profile MissionProfile, opts ...RegistryOption) (*Registry, error) {
+	r, err := NewRegistry(profile, opts...)
 	if err != nil {
 		return nil, err
 	}
 	for _, register := range []func(*Registry) error{
 		registerST01, registerST03, registerST05, registerST08, registerST11,
-		registerST17,
+		registerST12, registerST17,
 	} {
 		if err := register(r); err != nil {
 			return nil, err

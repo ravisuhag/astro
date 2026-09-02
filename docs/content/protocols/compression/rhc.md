@@ -5,7 +5,7 @@ description: Robust Compression of Housekeeping Data (CCSDS 124.0-B-1) — POCKE
 order: 51
 ---
 
-> **CCSDS 124.0-B-1** · [Blue Book](https://public.ccsds.org/Pubs/124x0b1.pdf) · [`pkg/rhc`](https://github.com/ravisuhag/astro/tree/main/pkg/rhc)
+> **CCSDS 124.0-B-1** | [Blue Book](https://public.ccsds.org/Pubs/124x0b1.pdf) | [`pkg/rhc`](https://github.com/ravisuhag/astro/tree/main/pkg/rhc) | [`astro rhc`](/cli/rhc)
 
 ## Overview
 
@@ -68,17 +68,17 @@ for _, packet := range reports {
 }
 ```
 
-On 200 slowly changing 512-bit reports this gives about 2.5× — and the ratio
+On 200 slowly changing 512-bit reports this gives about 2.5x — and the ratio
 climbs the less the data moves.
 
 `bitLen` matters. An output vector is a whole number of *bits*, not octets, and
-`Compress` pads to the next octet only because it returns a byte slice. §2.2
+`Compress` pads to the next octet only because it returns a byte slice. Clause 2.2
 leaves framing to the mission, so if you are packing several outputs together
 you need the bit length to find the boundaries.
 
 ## The three components
 
-Each output vector is `h_t || q_t || u_t` (§5.3.1).
+Each output vector is `h_t || q_t || u_t` (clause 5.3.1).
 
 **h_t** describes what changed in the mask lately. Not just this cycle: the
 change vectors of the last few cycles are ORed together, so a decompressor that
@@ -95,19 +95,19 @@ vector when the uncompressed flag is set.
 ## A note on the decompressor
 
 CCSDS 124.0-B-1 specifies the compressor and nothing else. Its normative
-sections are inputs (§3), mask update (§4) and encoder (§5), and the
+sections are inputs (clause 3), mask update (clause 4) and encoder (clause 5), and the
 conformance list in annex A2.2.1 has five items, all encoder items. There is no
 decoder section.
 
 The decompressor in this package is therefore the encoder run backwards. That
-is legitimate — §2.1 lists exactly what a decompressor needs and the encoding
+is legitimate — clause 2.1 lists exactly what a decompressor needs and the encoding
 is losslessly invertible — but it is derived rather than transcribed, and the
 [PICS](/conformance/rhc) says so. The round-trip and loss tests are what
 stand behind it.
 
 One reading of the standard deserves a flag: equation 11's bit extraction
 emits the selected bits in the *reverse* of transmission order — the last
-selected position travels first. That falls out of §1.6.1's own conventions
+selected position travels first. That falls out of clause 1.6.1's own conventions
 and matches the independent VisionSpace PocketPlus implementation, but no
 published test vector confirms it. The PICS records the full reasoning.
 
@@ -118,7 +118,7 @@ stays that way — otherwise the decompressor could not trust any position.
 
 That would be a one-way ratchet, so there is a second vector, the **build**,
 accumulating the same changes in parallel. When the new mask flag fires
-(§4.2.2), the mask is replaced by the build and the build resets to empty. A
+(clause 4.2.2), the mask is replaced by the build and the build resets to empty. A
 position that has been quiet since the last time the flag fired is not in the
 build, so it goes back to being predictable.
 
@@ -131,7 +131,7 @@ compressor.ForceNewMask()   // resets the build; the mask is unchanged,
 compressor.ForceNewMask()   // now the mask really does clear
 ```
 
-The first flag mostly serves to start a fresh build. §2.1 puts it as positions
+The first flag mostly serves to start a fresh build. Clause 2.1 puts it as positions
 moving to predictable "only on the cycle when the new mask is requested" — and
 only if they have been quiet since the previous request.
 
@@ -141,13 +141,13 @@ This is the part to read twice.
 
 Each output says how many outputs may have been lost immediately before it
 without stopping it from being decoded. That is its **effective robustness
-level**, and `Robustness` sets the floor. §2.1:
+level**, and `Robustness` sets the floor. Clause 2.1:
 
 > the mask can be synchronized even if the number of consecutive output binary
 > vectors lost immediately before this output bit vector is equal to, or less
 > than, the effective robustness level
 
-But the decompressor **cannot tell that anything was lost**. §2.2 is explicit:
+But the decompressor **cannot tell that anything was lost**. Clause 2.2 is explicit:
 
 > it does not provide a mechanism for identifying the number of sequential
 > output binary vectors that were lost. Such mechanisms are assumed to be
@@ -167,13 +167,13 @@ With `NotifyLoss`, the decompressor refuses anything it cannot vouch for.
 Without it, a stream with holes reconstructs wrong bytes and nobody notices.
 That is a property of the standard, not of this package.
 
-The same goes for framing. There are no sync markers — §2.2 again — so a
+The same goes for framing. There are no sync markers — clause 2.2 again — so a
 corrupt or foreign vector that happens to parse will be taken for a real one.
 Carry the outputs in something with a length field, such as space packets.
 
 ### Recovering
 
-Two things restore a decompressor, and they fix different halves of §2.1's
+Two things restore a decompressor, and they fix different halves of clause 2.1's
 list:
 
 | What arrives | What it restores |
@@ -207,7 +207,7 @@ package's addition, not the standard's, and is off by default.
 `VectorLength` is fixed by the data. The rest are trades, and only the first is
 in the standard at all:
 
-| Knob | § | Trade |
+| Knob | clause | Trade |
 |---|---|---|
 | `Robustness` | 3.3.2a | 0 to 7. Higher survives longer gaps; costs bits, because the change information is ORed over more cycles and so names more positions. |
 | `UncompressedInterval` | policy | How often to send a whole input. The recovery lever. Short means fast recovery and a much worse ratio — an uncompressed output is bigger than the input. |
@@ -215,10 +215,10 @@ in the standard at all:
 | `NewMaskInterval` | policy | How often to let positions go back to predictable. Never setting it means the mask fills with ones over a long run and compression decays. |
 | `Strict` | policy | Decompressor side. After a reported loss, accept only an uncompressed output rather than trusting an output's self-declared robustness reach. Safer against corruption; refuses more. |
 
-Only `Robustness` is normative. §3.3.2 makes the three flags user-specified at
+Only `Robustness` is normative. Clause 3.3.2 makes the three flags user-specified at
 every cycle and says nothing about when to set them, so the intervals here are
 this package's convenience and nothing more. `CompressWith` takes the flags
-directly if you want to drive them from your own logic — which §2.1 explicitly
+directly if you want to drive them from your own logic — which clause 2.1 explicitly
 allows, since "all the information required for decompression is contained in
 the output bit vectors".
 
@@ -233,4 +233,4 @@ The two ends need only agree on `VectorLength`.
 
 - [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) — Robust
   Compression of Fixed-Length Housekeeping Data, February 2023
-- [Conformance](/conformance/rhc)
+- [CLI](/cli/rhc) | [Conformance](/conformance/rhc) | [The stack](/docs/start/concepts)

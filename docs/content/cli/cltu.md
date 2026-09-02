@@ -2,7 +2,7 @@
 title: astro cltu
 short: CLTU
 description: Command Link Transmission Units — wrap, unwrap, inspect.
-order: 31
+order: 90
 ---
 
 Command Link Transmission Unit operations — wrap, unwrap, and inspect CLTUs ([CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf)).
@@ -14,6 +14,7 @@ Command Link Transmission Unit operations — wrap, unwrap, and inspect CLTUs ([
 | `astro cltu wrap` | Wrap a TC frame into a CLTU (BCH encode, add start/tail sequences) |
 | `astro cltu unwrap` | Validate sequences, BCH decode, extract TC frame |
 | `astro cltu inspect` | Annotated CLTU breakdown with codeblock details |
+| `astro cltu gen` | Generate synthetic CLTUs |
 
 ---
 
@@ -112,15 +113,50 @@ Raw CLTU (26 bytes)
 
 ---
 
+## astro cltu gen
+
+Generate a stream of synthetic CLTUs — BCH-encoded TC frames with start and tail sequences.
+
+```
+astro cltu gen [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scid` | `0` | Spacecraft ID (0-1023) |
+| `--vcid` | `0` | Virtual Channel ID (0-63) |
+| `--count` | `10` | Number of CLTUs to generate |
+| `--data-size` | `64` | TC frame data field size in bytes |
+| `--randomize` | `false` | Apply CCSDS pseudo-randomization |
+| `--format` | `bin` | Output format: `bin` or `hex` |
+
+**Examples**
+
+```bash
+# Generate 10 CLTUs
+astro cltu gen --scid 26 --vcid 1 --count 10 --data-size 64
+
+# Generate and inspect the first one
+astro cltu gen --scid 26 --vcid 1 --count 1 --data-size 32 --format hex | astro cltu inspect --input hex
+```
+
+---
+
 ## Piping
 
 ```bash
-# Full TC chain: encode frame → wrap CLTU → inspect
+# Full TC chain: encode frame -> wrap CLTU -> inspect
 astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro cltu wrap --input hex | astro cltu inspect --input hex
 
-# Wrap → Unwrap round-trip
+# Wrap -> Unwrap round-trip
 astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro cltu wrap --input hex | astro cltu unwrap --input hex
 
-# Wrap with randomize → Unwrap with derandomize
+# Wrap with randomize -> Unwrap with derandomize
 astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro cltu wrap --input hex --randomize | astro cltu unwrap --input hex --derandomize
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/coding/tcsc) for the standard and the Go API, and the [conformance statement](/conformance/tcsc) for what is and is not implemented.

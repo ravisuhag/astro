@@ -2,7 +2,7 @@
 title: astro bp
 short: BP
 description: Bundle Protocol v6 — decode bundles and administrative records.
-order: 55
+order: 210
 ---
 
 Decode Bundle Protocol bundles and administrative records ([CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf), [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050)).
@@ -59,4 +59,6 @@ Same as `decode`.
 astro bp admin --input hex < record.hex
 ```
 
-See the [conformance statement](/conformance/bp).
+---
+
+**See also** — [the protocol page](/protocols/transport/bp) for the standard and the Go API, and the [conformance statement](/conformance/bp) for what is and is not implemented.

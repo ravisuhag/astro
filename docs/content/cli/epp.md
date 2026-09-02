@@ -2,7 +2,7 @@
 title: astro epp
 short: EPP
 description: Encapsulation Packets — encode, decode, inspect, validate, stream.
-order: 11
+order: 20
 ---
 
 Encapsulation Packet Protocol operations — encode, decode, inspect, validate, and stream CCSDS Encapsulation Packets ([CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf)).
@@ -255,19 +255,23 @@ astro epp gen --pid 7 --count 5 --size 32 --long-length --format hex
 All commands support stdin/stdout piping for composability:
 
 ```bash
-# Encode → Inspect
+# Encode -> Inspect
 astro epp encode --pid 2 --data 0102030405 | astro epp inspect --input hex
 
-# Encode → Validate
+# Encode -> Validate
 astro epp encode --pid 7 --data a1b2c3d4 | astro epp validate --input hex
 
-# Encode → Decode as JSON
+# Encode -> Decode as JSON
 astro epp encode --pid 2 --data 0102030405 | astro epp decode --input hex --format json
 
-# Generate → Stream decode
+# Generate -> Stream decode
 astro epp gen --pid 2 --count 20 --size 32 --format bin | astro epp stream --input bin
 
-# EPP → SPP interop: EPP carrying SPP-encoded data
+# EPP -> SPP interop: EPP carrying SPP-encoded data
 SPP=$(astro spp encode --apid 100 --type tm --data 61626364)
 astro epp encode --pid 7 --data $SPP
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/transport/epp) for the standard and the Go API, and the [conformance statement](/conformance/epp) for what is and is not implemented.

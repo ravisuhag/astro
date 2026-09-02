@@ -2,7 +2,7 @@
 title: astro xtce
 short: XTCE
 description: XTCE mission databases — validate, list, layout, decode, match.
-order: 50
+order: 150
 ---
 
 XTCE mission database operations — validate a database, see what it defines, and decode packets against it ([XTCE 1.2](https://www.omg.org/spec/XTCE/), [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf)).
@@ -175,4 +175,6 @@ astro xtce match mission.xml --root /Sat/Packet --format name < packet.hex
 
 `match` resolves candidates against the packet too, so a dynamic container can be identified as well as decoded. A `CustomAlgorithm` in the restriction criteria is refused, being by definition not in the file.
 
-See the [conformance statement](/conformance/xtce) for the row-by-row picture.
+---
+
+**See also** — [the protocol page](/protocols/mission/xtce) for the standard and the Go API, and the [conformance statement](/conformance/xtce) for what is and is not implemented.

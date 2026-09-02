@@ -1,10 +1,17 @@
 ---
 title: Compose a link
+short: Compose
 description: One configuration builds both ends of a downlink or an uplink, so they cannot drift apart.
 order: 4
 ---
 
 [Build a downlink](/docs/guides/downlink) wires the layers by hand, which is what you want when you are learning where the boundaries are. This page is the short version: [`pkg/stack`](https://github.com/ravisuhag/astro/tree/main/pkg/stack) takes one configuration value and builds both the spacecraft side and the ground side from it.
+
+The complete program is [`examples/composed`](https://github.com/ravisuhag/astro/tree/main/examples/composed). Run it:
+
+```bash
+go run ./examples/composed/
+```
 
 ## Why it exists
 

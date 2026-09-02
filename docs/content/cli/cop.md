@@ -2,7 +2,7 @@
 title: astro cop
 short: COP
 description: COP-1 — build and read the Communications Link Control Word.
-order: 58
+order: 130
 ---
 
 Build and read the Communications Link Control Word ([CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2ec1.pdf)).
@@ -34,6 +34,7 @@ astro cop clcw-encode [flags]
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--scid` | `0` | Spacecraft ID, for the text summary only |
 | `--vcid` | `0` | Virtual Channel ID this CLCW reports on (0-63) |
 | `--report-value` | `0` | Next frame sequence number the receiver expects, N(R) |
 | `--wait` | `false` | Set the Wait flag: the receiver has no buffer |
@@ -81,4 +82,6 @@ astro cop clcw-decode [file] [flags]
 astro cop clcw-decode --input hex < ocf.hex
 ```
 
-See the [conformance statement](/conformance/cop) for the FOP-1 and FARM-1 state coverage.
+---
+
+**See also** — [the protocol page](/protocols/data-link/cop) for the standard and the Go API, and the [conformance statement](/conformance/cop) for what is and is not implemented.

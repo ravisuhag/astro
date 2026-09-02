@@ -2,7 +2,7 @@
 title: astro tm
 short: TM
 description: TM transfer frames — encode, decode, inspect, gaps, demux.
-order: 20
+order: 30
 ---
 
 TM Transfer Frame operations — encode, decode, inspect, and analyze CCSDS TM Transfer Frames ([CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf)).
@@ -16,6 +16,7 @@ TM Transfer Frame operations — encode, decode, inspect, and analyze CCSDS TM T
 | `astro tm inspect` | Annotated frame breakdown with hex dump |
 | `astro tm gaps` | Detect MC/VC counter gaps in a frame stream |
 | `astro tm demux` | Filter frames by Virtual Channel ID |
+| `astro tm gen` | Generate synthetic TM Transfer Frames |
 
 ## Common Flags
 
@@ -150,7 +151,7 @@ Raw Frame (13 bytes)
 
 Scan a stream of concatenated TM Transfer Frames and report any gaps in the Master Channel (MC) and Virtual Channel (VC) frame counters. Each gap line gives the number of frames that went missing, not just that the counter jumped.
 
-Both counters are eight bits and the arithmetic is modular, so 254 → 255 → 1 reports the one frame that was lost, not 254 of them. Counters are tracked per spacecraft: a capture holding two SCIDs is compared within each, never across them.
+Both counters are eight bits and the arithmetic is modular, so 254 -> 255 -> 1 reports the one frame that was lost, not 254 of them. Counters are tracked per spacecraft: a capture holding two SCIDs is compared within each, never across them.
 
 ```
 astro tm gaps [file] [flags]
@@ -207,15 +208,49 @@ astro tm demux --input bin --frame-len 1115 --vcid 0 --format hex capture.bin | 
 
 ---
 
+## astro tm gen
+
+Generate a stream of synthetic TM Transfer Frames with incrementing master and virtual channel counters and random data.
+
+```
+astro tm gen [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scid` | `0` | Spacecraft ID (0-1023) |
+| `--vcid` | `0` | Virtual Channel ID (0-7) |
+| `--count` | `10` | Number of frames to generate |
+| `--data-size` | `1024` | Data field size in bytes per frame |
+| `--format` | `bin` | Output format: `bin` or `hex` |
+
+**Examples**
+
+```bash
+# Generate 10 TM frames
+astro tm gen --scid 26 --vcid 1 --count 10 --data-size 1024
+
+# Generate and check for gaps, which should find none
+astro tm gen --scid 26 --vcid 0 --count 50 --data-size 100 | astro tm gaps --input bin --frame-len 108
+```
+
+---
+
 ## Piping
 
 ```bash
-# Encode → Inspect
+# Encode -> Inspect
 astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro tm inspect --input hex
 
-# Encode → Decode as JSON
+# Encode -> Decode as JSON
 astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro tm decode --input hex --format json
 
-# Encode with OCF → Inspect
+# Encode with OCF -> Inspect
 astro tm encode --scid 26 --vcid 1 --data 0102030405 --ocf 00000000 | astro tm inspect --input hex
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/data-link/tmdl) for the standard and the Go API, and the [conformance statement](/conformance/tmdl) for what is and is not implemented.

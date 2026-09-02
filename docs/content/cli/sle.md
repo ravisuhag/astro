@@ -2,7 +2,7 @@
 title: astro sle
 short: SLE
 description: Space Link Extension — decode transfer service PDUs.
-order: 56
+order: 220
 ---
 
 Decode SLE transfer service PDUs (CCSDS [911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf), [911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf), [911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf), [912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf)).
@@ -58,4 +58,8 @@ A value the schema makes structured — a set of GVCIDs, the online/offline choi
 
 ## Limits
 
-The provider runs production and the transfer buffer, and serves several service instances; what it does not hold is a service agreement. See the [conformance statement](/conformance/sle).
+The provider runs production and the transfer buffer, and serves several service instances; what it does not hold is a service agreement.
+
+---
+
+**See also** — [the protocol page](/protocols/ground/sle) for the standard and the Go API, and the [conformance statement](/conformance/sle) for what is and is not implemented.

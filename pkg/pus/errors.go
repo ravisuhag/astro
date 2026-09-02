@@ -63,6 +63,31 @@ var (
 	// activity list that would desynchronise every activity after it.
 	ErrPacketLengthMismatch = errors.New("embedded packet length field disagrees with the octets given")
 
+	// ErrInvalidCheckType indicates a check type outside Table 8-6's three
+	// values.
+	ErrInvalidCheckType = errors.New("invalid ST[12] check type")
+
+	// ErrCheckCriteriaMismatch indicates check criteria whose set alternative
+	// does not match its check type. The receiving end reads the criteria
+	// according to the type, so a mismatch would be misread rather than
+	// noticed.
+	ErrCheckCriteriaMismatch = errors.New("ST[12] check criteria do not match the check type")
+
+	// ErrNoParameterResolver indicates an ST[12] message carrying fields whose
+	// widths come from the mission's parameter definitions, decoded by a
+	// registry that was given no ParameterResolver. Guessing would mis-split
+	// the definition list silently.
+	ErrNoParameterResolver = errors.New("this ST[12] message type needs a ParameterResolver")
+
+	// ErrInvalidParameterLayout indicates a resolver that returned a negative
+	// width.
+	ErrInvalidParameterLayout = errors.New("invalid parameter layout")
+
+	// ErrFieldWidthMismatch indicates a value whose length is not the width
+	// the parameter's layout declares. These fields sit before others in a
+	// repeated group, so a wrong width shifts everything after it.
+	ErrFieldWidthMismatch = errors.New("value length does not match the width the parameter layout declares")
+
 	// ErrHeaderNotWordAligned indicates a secondary header whose size is not a
 	// whole number of mission words (clauses 7.4.3.1l and 7.4.4.1g), when the
 	// profile declares a word size to check against.

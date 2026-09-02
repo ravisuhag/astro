@@ -70,7 +70,7 @@ NOTE — CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service 
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| TCSC-10 | PN Sequence Generation | 6.2 | M | Yes | `GeneratePNSequence(length)` — 8-bit LFSR, h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, preset to all ones. Pinned to the published first 40 digits (0xFF 0x39 0x9E 0x5A 0x68). This is the TC polynomial; the TM randomizer of CCSDS 131.0-B-5 §10.4.2 is a different sequence and is not used here. |
+| TCSC-10 | PN Sequence Generation | 6.2 | M | Yes | `GeneratePNSequence(length)` — 8-bit LFSR, h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, preset to all ones. Pinned to the published first 40 digits (0xFF 0x39 0x9E 0x5A 0x68). This is the TC polynomial; the TM randomizer of CCSDS 131.0-B-5 clause 10.4.2 is a different sequence and is not used here. |
 | TCSC-11 | Randomization (Send) | 6.3 | M | Yes | `Randomize(data)` XORs data with the PN sequence. Returns new slice; input not modified. |
 | TCSC-12 | De-Randomization (Receive) | 6.3 | M | Yes | Same `Randomize()` function — XOR is self-inverse. Integrated into `UnwrapCLTU()` when randomize=true. |
 | TCSC-13 | Randomization Coverage in the CLTU | 6.3 | M | Yes | `WrapCLTU()` pads to the codeblock boundary with 0x55 fill FIRST, then randomizes the padded buffer, so the fill octets go out randomized like the rest of the data. `UnwrapCLTU()` de-randomizes the full recovered buffer (fill included). Pinned by `TestWrapCLTU_RandomizesFillOctets`. |
@@ -133,7 +133,7 @@ NOTE — CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service 
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| BCH(63,56) Coding | TCSC-1–9 | `BCHEncode()` (complemented parity, filler '0', all-zeros → 0xFE vector), `BCHDecode()` / `BCHDecodeWithMode()` with SEC and TED modes. |
-| Pseudo-Randomization | TCSC-10–13 | `GeneratePNSequence()`, `Randomize()`; fill-then-randomize order in `WrapCLTU()`. |
-| CLTU | TCSC-14–20 | `WrapCLTU()`, `UnwrapCLTU()` / `UnwrapCLTUWithMode()` terminating on the first failed codeblock. |
-| Acquisition/Idle/PLOP | TCSC-21–24 | `AcquisitionSequence()`, `IdleSequence()`, `UplinkSequence()` for PLOP-1 and PLOP-2. |
+| BCH(63,56) Coding | TCSC-1-9 | `BCHEncode()` (complemented parity, filler '0', all-zeros -> 0xFE vector), `BCHDecode()` / `BCHDecodeWithMode()` with SEC and TED modes. |
+| Pseudo-Randomization | TCSC-10-13 | `GeneratePNSequence()`, `Randomize()`; fill-then-randomize order in `WrapCLTU()`. |
+| CLTU | TCSC-14-20 | `WrapCLTU()`, `UnwrapCLTU()` / `UnwrapCLTUWithMode()` terminating on the first failed codeblock. |
+| Acquisition/Idle/PLOP | TCSC-21-24 | `AcquisitionSequence()`, `IdleSequence()`, `UplinkSequence()` for PLOP-1 and PLOP-2. |

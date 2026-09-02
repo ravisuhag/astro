@@ -2,7 +2,7 @@
 title: astro pxsc
 short: PXSC
 description: Proximity-1 coding — PLTUs, sync, convolutional code.
-order: 60
+order: 100
 ---
 
 Proximity-1 coding and synchronisation ([CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf)).
@@ -21,11 +21,13 @@ A PLTU is the Proximity-1 equivalent of a CADU: the sync marker `0xFAF320`, the 
 
 ---
 
-## astro pxsc wrap / unwrap
+## astro pxsc wrap
 
-`wrap` prepends the sync marker and appends the CRC-32. `unwrap` strips the marker, verifies the CRC, and returns the frame.
+Prepend the sync marker and append the CRC-32, turning a transfer frame into a PLTU.
 
-A CRC mismatch is an **error**. The frame is corrupt, and passing it up would put bad data into the layer above.
+```
+astro pxsc wrap [file] [flags]
+```
 
 **Flags**
 
@@ -33,12 +35,36 @@ A CRC mismatch is an **error**. The frame is corrupt, and passing it up would pu
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
-| `--max-frame` (unwrap) | `2048` | Largest frame to accept, in octets |
 
 **Examples**
 
 ```bash
 astro pxdl encode --scid 42 --port 1 --data 0102 | astro pxsc wrap --input hex
+```
+
+---
+
+## astro pxsc unwrap
+
+Strip the marker, verify the CRC-32, and return the frame.
+
+A CRC mismatch is an **error**. The frame is corrupt, and passing it up would put bad data into the layer above.
+
+```
+astro pxsc unwrap [file] [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | `hex` | Input format: `hex` or `bin` |
+| `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
+| `--max-frame` | `2048` | Largest frame to accept, in octets |
+
+**Examples**
+
+```bash
 astro pxsc unwrap --input hex < pltu.hex | astro pxdl decode --input hex
 ```
 
@@ -50,6 +76,10 @@ Search a raw stream for the sync marker and extract the frames whose CRC-32 chec
 
 Unlike a CADU stream, a PLTU carries no fixed length, so the synchroniser tries candidate lengths and lets the CRC decide. A frame is reported only when its checksum agrees, which is what stops a false marker producing a bogus frame.
 
+```
+astro pxsc sync [file] [flags]
+```
+
 **Flags**
 
 | Flag | Default | Description |
@@ -59,9 +89,21 @@ Unlike a CADU stream, a PLTU carries no fixed length, so the synchroniser tries 
 
 ---
 
-## astro pxsc encode / decode
+## astro pxsc encode
 
-The rate-1/2 convolutional code of §3.3: constraint length 7, generators 171 and 133 in octal. Every input bit becomes two output bits.
+Apply the rate-1/2 convolutional code of clause 3.3: constraint length 7, generators 171 and 133 in octal. Every input bit becomes two output bits.
+
+```
+astro pxsc encode [file] [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | `hex` | Input format: `hex` or `bin` |
+| `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
+| `--flush` | `true` | Append the zero tail the decoder needs |
 
 ### The tail
 
@@ -71,13 +113,22 @@ So `encode` appends five zero octets by default, which is the smallest whole num
 
 Symbols from elsewhere may still be short by a few octets at the end, which is the decoder working correctly rather than a fault.
 
+---
+
+## astro pxsc decode
+
+Decode code symbols with a Viterbi decoder, recovering the original octets. The decoder corrects errors, which is the point of the code: a symbol stream with a few bits flipped still decodes to the right octets.
+
+```
+astro pxsc decode [file] [flags]
+```
+
 **Flags**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
-| `--flush` (encode) | `true` | Append a zero tail so a decode returns exactly this input |
 
 **Examples**
 
@@ -93,4 +144,6 @@ astro pxdl encode --scid 42 --port 1 --data 0102 |
 
 The decoder corrects errors, which is the point of the code: a symbol stream with a few bits flipped still decodes to the right octets.
 
-See the [conformance statement](/conformance/pxsc).
+---
+
+**See also** — [the protocol page](/protocols/coding/pxsc) for the standard and the Go API, and the [conformance statement](/conformance/pxsc) for what is and is not implemented.

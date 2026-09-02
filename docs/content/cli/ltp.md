@@ -2,7 +2,7 @@
 title: astro ltp
 short: LTP
 description: Licklider Transmission Protocol — decode segments.
-order: 54
+order: 200
 ---
 
 Decode LTP segments ([CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf), [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326)).
@@ -36,4 +36,6 @@ astro ltp decode [file] [flags]
 astro ltp decode --input hex < segment.hex
 ```
 
-See the [conformance statement](/conformance/ltp) for what the package implements.
+---
+
+**See also** — [the protocol page](/protocols/transport/ltp) for the standard and the Go API, and the [conformance statement](/conformance/ltp) for what is and is not implemented.

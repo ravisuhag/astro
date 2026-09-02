@@ -1,5 +1,6 @@
 ---
 title: The stack
+short: The stack
 description: How a sensor reading becomes radio symbols, and which package does each step.
 order: 4
 ---
@@ -26,12 +27,13 @@ This page is the map. Every protocol page links back here rather than re-explain
        ▼
 ┌──────────────────┐
 │  Reed-Solomon    │   pkg/tmsc    "here is enough parity to fix
-│  + randomize     │                16 bad bytes"
+│  + randomize     │                16 bad bytes"     (radio; a
+│                  │                laser link uses pkg/ocsc)
 └──────────────────┘
        │
        ▼
 ┌──────────────────┐
-│  ASM  →  CADU    │   pkg/tmsc    "a frame starts HERE"
+│  ASM  ->  CADU    │   pkg/tmsc    "a frame starts HERE"
 └──────────────────┘
        │
        ▼
@@ -46,7 +48,7 @@ The ground runs the same thing backwards.
 
 **The data link layer** answers *how do I find one thing in a continuous stream?* Frames are a fixed size, so a receiver always knows where the next one starts. Because packets and frames are different sizes, a packet can span several frames — the First Header Pointer in the frame header is how the receiver finds packet boundaries again after a loss.
 
-**The coding layer** answers *what about bit errors?* There is no asking for a resend when the round trip is an hour. Reed–Solomon parity lets the receiver fix errors where they land. Randomization keeps the receiver's clock locked. The Attached Sync Marker is a known pattern that says a frame begins here.
+**The coding layer** answers *what about bit errors?* There is no asking for a resend when the round trip is an hour. Reed-Solomon parity lets the receiver fix errors where they land. Randomization keeps the receiver's clock locked. The Attached Sync Marker is a known pattern that says a frame begins here.
 
 ## Which protocol for which job
 
@@ -55,7 +57,7 @@ The ground runs the same thing backwards.
 | Packets | [SPP](/protocols/transport/spp), [EPP](/protocols/transport/epp) | [SPP](/protocols/transport/spp), [EPP](/protocols/transport/epp) |
 | Frames | [TM](/protocols/data-link/tmdl), [AOS](/protocols/data-link/aos) | [TC](/protocols/data-link/tcdl) |
 | Both directions | [USLP](/protocols/data-link/usdl) | [USLP](/protocols/data-link/usdl) |
-| Coding | [TMSC](/protocols/coding/tmsc) | [TCSC](/protocols/coding/tcsc) |
+| Coding | [TMSC](/protocols/coding/tmsc), [OCSC](/protocols/coding/ocsc) | [TCSC](/protocols/coding/tcsc) |
 | Reliability | — | [COP-1](/protocols/data-link/cop) |
 | Security | [SDLS](/protocols/data-link/sdls) | [SDLS](/protocols/data-link/sdls) |
 
@@ -71,7 +73,9 @@ Some protocols do not sit in that stack at all.
 
 **Between ground systems.** [SLE](/protocols/ground/sle) moves frames between a ground station and a control centre over the internet. It is the only protocol here that never touches a spacecraft.
 
-**Between spacecraft.** [Proximity-1](/protocols/data-link/pxdl) is the short-range link — a rover to an orbiter overhead, which then relays to Earth on a completely separate downlink.
+**Between spacecraft.** [Proximity-1](/protocols/data-link/pxdl) is the short-range link — a rover to an orbiter overhead, which then relays to Earth on a completely separate downlink. It has its own coding layer, [PXSC](/protocols/coding/pxsc), which wraps frames in PLTUs the way TMSC wraps them in CADUs.
+
+**Over a laser.** [OCSC](/protocols/coding/ocsc) is the coding layer for optical links. It replaces Reed-Solomon with SCPPM and works in bits rather than octets, because a codeblock's length is not a whole number of them.
 
 **Files and networking.** [CFDP](/protocols/transport/cfdp) moves files. [LTP](/protocols/transport/ltp) and [BP](/protocols/transport/bp) do delay-tolerant networking for multi-hop paths.
 
@@ -86,9 +90,9 @@ Follow one housekeeping reading end to end:
 1. A thermistor reads 22.5 °C. [PUS ST[03]](/protocols/mission/pus) says how that goes into a housekeeping report, and [a time code](/protocols/mission/tcf) stamps it.
 2. The report becomes the payload of a [Space Packet](/protocols/transport/spp) on APID 100.
 3. The [VCP service](/protocols/data-link/tmdl) packs that packet into a TM frame on virtual channel 0, along with whatever else fits.
-4. [TMSC](/protocols/coding/tmsc) adds Reed–Solomon parity, randomizes the bits, and prepends the sync marker. That is a CADU.
+4. [TMSC](/protocols/coding/tmsc) adds Reed-Solomon parity, randomizes the bits, and prepends the sync marker. That is a CADU.
 5. The radio sends it. Some bits arrive wrong.
-6. The ground finds the sync marker, de-randomizes, and lets Reed–Solomon fix the errors.
+6. The ground finds the sync marker, de-randomizes, and lets Reed-Solomon fix the errors.
 7. The frame's counters show whether anything was lost. The First Header Pointer finds the packet boundary.
 8. The packet's APID says it is housekeeping. [XTCE](/protocols/mission/xtce) says byte 4 is the temperature.
 9. Someone sees 22.5 °C.

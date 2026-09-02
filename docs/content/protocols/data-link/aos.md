@@ -5,7 +5,7 @@ description: CCSDS 732.0-B-4 — high-rate downlink frames for Earth observation
 order: 22
 ---
 
-> **CCSDS 732.0-B-4** · [Blue Book](https://public.ccsds.org/Pubs/732x0b4.pdf) · [`pkg/aos`](https://github.com/ravisuhag/astro/tree/main/pkg/aos) · [`astro aos`](/cli/aos)
+> **CCSDS 732.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/732x0b4.pdf) | [`pkg/aos`](https://github.com/ravisuhag/astro/tree/main/pkg/aos) | [`astro aos`](/cli/aos)
 
 AOS is the downlink protocol for missions that send a lot of data for a long time. Earth observation, lunar, deep space. It does the same job as [TM](/protocols/data-link/tmdl) but scales further in three ways: a 24-bit frame counter instead of 8 bits, an insert zone that puts a fixed field at every frame boundary, and a bitstream service for data that is not packets.
 
@@ -26,18 +26,18 @@ The primary header — 6 bytes, or 8 with FHEC. Go fields on `aos.PrimaryHeader`
 | Field | Bits | Go | Notes |
 |---|---|---|---|
 | Transfer Frame Version Number | 2 | `TFVN` | Always `1` for AOS. TM uses `0`. |
-| Spacecraft Identifier | 8 | `SCID` | 0–255. Narrower than TM's 10 bits. |
-| Virtual Channel Identifier | 6 | `VCID` | 0–63. VCID 63 is reserved for Only Idle Data. |
+| Spacecraft Identifier | 8 | `SCID` | 0-255. Narrower than TM's 10 bits. |
+| Virtual Channel Identifier | 6 | `VCID` | 0-63. VCID 63 is reserved for Only Idle Data. |
 | Virtual Channel Frame Count | 24 | `VCFrameCount` | Wraps at 16,777,215 |
 | Replay Flag | 1 | `ReplayFlag` | Marks recorded data being played back |
 | VC Frame Count Usage Flag | 1 | `VCFCUsageFlag` | Whether the cycle field is in use |
-| VC Frame Count Cycle | 4 | `VCFrameCountCycle` | 0–15, extends the counter further |
+| VC Frame Count Cycle | 4 | `VCFrameCountCycle` | 0-15, extends the counter further |
 
 The rest of the frame, on `aos.TransferFrame`:
 
 | Part | Size | Go | Notes |
 |---|---|---|---|
-| Frame Header Error Control | 2 B | `FHEC` | Optional. Reed–Solomon (10,6) over the protected header octets. |
+| Frame Header Error Control | 2 B | `FHEC` | Optional. Reed-Solomon (10,6) over the protected header octets. |
 | Insert Zone | fixed | `InsertZone` | Optional, mission-defined, same length on every frame |
 | Data Field | variable | `DataField` | Includes the M_PDU or B_PDU header when one applies |
 | Operational Control Field | 4 B | `OCF` | Optional, usually a CLCW |
@@ -51,7 +51,7 @@ Channel-wide settings are on `aos.ChannelConfig`: `FrameLength`, `InsertZoneLen`
 
 | FHP | Meaning |
 |---|---|
-| 0–2045 | Offset to the first packet header in the packet zone |
+| 0-2045 | Offset to the first packet header in the packet zone |
 | `0x7FE` | Idle data only |
 | `0x7FF` | No packet starts here |
 
@@ -59,7 +59,7 @@ Channel-wide settings are on `aos.ChannelConfig`: `FrameLength`, `InsertZoneLen`
 
 | BDP | Meaning |
 |---|---|
-| 0–16381 | Index of the last valid bit |
+| 0-16381 | Index of the last valid bit |
 | `0x3FFE` | All idle |
 | `0x3FFF` | All valid, nothing ends in this frame |
 
@@ -113,7 +113,7 @@ Get those three arguments wrong and the decode either fails or silently reads th
 | `WithInsertZone(data)` | Fills the insert zone. Length must match `ChannelConfig.InsertZoneLen`. |
 | `WithOCF(ocf)` | Attaches a 4-byte Operational Control Field |
 | `WithFECF()` | Appends the 2-byte CRC |
-| `WithFHEC()` | Adds Reed–Solomon header protection, making the primary header 8 bytes |
+| `WithFHEC()` | Adds Reed-Solomon header protection, making the primary header 8 bytes |
 | `WithVCFrameCount(n)` | Sets the 24-bit count |
 | `WithReplayFlag()` | Marks the frame as recorded data being played back |
 | `WithVCFCUsage(cycle)` | Sets the usage flag and the 4-bit cycle |
@@ -216,10 +216,10 @@ AOS counts per virtual channel only — there is no master channel frame count. 
 | Error | Cause |
 |---|---|
 | `ErrInvalidVersion` | TFVN is not 1 |
-| `ErrInvalidSpacecraftID` | Outside 0–255 |
-| `ErrInvalidVCID` | Outside 0–63 |
+| `ErrInvalidSpacecraftID` | Outside 0-255 |
+| `ErrInvalidVCID` | Outside 0-63 |
 | `ErrInvalidVCFrameCount` | Exceeds 24 bits |
-| `ErrInvalidVCFrameCountCycle` | Outside 0–15 |
+| `ErrInvalidVCFrameCountCycle` | Outside 0-15 |
 | `ErrInvalidFirstHeaderPointer` | Exceeds 11 bits |
 | `ErrInvalidBitstreamDataPointer` | Exceeds 14 bits |
 | `ErrBitstreamTooLongForPointer` | Partial bitstream cannot be expressed by the BDP |
@@ -245,4 +245,4 @@ Commentary, not sourced from the standard.
 ## Reference
 
 - [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) — AOS Space Data Link Protocol (Blue Book)
-- [CLI](/cli/aos) · [Conformance](/conformance/aos)
+- [CLI](/cli/aos) | [Conformance](/conformance/aos) | [The stack](/docs/start/concepts)

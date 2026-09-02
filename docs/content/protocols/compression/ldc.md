@@ -5,7 +5,7 @@ description: CCSDS 121.0-B-3 — the Rice adaptive entropy coder, every bit reco
 order: 50
 ---
 
-> **CCSDS 121.0-B-3** · [Blue Book](https://public.ccsds.org/Pubs/121x0b3.pdf) · [`pkg/ldc`](https://github.com/ravisuhag/astro/tree/main/pkg/ldc)
+> **CCSDS 121.0-B-3** | [Blue Book](https://public.ccsds.org/Pubs/121x0b3.pdf) | [`pkg/ldc`](https://github.com/ravisuhag/astro/tree/main/pkg/ldc) | [`astro ldc`](/cli/ldc)
 
 ## Overview
 
@@ -19,7 +19,7 @@ stages, both pure integer arithmetic:
 
 ```
   samples ──►  preprocessor  ──►  adaptive entropy coder  ──►  coded data sets
-                   §4                     §3                        §5
+                   Clause 4                     clause 3                        clause 5
               decorrelate            price every option
               and fold to            for each block and
               non-negative           write the cheapest
@@ -27,7 +27,7 @@ stages, both pure integer arithmetic:
 
 Where it sits in this library: an instrument produces samples, `pkg/ldc`
 compresses them, and the caller puts the result into packets with `pkg/spp` or
-into a file. This package does no packetization — §5.3 leaves that to the
+into a file. This package does no packetization — clause 5.3 leaves that to the
 packet formatter, and so does this code.
 
 ## Scope
@@ -42,8 +42,8 @@ vectors.
 hands you bytes and you put them in [Space Packets](/protocols/transport/spp) or a file.
 
 **Configuration lives in `Params`.** `BlockSize` (J, one of 8/16/32/64),
-`Resolution` (n, 1–32 bits), `Signed`, `Predictor`, `ReferenceInterval`
-(r, 1–4096 blocks), and `Restricted`. `DefaultParams()` gives you 8-bit
+`Resolution` (n, 1-32 bits), `Signed`, `Predictor`, `ReferenceInterval`
+(r, 1-4096 blocks), and `Restricted`. `DefaultParams()` gives you 8-bit
 unsigned samples in blocks of 16, unit-delay prediction, and a reference every
 256 blocks.
 
@@ -80,13 +80,13 @@ putting coded data sets straight into space packets — `Compress` and
 The entropy coder wants small non-negative integers. Raw telemetry is neither.
 
 **Prediction** subtracts what the previous sample suggests this one will be
-(§4.2.5). On a drifting sensor the residual is near zero; on white noise it is
+(clause 4.2.5). On a drifting sensor the residual is near zero; on white noise it is
 no better than the original, which is why the predictor is optional.
 
-**Mapping** folds the signed residual onto the non-negative integers (§4.4).
+**Mapping** folds the signed residual onto the non-negative integers (clause 4.4).
 Small errors of either sign become small values:
 
-| Δ | 0 | −1 | +1 | −2 | +2 |
+| Δ | 0 | -1 | +1 | -2 | +2 |
 |---|---|---|---|---|---|
 | δ | 0 | 1 | 2 | 3 | 4 |
 
@@ -107,25 +107,25 @@ Three predictor settings:
 ## Reference samples
 
 A unit-delay chain needs a starting point, so every so often an uncoded sample
-travels in the clear (§4.2.6). `ReferenceInterval` sets how often, in blocks.
+travels in the clear (clause 4.2.6). `ReferenceInterval` sets how often, in blocks.
 
 It also bounds damage. A bit error in a coded stream corrupts everything until
 the next reference sample, so the interval is really a choice about error
 containment: shorter costs more bits and loses less to a hit.
 
-Reference samples are inserted only with the unit-delay predictor. §4.2.6 is
+Reference samples are inserted only with the unit-delay predictor. Clause 4.2.6 is
 explicit that otherwise they "shall not be employed", and the bypass predictor
 looks at nothing, so it needs none.
 
 ## The five code options
 
 For each block the coder prices every option and writes the cheapest, prefixed
-by an identifier saying which it chose (§3.7).
+by an identifier saying which it chose (clause 3.7).
 
-| Option | § | What it does | Good for |
+| Option | clause | What it does | Good for |
 |---|---|---|---|
 | Fundamental sequence | 3.2 | a sample of value m becomes m zeros and a one | values near zero |
-| Split sample, k | 3.3 | FS-code the top n−k bits, send the low k raw | moderate values |
+| Split sample, k | 3.3 | FS-code the top n-k bits, send the low k raw | moderate values |
 | Second extension | 3.4 | pair samples, code the pair as one symbol | very low entropy |
 | Zero block | 3.5 | one codeword for a run of all-zero blocks | constant data |
 | No compression | 3.6 | send the block unaltered | noise |
@@ -133,11 +133,11 @@ by an identifier saying which it chose (§3.7).
 The fundamental sequence is the split-sample option with k = 0, which is why
 they share an identifier range.
 
-**Zero block is not chosen, it is imposed.** §3.7.2 says a run of all-zero
+**Zero block is not chosen, it is imposed.** clause 3.7.2 says a run of all-zero
 blocks always takes it, whatever anything else would cost. It is also the only
 option whose coded data set spans more than one block.
 
-**Ties have a defined winner.** §3.7.4 is normative and not the order you would
+**Ties have a defined winner.** clause 3.7.4 is normative and not the order you would
 guess: no compression first, then second extension, then the smallest k. An
 implementation that broke ties the other way would produce output a conforming
 decoder still reads, but it would not be this standard.
@@ -146,7 +146,7 @@ decoder still reads, but it would not be this standard.
 
 The zero-block option counts runs, and the count has two boundaries it cannot
 cross. A run stops at the end of its reference interval, because the next
-interval opens with an uncoded sample. And within an interval, §3.5.2 divides
+interval opens with an uncoded sample. And within an interval, clause 3.5.2 divides
 the blocks into segments of 64, and a run stops at a segment end too.
 
 Table 3-2 numbers the run lengths, with one oddity: the
@@ -160,10 +160,10 @@ remainder-of-segment codeword sits *between* four and five.
 | 4 | `0001` |
 | **ROS** | `00001` |
 | 5 | `000001` |
-| … | … |
+| ... | ... |
 | 63 | 63 zeros and a one |
 
-ROS means "the rest of this segment is zeros", and §3.5.3 allows it for runs of
+ROS means "the rest of this segment is zeros", and clause 3.5.3 allows it for runs of
 five or more. It earns its place: a segment is 64 blocks and the table counts
 only to 63, so a wholly zero segment can be written no other way.
 
@@ -180,7 +180,7 @@ The rest are trades:
   it does not hurt much either; the coder will simply pick no-compression more
   often.
 - **ReferenceInterval** — see above; it is an error-containment choice.
-- **Restricted** — at four bits or fewer, §5.2.1.1 allows a shorter identifier
+- **Restricted** — at four bits or fewer, clause 5.2.1.1 allows a shorter identifier
   at the cost of most split-sample options. Worth it only when blocks are small
   and identifiers are a real fraction of the output.
 
@@ -211,7 +211,7 @@ per-reference-interval byte alignment, an application framing choice this
 package does not implement (see the [PICS](/conformance/ldc)).
 
 The Green Book, CCSDS 120.0-G-4, publishes a worked preprocessor table in
-§3.3.3 that this package transcribes as a test — including the two rows that
+Clause 3.3.3 that this package transcribes as a test — including the two rows that
 fall past θ, where the mapping stops interleaving. An implementation that got
 only the interleaved branch right would pass every other row of that table, so
 those two are the ones worth having.
@@ -232,4 +232,4 @@ it against this package.
   Compression, the Blue Book
 - [CCSDS 120.0-G-4](https://public.ccsds.org/Pubs/120x0g4.pdf) — the Green Book
   report, with the worked examples
-- [Conformance](/conformance/ldc)
+- [CLI](/cli/ldc) | [Conformance](/conformance/ldc) | [The stack](/docs/start/concepts)

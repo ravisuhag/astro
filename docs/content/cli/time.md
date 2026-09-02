@@ -2,7 +2,7 @@
 title: astro time
 short: TIME
 description: CCSDS time codes — encode, decode, inspect, now.
-order: 40
+order: 140
 ---
 
 CCSDS Time Code Format operations — encode, decode, and inspect CCSDS time codes ([CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf)). Supports CUC, CDS, CCS, and ASCII formats.
@@ -224,9 +224,13 @@ ASCII-B  2025-074T12:30:45.123Z
 ## Piping
 
 ```bash
-# Encode → Decode round-trip
+# Encode -> Decode round-trip
 astro time encode --codec cuc --time "2025-03-15T12:30:45Z" | astro time decode --input hex --format json
 
-# Encode → Inspect
+# Encode -> Inspect
 astro time encode --codec cds --time "2025-03-15T12:30:45Z" | astro time inspect --input hex
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/mission/tcf) for the standard and the Go API, and the [conformance statement](/conformance/tcf) for what is and is not implemented.

@@ -16,6 +16,7 @@ Space Packet Protocol operations — encode, decode, inspect, validate, and stre
 | `astro spp inspect` | Pretty-print an annotated packet breakdown with hex dump |
 | `astro spp validate` | Check field ranges, length consistency, and optional CRC |
 | `astro spp stream` | Decode a stream of concatenated Space Packets |
+| `astro spp gen` | Generate synthetic Space Packets |
 
 ## Common Flags
 
@@ -221,17 +222,55 @@ echo "${P1}${P2}" | astro spp stream --input hex
 
 ---
 
+## astro spp gen
+
+Generate a stream of synthetic Space Packets with incrementing sequence counts and random data.
+
+```
+astro spp gen [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--apid` | `0` | Application Process Identifier (0-2047) |
+| `--type` | `tm` | Packet type: `tm` or `tc` |
+| `--count` | `10` | Number of packets to generate |
+| `--size` | `64` | User data size in bytes per packet |
+| `--crc` | `false` | Append CRC-16-CCITT error control field |
+| `--format` | `bin` | Output format: `bin` or `hex` |
+
+**Examples**
+
+```bash
+# Generate 10 TM packets of 64 bytes each
+astro spp gen --apid 100 --count 10 --size 64
+
+# Generate packets and pipe into stream
+astro spp gen --apid 100 --count 50 --size 128 --format bin | astro spp stream --input bin
+
+# Generate with a CRC
+astro spp gen --apid 100 --count 5 --size 32 --crc
+```
+
+---
+
 ## Piping
 
 All commands support stdin/stdout piping for composability:
 
 ```bash
-# Encode → Inspect
+# Encode -> Inspect
 astro spp encode --apid 255 --type tc --data 0102030405 | astro spp inspect --input hex
 
-# Encode with CRC → Validate CRC
+# Encode with CRC -> Validate CRC
 astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate --input hex --crc
 
-# Encode → Decode as JSON
+# Encode -> Decode as JSON
 astro spp encode --apid 42 --type tm --data 0102030405 | astro spp decode --input hex --format json
 ```
+
+---
+
+**See also** — [the protocol page](/protocols/transport/spp) for the standard and the Go API, and the [conformance statement](/conformance/spp) for what is and is not implemented.

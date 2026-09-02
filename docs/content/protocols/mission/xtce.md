@@ -5,7 +5,7 @@ description: XML Telemetric and Command Exchange (XTCE 1.2) — reading the miss
 order: 80
 ---
 
-> **XTCE 1.2 (OMG)** · [Spec](https://www.omg.org/spec/XTCE/) · [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) as the guide to it · [`pkg/xtce`](https://github.com/ravisuhag/astro/tree/main/pkg/xtce)
+> **XTCE 1.2 (OMG)** | [Spec](https://www.omg.org/spec/XTCE/) | [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) as the guide to it | [`pkg/xtce`](https://github.com/ravisuhag/astro/tree/main/pkg/xtce) | [`astro xtce`](/cli/xtce)
 
 ## Overview
 
@@ -447,4 +447,4 @@ power of zero, and an absent threshold means any change is significant.
   date is the schema's publication, not a version of its own.
 - [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) — the Green Book
   guide. Informational, and the clearest explanation of the semantics.
-- [Conformance](/conformance/xtce)
+- [CLI](/cli/xtce) | [Conformance](/conformance/xtce) | [The stack](/docs/start/concepts)

@@ -5,7 +5,7 @@ description: Proximity-1 Coding and Synchronization (CCSDS 211.2-B-3) — framin
 order: 32
 ---
 
-> **CCSDS 211.2-B-3** · [Blue Book](https://public.ccsds.org/Pubs/211x2b3.pdf) · [`pkg/pxsc`](https://github.com/ravisuhag/astro/tree/main/pkg/pxsc)
+> **CCSDS 211.2-B-3** | [Blue Book](https://public.ccsds.org/Pubs/211x2b3.pdf) | [`pkg/pxsc`](https://github.com/ravisuhag/astro/tree/main/pkg/pxsc) | [`astro pxsc`](/cli/pxsc)
 
 ## Overview
 
@@ -37,9 +37,9 @@ bursts with gaps between them, and the receiver re-acquires for each one.
 
 **Not here yet.**
 
-- **The LDPC code** of §3.4.4, its Codeword Sync Marker, and the
-  pseudo-randomizer of §3.4.5, which applies only when LDPC is used.
-- **Reed-Solomon**, which some transceivers add but §3.4.1 notes is not part of
+- **The LDPC code** of clause 3.4.4, its Codeword Sync Marker, and the
+  pseudo-randomizer of clause 3.4.5, which applies only when LDPC is used.
+- **Reed-Solomon**, which some transceivers add but clause 3.4.1 notes is not part of
   the CCSDS Proximity-1 standards and is not intended for cross support.
 - **CLI subcommands** — a follow-up once the API settles.
 
@@ -94,11 +94,11 @@ transmit(pxsc.IdleSequence(n))
 
 ## Idle data
 
-A repeating pseudo-noise pattern, **352EF853** (§3.3.2.2), tiled to whatever
+A repeating pseudo-noise pattern, **352EF853** (clause 3.3.2.2), tiled to whatever
 length you need. When the end is reached it starts again from the first bit.
 
 The same pattern serves three roles, distinguished only by when it is sent
-(§3.3.1):
+(clause 3.3.1):
 
 | Sequence | When | Duration from |
 |---|---|---|
@@ -139,14 +139,14 @@ for _, pltu := range s.Scan(stream) {
 ```
 
 At each marker the synchronizer first reads the Length field of the Version-3
-frame header that should follow — that is how the §3.6 receiver delimits a
+frame header that should follow — that is how the clause 3.6 receiver delimits a
 PLTU — and checks the CRC at exactly that length. Only if the header's claim
 does not verify does it fall back to trying frame lengths from the minimum
 upward and taking the first whose CRC verifies. A marker with no verifying
 length at all is a false match: it steps one octet past and keeps hunting, so
 a marker pattern sitting inside frame data does not derail it.
 
-A PLTU whose CRC fails is skipped, per §3.6, and a good one after it is still
+A PLTU whose CRC fails is skipped, per clause 3.6, and a good one after it is still
 found. There is a test for exactly that.
 
 Set `MinFrameLength` and `MaxFrameLength` to what your mission sends. The
@@ -158,7 +158,7 @@ path.
 ## Convolutional encoding
 
 Proximity-1 offers the rate 1/2, constraint-length 7 convolutional code from
-CCSDS 131.0 (§3.4.3.1). Each input bit becomes two output symbols.
+CCSDS 131.0 (clause 3.4.3.1). Each input bit becomes two output symbols.
 
 ```go
 e := pxsc.NewConvolutionalEncoder()
@@ -167,14 +167,14 @@ symbols := e.Encode(bitstream)
 
 Two things to know.
 
-**The G2 output is inverted** (§3.4.3.1 note 1). Connection vectors are
+**The G2 output is inverted** (clause 3.4.3.1 note 1). Connection vectors are
 G1 = 171 octal and G2 = 133 octal, with the second path complemented. The
 encoder realizes the standard CCSDS 171/133 code — the same convention as
 libfec and gr-satellites — and known-answer tests pin it there, because the
 mirror-image (reciprocal) code passes every round-trip test while being
 undecodable by real receivers.
 
-**The encoder state carries across calls.** §3.4.3.2 encodes everything
+**The encoder state carries across calls.** clause 3.4.3.2 encodes everything
 transmitted as one continuous stream — PLTUs and idle data alike — so the shift
 register must not reset at unit boundaries. Reuse one `ConvolutionalEncoder`
 for the whole stream; `Reset()` is there if you genuinely need to start over.
@@ -213,10 +213,10 @@ So `Decode` returns fewer bits than you fed it, and `Flush` returns the rest at
 the end of the stream. Those last bits are the least reliable in the stream:
 they are decided without the convergence the rest enjoyed.
 
-**Soft decisions are better, and §3.4.3.3 recommends them.** `DecodeSoft` takes
+**Soft decisions are better, and clause 3.4.3.3 recommends them.** `DecodeSoft` takes
 one value per coded symbol: positive for a one, negative for a zero, and
 further from zero for more confident. Three-bit decisions in the range -4 to 3
-are what §3.4.3.3 has in mind, though only the sign and the relative magnitude
+are what clause 3.4.3.3 has in mind, though only the sign and the relative magnitude
 matter.
 
 ```go
@@ -236,4 +236,4 @@ full-confidence decision, which is the best it can do from octets alone.
 
 - [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) — Coding and Synchronization Sublayer
 - [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) — Data Link Layer, for the transfer frame
-- [Conformance](/conformance/pxsc)
+- [CLI](/cli/pxsc) | [Conformance](/conformance/pxsc) | [The stack](/docs/start/concepts)

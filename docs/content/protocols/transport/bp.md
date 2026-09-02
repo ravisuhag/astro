@@ -5,7 +5,7 @@ description: CCSDS 734.2-B-1 — store-and-forward bundles for delay-tolerant ne
 order: 14
 ---
 
-> **CCSDS 734.2-B-1** · [Blue Book](https://public.ccsds.org/Pubs/734x2b1.pdf) · [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050) · [`pkg/bp`](https://github.com/ravisuhag/astro/tree/main/pkg/bp)
+> **CCSDS 734.2-B-1** | [Blue Book](https://public.ccsds.org/Pubs/734x2b1.pdf) | [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050) | [`pkg/bp`](https://github.com/ravisuhag/astro/tree/main/pkg/bp) | [`astro bp`](/cli/bp)
 
 ## Overview
 
@@ -37,7 +37,7 @@ of Service** block.
 ┌─────────────────────────────────────────────┐
 │  Application data (files, telemetry)        │
 ├─────────────────────────────────────────────┤
-│  Bundle Protocol (pkg/bp)                   │  ← this package
+│  Bundle Protocol (pkg/bp)                   │  <- this package
 ├─────────────────────────────────────────────┤
 │  Convergence layer: LTP (pkg/ltp) or        │
 │  Encapsulation Packets (pkg/epp)            │
@@ -83,7 +83,7 @@ package builds on `pkg/sdnv`.
 ## Endpoints and the dictionary
 
 An endpoint is a URI: a scheme and a scheme-specific part. CCSDS requires the
-**IPN scheme** (§3.2.1), where the scheme-specific part is a node number, a
+**IPN scheme** (clause 3.2.1), where the scheme-specific part is a node number, a
 period, and a service number:
 
 ```go
@@ -91,8 +91,8 @@ dest := bp.IPNEndpoint(2, 1)   // ipn:2.1
 src  := bp.IPNEndpoint(1, 1)   // ipn:1.1
 ```
 
-Node numbers run 1 to 2^64−1 and are assigned by SANA. Service numbers run
-0 to 2^64−1.
+Node numbers run 1 to 2^64-1 and are assigned by SANA. Service numbers run
+0 to 2^64-1.
 
 Here is the part worth understanding. The primary block does not store four
 endpoint URIs. It stores a **dictionary** — a run of null-terminated strings —
@@ -142,7 +142,7 @@ and custody signals refer back to it.
 
 ## Processing flags
 
-The flags field is an SDNV, so it has no fixed width. Three groups (§4.2):
+The flags field is an SDNV, so it has no fixed width. Three groups (clause 4.2):
 
 **Handling requests**, bits 0 to 5: fragment, administrative record, must not
 fragment, custody transfer requested, singleton destination, application
@@ -154,7 +154,7 @@ acknowledgement.
 **Status report requests**, bits 14 to 18: reception, custody acceptance,
 forwarding, delivery, deletion.
 
-Rules the library enforces (§4.2): an administrative record must request
+Rules the library enforces (clause 4.2): an administrative record must request
 neither custody transfer nor any status report. Class of service 3 is
 reserved and rejected. A bundle cannot both be a fragment and forbid
 fragmentation. And an anonymous bundle — source `dtn:none` — must not
@@ -163,7 +163,7 @@ without a source it is not uniquely identifiable.
 
 ## Extended Class of Service
 
-CCSDS 734.2-B-1 §3.3 **requires** conformant implementations to support the
+CCSDS 734.2-B-1 clause 3.3 **requires** conformant implementations to support the
 ECOS block. Three priority levels are not enough for spacecraft operations.
 
 ```go
@@ -204,7 +204,7 @@ application data unit, and the total ADU length so the far end knows when it
 has everything.
 
 Extension blocks flagged "replicate in every fragment" are copied into each
-piece. Of the rest, §5.8 splits them around the payload: blocks that precede
+piece. Of the rest, clause 5.8 splits them around the payload: blocks that precede
 it ride with the first fragment, and blocks that follow it ride with the
 last — sending an extension block five times when once will do wastes the
 link.
@@ -223,7 +223,7 @@ A bundle with the "must not be fragmented" flag refuses to split.
 ## Administrative records
 
 Two kinds, both carried as a bundle payload with the administrative-record
-flag set (§6.1).
+flag set (clause 6.1).
 
 **Status reports** say what a node did with a bundle: received it, took
 custody, forwarded it, delivered it, deleted it. Each event has a timestamp,
@@ -245,7 +245,7 @@ if record.StatusReport != nil {
 ```
 
 Times in administrative records are "DTN time": seconds since the start of
-2000, plus nanoseconds. CCSDS §3.4 relaxes this — where a spacecraft clock
+2000, plus nanoseconds. CCSDS clause 3.4 relaxes this — where a spacecraft clock
 cannot produce meaningful nanoseconds, the onboard precision is used, and this
 does not become a requirement on the clock.
 
@@ -275,4 +275,4 @@ consumed and leaves the rest for the next call.
 - [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) — CCSDS Bundle Protocol Specification
 - [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050.txt) — Bundle Protocol Specification, the wire format
 - [RFC 6260](https://www.rfc-editor.org/rfc/rfc6260.txt) — Compressed Bundle Header Encoding
-- [Conformance](/conformance/bp)
+- [CLI](/cli/bp) | [Conformance](/conformance/bp) | [The stack](/docs/start/concepts)

@@ -68,23 +68,23 @@ in section A2.3.
 |------|-------------|-----------|--------|----------------|---------|-------|
 | LDC-1 | Block size J | 3.1.6 | M | 8, 16, 32, 64 | Yes | `Params.BlockSize`. Any other value is `ErrInvalidBlockSize`. |
 | LDC-2 | Sample resolution n | 3.1.6 | M | 1 to 32 bits | Yes | `Params.Resolution`. |
-| LDC-3 | Unsigned sample range | 3.1.6, 4.4 | M | 0 to 2^n−1 | Yes | |
-| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | −2^(n−1) to 2^(n−1)−1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. Requires the unit-delay predictor — see the interpretation note in A2.3. |
+| LDC-3 | Unsigned sample range | 3.1.6, 4.4 | M | 0 to 2^n-1 | Yes | |
+| LDC-4 | Signed sample range | 3.1.6, 4.4 | M | -2^(n-1) to 2^(n-1)-1 | Yes | `Params.Signed`. Two's complement, sign extended from n bits. Requires the unit-delay predictor — see the interpretation note in A2.3. |
 | LDC-5 | Option identifier attached to every coded data set | 3.1.1, 5.2.1.3 | M | — | Yes | Always written, even when a subset of options is in use. |
 
 ### Table A-2: Code options
 
 | Item | Description | Reference | Status | Support | Notes |
 |------|-------------|-----------|--------|---------|-------|
-| LDC-6 | Fundamental sequence option | 3.2 | M | Yes | Table 3-1 transcribed as a test. Implemented as the split-sample option with k=0, which §3.3.2 says it is. |
+| LDC-6 | Fundamental sequence option | 3.2 | M | Yes | Table 3-1 transcribed as a test. Implemented as the split-sample option with k=0, which clause 3.3.2 says it is. |
 | LDC-7 | Split-sample options | 3.3 | M | Yes | Every k the resolution allows: up to 5, 13 or 29 in the three basic columns of table 5-1. |
 | LDC-8 | Split-sample field order | 3.3.3 | M | Yes | All FS codewords for the block first, then all split bits. Not interleaved — the spec is explicit and the obvious implementation is wrong. |
-| LDC-9 | Second-extension option | 3.4 | M | Yes | The transform of §3.4.1, with δ₁ = 0 substituted on a reference block. |
-| LDC-10 | Second-extension overflow | 3.4.2 | M | Yes | At 32-bit resolution the transform can exceed a 64-bit integer. The option reports itself unusable rather than wrapping. §3.4.2's note that it "is only designed to be a useful option when all of the transformed symbols are small" is why this can never lose data. |
-| LDC-11 | Zero-block option | 3.5 | M | Yes | Including the ROS codeword and the 64-block segments of §3.5.2. |
+| LDC-9 | Second-extension option | 3.4 | M | Yes | The transform of clause 3.4.1, with δ₁ = 0 substituted on a reference block. |
+| LDC-10 | Second-extension overflow | 3.4.2 | M | Yes | At 32-bit resolution the transform can exceed a 64-bit integer. The option reports itself unusable rather than wrapping. Clause 3.4.2's note that it "is only designed to be a useful option when all of the transformed symbols are small" is why this can never lose data. |
+| LDC-11 | Zero-block option | 3.5 | M | Yes | Including the ROS codeword and the 64-block segments of clause 3.5.2. |
 | LDC-12 | Zero-block run codewords | 3.5.3, table 3-2 | M | Yes | Table transcribed in full, including the ROS codeword displaced between four and five. |
 | LDC-13 | Zero-block spans multiple blocks | 3.1.4, 3.5.1 | M | Yes | One coded data set covers the whole run. |
-| LDC-14 | All-zeros with a reference sample | 3.5.1, 3.7.2 | M | Yes | A reference block counts as all zeros when the J−1 samples after the reference are zero, whatever the reference itself is. |
+| LDC-14 | All-zeros with a reference sample | 3.5.1, 3.7.2 | M | Yes | A reference block counts as all zeros when the J-1 samples after the reference are zero, whatever the reference itself is. |
 | LDC-15 | No-compression option | 3.6 | M | Yes | |
 
 ### Table A-3: Code selection
@@ -107,7 +107,7 @@ in section A2.3.
 | LDC-24 | Reference samples required only for previous-sample predictors | 4.2.6 | M | Yes | Inserted for the unit-delay predictor, and for nothing else. |
 | LDC-25 | Reference sample is the first of a block, uncoded, leading the CDS | 4.2.6, 5.2.2 | M | Yes | |
 | LDC-26 | Reference sample interval r | 4.3 | M | Yes | 1 to 4096 blocks. Bounds the zero-block segments even when no reference samples are used. |
-| LDC-27 | Prediction error mapper | 4.4 | M | Yes | The three-branch equation, with θ = min(x̂ − xmin, xmax − x̂). Verified against the worked table of Green Book §3.3.3, including the two rows past θ. |
+| LDC-27 | Prediction error mapper | 4.4 | M | Yes | The three-branch equation, with θ = min(x̂ - xmin, xmax - x̂). Verified against the worked table of Green Book clause 3.3.3, including the two rows past θ. |
 | LDC-28 | Mapper is a bijection | 4.4 | M | Yes | Checked exhaustively at low resolution across every predictor value. |
 
 ### Table A-5: Coded data set formats
@@ -116,11 +116,11 @@ in section A2.3.
 |------|-------------|-----------|--------|---------|-------|
 | LDC-29 | Option identification key | 5.2.1, table 5-1 | M | Yes | All five resolution columns, transcribed in full as a test. |
 | LDC-30 | Basic code option set | 5.2.1.1 | M | Yes | 3, 4 and 5-bit identifiers by resolution. |
-| LDC-31 | Restricted code option set | 5.2.1.1 | O | Yes | 1 and 2-bit identifiers, allowed only at n ≤ 4. Requesting it above that is `ErrRestrictedNotAllowed`. |
+| LDC-31 | Restricted code option set | 5.2.1.1 | O | Yes | 1 and 2-bit identifiers, allowed only at n <= 4. Requesting it above that is `ErrRestrictedNotAllowed`. |
 | LDC-32 | CDS format, FS and split-sample | 5.2.3 | M | Yes | |
 | LDC-33 | CDS format, no compression | 5.2.4 | M | Yes | |
 | LDC-34 | CDS format, zero block | 5.2.5 | M | Yes | |
-| LDC-35 | CDS format, second extension | 5.2.6 | M | Yes | J/2 symbols, per §3.4.1 and figure 5-4. The prose of §5.2.6 says "2J transformed pairs", which contradicts both and is read as a typo. |
+| LDC-35 | CDS format, second extension | 5.2.6 | M | Yes | J/2 symbols, per clause 3.4.1 and figure 5-4. The prose of clause 5.2.6 says "2J transformed pairs", which contradicts both and is read as a typo. |
 | LDC-36 | Bit order MSB first | 1.5.2 | M | Yes | |
 
 ### Table A-6: File format
@@ -150,7 +150,7 @@ in section A2.3.
 
 | Item | Description | Reason |
 |------|-------------|--------|
-| LDC-23 | Application-specific predictor | §4.2.4 names it and leaves it undefined: "such a predictor is unique to the application and is not specified in this Recommended Standard." There is nothing to implement. A file header requesting it is refused rather than silently decoded with the wrong predictor. |
+| LDC-23 | Application-specific predictor | clause 4.2.4 names it and leaves it undefined: "such a predictor is unique to the application and is not specified in this Recommended Standard." There is nothing to implement. A file header requesting it is refused rather than silently decoded with the wrong predictor. |
 | LDC-41 | Application-specific mapper | Same reasoning, from table 7-1. |
 | LDC-44 | Insertion into space packets | The caller composes coded data sets into packets. Keeping the two apart is what lets this package be used with the file format, with packets, or with neither. |
 | LDC-45 | Compression identification packet | Section 6 is optional and duplicates what the file header carries. |
@@ -164,7 +164,7 @@ reading taken here:
 | Where | Reading taken |
 |---|---|
 | Signed samples and the predictor (table 7-1, Data Sense) | Table 7-1 makes the positive Data Sense "mandatory if preprocessor is bypassed or preprocessor absent". Read narrowly, that constrains only a section-7 file header field; read broadly, it says signed samples are meaningful only under the unit-delay predictor. This implementation takes the broad, conservative reading and enforces it in `Params.Validate` everywhere, not just in the file path: `Signed` with any predictor other than unit delay is refused with `ErrUnsupportedPredictor`. The narrow reading would let signed samples through with the bypass predictor outside the file format — and would then produce parameter sets a section-7 header cannot describe. Refusing keeps every compressible stream expressible as a file. |
-| Second-extension CDS symbol count (§5.2.6) | The prose says "2J transformed pairs", which contradicts §3.4.1 and figure 5-4 (J/2 symbols). Read as a typo; J/2 is implemented. Also recorded at LDC-35. |
+| Second-extension CDS symbol count (clause 5.2.6) | The prose says "2J transformed pairs", which contradicts clause 3.4.1 and figure 5-4 (J/2 symbols). Read as a typo; J/2 is implemented. Also recorded at LDC-35. |
 
 ### Implementation-Defined Limits
 
@@ -177,7 +177,7 @@ count.
 |---|---|---|
 | Decodable sample count | 2^28 samples | The header's Number of Samples field is 48 bits, so a twelve-octet file can claim 2^48 samples — a terabyte of output — and the decoder would size a slice from it before reading a coded bit. |
 | FS codeword length | Bounded by the resolution | A run of zero octets in a corrupt stream would otherwise be read as an enormous sample value. `ReadFS` takes a limit and refuses past it. |
-| Fill skipped by the unbounded `Decompress` | 7 bits | `Decompress` (no sample count) treats a trailing all-zero run of fewer than eight bits as §7.2.3.2 fill, which covers a B=1 file body exactly. A file written with an output word size B > 1 octet can carry up to 8B−1 fill bits, and without the count that tail cannot be told from a truncated coded data set — so `Decompress` fails with an error rather than guessing. `DecompressCount` and `DecompressFile` know the count and skip any fill. Pinned by `TestDecompressRefusesLongWordFill`. |
+| Fill skipped by the unbounded `Decompress` | 7 bits | `Decompress` (no sample count) treats a trailing all-zero run of fewer than eight bits as clause 7.2.3.2 fill, which covers a B=1 file body exactly. A file written with an output word size B > 1 octet can carry up to 8B-1 fill bits, and without the count that tail cannot be told from a truncated coded data set — so `Decompress` fails with an error rather than guessing. `DecompressCount` and `DecompressFile` know the count and skip any fill. Pinned by `TestDecompressRefusesLongWordFill`. |
 
 ### Fully Supported Mandatory Items
 
@@ -187,13 +187,13 @@ data set formats, and the option selection rule including its tie-breaks.
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| Parameters | LDC-1–5 | `params.go` |
+| Parameters | LDC-1-5 | `params.go` |
 | Bit packing | LDC-36 | `bits.go` |
-| Code options | LDC-6–15 | `options.go` |
-| Selection | LDC-16–18 | `encoder.go` |
-| Preprocessor | LDC-19–28 | `preprocessor.go` |
-| CDS formats | LDC-29–35 | `encoder.go`, `decoder.go` |
-| File format | LDC-37–43 | `file.go` |
+| Code options | LDC-6-15 | `options.go` |
+| Selection | LDC-16-18 | `encoder.go` |
+| Preprocessor | LDC-19-28 | `preprocessor.go` |
+| CDS formats | LDC-29-35 | `encoder.go`, `decoder.go` |
+| File format | LDC-37-43 | `file.go` |
 
 ### Verification
 
@@ -203,9 +203,9 @@ data set formats, and the option selection rule including its tie-breaks.
 | Blue Book table 3-2 | Zero-block run codewords, including ROS |
 | Blue Book table 5-1 | Every option identifier at every resolution |
 | Blue Book table 7-1 | File header, field by field |
-| Blue Book §3.4.1 | The second-extension transform |
-| Blue Book §3.7.4 | The tie-breaking order |
-| Green Book §3.3.3 | The preprocessor and mapper, as a worked table |
+| Blue Book clause 3.4.1 | The second-extension transform |
+| Blue Book clause 3.7.4 | The tie-breaking order |
+| Green Book clause 3.3.3 | The preprocessor and mapper, as a worked table |
 | Green Book figure 3-4 | Zero-block segmentation and ROS |
 
 Annex A of the Green Book names a fuller vector set at

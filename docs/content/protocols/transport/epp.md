@@ -5,7 +5,7 @@ description: CCSDS 133.1-B-3 — a thin wrapper for carrying IP and other non-CC
 order: 11
 ---
 
-> **CCSDS 133.1-B-3** · [Blue Book](https://public.ccsds.org/Pubs/133x1b3e1.pdf) · [`pkg/epp`](https://github.com/ravisuhag/astro/tree/main/pkg/epp) · [`astro epp`](/cli/epp)
+> **CCSDS 133.1-B-3** | [Blue Book](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](https://github.com/ravisuhag/astro/tree/main/pkg/epp) | [`astro epp`](/cli/epp)
 
 EPP wraps data that is not a Space Packet so it can travel on a CCSDS data link. An IP datagram, an LTP segment, anything with its own addressing. The header is 1, 2, 4, or 8 octets and does almost nothing except say what is inside.
 
@@ -51,7 +51,7 @@ From clause 4.1.2.3 and the SANA Encapsulation Protocol ID registry.
 | 0 | `ProtocolIDIdle` | Fill data |
 | 1 | `ProtocolIDLTP` | [Licklider Transmission Protocol](/protocols/transport/ltp) |
 | 2 | `ProtocolIDIPE` | IPv4 or IPv6, via the Internet Protocol Extension |
-| 3–5 | — | Reserved |
+| 3-5 | — | Reserved |
 | 6 | `ProtocolIDExtended` | Whatever the Protocol ID Extension names |
 | 7 | `ProtocolIDMission` | Mission-specific, privately defined |
 
@@ -244,8 +244,8 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | Error | Meaning |
 |-------|---------|
 | `ErrInvalidPVN` | PVN is not 7 ('111') |
-| `ErrInvalidProtocolID` | Protocol ID outside 0–7 |
-| `ErrInvalidLengthOfLength` | Length of Length field outside 0–3 |
+| `ErrInvalidProtocolID` | Protocol ID outside 0-7 |
+| `ErrInvalidLengthOfLength` | Length of Length field outside 0-3 |
 | `ErrInvalidUserDefined` | User Defined Field does not fit in 4 bits |
 | `ErrInvalidExtendedProtocolID` | Protocol ID Extension does not fit in 4 bits |
 | `ErrNonIdleOneOctetHeader` | 1-octet header with a non-idle Protocol ID |
@@ -273,4 +273,4 @@ Commentary, not sourced from the standard.
 ## Reference
 
 - [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) — Encapsulation Packet Protocol (Blue Book)
-- [CLI](/cli/epp) · [Conformance](/conformance/epp)
+- [CLI](/cli/epp) | [Conformance](/conformance/epp) | [The stack](/docs/start/concepts)

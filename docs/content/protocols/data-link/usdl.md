@@ -5,7 +5,7 @@ description: CCSDS 732.1-B-3 — one frame format that replaces TM, TC, and AOS.
 order: 23
 ---
 
-> **CCSDS 732.1-B-3** · [Blue Book](https://ccsds.org/Pubs/732x1b3e1.pdf) · [`pkg/usdl`](https://github.com/ravisuhag/astro/tree/main/pkg/usdl) · [`astro usdl`](/cli/usdl)
+> **CCSDS 732.1-B-3** | [Blue Book](https://ccsds.org/Pubs/732x1b3e1.pdf) | [`pkg/usdl`](https://github.com/ravisuhag/astro/tree/main/pkg/usdl) | [`astro usdl`](/cli/usdl)
 
 USLP folds [TM](/protocols/data-link/tmdl), [TC](/protocols/data-link/tcdl), and [AOS](/protocols/data-link/aos) into one frame format. It runs in both directions, does fixed *or* variable length frames, and adds a MAP layer for finer multiplexing.
 
@@ -26,17 +26,17 @@ The primary header. Its size varies, because the frame count field is 0 to 7 oct
 | Field | Bits | Go | Notes |
 |---|---|---|---|
 | Transfer Frame Version Number | 4 | `TFVN` | Always `12` (`0b1100`) |
-| Spacecraft Identifier | 16 | `SCID` | 0–65535. TM and TC get 10 bits; USLP gets 16. |
+| Spacecraft Identifier | 16 | `SCID` | 0-65535. TM and TC get 10 bits; USLP gets 16. |
 | Source or Destination | 1 | `SourceOrDest` | `0` = SCID is the source, `1` = the destination |
-| Virtual Channel Identifier | 6 | `VCID` | 0–63. VCID 63 carries Only Idle Data. |
-| MAP Identifier | 4 | `MAPID` | 0–15 |
+| Virtual Channel Identifier | 6 | `VCID` | 0-63. VCID 63 carries Only Idle Data. |
+| MAP Identifier | 4 | `MAPID` | 0-15 |
 | End of Frame Primary Header | 1 | `EndOfFPH` | Set on a truncated frame |
 | Frame Length | 16 | `FrameLength` | Total octets minus 1. Absent on truncated frames. |
 | Bypass / Sequence Control | 1 | `BypassSeqCtrl` | `true` = expedited |
 | Protocol Control Command | 1 | `ProtCtrlCmd` | `true` = protocol control |
 | OCF Flag | 1 | `OCFFlag` | Signals the OCF in-band |
-| VCF Count Length | 3 | `VCFCountLen` | 0–7 octets |
-| VC Frame Count | 0–56 | `VCFCount` | Width set by the field above |
+| VCF Count Length | 3 | `VCFCountLen` | 0-7 octets |
+| VC Frame Count | 0-56 | `VCFCount` | Width set by the field above |
 
 The rest of the frame, on `usdl.TransferFrame`:
 
@@ -237,12 +237,12 @@ det := usdl.NewFrameGapDetector(config.VCFCountLen)
 | Error | Cause |
 |---|---|
 | `ErrInvalidVersion` | TFVN is not 12 |
-| `ErrInvalidSpacecraftID` | Outside 0–65535 |
-| `ErrInvalidVCID` | Outside 0–63 |
-| `ErrInvalidMAPID` | Outside 0–15 |
-| `ErrInvalidVCFCountLen` | Outside 0–7 octets |
+| `ErrInvalidSpacecraftID` | Outside 0-65535 |
+| `ErrInvalidVCID` | Outside 0-63 |
+| `ErrInvalidMAPID` | Outside 0-15 |
+| `ErrInvalidVCFCountLen` | Outside 0-7 octets |
 | `ErrInvalidVCFCount` | Exceeds the configured field width |
-| `ErrInvalidConstructionRule` | Outside 0–7 |
+| `ErrInvalidConstructionRule` | Outside 0-7 |
 | `ErrInvalidPointer` | Exceeds the data zone length |
 | `ErrInvalidFECSize` | Not 0 or 2 — USLP has only the 16-bit FECF |
 | `ErrTruncatedFrameFields` | Truncated frame asked for an insert zone, OCF, FECF, or pointer |
@@ -270,4 +270,4 @@ Commentary, not sourced from the standard.
 
 - [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf) — Unified Space Data Link Protocol (Blue Book)
 - [SANA UPID registry](https://sanaregistry.org/r/uslp_protocol_id) — USLP Protocol Identifiers
-- [CLI](/cli/usdl) · [Conformance](/conformance/usdl)
+- [CLI](/cli/usdl) | [Conformance](/conformance/usdl) | [The stack](/docs/start/concepts)

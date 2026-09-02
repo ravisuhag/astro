@@ -5,7 +5,7 @@ description: CCSDS 133.0-B-2 — the packet that carries application data across
 order: 10
 ---
 
-> **CCSDS 133.0-B-2** · [Blue Book](https://public.ccsds.org/Pubs/133x0b2e2.pdf) · [`pkg/spp`](https://github.com/ravisuhag/astro/tree/main/pkg/spp) · [`astro spp`](/cli/spp)
+> **CCSDS 133.0-B-2** | [Blue Book](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](https://github.com/ravisuhag/astro/tree/main/pkg/spp) | [`astro spp`](/cli/spp)
 
 A Space Packet is the unit an application sends. It carries a 6-byte header and a payload of 1 to 65,536 bytes. The header names the application it came from or is going to, and counts packets so the receiver can spot gaps.
 
@@ -28,10 +28,10 @@ The 6-byte Packet Primary Header, and where each field lives in Go.
 | Packet Version Number | 3 | `PrimaryHeader.Version` | Always `0`. Anything else is rejected. |
 | Packet Type | 1 | `PrimaryHeader.Type` | `PacketTypeTM` (0) or `PacketTypeTC` (1) |
 | Secondary Header Flag | 1 | `PrimaryHeader.SecondaryHeaderFlag` | Must agree with `SpacePacket.SecondaryHeader` |
-| APID | 11 | `PrimaryHeader.APID` | 0–2047. `APIDIdle` (`0x7FF`) means fill. |
+| APID | 11 | `PrimaryHeader.APID` | 0-2047. `APIDIdle` (`0x7FF`) means fill. |
 | Sequence Flags | 2 | `PrimaryHeader.SequenceFlags` | `SeqFlagContinuation`, `FirstSegment`, `LastSegment`, `Unsegmented` |
-| Packet Sequence Count | 14 | `PrimaryHeader.SequenceCount` | 0–16383, counted per APID |
-| Packet Data Length | 16 | *derived* | Written as length−1. You never set it. |
+| Packet Sequence Count | 14 | `PrimaryHeader.SequenceCount` | 0-16383, counted per APID |
+| Packet Data Length | 16 | *derived* | Written as length-1. You never set it. |
 
 The Packet Data Field that follows:
 
@@ -354,13 +354,13 @@ All errors are exported package-level variables, suitable for use with `errors.I
 |-------|---------|
 | `ErrInvalidVersion` | Version is not 0 |
 | `ErrInvalidType` | Type is not 0 or 1 |
-| `ErrInvalidAPID` | APID outside 0–2047 |
-| `ErrInvalidSequenceFlags` | Sequence flags outside 0–3 |
-| `ErrInvalidSequenceCount` | Sequence count outside 0–16383 |
+| `ErrInvalidAPID` | APID outside 0-2047 |
+| `ErrInvalidSequenceFlags` | Sequence flags outside 0-3 |
+| `ErrInvalidSequenceCount` | Sequence count outside 0-16383 |
 | `ErrInvalidHeader` | Header does not conform to CCSDS |
 | `ErrEmptyPacket` | Packet has no secondary header and no user data (C1/C2) |
 | `ErrNilPacket` | Nil packet provided |
-| `ErrPacketTooLarge` | Total packet size outside 7–65542 bytes |
+| `ErrPacketTooLarge` | Total packet size outside 7-65542 bytes |
 | `ErrDataTooShort` | Input data too short to decode |
 | `ErrPacketLengthMismatch` | Data field size doesn't match header length |
 | `ErrSecondaryHeaderMissing` | Flag is set on a hand-built packet but no secondary header provided |
@@ -387,4 +387,4 @@ Commentary, not sourced from the standard. Read it as one implementer's reading 
 
 - [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) — Space Packet Protocol (Blue Book)
 - [CCSDS 133.0-G-1](https://public.ccsds.org/Pubs/133x0g1.pdf) — Space Packet Protocol Summary (Green Book)
-- [CLI](/cli/spp) · [Conformance](/conformance/spp)
+- [CLI](/cli/spp) | [Conformance](/conformance/spp)

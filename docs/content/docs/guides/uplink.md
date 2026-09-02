@@ -1,5 +1,6 @@
 ---
 title: Build an uplink
+short: Uplink
 description: Commands from the ground to a spacecraft, with reliable delivery.
 order: 2
 ---
@@ -163,4 +164,4 @@ FOP-1 after CLCW processing:
 
 - [Handle a lossy link](/docs/guides/lossy-link) — the downlink under real loss
 - [COP-1 protocol page](/protocols/data-link/cop) — both state machines in full
-- [TC](/protocols/data-link/tcdl) · [TCSC](/protocols/coding/tcsc)
+- [TC](/protocols/data-link/tcdl) | [TCSC](/protocols/coding/tcsc)

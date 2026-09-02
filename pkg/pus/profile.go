@@ -164,6 +164,63 @@ type MissionProfile struct {
 	SupportsSubSchedules bool
 	SupportsGroups       bool
 
+	// On-board monitoring widths for ST[12] (Figures 8-111 to 8-139). All
+	// enumerated or unsigned integer with no stated width. The monitored and
+	// validity parameter IDs reuse ParameterIDBytes, and the event definition
+	// IDs reuse EventDefinitionIDBytes: they name the same things the ST[03]
+	// and ST[05] fields name, so a mission that sized them once has sized them.
+	PMONIDBytes               int
+	FMONIDBytes               int
+	MonitorCountBytes         int
+	CheckTypeBytes            int
+	PMONStatusBytes           int
+	PMONCheckingStatusBytes   int
+	FMONStatusBytes           int
+	FMONProtectionStatusBytes int
+	FMONCheckingStatusBytes   int
+	MonitoringIntervalBytes   int
+	RepetitionNumberBytes     int
+	TransitionDelayBytes      int
+	MinPMONFailingBytes       int
+	DeltaValueCountBytes      int
+
+	// The five ST[12] subservice declarations that decide field presence.
+	// Like the ST[11] pair these are not widths, but getting one wrong shifts
+	// every field after it.
+	//
+	// SupportsConditionalChecking is clause 6.12.3.3c: it decides whether a
+	// parameter monitoring definition carries a check validity condition
+	// (6.12.3.3g item 3).
+	//
+	// PerDefinitionMonitoringInterval is clause 6.12.3.3d: a subservice uses
+	// either one interval for everything or one per definition, and only the
+	// second puts an interval in the message (6.12.3.3g item 4).
+	//
+	// SupportsTransitionDelayChange is clause 6.12.3.8a: it decides whether
+	// TM[12,9] leads with the current maximum transition reporting delay
+	// (6.12.3.10i item 1).
+	//
+	// ExpectedValueSpare is clauses 8.12.2.5d, 8.12.2.7e and 8.12.2.9d: a
+	// spare as wide as an event definition ID, there so all three check types
+	// can share a width (Figure 8-115 note 2).
+	//
+	// SupportsFMONConditionalChecking is clause 6.12.4.2.1c, the functional
+	// twin of SupportsConditionalChecking (6.12.4.2.1f item 2).
+	//
+	// SupportsMinPMONFailingNumber is clause 6.12.4.2.1d: whether a functional
+	// monitoring definition says how many of its checks must fail at once
+	// (6.12.4.2.1f item 4).
+	//
+	// SupportsFMONProtection is clause 6.12.4.6.1a: a protection status exists
+	// only for a subservice that can protect definitions.
+	SupportsConditionalChecking     bool
+	PerDefinitionMonitoringInterval bool
+	SupportsTransitionDelayChange   bool
+	ExpectedValueSpare              bool
+	SupportsFMONConditionalChecking bool
+	SupportsMinPMONFailingNumber    bool
+	SupportsFMONProtection          bool
+
 	// Function management widths for ST[08] (Figure 8-87).
 	//
 	// FunctionIDBytes is the width of the fixed character-string that names
@@ -219,6 +276,20 @@ func DefaultProfile() MissionProfile {
 		ScheduleSeqCountBytes:        2,
 		SupportsSubSchedules:         true,
 		SupportsGroups:               true,
+		PMONIDBytes:                  2,
+		FMONIDBytes:                  2,
+		MonitorCountBytes:            1,
+		CheckTypeBytes:               1,
+		PMONStatusBytes:              1,
+		PMONCheckingStatusBytes:      1,
+		FMONStatusBytes:              1,
+		FMONProtectionStatusBytes:    1,
+		FMONCheckingStatusBytes:      1,
+		MonitoringIntervalBytes:      4,
+		RepetitionNumberBytes:        1,
+		TransitionDelayBytes:         2,
+		MinPMONFailingBytes:          1,
+		DeltaValueCountBytes:         1,
 		FunctionIDBytes:              8,
 		FunctionArgumentCountBytes:   1,
 		FunctionArgumentIDBytes:      1,
@@ -320,6 +391,80 @@ func (p MissionProfile) ScheduleRequestIDSize() int {
 	return p.ScheduleSourceIDSize() + p.ScheduleAPIDSize() + p.ScheduleSeqCountSize()
 }
 
+// The ST[12] field widths. Each returns the profile's value, or the default
+// noted on the constant when the profile leaves it zero. No standard states
+// any of them.
+func (p MissionProfile) PMONIDSize() int { return orDefault(p.PMONIDBytes, 2) }
+
+// FMONIDSize returns the width of a functional monitoring definition ID.
+func (p MissionProfile) FMONIDSize() int { return orDefault(p.FMONIDBytes, 2) }
+
+// MonitorCountSize returns the width of an ST[12] N field.
+func (p MissionProfile) MonitorCountSize() int { return orDefault(p.MonitorCountBytes, 1) }
+
+// CheckTypeSize returns the width of a check type field.
+func (p MissionProfile) CheckTypeSize() int { return orDefault(p.CheckTypeBytes, 1) }
+
+// PMONStatusSize returns the width of a PMON status field.
+func (p MissionProfile) PMONStatusSize() int { return orDefault(p.PMONStatusBytes, 1) }
+
+// PMONCheckingStatusSize returns the width of a PMON checking status field.
+func (p MissionProfile) PMONCheckingStatusSize() int {
+	return orDefault(p.PMONCheckingStatusBytes, 1)
+}
+
+// FMONStatusSize returns the width of an FMON status field.
+func (p MissionProfile) FMONStatusSize() int { return orDefault(p.FMONStatusBytes, 1) }
+
+// FMONProtectionStatusSize returns the width of an FMON protection status field.
+func (p MissionProfile) FMONProtectionStatusSize() int {
+	return orDefault(p.FMONProtectionStatusBytes, 1)
+}
+
+// FMONCheckingStatusSize returns the width of an FMON checking status field.
+func (p MissionProfile) FMONCheckingStatusSize() int {
+	return orDefault(p.FMONCheckingStatusBytes, 1)
+}
+
+// MonitoringIntervalSize returns the width of a monitoring interval field.
+// Clause 6.12.3.3f expresses the interval in on-board parameter minimum
+// sampling interval units, not in seconds.
+func (p MissionProfile) MonitoringIntervalSize() int {
+	return orDefault(p.MonitoringIntervalBytes, 4)
+}
+
+// RepetitionNumberSize returns the width of a repetition number field.
+func (p MissionProfile) RepetitionNumberSize() int { return orDefault(p.RepetitionNumberBytes, 1) }
+
+// TransitionDelaySize returns the width of a maximum transition reporting
+// delay field.
+func (p MissionProfile) TransitionDelaySize() int { return orDefault(p.TransitionDelayBytes, 2) }
+
+// MinPMONFailingSize returns the width of a minimum PMON failing number field.
+func (p MissionProfile) MinPMONFailingSize() int { return orDefault(p.MinPMONFailingBytes, 1) }
+
+// DeltaValueCountSize returns the width of a number-of-consecutive-delta-values
+// field.
+func (p MissionProfile) DeltaValueCountSize() int { return orDefault(p.DeltaValueCountBytes, 1) }
+
+// EventDefinitionIDSize returns the width of an event definition ID, shared by
+// ST[05] and ST[12].
+func (p MissionProfile) EventDefinitionIDSize() int {
+	return orDefault(p.EventDefinitionIDBytes, 2)
+}
+
+// ParameterIDSize returns the width of an on-board parameter ID, shared by
+// ST[03] and ST[12].
+func (p MissionProfile) ParameterIDSize() int { return orDefault(p.ParameterIDBytes, 2) }
+
+// orDefault returns width, or fallback when width is zero.
+func orDefault(width, fallback int) int {
+	if width == 0 {
+		return fallback
+	}
+	return width
+}
+
 // FunctionIDSize returns the width of the ST[08] function ID field in octets:
 // FunctionIDBytes, or 8 when the profile leaves it zero. Eight is this
 // package's choice, not the standard's — figure 8-87 gives the field no width.
@@ -408,6 +553,11 @@ func (p MissionProfile) Validate() error {
 		p.SubScheduleIDBytes, p.GroupIDBytes, p.ScheduleCountBytes,
 		p.ScheduleStatusBytes, p.TimeWindowTypeBytes,
 		p.ScheduleSourceIDBytes, p.ScheduleAPIDBytes, p.ScheduleSeqCountBytes,
+		p.PMONIDBytes, p.FMONIDBytes, p.MonitorCountBytes,
+		p.CheckTypeBytes, p.PMONStatusBytes, p.PMONCheckingStatusBytes,
+		p.FMONStatusBytes, p.FMONProtectionStatusBytes, p.FMONCheckingStatusBytes,
+		p.MonitoringIntervalBytes, p.RepetitionNumberBytes,
+		p.TransitionDelayBytes, p.MinPMONFailingBytes, p.DeltaValueCountBytes,
 		p.FunctionIDBytes, p.FunctionArgumentCountBytes,
 		p.FunctionArgumentIDBytes,
 		p.APIDBytes, p.WordSizeBytes,

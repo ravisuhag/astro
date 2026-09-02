@@ -5,7 +5,7 @@ description: ECSS-E-ST-70-41C — what goes inside a telemetry or telecommand pa
 order: 70
 ---
 
-> **ECSS-E-ST-70-41C (PUS-C)** · [Standard](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) · [`pkg/pus`](https://github.com/ravisuhag/astro/tree/main/pkg/pus)
+> **ECSS-E-ST-70-41C (PUS-C)** | [Standard](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | [`pkg/pus`](https://github.com/ravisuhag/astro/tree/main/pkg/pus) | [`astro pus`](/cli/pus)
 
 ## Overview
 
@@ -26,6 +26,7 @@ Services are numbered. A few you will meet constantly:
 | ST[05] | Event reporting | On-board events at four severities |
 | ST[08] | Function management | Tells a process to run one of its own functions |
 | ST[11] | Time-based scheduling | Holds telecommands to release at a given time |
+| ST[12] | On-board monitoring | Watches parameters and reports when one goes out of range |
 | ST[17] | Test | "Are you alive?" |
 
 A message type is written `TC[3,1]` for a telecommand and `TM[1,2]` for
@@ -37,10 +38,10 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 ┌─────────────────────────────────────────────┐
 │  Mission operations (commanding, telemetry) │
 ├─────────────────────────────────────────────┤
-│  PUS — services, requests, reports          │  ← this package
+│  PUS — services, requests, reports          │  <- this package
 │  secondary header │ application data        │
 ├─────────────────────────────────────────────┤
-│  Space Packet Protocol (pkg/spp)            │  ← carries it
+│  Space Packet Protocol (pkg/spp)            │  <- carries it
 ├─────────────────────────────────────────────┤
 │  TM / TC / AOS / USLP Transfer Frame        │
 └─────────────────────────────────────────────┘
@@ -48,7 +49,7 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 
 ## Scope
 
-**Implemented.** Six services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, and ST[17] test — plus the PUS secondary headers, mission profiles, and both time fields.
+**Implemented.** Seven services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, ST[11] time-based scheduling, ST[12] on-board monitoring, and ST[17] test — plus the PUS secondary headers, mission profiles, and both time fields.
 
 **Not here yet.**
 
@@ -56,16 +57,15 @@ The standard defines twenty-plus services, and the rest are deliberate
 follow-ups:
 
 ST[02] device access, ST[04] parameter statistics, ST[06] memory management,
-ST[09] time management, ST[12] on-board monitoring, ST[13] large packet
-transfer, ST[14] real-time forwarding, ST[15] storage and retrieval, ST[18]
-on-board control procedures, ST[19] event-action, ST[20] parameter management,
-ST[21] request sequencing, ST[22] position-based scheduling, ST[23] file
-management.
+ST[09] time management, ST[13] large packet transfer, ST[14] real-time
+forwarding, ST[15] storage and retrieval, ST[18] on-board control procedures,
+ST[19] event-action, ST[20] parameter management, ST[21] request sequencing,
+ST[22] position-based scheduling, ST[23] file management.
 
-Also absent: the schedule itself. ST[11] gives you the wire format of all
-twenty-seven message types; running the schedule — sub-schedule and group
-state, the release window, interlocks between activities — is flight
-software's job, and clause 6.11 is where its rules live.
+Also absent: the schedule and the monitoring itself. ST[11] and ST[12] give
+you the wire format of every message type; running the schedule and running
+the checks are flight software's job. Clauses 6.11 and 6.12 are where those
+rules live.
 
 ## Mission profiles
 
@@ -385,8 +385,109 @@ three fine octets can come back one tick lower than it went out. It matters if
 you decode a scheduled release time and re-encode it: compare the octets, not
 the `time.Time`.
 
+## On-board monitoring, ST[12]
+
+Twenty-eight message types across two subservices. Parameter monitoring
+watches individual on-board parameters and reports when one goes out of range.
+Functional monitoring watches groups of those checks and reports when enough
+of them fail at once.
+
+### This one needs your parameter table
+
+ST[12] is the first service here that cannot be decoded from the message
+alone. The limits, delta thresholds, expected values and masks are all typed
+"deduced" in the figures, and the notes say what they are deduced from: the
+monitored parameter's own definition. That is your mission configuration.
+
+Unlike ST[03]'s parameter values or ST[08]'s function arguments, these fields
+are not at the end of the message. They sit in the middle of a repeated group,
+so without their widths there is no way to find where the next definition
+starts. Carrying them raw is not an option.
+
+So you supply a resolver:
+
+```go
+registry, err := pus.NewDefaultRegistry(profile,
+    pus.WithParameterResolver(func(id uint64) (pus.ParameterLayout, error) {
+        p, ok := myParameterTable[id]
+        if !ok {
+            return pus.ParameterLayout{}, fmt.Errorf("unknown parameter %d", id)
+        }
+        return pus.ParameterLayout{ValueBytes: p.Width, MaskBytes: p.Width}, nil
+    }))
+```
+
+`ValueBytes` and `MaskBytes` are separate because the standard never says they
+are equal — only that each derives from the parameter. A mask over a value is
+normally the same width, but this type does not decide that for you.
+
+A registry built without a resolver decodes twenty-one of the twenty-eight
+types and returns `ErrNoParameterResolver` for the other seven: `TC[12,5]`,
+`TC[12,7]`, `TC[12,23]`, `TM[12,9]`, `TM[12,11]`, `TM[12,12]` and `TM[12,26]`.
+It refuses rather than guessing, because a guess would mis-split the
+definition list silently.
+
+### The same raw status means three different things
+
+Clause 8.12.3.1b gives the PMON checking status three tables — 8-7 for
+expected-value checks, 8-8 for limit checks, 8-9 for delta checks. Raw values
+0, 1 and 2 line up. Raw 3 does not:
+
+| Raw | Expected-value | Limit | Delta |
+|---|---|---|---|
+| 0 | expected value | within limits | within thresholds |
+| 1 | unchecked | unchecked | unchecked |
+| 2 | invalid | invalid | invalid |
+| 3 | unexpected value | below low limit | below low threshold |
+| 4 | — | above high limit | above high threshold |
+
+So a raw value on its own does not name a status. `NameFor` takes the check
+type:
+
+```go
+name := transition.CurrentCheckingStatus.NameFor(transition.CheckType)
+```
+
+An operator display that ignored the check type would be wrong two thirds of
+the time and look right.
+
+### Five declarations decide the layout
+
+Like ST[11]'s two capability flags, these are per-subservice declarations that
+change which fields are on the wire:
+
+| Profile field | Clause | What it decides |
+|---|---|---|
+| `SupportsConditionalChecking` | 6.12.3.3c | whether a PMON definition carries a check validity condition |
+| `PerDefinitionMonitoringInterval` | 6.12.3.3d | whether it carries its own monitoring interval |
+| `SupportsTransitionDelayChange` | 6.12.3.8a | whether `TM[12,9]` leads with the transition reporting delay |
+| `ExpectedValueSpare` | 8.12.2.5d | whether the expected-value criteria carry a spare |
+| `SupportsFMONConditionalChecking` | 6.12.4.2.1c | the functional twin of the first |
+| `SupportsMinPMONFailingNumber` | 6.12.4.2.1d | whether an FMON definition says how many checks must fail |
+| `SupportsFMONProtection` | 6.12.4.6.1a | whether an FMON status carries a protection status |
+
+### Three shapes of one definition
+
+`PMONDefinition` serves the add request, the modify request and the report,
+because they differ only in which fields they carry:
+
+| | Validity condition | Monitoring interval | PMON status |
+|---|---|---|---|
+| `TC[12,5]` add | yes | yes | no |
+| `TC[12,7]` modify | no | no | no |
+| `TM[12,9]` report | yes | yes | yes |
+
+The modify request drops both, and it drops them even when the profile
+declares the capabilities: clause 6.12.3.9.4 modifies a check rather than
+replacing a definition. Clause 8.12.2.7c also requires the check type to match
+the definition's original one, which only flight software can verify — it holds
+the original.
+
+The repetition number is always there. Clause 6.12.3.3j item 1 makes it part
+of every check definition, whatever Figure 8-114's bracket suggests.
+
 ## Reference
 
 - [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) — Telemetry and telecommand packet utilization
 - [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) — Time Code Formats, for the CUC time field
-- [Conformance](/conformance/pus)
+- [CLI](/cli/pus) | [Conformance](/conformance/pus) | [The stack](/docs/start/concepts)

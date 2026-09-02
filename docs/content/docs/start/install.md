@@ -1,10 +1,11 @@
 ---
 title: Install
+short: Install
 description: Add the library to a Go project, or install the command line tool.
 order: 1
 ---
 
-Astro needs **Go 1.26 or later**. It has no dependencies outside the standard library, so there is nothing else to install.
+Astro needs **Go 1.26 or later**. The `pkg/` libraries have no dependencies outside the standard library, so importing one pulls in nothing else. The CLI adds Cobra for its command tree.
 
 ## Library
 

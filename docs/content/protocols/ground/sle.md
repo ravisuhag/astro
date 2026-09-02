@@ -5,7 +5,7 @@ description: CCSDS 911.x, 912.1, 913.1 — getting frames to and from a ground s
 order: 40
 ---
 
-> **CCSDS 913.1-B-2 (ISP1)**, with RAF, RCF, ROCF and FCLTU on top · [`pkg/sle`](https://github.com/ravisuhag/astro/tree/main/pkg/sle)
+> **CCSDS 913.1-B-2 (ISP1)** | [Blue Book](https://public.ccsds.org/Pubs/913x1b2.pdf) | with RAF, RCF, ROCF and FCLTU on top | [`pkg/sle`](https://github.com/ravisuhag/astro/tree/main/pkg/sle) | [`astro sle`](/cli/sle)
 
 ## Overview
 
@@ -126,8 +126,8 @@ two's complement encoding without hand-writing every vector.
 
 ### SHA-256, not SHA-1
 
-§3.1.2.3 requires SHA-256. SHA-1 belonged to the previous issue of the
-standard. §3.2.3's note keeps a 20-octet digest recognizable only so a new
+Clause 3.1.2.3 requires SHA-256. SHA-1 belonged to the previous issue of the
+standard. Clause 3.2.3's note keeps a 20-octet digest recognizable only so a new
 implementation can talk to an old one: this package decodes a digest only at
 20 or 32 octets — no other length is a digest either issue defines — never
 generates the 20-octet form, and cannot verify one, because it does not
@@ -136,7 +136,7 @@ implement the superseded scheme. Verification requires SHA-256.
 ## TML: the framing
 
 Every message on the connection is eight octets of header and a body
-(§3.3.2.2.1):
+(clause 3.3.2.2.1):
 
 ```
 octet 0:    type (1 = SLE PDU, 2 = context, 3 = heartbeat)
@@ -187,7 +187,7 @@ creds, err := sle.GenerateCredentials(now, randomNumber, userName, password)
 **You supply the random number.** A library has no business picking a mission's
 randomness source, and a fixed value makes tests reproducible.
 
-The time is what stops a replay. §3.1.2.2.1 has the receiver reject credentials
+The time is what stops a replay. Clause 3.1.2.2.1 has the receiver reject credentials
 whose time is further from now than an acceptable delay:
 
 ```go
@@ -220,7 +220,7 @@ The provider answers, and the state machine handles the rules: an association
 already bound refuses a second BIND, an unexpected initiator is refused, bad
 credentials are refused with the right diagnostic. Each of those is a test.
 
-States run unbound → bind pending → bound → unbind pending → closed. A
+States run unbound -> bind pending -> bound -> unbind pending -> closed. A
 PEER-ABORT jumps straight to closed from anywhere.
 
 ## Service instance identifiers
@@ -407,7 +407,7 @@ itself, since only it knows what it is doing with the data.
 A return-service provider does not send one PDU per frame. It fills a transfer
 buffer and passes the whole thing, which is what lets RAF carry a line-rate
 downlink over a TCP connection. `Production` is that buffer plus the production
-status, both from §3.1.9.1 and annex B.
+status, both from clause 3.1.9.1 and annex B.
 
 ```go
 production, err := sle.NewProduction(sle.ProductionConfig{
@@ -427,23 +427,23 @@ if due || production.Expired(now) {
 
 Three things here are easy to get subtly wrong, so they are worth naming.
 
-**The release timer starts on insertion into an empty buffer** (§3.1.9.1.4),
+**The release timer starts on insertion into an empty buffer** (clause 3.1.9.1.4),
 not on every insertion. So it measures how long the *oldest* record has waited,
 which is the latency the limit is about. Restarting it on each insertion would
 let a steady trickle hold a record forever.
 
-**Backpressure discards the whole buffer** (§3.1.9.1.9), not the one record
+**Backpressure discards the whole buffer** (clause 3.1.9.1.9), not the one record
 that would not fit, and inserts a 'data discarded due to excessive backlog'
 notification. And while that notification waits, the buffer size is
-temporarily one larger (§3.1.9.1.10) — without that, a channel configured with
+temporarily one larger (clause 3.1.9.1.10) — without that, a channel configured with
 a buffer size of one would carry nothing but backlog notifications.
 
 **A status change is notified in sequence.** `SetRunning`, `SetInterrupted` and
 `SetHalted` return the notification rather than sending it, so you insert it
 into the buffer and it lands between the frames acquired before the event and
-those acquired after. The transitions are table B-1's: halted→running,
-running→interrupted, interrupted→running, and anything→halted. A
-halted→interrupted is refused, because it is not a row in the table.
+those acquired after. The transitions are table B-1's: halted->running,
+running->interrupted, interrupted->running, and anything->halted. A
+halted->interrupted is refused, because it is not a row in the table.
 
 Nothing here reads a clock. Every method that involves time takes the time,
 and the timer is read through `Due`, `Expired` and `Deadline` — the same
@@ -457,8 +457,8 @@ row, a user that binds and unbinds while another stays up. A BIND names the
 instance it wants, and something has to route it.
 
 `Complex` is that something, and the name is the standard's. CCSDS 910.4-B-2
-§4.4.2.1b defines an SLE Complex as "a set of SLE-FGs under a single management
-authority", and §4.4.2.4 puts the transfer ports a user binds to on the Complex
+Clause 4.4.2.1b defines an SLE Complex as "a set of SLE-FGs under a single management
+authority", and clause 4.4.2.4 puts the transfer ports a user binds to on the Complex
 rather than on any one functional group. So the Complex is what decides whether
 a BIND is acceptable.
 
@@ -492,7 +492,7 @@ be.
 
 ## Aborts and authentication levels
 
-A PEER-ABORT goes out twice under ISP1 (§3.4): as the `[104]` PDU — a
+A PEER-ABORT goes out twice under ISP1 (clause 3.4): as the `[104]` PDU — a
 primitive element holding the bare diagnostic octet, `9F 68 01 xx` on the
 wire — and as one octet of TCP **urgent data** before the connection closes.
 The library encodes the PDU and gives you the octet (`PeerAbort.UrgentData`);
@@ -515,4 +515,4 @@ buffer entries included, before the machine acts on the PDU.
 - [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) — Forward CLTU
 - [CCSDS 910.4-B-2](https://ccsds.org/wp-content/uploads/gravity_forms/5-448e85c647331d9cbaf66c096458bdd5/2025/01//910x4b2e1s.pdf) — Cross Support Reference Model, where the vocabulary is defined. Retired in December 2023 with nothing named in its place, but still reference [1] of 911.1-B-5.
 - [ITU-T X.690](https://www.itu.int/rec/T-REC-X.690) — BER, CER and DER
-- [Conformance](/conformance/sle)
+- [CLI](/cli/sle) | [Conformance](/conformance/sle) | [The stack](/docs/start/concepts)

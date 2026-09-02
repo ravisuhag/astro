@@ -5,7 +5,7 @@ description: CCSDS 232.0-B-4 — variable-length command frames on the uplink.
 order: 21
 ---
 
-> **CCSDS 232.0-B-4** · [Blue Book](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) · [`pkg/tcdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tcdl) · [`astro tc`](/cli/tc)
+> **CCSDS 232.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tcdl) | [`astro tc`](/cli/tc)
 
 TC carries commands from the ground to a spacecraft. Frames are variable length, up to 1024 bytes, because a "turn on the heater" command is ten bytes and padding it to a fixed size would waste most of an uplink.
 
@@ -27,8 +27,8 @@ The 5-byte Transfer Frame Primary Header. Go fields are on `tcdl.PrimaryHeader`.
 | Bypass Flag | 1 | `BypassFlag` | `0` = Type-A (sequence controlled), `1` = Type-B (expedited) |
 | Control Command Flag | 1 | `ControlCommandFlag` | `0` = data, `1` = COP-1 control command |
 | Reserved | 2 | `Reserved` | Must be `00` |
-| Spacecraft Identifier | 10 | `SpacecraftID` | 0–1023 |
-| Virtual Channel Identifier | 6 | `VirtualChannelID` | 0–63. Six bits, not TM's three. |
+| Spacecraft Identifier | 10 | `SpacecraftID` | 0-1023 |
+| Virtual Channel Identifier | 6 | `VirtualChannelID` | 0-63. Six bits, not TM's three. |
 | Frame Length | 10 | `FrameLength` | Total octets minus 1 |
 | Frame Sequence Number | 8 | `FrameSequenceNum` | N(S) for COP-1, counted per VC |
 
@@ -117,7 +117,7 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 +-----------------------------------------+
 ```
 
-> **Note:** The sync and channel coding layer (CLTU, BCH encoding) is handled by the [`tcsc` package](tcsc.md).
+> **Note:** The sync and channel coding layer (CLTU, BCH encoding) is handled by the [`tcsc` package](/protocols/coding/tcsc).
 
 ## Transfer Frames
 
@@ -442,4 +442,4 @@ Commentary, not sourced from the standard.
 ## Reference
 
 - [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) — TC Space Data Link Protocol (Blue Book)
-- [CLI](/cli/tc) · [Conformance](/conformance/tcdl)
+- [CLI](/cli/tc) | [Conformance](/conformance/tcdl) | [The stack](/docs/start/concepts)

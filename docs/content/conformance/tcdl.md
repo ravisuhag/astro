@@ -15,7 +15,7 @@ order: 70
 
 | Field | Value |
 |---|---|
-| Date of Statement (DD/MM/YYYY) | 19/03/2026 |
+| Date of Statement (DD/MM/YYYY) | 23/08/2026 |
 | PICS Serial Number | ASTRO-TCDL-PICS-001 |
 | System Conformance Statement Cross-Reference | This document |
 
@@ -26,7 +26,7 @@ order: 70
 | Implementation Name | astro/pkg/tcdl |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing CCSDS TC Space Data Link Protocol. Full pipeline: PhysicalChannel (MC mux/demux) → MasterChannel (VC mux, frame gap detection) → VirtualChannel (frame buffer) → Services (MAP Packet with segmentation/reassembly, MAP Access, VC Frame). Variable frame length (up to 1024 bytes). Segment Header (MAP sublayer) support for large packet segmentation. Frame Sequence Number N(S) for COP-1 integration. |
+| Other Information | Go library implementing CCSDS TC Space Data Link Protocol. Full pipeline: PhysicalChannel (MC mux/demux) -> MasterChannel (VC mux, frame gap detection) -> VirtualChannel (frame buffer) -> Services (MAP Packet with segmentation/reassembly, MAP Access, VC Frame). Variable frame length (up to 1024 bytes). Segment Header (MAP sublayer) support for large packet segmentation. Frame Sequence Number N(S) for COP-1 integration. |
 
 ### A2.1.3 Identification of Supplier
 
@@ -178,12 +178,12 @@ Key implementations:
 
 | Area | Items | Implementation |
 |------|-------|----------------|
-| Service Data Units | TC-1–4 | `TCTransferFrame` encode/decode, `MAPPacketService`, `MAPAccessService`, `VCFrameService`. |
-| MAP Packet Service | TC-5–7, TC-13–14 | `MAPPacketService` with segmentation (First/Continuation/Last/Unsegmented), `PacketSizer`-based reassembly. |
-| MAP Access Service | TC-8–10, TC-15–16 | `MAPAccessService` with unsegmented frame wrapping. |
-| VC Frame Service | TC-11–12, TC-17–18 | `VCFrameService` pass-through via `VirtualChannel`. |
-| Protocol Data Unit | TC-19–23 | `PrimaryHeader` (40-bit) with frame-type validation and Type-B N(S)=0, BC contents (TC-20a: Unlock / Set V(R)), `SegmentHeader` (8-bit), CRC-16-CCITT. |
-| Packet Processing | TC-24–25, TC-30–31 | MAP Packet segmentation/reassembly, MAP Access raw delivery. |
-| VC Functions | TC-26–27, TC-32–33 | `NewTCTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
-| MC Functions | TC-28–29, TC-34–35 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
-| Management Params | TC-36–48 | Physical channel name, max frame length 1024, TFVN enforced, SCID/VCID validated, segment header support, all service types. |
+| Service Data Units | TC-1-4 | `TCTransferFrame` encode/decode, `MAPPacketService`, `MAPAccessService`, `VCFrameService`. |
+| MAP Packet Service | TC-5-7, TC-13-14 | `MAPPacketService` with segmentation (First/Continuation/Last/Unsegmented), `PacketSizer`-based reassembly. |
+| MAP Access Service | TC-8-10, TC-15-16 | `MAPAccessService` with unsegmented frame wrapping. |
+| VC Frame Service | TC-11-12, TC-17-18 | `VCFrameService` pass-through via `VirtualChannel`. |
+| Protocol Data Unit | TC-19-23 | `PrimaryHeader` (40-bit) with frame-type validation and Type-B N(S)=0, BC contents (TC-20a: Unlock / Set V(R)), `SegmentHeader` (8-bit), CRC-16-CCITT. |
+| Packet Processing | TC-24-25, TC-30-31 | MAP Packet segmentation/reassembly, MAP Access raw delivery. |
+| VC Functions | TC-26-27, TC-32-33 | `NewTCTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
+| MC Functions | TC-28-29, TC-34-35 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
+| Management Params | TC-36-48 | Physical channel name, max frame length 1024, TFVN enforced, SCID/VCID validated, segment header support, all service types. |

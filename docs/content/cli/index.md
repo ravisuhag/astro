@@ -62,7 +62,7 @@ They mean the same thing everywhere.
 Layers compose the way the protocol stack does:
 
 ```bash
-# Packet → frame → CADU
+# Packet -> frame -> CADU
 PKT=$(astro spp encode --apid 100 --type tm --data 68656c6c6f)
 FRAME=$(astro tm encode --scid 42 --vcid 0 --data "$PKT")
 echo "$FRAME" | astro cadu wrap --input hex

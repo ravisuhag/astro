@@ -5,7 +5,7 @@ description: Communications Operation Procedure-1 (CCSDS 232.1-B-2) — reliable
 order: 25
 ---
 
-> **CCSDS 232.1-B-2** · [Blue Book](https://public.ccsds.org/Pubs/232x1b2e1.pdf) · [`pkg/cop`](https://github.com/ravisuhag/astro/tree/main/pkg/cop)
+> **CCSDS 232.1-B-2** | [Blue Book](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](https://github.com/ravisuhag/astro/tree/main/pkg/cop) | [`astro cop`](/cli/cop)
 
 COP-1 is what makes telecommand reliable. It sits on top of [TC](/protocols/data-link/tcdl) and manages sequence numbers, acknowledgement, and retransmission. It is a sliding window protocol, like TCP's, built for links where the round trip is seconds to hours and a wrong command can end the mission.
 
@@ -38,7 +38,7 @@ The CLCW is the only thing on the wire. Go fields on `cop.CLCW`.
 | Lockout | 1 | `LockoutFlag` | FARM is locked out |
 | Wait | 1 | `WaitFlag` | FARM has no buffer |
 | Retransmit | 1 | `RetransmitFlag` | FARM wants a resend |
-| FARM-B Counter | 2 | `FARMBCounter` | Counts accepted Type-B frames, 0–3 |
+| FARM-B Counter | 2 | `FARMBCounter` | Counts accepted Type-B frames, 0-3 |
 | Report Value | 8 | `ReportValue` | V(R), the next sequence number FARM expects |
 
 The Report Value is a cumulative acknowledgement. It means "I have everything below this". One byte confirms a whole window.
@@ -58,7 +58,7 @@ The Report Value is a cumulative acknowledgement. It means "I have everything be
 
 An **Alert** — lockout seen, bad N(R), transmission limit hit, inconsistent CLCW, or an operator terminate — purges every queue and drops to S6 with a reason code. The errors carry it: `ErrFOPLockout`, `ErrFOPInvalidNR`, `ErrFOPLimit`, `ErrFOPSynch`, `ErrFOPInvalidCLCW`.
 
-The service can also **suspend** instead of alerting. Under timeout type TT1, a T1 expiry at the transmission limit remembers which state it was in (SS 1–4) so a later Resume picks up there.
+The service can also **suspend** instead of alerting. Under timeout type TT1, a T1 expiry at the transmission limit remembers which state it was in (SS 1-4) so a later Resume picks up there.
 
 Directives, all implemented: Initiate AD Service — plain, with CLCW check, with Unlock, or with Set V(R) — plus Terminate, Resume, Set V(S), Set FOP Sliding Window, Set T1 Initial, Set Transmission Limit, and Set Timeout Type.
 
@@ -71,7 +71,7 @@ Directives, all implemented: Initiate AD Service — plain, with CLCW check, wit
               |<---- FW (window width) ---->|
 ```
 
-V(S) is the next number to assign. N(R) comes back in the CLCW. When `V(S) - N(R) >= FW` the window is full and nothing more goes out until an acknowledgement arrives — `ErrFOPWindowFull`. Width is 1–255.
+V(S) is the next number to assign. N(R) comes back in the CLCW. When `V(S) - N(R) >= FW` the window is full and nothing more goes out until an acknowledgement arrives — `ErrFOPWindowFull`. Width is 1-255.
 
 ## FARM-1, on the spacecraft
 
@@ -79,7 +79,7 @@ V(S) is the next number to assign. N(R) comes back in the CLCW. When `V(S) - N(R
 
 The window W is even and splits in half around V(R): a positive half PW = W/2 ahead, a negative half NW = W/2 behind.
 
-| N(S) is… | What happens |
+| N(S) is... | What happens |
 |---|---|
 | Exactly V(R) | **Accept.** Increment V(R), clear the retransmit flag. With no free buffer instead: discard, set Wait and Retransmit. |
 | Ahead, within PW | **Discard, set retransmit.** An earlier frame was lost. |
@@ -400,4 +400,4 @@ Commentary, not sourced from the standard.
 ## Reference
 
 - [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) — Communications Operation Procedure-1 (Blue Book)
-- [Conformance](/conformance/cop)
+- [CLI](/cli/cop) | [Conformance](/conformance/cop) | [The stack](/docs/start/concepts)

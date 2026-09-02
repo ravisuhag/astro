@@ -276,3 +276,126 @@ func FuzzRelativeTime(f *testing.F) {
 		}
 	})
 }
+
+// fuzzParameters is the mission parameter table the ST[12] fuzz targets decode
+// against: every parameter two octets wide with a two-octet mask.
+func fuzzParameters(uint64) (pus.ParameterLayout, error) {
+	return pus.ParameterLayout{ValueBytes: 2, MaskBytes: 2}, nil
+}
+
+// fuzzMonitorProfiles are two ST[12] tailorings: one with every capability
+// declared and one with none. The capability flags decide field presence, so
+// both halves matter.
+func fuzzMonitorProfiles() []pus.MissionProfile {
+	full := pus.DefaultProfile()
+	full.TimeFormat = pus.TimeNone
+	full.SupportsConditionalChecking = true
+	full.PerDefinitionMonitoringInterval = true
+	full.SupportsTransitionDelayChange = true
+	full.ExpectedValueSpare = true
+	full.SupportsFMONConditionalChecking = true
+	full.SupportsMinPMONFailingNumber = true
+	full.SupportsFMONProtection = true
+
+	bare := pus.DefaultProfile()
+	bare.TimeFormat = pus.TimeNone
+
+	return []pus.MissionProfile{full, bare}
+}
+
+func FuzzDecodeMonitoringMessages(f *testing.F) {
+	f.Add(uint8(1), []byte{1, 0, 5})
+	f.Add(uint8(3), []byte{0x12, 0x34})
+	f.Add(uint8(4), []byte{})
+	f.Add(uint8(5), make([]byte, 40))
+	f.Add(uint8(9), make([]byte, 40))
+	f.Add(uint8(11), make([]byte, 40))
+	f.Add(uint8(14), []byte{1, 0, 1, 1})
+	f.Add(uint8(23), make([]byte, 40))
+	f.Add(uint8(28), []byte{1, 0, 1, 1, 1, 1})
+	f.Add(uint8(0), []byte{})
+	f.Add(uint8(255), make([]byte, 64))
+
+	f.Fuzz(func(t *testing.T, subtype uint8, data []byte) {
+		// Property: an ST[12] message that decodes must re-encode to the same
+		// octets. Every field here is either fixed-width, self-delimiting, or
+		// sized by the resolver, so there is nowhere for a decoder to guess.
+		//
+		// The profiles all use TimeNone, which keeps the CUC truncation of
+		// FuzzDecodeScheduleMessages out of the way: TM[12,11] and TM[12,12]
+		// carry an absolute time and would hit the same one-tick loss.
+		for _, profile := range fuzzMonitorProfiles() {
+			registry, err := pus.NewDefaultRegistry(profile,
+				pus.WithParameterResolver(fuzzParameters))
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := pus.MessageKey{Service: pus.ServiceOnBoardMonitoring, Subtype: subtype}
+
+			if request, err := registry.DecodeRequest(key, data); err == nil {
+				encoded, err := request.Encode()
+				if err != nil {
+					t.Fatalf("a decoded TC[12,%d] failed to re-encode: %v", subtype, err)
+				}
+				if !bytes.Equal(encoded, data) {
+					t.Fatalf("TC[12,%d] re-encoded % x, want % x", subtype, encoded, data)
+				}
+			}
+			if report, err := registry.DecodeReport(key, data); err == nil {
+				encoded, err := report.Encode()
+				if err != nil {
+					t.Fatalf("a decoded TM[12,%d] failed to re-encode: %v", subtype, err)
+				}
+				if !bytes.Equal(encoded, data) {
+					t.Fatalf("TM[12,%d] re-encoded % x, want % x", subtype, encoded, data)
+				}
+			}
+		}
+	})
+}
+
+func FuzzMonitoringParameterLayouts(f *testing.F) {
+	f.Add(uint8(5), make([]byte, 40), uint8(2), uint8(2))
+	f.Add(uint8(9), make([]byte, 40), uint8(0), uint8(0))
+	f.Add(uint8(12), make([]byte, 40), uint8(8), uint8(1))
+
+	f.Fuzz(func(t *testing.T, subtype uint8, data []byte, valueBytes, maskBytes uint8) {
+		// Property: a hostile parameter layout never panics and never lets a
+		// decoded message re-encode to different octets. A zero-width value is
+		// legal and a wide one is legal; what must not happen is a decoder
+		// walking off the end or losing a field.
+		resolve := func(uint64) (pus.ParameterLayout, error) {
+			return pus.ParameterLayout{
+				ValueBytes: int(valueBytes),
+				MaskBytes:  int(maskBytes),
+			}, nil
+		}
+		profile := pus.DefaultProfile()
+		profile.TimeFormat = pus.TimeNone
+
+		registry, err := pus.NewDefaultRegistry(profile, pus.WithParameterResolver(resolve))
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := pus.MessageKey{Service: pus.ServiceOnBoardMonitoring, Subtype: subtype}
+
+		if request, err := registry.DecodeRequest(key, data); err == nil {
+			encoded, err := request.Encode()
+			if err != nil {
+				t.Fatalf("a decoded TC[12,%d] failed to re-encode: %v", subtype, err)
+			}
+			if !bytes.Equal(encoded, data) {
+				t.Fatalf("TC[12,%d] re-encoded % x, want % x", subtype, encoded, data)
+			}
+		}
+		if report, err := registry.DecodeReport(key, data); err == nil {
+			encoded, err := report.Encode()
+			if err != nil {
+				t.Fatalf("a decoded TM[12,%d] failed to re-encode: %v", subtype, err)
+			}
+			if !bytes.Equal(encoded, data) {
+				t.Fatalf("TM[12,%d] re-encoded % x, want % x", subtype, encoded, data)
+			}
+		}
+	})
+}

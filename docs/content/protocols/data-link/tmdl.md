@@ -5,7 +5,7 @@ description: CCSDS 132.0-B-3 — fixed-length telemetry frames on the downlink.
 order: 20
 ---
 
-> **CCSDS 132.0-B-3** · [Blue Book](https://public.ccsds.org/Pubs/132x0b3.pdf) · [`pkg/tmdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tmdl) · [`astro tm`](/cli/tm)
+> **CCSDS 132.0-B-3** | [Blue Book](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tmdl) | [`astro tm`](/cli/tm)
 
 TM carries telemetry from a spacecraft to the ground in fixed-length transfer frames. The length is chosen once per physical channel and never changes. Inside a frame you usually find [Space Packets](/protocols/transport/spp), packed end to end and spanning frame boundaries when they are too big to fit.
 
@@ -28,8 +28,8 @@ The 6-byte Transfer Frame Primary Header. Go fields are on `tmdl.PrimaryHeader`.
 | Field | Bits | Go | Notes |
 |---|---|---|---|
 | Transfer Frame Version Number | 2 | `VersionNumber` | Always `0` for TM. AOS uses `1`. |
-| Spacecraft Identifier | 10 | `SpacecraftID` | 0–1023, assigned by your agency |
-| Virtual Channel Identifier | 3 | `VirtualChannelID` | 0–7 |
+| Spacecraft Identifier | 10 | `SpacecraftID` | 0-1023, assigned by your agency |
+| Virtual Channel Identifier | 3 | `VirtualChannelID` | 0-7 |
 | OCF Flag | 1 | `OCFFlag` | Fixed for the whole physical channel |
 | Master Channel Frame Count | 8 | `MCFrameCount` | Wraps at 255. Counts every frame from the spacecraft. |
 | Virtual Channel Frame Count | 8 | `VCFrameCount` | Wraps at 255. Counts frames on this VC only. |
@@ -43,7 +43,7 @@ The rest of the frame, on `tmdl.TMTransferFrame`:
 
 | Part | Size | Go | Notes |
 |---|---|---|---|
-| Secondary Header | 2–64 B | `SecondaryHeader` | Optional. One prefix octet plus 1–63 data octets. |
+| Secondary Header | 2-64 B | `SecondaryHeader` | Optional. One prefix octet plus 1-63 data octets. |
 | Data Field | variable | `DataField` | Frame length minus everything else |
 | Operational Control Field | 4 B | `OperationalControl` | Optional. Usually a CLCW. |
 | Frame Error Control | 2 B | `FrameErrorControl` | Optional CRC-16-CCITT over the whole frame |
@@ -58,7 +58,7 @@ The FHP is how a receiver finds packet boundaries in a fixed-length stream, and 
 
 | Value | Meaning |
 |---|---|
-| 0–2045 | Byte offset in the data field where the first new packet starts |
+| 0-2045 | Byte offset in the data field where the first new packet starts |
 | `0x07FE` (2046) | Only idle data. No packet starts or continues here. |
 | `0x07FF` (2047) | No packet starts here. The whole data field continues a packet from an earlier frame. |
 
@@ -66,7 +66,7 @@ When `SyncFlag` is true the FHP is undefined. Astro sends `0x07FF` and a receive
 
 ## Gotchas
 
-**The secondary header length field is not the data field length minus one.** Clause 4.1.3.2.2.3 defines it as the *total* header length minus one, and the total includes the identification octet. So for an N-octet data field the field holds N, not N−1. Use `SecondaryHeader.SetDataField()` and let Astro work it out.
+**The secondary header length field is not the data field length minus one.** Clause 4.1.3.2.2.3 defines it as the *total* header length minus one, and the total includes the identification octet. So for an N-octet data field the field holds N, not N-1. Use `SecondaryHeader.SetDataField()` and let Astro work it out.
 
 **Fill is a real idle packet, not padding.** When VCP has spare room at the end of a data field it writes a Space Packet with APID `0x7FF`. Raw fill bytes would be read as a packet header by a conformant receiver. If the spare room is under 7 octets — the smallest a Space Packet can be — the idle packet spans into the next frame.
 
@@ -101,25 +101,25 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 ```
 ┌─────────────────────────────────────────────┐
 │  Service Layer                              │
-│  VCP (Packet) · VCF (Frame) · VCA (Access)  │
+│  VCP (Packet) / VCF (Frame) / VCA (Access)  │
 │  TMServiceManager                           │
 ├─────────────────────────────────────────────┤
 │  Master Channel Layer                       │
-│  MasterChannel · VirtualChannelMultiplexer  │
+│  MasterChannel / VirtualChannelMultiplexer  │
 ├─────────────────────────────────────────────┤
 │  Virtual Channel Layer                      │
 │  VirtualChannel (frame buffer per VCID)     │
 ├─────────────────────────────────────────────┤
 │  Frame Layer                                │
-│  TMTransferFrame · PrimaryHeader            │
-│  SecondaryHeader · FrameCounter · CRC-16    │
+│  TMTransferFrame / PrimaryHeader            │
+│  SecondaryHeader / FrameCounter / CRC-16    │
 ├─────────────────────────────────────────────┤
 │  Physical Layer                             │
 │  PhysicalChannel (MC multiplexing)          │
 └─────────────────────────────────────────────┘
 ```
 
-> **Note:** The sync and channel coding layer (ASM, pseudo-randomization, CADU framing) is handled by the `tmsc` package, which implements CCSDS 131.0-B-4. See [tmsc](tmsc.md) for details.
+> **Note:** The sync and channel coding layer (ASM, pseudo-randomization, CADU framing) is handled by the `tmsc` package, which implements CCSDS 131.0-B-5. See [tmsc](/protocols/coding/tmsc) for details.
 
 ## Transfer Frames
 
@@ -189,13 +189,13 @@ capacity := config.DataFieldCapacity(0)                  // No secondary header
 capacity := config.DataFieldCapacity(len(secHeaderData)) // With secondary header
 ```
 
-`FSHDataLength` is the length of the Transfer Frame Secondary Header data field carried by *every* frame on the channel. CCSDS 132.0-B-3 §4.1.3.1.6 fixes that length for the channel, so it belongs here rather than per frame. Set it and the services emit a secondary header on every frame, filling it from a VC_FSH supplier when one is installed.
+`FSHDataLength` is the length of the Transfer Frame Secondary Header data field carried by *every* frame on the channel. CCSDS 132.0-B-3 clause 4.1.3.1.6 fixes that length for the channel, so it belongs here rather than per frame. Set it and the services emit a secondary header on every frame, filling it from a VC_FSH supplier when one is installed.
 
 `DataFieldCapacity` accounts for the 6-byte primary header, optional secondary header (1 + N bytes), optional OCF (4 bytes), and optional FEC (2 bytes).
 
 ## Virtual Channels
 
-A `VirtualChannel` is a buffered frame queue identified by a VCID (0–7). It provides thread-safe FIFO storage for frames within a single data stream.
+A `VirtualChannel` is a buffered frame queue identified by a VCID (0-7). It provides thread-safe FIFO storage for frames within a single data stream.
 
 ```go
 // Create with VCID=1 and buffer capacity of 100 frames
@@ -271,7 +271,7 @@ data, err := vcf.Receive()
 
 ### Virtual Channel Access Service (VCA)
 
-Fixed-length SDU service for housekeeping data or fixed-rate streams. Sets `SyncFlag=true` per CCSDS 132.0-B-3 §4.1.2.7.3.2.
+Fixed-length SDU service for housekeeping data or fixed-rate streams. Sets `SyncFlag=true` per CCSDS 132.0-B-3 clause 4.1.2.7.3.2.
 
 ```go
 counter := tmdl.NewFrameCounter()
@@ -288,7 +288,7 @@ status := vca.LastStatus() // VCAStatus{SyncFlag, PacketOrderFlag, SegmentLength
 
 ### VCA Status Fields
 
-With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user — they are the VCA Status Fields of §3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
+With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user — they are the VCA Status Fields of clause 3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
 
 ```go
 vca.SetSendStatus(tmdl.VCAStatus{
@@ -305,7 +305,7 @@ Without `SetSendStatus`, the First Header Pointer defaults to all ones (`FHPNoPa
 
 ### Secondary Header and OCF Services (VC_FSH, VC_OCF)
 
-The VCP and VCA services carry data for two more of the standard's services: VC_FSH (§3.5) puts an SDU in every frame's Transfer Frame Secondary Header, VC_OCF (§3.6) puts four octets in every frame's Operational Control Field. Both are synchronous with frame release, so they are installed as suppliers polled as each frame is built:
+The VCP and VCA services carry data for two more of the standard's services: VC_FSH (clause 3.5) puts an SDU in every frame's Transfer Frame Secondary Header, VC_OCF (clause 3.6) puts four octets in every frame's Operational Control Field. Both are synchronous with frame release, so they are installed as suppliers polled as each frame is built:
 
 ```go
 config := tmdl.ChannelConfig{FrameLength: 1024, FSHDataLength: 4, HasOCF: true, HasFEC: true}
@@ -317,7 +317,7 @@ svc.SetOCFSupplier(func() []byte { return clcw.Encode() }) // VC_OCF
 fsh := svc.LastFSH()
 ```
 
-The FSH SDU must be exactly `FSHDataLength` octets, and the OCF SDU exactly 4; a wrong size is refused rather than truncated. Without a supplier the fields are zero-filled, because §4.1.3.1.5 requires the secondary header in every frame of a channel that has one.
+The FSH SDU must be exactly `FSHDataLength` octets, and the OCF SDU exactly 4; a wrong size is refused rather than truncated. Without a supplier the fields are zero-filled, because clause 4.1.3.1.5 requires the secondary header in every frame of a channel that has one.
 
 ### Frame Counter
 
@@ -358,7 +358,7 @@ hasPending := mc.HasPendingFrames()
 
 ### Master Channel FSH and OCF Services (MC_FSH, MC_OCF)
 
-The master channel has its own pair of services (§3.8, §3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there — that is the Master Channel Generation Function of §4.2.5:
+The master channel has its own pair of services (clause 3.8, clause 3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there — that is the Master Channel Generation Function of clause 4.2.5:
 
 ```go
 mc.SetFSHSupplier(func() []byte { return spacecraftTime() })  // MC_FSH
@@ -373,18 +373,18 @@ Use the master-channel services when the data is spacecraft-wide (a time code, t
 
 ### Idle (OID) Frames
 
-When no virtual channel has a frame ready at release time, `GetNextFrameOrIdle` creates an Only Idle Data frame to keep the stream continuous (§4.2.4.4). Getting one right takes more than zero-filling:
+When no virtual channel has a frame ready at release time, `GetNextFrameOrIdle` creates an Only Idle Data frame to keep the stream continuous (clause 4.2.4.4). Getting one right takes more than zero-filling:
 
 ```go
-mc.SetFrameCounter(counter) // counts continue through idle frames (§4.1.2.5)
+mc.SetFrameCounter(counter) // counts continue through idle frames (clause 4.1.2.5)
 mc.SetIdleVCID(1)           // optional: pin the VCID, else lowest registered
 idle, err := mc.GetNextFrameOrIdle()
 ```
 
-- The First Header Pointer is `0x7FE` (`FHPOnlyIdleData`), which says "only idle data", not the `0x7FF` that says "no packet starts here" (§4.1.2.7.6.5).
-- The data field carries the mandatory PN sequence from `OIDSequence` — a 32-cell LFSR with polynomial D0+D1+D2+D22+D32 (§4.1.4.6.2). Each `MasterChannel` keeps one generator for its lifetime, since §4.1.4.6.2.1 forbids restarting it, so consecutive idle frames carry different octets. Constant fill would defeat the randomization the sequence exists to provide.
-- The VCID is one that carries packets (§4.1.4.6.3), so a receiver has a reception function for it.
-- The secondary header and OCF still carry their MC service data: only the *data field* of an OID frame is idle (§4.1.4.6.3 note 1).
+- The First Header Pointer is `0x7FE` (`FHPOnlyIdleData`), which says "only idle data", not the `0x7FF` that says "no packet starts here" (clause 4.1.2.7.6.5).
+- The data field carries the mandatory PN sequence from `OIDSequence` — a 32-cell LFSR with polynomial D0+D1+D2+D22+D32 (clause 4.1.4.6.2). Each `MasterChannel` keeps one generator for its lifetime, since clause 4.1.4.6.2.1 forbids restarting it, so consecutive idle frames carry different octets. Constant fill would defeat the randomization the sequence exists to provide.
+- The VCID is one that carries packets (clause 4.1.4.6.3), so a receiver has a reception function for it.
+- The secondary header and OCF still carry their MC service data: only the *data field* of an OID frame is idle (clause 4.1.4.6.3 note 1).
 
 ## Physical Channel
 
@@ -407,7 +407,7 @@ err := pc.AddFrame(frame)
 
 ### Composing with tmsc for Sync and Channel Coding
 
-The `tmsc` package (CCSDS 131.0-B-4) handles the sync layer — ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
+The `tmsc` package (CCSDS 131.0-B-5) handles the sync layer — ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tmsc"
@@ -508,7 +508,7 @@ if err != nil { /* handle sync marker or data errors */ }
 frame, err := tmdl.DecodeTMTransferFrame(unwrapped)
 if err != nil { /* handle CRC or frame errors */ }
 
-// 3. Route to Master Channel → Virtual Channel
+// 3. Route to Master Channel -> Virtual Channel
 err = pc.AddFrame(frame)
 
 // 4. Extract packets
@@ -523,13 +523,13 @@ All errors are exported package-level variables, suitable for use with `errors.I
 |-------|---------|
 | `ErrDataTooShort` | Data too short to decode |
 | `ErrInvalidVersion` | Version is not 0 |
-| `ErrInvalidSpacecraftID` | SCID outside 0–1023 |
-| `ErrInvalidVCID` | VCID outside 0–7 |
+| `ErrInvalidSpacecraftID` | SCID outside 0-1023 |
+| `ErrInvalidVCID` | VCID outside 0-7 |
 | `ErrInvalidPacketOrderFlag` | Packet order flag set when sync flag is 0 |
 | `ErrInvalidSegmentLengthID` | Segment length ID not `11` when sync flag is 0 |
-| `ErrInvalidFirstHeaderPtr` | FHP outside 0–2047 or inconsistent with sync flag |
+| `ErrInvalidFirstHeaderPtr` | FHP outside 0-2047 or inconsistent with sync flag |
 | `ErrInvalidSecondaryHeaderVersion` | Secondary header version is not 0 |
-| `ErrInvalidHeaderLength` | Secondary header length outside 0–63 |
+| `ErrInvalidHeaderLength` | Secondary header length outside 0-63 |
 | `ErrCRCMismatch` | CRC integrity check failed |
 | `ErrDataTooLarge` | Data exceeds maximum frame length |
 | `ErrEmptyData` | Empty data provided |
@@ -566,4 +566,4 @@ Commentary, not sourced from the standard.
 
 - [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) — TM Space Data Link Protocol (Blue Book)
 - [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/) — the European profile
-- [CLI](/cli/tm) · [Conformance](/conformance/tmdl) · [ECSS conformance](/conformance/tmdl-ecss)
+- [CLI](/cli/tm) | [Conformance](/conformance/tmdl) | [ECSS conformance](/conformance/tmdl-ecss)

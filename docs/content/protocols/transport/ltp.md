@@ -5,7 +5,7 @@ description: CCSDS 734.1-B-1 — reliable block transfer over long, one-way-ish 
 order: 13
 ---
 
-> **CCSDS 734.1-B-1** · [Blue Book](https://public.ccsds.org/Pubs/734x1b1.pdf) · [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326) · [`pkg/ltp`](https://github.com/ravisuhag/astro/tree/main/pkg/ltp)
+> **CCSDS 734.1-B-1** | [Blue Book](https://public.ccsds.org/Pubs/734x1b1.pdf) | [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326) | [`pkg/ltp`](https://github.com/ravisuhag/astro/tree/main/pkg/ltp) | [`astro ltp`](/cli/ltp)
 
 ## Overview
 
@@ -43,7 +43,7 @@ red data above a green one, is a **miscolored** block and cancels the session.
 ┌─────────────────────────────────────────────┐
 │  Bundle Protocol / CFDP / application       │
 ├─────────────────────────────────────────────┤
-│  LTP — reliable block delivery              │  ← this package
+│  LTP — reliable block delivery              │  <- this package
 ├─────────────────────────────────────────────┤
 │  Link layer (frames, or UDP on the ground)  │
 └─────────────────────────────────────────────┘
@@ -68,11 +68,11 @@ The library owns no clock. You drive every timer yourself — see below.
 
 ## Segments
 
-Every segment starts the same way (§3.1): a control octet holding a 4-bit
+Every segment starts the same way (clause 3.1): a control octet holding a 4-bit
 version and a 4-bit type code, a session ID, an extension-count octet, then
 the header extensions.
 
-The type code says everything about what follows. §3.1.2 assigns sixteen:
+The type code says everything about what follows. Clause 3.1.2 assigns sixteen:
 
 | Code | Segment |
 |---|---|
@@ -125,7 +125,7 @@ for {
 `NextSegment` returning `false` does not mean the session is over — a red-part
 sender will have more to do once a report arrives. Check `Done()`.
 
-**You pick the first checkpoint serial.** §3.2.1 says it must be chosen
+**You pick the first checkpoint serial.** clause 3.2.1 says it must be chosen
 randomly for security and must never be zero. This package refuses a zero
 rather than inventing randomness of its own, because a library has no business
 deciding a mission's randomness policy.
@@ -181,7 +181,7 @@ listing what it has: an upper and lower bound, then a run of reception claims.
 One detail causes more bugs here than anything else:
 
 > **Claim offsets are relative to the report's lower bound, not the start of
-> the block.** §3.2.2: "The offset within the entire block can be calculated by
+> the block.** clause 3.2.2: "The offset within the entire block can be calculated by
 > summing this offset with the lower bound of the RS."
 
 Use `ReportSegment.ClaimedRanges()` to get absolute block offsets, and the
@@ -192,7 +192,7 @@ those ranges for retransmission. The last segment of each retransmission
 cycle is a checkpoint — wherever it sits in the block — and carries the
 serial of the report that prompted it, so the receiver answers with a fresh
 report and the loop converges. The sender also acknowledges every report,
-because §3.2.3 requires it, including the final one after the session has
+because clause 3.2.3 requires it, including the final one after the session has
 closed.
 
 The receiver holds its session open until that final acknowledgment arrives,
@@ -223,7 +223,7 @@ Tests run instantly and deterministically as a result.
 
 ## Cancelling
 
-Either end can cancel, with a reason code from §3.2.4:
+Either end can cancel, with a reason code from clause 3.2.4:
 
 | Code | Meaning |
 |---|---|
@@ -263,5 +263,5 @@ octets is refused with `ErrTooLong` even when the value itself is small.
 
 - [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326.txt) — LTP specification, the wire format
 - [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) — the CCSDS profile for space links
-- [RFC 5050 §4.1](https://www.rfc-editor.org/rfc/rfc5050.txt) — where SDNV is defined
-- [Conformance](/conformance/ltp)
+- [RFC 5050 clause 4.1](https://www.rfc-editor.org/rfc/rfc5050.txt) — where SDNV is defined
+- [CLI](/cli/ltp) | [Conformance](/conformance/ltp) | [The stack](/docs/start/concepts)

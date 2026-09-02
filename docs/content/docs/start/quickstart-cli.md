@@ -1,5 +1,6 @@
 ---
 title: Quickstart — CLI
+short: CLI
 description: Encode, inspect, and validate packets from a terminal.
 order: 3
 ---
@@ -113,6 +114,7 @@ CUC .... 1e8128a979cc78
 CDS .... 4061f800d0533e
 CCS .... 5a202602440347327987
 ASCII-A  2026-09-01T03:47:32.798Z
+ASCII-B  2026-244T03:47:32.798Z
 ```
 
 Four [time code formats](/protocols/mission/tcf), same instant. `astro time decode` reads any of them back.
