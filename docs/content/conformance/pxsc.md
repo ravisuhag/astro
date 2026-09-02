@@ -1,5 +1,6 @@
 ---
 title: Proximity-1 Coding and Sync
+short: PXSC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 150
 ---

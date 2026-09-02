@@ -1,5 +1,6 @@
 ---
 title: Lossless Data Compression
+short: LDC
 description: CCSDS 121.0-B-3 — the Rice adaptive entropy coder, every bit recoverable.
 order: 50
 ---

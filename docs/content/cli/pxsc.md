@@ -1,5 +1,6 @@
 ---
 title: astro pxsc
+short: PXSC
 description: Proximity-1 coding — PLTUs, sync, convolutional code.
 order: 60
 ---

@@ -1,5 +1,6 @@
 ---
 title: TC Sync and Channel Coding
+short: TCSC
 description: TC Synchronization and Channel Coding (CCSDS 231.0-B-4) — CLTU framing, BCH coding, and randomization on the uplink.
 order: 31
 ---

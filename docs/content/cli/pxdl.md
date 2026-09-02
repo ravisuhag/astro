@@ -1,5 +1,6 @@
 ---
 title: astro pxdl
+short: PXDL
 description: Proximity-1 data link — encode, decode, SPDUs.
 order: 59
 ---

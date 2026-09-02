@@ -1,5 +1,6 @@
 ---
 title: astro cadu
+short: CADU
 description: Channel Access Data Units — wrap, unwrap, inspect, sync.
 order: 30
 ---

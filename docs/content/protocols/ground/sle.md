@@ -1,5 +1,6 @@
 ---
 title: Space Link Extension
+short: SLE
 description: CCSDS 911.x, 912.1, 913.1 — getting frames to and from a ground station over the internet.
 order: 40
 ---

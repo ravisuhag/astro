@@ -1,5 +1,6 @@
 ---
 title: TM Space Data Link Protocol
+short: TMDL
 description: CCSDS 132.0-B-3 — fixed-length telemetry frames on the downlink.
 order: 20
 ---

@@ -1,5 +1,6 @@
 ---
 title: astro cop
+short: COP
 description: COP-1 — build and read the Communications Link Control Word.
 order: 58
 ---

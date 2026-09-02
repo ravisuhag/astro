@@ -1,5 +1,6 @@
 ---
 title: Time Code Formats
+short: TCF
 description: CCSDS 301.0-B-4 — how spacecraft timestamps are encoded, and what leap seconds do to them.
 order: 60
 ---

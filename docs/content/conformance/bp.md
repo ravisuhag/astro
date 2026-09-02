@@ -1,5 +1,6 @@
 ---
 title: Bundle Protocol
+short: BP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 50
 ---

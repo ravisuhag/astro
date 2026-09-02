@@ -1,5 +1,6 @@
 ---
 title: astro rhc
+short: RHC
 description: Robust housekeeping compression (POCKET+) — compress, decompress.
 order: 57
 ---

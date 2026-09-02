@@ -1,5 +1,6 @@
 ---
 title: TC Space Data Link Protocol
+short: TCDL
 description: CCSDS 232.0-B-4 — variable-length command frames on the uplink.
 order: 21
 ---

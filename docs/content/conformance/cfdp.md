@@ -1,5 +1,6 @@
 ---
 title: CCSDS File Delivery Protocol
+short: CFDP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 30
 ---

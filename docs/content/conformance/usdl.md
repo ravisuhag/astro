@@ -1,5 +1,6 @@
 ---
 title: Unified Space Data Link Protocol
+short: USDL
 description: "PICS proforma: what this package implements, clause by clause."
 order: 90
 ---

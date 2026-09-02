@@ -1,5 +1,6 @@
 ---
 title: AOS Space Data Link Protocol
+short: AOS
 description: "PICS proforma: what this package implements, clause by clause."
 order: 80
 ---

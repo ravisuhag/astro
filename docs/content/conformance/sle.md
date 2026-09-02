@@ -1,5 +1,6 @@
 ---
 title: Space Link Extension
+short: SLE
 description: "PICS proforma: what this package implements, clause by clause."
 order: 170
 ---

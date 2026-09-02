@@ -1,5 +1,6 @@
 ---
 title: XTCE
+short: XTCE
 description: "PICS proforma: what this package implements, clause by clause."
 order: 220
 ---

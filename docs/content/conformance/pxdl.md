@@ -1,5 +1,6 @@
 ---
 title: Proximity-1 Data Link Layer
+short: PXDL
 description: "PICS proforma: what this package implements, clause by clause."
 order: 100
 ---

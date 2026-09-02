@@ -1,5 +1,6 @@
 ---
 title: astro cltu
+short: CLTU
 description: Command Link Transmission Units — wrap, unwrap, inspect.
 order: 31
 ---

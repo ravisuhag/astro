@@ -1,5 +1,6 @@
 ---
 title: Optical Coding and Sync
+short: OCSC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 160
 ---

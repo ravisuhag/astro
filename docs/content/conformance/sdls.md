@@ -1,5 +1,6 @@
 ---
 title: Space Data Link Security
+short: SDLS
 description: "PICS proforma: what this package implements, clause by clause."
 order: 120
 ---

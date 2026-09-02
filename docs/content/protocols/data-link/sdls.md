@@ -1,5 +1,6 @@
 ---
 title: Space Data Link Security
+short: SDLS
 description: CCSDS 355.0-B-2 — encrypting and authenticating transfer frame contents.
 order: 26
 ---

@@ -1,5 +1,6 @@
 ---
 title: astro cfdp
+short: CFDP
 description: CCSDS File Delivery Protocol — decode PDUs.
 order: 53
 ---

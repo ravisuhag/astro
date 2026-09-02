@@ -1,5 +1,6 @@
 ---
 title: COP-1
+short: COP
 description: Communications Operation Procedure-1 (CCSDS 232.1-B-2) — reliable telecommand delivery with FOP-1 and FARM-1.
 order: 25
 ---

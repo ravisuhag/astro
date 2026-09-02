@@ -1,5 +1,6 @@
 ---
 title: astro bp
+short: BP
 description: Bundle Protocol v6 — decode bundles and administrative records.
 order: 55
 ---

@@ -1,5 +1,6 @@
 ---
 title: astro spp
+short: SPP
 description: Space Packets — encode, decode, inspect, validate, stream.
 order: 10
 ---

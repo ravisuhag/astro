@@ -1,5 +1,6 @@
 ---
 title: Lossless Data Compression
+short: LDC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 180
 ---

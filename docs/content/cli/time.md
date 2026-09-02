@@ -1,5 +1,6 @@
 ---
 title: astro time
+short: TIME
 description: CCSDS time codes — encode, decode, inspect, now.
 order: 40
 ---

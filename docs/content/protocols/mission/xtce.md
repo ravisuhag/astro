@@ -1,5 +1,6 @@
 ---
 title: XTCE
+short: XTCE
 description: XML Telemetric and Command Exchange (XTCE 1.2) — reading the mission database that says what the octets mean.
 order: 80
 ---

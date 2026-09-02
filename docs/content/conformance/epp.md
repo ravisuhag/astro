@@ -1,5 +1,6 @@
 ---
 title: Encapsulation Packet Protocol
+short: EPP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 20
 ---

@@ -1,5 +1,6 @@
 ---
 title: TM Sync and Channel Coding
+short: TMSC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 130
 ---

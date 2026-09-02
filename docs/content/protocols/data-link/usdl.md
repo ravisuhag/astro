@@ -1,5 +1,6 @@
 ---
 title: Unified Space Data Link Protocol
+short: USDL
 description: CCSDS 732.1-B-3 — one frame format that replaces TM, TC, and AOS.
 order: 23
 ---

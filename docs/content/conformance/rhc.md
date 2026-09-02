@@ -1,5 +1,6 @@
 ---
 title: Housekeeping Compression
+short: RHC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 190
 ---

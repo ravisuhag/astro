@@ -1,5 +1,6 @@
 ---
 title: astro epp
+short: EPP
 description: Encapsulation Packets — encode, decode, inspect, validate, stream.
 order: 11
 ---

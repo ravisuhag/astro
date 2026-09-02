@@ -1,5 +1,6 @@
 ---
 title: astro aos
+short: AOS
 description: AOS transfer frames — encode, decode, inspect, gaps, demux.
 order: 22
 ---

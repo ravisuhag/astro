@@ -1,5 +1,6 @@
 ---
 title: astro ldc
+short: LDC
 description: Lossless data compression — compress, decompress, inspect.
 order: 52
 ---

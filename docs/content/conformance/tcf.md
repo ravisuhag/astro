@@ -1,5 +1,6 @@
 ---
 title: Time Code Formats
+short: TCF
 description: "Coverage matrix: what pkg/tcf implements from CCSDS 301.0-B-4, and what it does not."
 order: 200
 ---

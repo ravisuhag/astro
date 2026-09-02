@@ -1,5 +1,6 @@
 ---
 title: Proximity-1 Data Link Layer
+short: PXDL
 description: CCSDS 211.0-B-6 — the short-range link between an orbiter and a lander or rover.
 order: 24
 ---

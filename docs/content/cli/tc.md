@@ -1,5 +1,6 @@
 ---
 title: astro tc
+short: TC
 description: TC transfer frames — encode, decode, inspect.
 order: 21
 ---

@@ -1,5 +1,6 @@
 ---
 title: Licklider Transmission Protocol
+short: LTP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 40
 ---

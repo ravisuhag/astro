@@ -1,5 +1,6 @@
 ---
 title: astro ltp
+short: LTP
 description: Licklider Transmission Protocol — decode segments.
 order: 54
 ---

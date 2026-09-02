@@ -1,5 +1,6 @@
 ---
 title: AOS Space Data Link Protocol
+short: AOS
 description: CCSDS 732.0-B-4 — high-rate downlink frames for Earth observation and deep space.
 order: 22
 ---

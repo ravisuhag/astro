@@ -1,5 +1,6 @@
 ---
 title: TC Space Data Link Protocol
+short: TCDL
 description: "PICS proforma: what this package implements, clause by clause."
 order: 70
 ---

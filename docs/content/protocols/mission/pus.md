@@ -1,5 +1,6 @@
 ---
 title: Packet Utilization Standard
+short: PUS
 description: ECSS-E-ST-70-41C — what goes inside a telemetry or telecommand packet.
 order: 70
 ---

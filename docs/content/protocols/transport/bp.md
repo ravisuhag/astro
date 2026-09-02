@@ -1,5 +1,6 @@
 ---
 title: Bundle Protocol
+short: BP
 description: CCSDS 734.2-B-1 — store-and-forward bundles for delay-tolerant networking.
 order: 14
 ---

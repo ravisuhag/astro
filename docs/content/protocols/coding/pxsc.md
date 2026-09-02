@@ -1,5 +1,6 @@
 ---
 title: Proximity-1 Coding and Sync
+short: PXSC
 description: Proximity-1 Coding and Synchronization (CCSDS 211.2-B-3) — framing, CRC, and convolutional coding for the proximity link.
 order: 32
 ---

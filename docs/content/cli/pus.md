@@ -1,5 +1,6 @@
 ---
 title: astro pus
+short: PUS
 description: PUS packet utilisation services — encode, decode, list what is implemented.
 order: 51
 ---

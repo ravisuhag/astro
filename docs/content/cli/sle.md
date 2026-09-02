@@ -1,5 +1,6 @@
 ---
 title: astro sle
+short: SLE
 description: Space Link Extension — decode transfer service PDUs.
 order: 56
 ---

@@ -1,5 +1,6 @@
 ---
 title: TC Sync and Channel Coding
+short: TCSC
 description: "PICS proforma: what this package implements, clause by clause."
 order: 140
 ---

@@ -1,5 +1,6 @@
 ---
 title: Housekeeping Compression
+short: RHC
 description: Robust Compression of Housekeeping Data (CCSDS 124.0-B-1) — POCKET+, lossless compression that survives packet loss.
 order: 51
 ---

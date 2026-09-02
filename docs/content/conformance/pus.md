@@ -1,5 +1,6 @@
 ---
 title: Packet Utilization Standard
+short: PUS
 description: "PICS proforma: what this package implements, clause by clause."
 order: 210
 ---

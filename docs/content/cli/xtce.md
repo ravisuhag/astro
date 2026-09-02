@@ -1,5 +1,6 @@
 ---
 title: astro xtce
+short: XTCE
 description: XTCE mission databases — validate, list, layout, decode, match.
 order: 50
 ---

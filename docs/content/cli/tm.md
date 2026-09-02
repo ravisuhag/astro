@@ -1,5 +1,6 @@
 ---
 title: astro tm
+short: TM
 description: TM transfer frames — encode, decode, inspect, gaps, demux.
 order: 20
 ---

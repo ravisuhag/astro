@@ -1,5 +1,6 @@
 ---
 title: astro sdls
+short: SDLS
 description: Space Data Link Security — read a Security Header.
 order: 62
 ---

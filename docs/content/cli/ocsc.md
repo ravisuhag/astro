@@ -1,5 +1,6 @@
 ---
 title: astro ocsc
+short: OCSC
 description: Optical coding — condition frames into codeblocks, randomise.
 order: 61
 ---

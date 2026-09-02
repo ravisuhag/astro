@@ -1,5 +1,6 @@
 ---
 title: astro usdl
+short: USDL
 description: USLP transfer frames — encode, decode, inspect.
 order: 23
 ---

@@ -1,5 +1,6 @@
 ---
 title: COP-1
+short: COP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 110
 ---

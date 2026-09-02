@@ -1,5 +1,6 @@
 ---
 title: Space Packet Protocol
+short: SPP
 description: "PICS proforma: what this package implements, clause by clause."
 order: 10
 ---

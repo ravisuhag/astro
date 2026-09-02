@@ -1,5 +1,6 @@
 ---
 title: Optical Coding and Sync
+short: OCSC
 description: Optical Communications Coding and Synchronization (CCSDS 142.0-B-1) — the coding layer for a laser downlink.
 order: 33
 ---

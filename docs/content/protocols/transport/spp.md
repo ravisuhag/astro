@@ -1,5 +1,6 @@
 ---
 title: Space Packet Protocol
+short: SPP
 description: CCSDS 133.0-B-2 — the packet that carries application data across a mission.
 order: 10
 ---

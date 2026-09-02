@@ -1,5 +1,6 @@
 ---
 title: Licklider Transmission Protocol
+short: LTP
 description: CCSDS 734.1-B-1 — reliable block transfer over long, one-way-ish links.
 order: 13
 ---

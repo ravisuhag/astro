@@ -1,5 +1,6 @@
 ---
 title: TM Space Data Link Protocol
+short: TMDL
 description: "PICS proforma: what this package implements, clause by clause."
 order: 60
 ---

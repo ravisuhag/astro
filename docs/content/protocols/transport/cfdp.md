@@ -1,5 +1,6 @@
 ---
 title: CCSDS File Delivery Protocol
+short: CFDP
 description: CCSDS 727.0-B-5 — moving files across a space link, reliably or not.
 order: 12
 ---

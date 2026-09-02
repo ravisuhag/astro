@@ -1,5 +1,6 @@
 ---
 title: TM Sync and Channel Coding
+short: TMSC
 description: TM Synchronization and Channel Coding (CCSDS 131.0-B-5) — sync markers, randomization, and Reed-Solomon on the downlink.
 order: 30
 ---

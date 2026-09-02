@@ -1,5 +1,6 @@
 ---
 title: Encapsulation Packet Protocol
+short: EPP
 description: CCSDS 133.1-B-3 — a thin wrapper for carrying IP and other non-CCSDS data.
 order: 11
 ---
