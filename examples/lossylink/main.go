@@ -1,4 +1,4 @@
-// Example: Lossy RF Link, Error Handling in CCSDS Telemetry
+// Example: A lossy RF link, and how CCSDS telemetry copes
 //
 // This example demonstrates how CCSDS protocols handle a noisy
 // communication channel. A spacecraft transmits 20 telemetry packets

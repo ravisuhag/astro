@@ -1,4 +1,4 @@
-// Example: Both Ends of a Downlink From One Configuration
+// Example: Both ends of a downlink from one configuration
 //
 // examples/downlink wires the layers by hand, which is what you want when you
 // are learning where the boundaries are. This is the short version: pkg/stack

@@ -1,4 +1,4 @@
-// Example: Spacecraft-to-Ground Station Telemetry Simulation
+// Example: Telemetry from a spacecraft to a ground station
 //
 // This example demonstrates a complete CCSDS telemetry chain:
 //

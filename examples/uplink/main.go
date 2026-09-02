@@ -1,4 +1,4 @@
-// Example: Ground Station-to-Spacecraft Telecommand Simulation
+// Example: Telecommands from a ground station to a spacecraft
 //
 // This example demonstrates a complete CCSDS telecommand (TC) uplink chain:
 //
@@ -352,9 +352,9 @@ func main() {
 	fmt.Printf("  Accepted: %d, Rejected: %d, BCH corrections: %d bits\n",
 		acceptedFrames, rejectedFrames, bchCorrections)
 	fmt.Printf("  FARM-1 VC%d: state=%s, V(R)=%d\n",
-		vcidCritical, farmStateString(farmCrit.State()), farmCrit.VR())
+		vcidCritical, farmCrit.State(), farmCrit.VR())
 	fmt.Printf("  FARM-1 VC%d: state=%s, V(R)=%d\n",
-		vcidRoutine, farmStateString(farmRout.State()), farmRout.VR())
+		vcidRoutine, farmRout.State(), farmRout.VR())
 
 	// Extract telecommand packets from accepted frames.
 	fmt.Println("\nExtracting critical commands from VC0:")
@@ -364,7 +364,7 @@ func main() {
 	routRecovered := extractPackets(scMapRout, "Routine")
 
 	// =====================================================================
-	// GROUND STATION: Process CLCW Return Link
+	// GROUND STATION: process the CLCW return link
 	// =====================================================================
 	fmt.Println()
 	fmt.Println("--- Return Link (CLCW Processing) ---")
@@ -441,17 +441,4 @@ func extractPackets(svc *tcdl.MAPPacketService, label string) int {
 	}
 	fmt.Printf("  Total: %d %s commands recovered\n", count, label)
 	return count
-}
-
-func farmStateString(state cop.FARMState) string {
-	switch state {
-	case cop.FARMOpen:
-		return "Open"
-	case cop.FARMWait:
-		return "Wait"
-	case cop.FARMLockout:
-		return "Lockout"
-	default:
-		return "Unknown"
-	}
 }

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A small mission database, for examples/xtce.
+
+  It describes the CCSDS Space Packet primary header once, as an abstract
+  container, then two concrete packet types that extend it. Each says which
+  APID selects it, so a ground system holding this file can take an unknown
+  packet and work out what it is.
+
+  Written against XTCE 1.2 (OMG) and CCSDS 660.1-G-2.
+-->
+<SpaceSystem xmlns="http://www.omg.org/spec/XTCE/20180204" name="Demosat">
+  <Header version="1.0" date="2026-03-14" validationStatus="Working"/>
+
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <!-- The seven primary header fields. Widths are fixed by CCSDS 133.0. -->
+      <IntegerParameterType name="Version_t" sizeInBits="8" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="3"/>
+      </IntegerParameterType>
+
+      <EnumeratedParameterType name="PacketType_t">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="1"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Telemetry"/>
+          <Enumeration value="1" label="Telecommand"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+
+      <BooleanParameterType name="SecondaryHeaderFlag_t"
+                            zeroStringValue="Absent" oneStringValue="Present">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="1"/>
+      </BooleanParameterType>
+
+      <IntegerParameterType name="APID_t" sizeInBits="16" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="11"/>
+      </IntegerParameterType>
+
+      <EnumeratedParameterType name="SequenceFlags_t">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="2"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Continuation"/>
+          <Enumeration value="1" label="FirstSegment"/>
+          <Enumeration value="2" label="LastSegment"/>
+          <Enumeration value="3" label="Unsegmented"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+
+      <IntegerParameterType name="SequenceCount_t" sizeInBits="16" signed="false">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="14"/>
+      </IntegerParameterType>
+
+      <IntegerParameterType name="PacketLength_t" sizeInBits="16" signed="false">
+        <UnitSet>
+          <Unit description="octets">octet</Unit>
+        </UnitSet>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="16"/>
+      </IntegerParameterType>
+
+      <!--
+        Payload parameters. Each is a raw count on the wire and an engineering
+        value to a human, and the calibrator is the whole difference.
+      -->
+      <FloatParameterType name="Volts_t" sizeInBits="32">
+        <UnitSet>
+          <Unit description="volts">V</Unit>
+        </UnitSet>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="16">
+          <DefaultCalibrator>
+            <!-- 0.0005 V per count: a 16-bit ADC over a 0 to 32.7 V range. -->
+            <PolynomialCalibrator>
+              <Term coefficient="0" exponent="0"/>
+              <Term coefficient="0.0005" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+
+      <FloatParameterType name="Amps_t" sizeInBits="32">
+        <UnitSet>
+          <Unit description="amperes">A</Unit>
+        </UnitSet>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="16">
+          <DefaultCalibrator>
+            <!--
+              A shunt whose response bends at the top of its range. A spline
+              says so with three measured points instead of pretending a
+              straight line fits.
+            -->
+            <SplineCalibrator order="1">
+              <SplinePoint raw="0" calibrated="0.0"/>
+              <SplinePoint raw="32768" calibrated="5.0"/>
+              <SplinePoint raw="65535" calibrated="9.5"/>
+            </SplineCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+
+      <EnumeratedParameterType name="Mode_t">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="8"/>
+        <EnumerationList>
+          <Enumeration value="0" label="Safe"/>
+          <Enumeration value="1" label="Nominal"/>
+          <Enumeration value="2" label="Science"/>
+        </EnumerationList>
+      </EnumeratedParameterType>
+
+      <FloatParameterType name="Celsius_t" sizeInBits="32">
+        <UnitSet>
+          <Unit description="degrees Celsius">degC</Unit>
+        </UnitSet>
+        <!-- A signed count, a hundredth of a degree each. -->
+        <IntegerDataEncoding encoding="twosComplement" sizeInBits="16">
+          <DefaultCalibrator>
+            <PolynomialCalibrator>
+              <Term coefficient="0" exponent="0"/>
+              <Term coefficient="0.01" exponent="1"/>
+            </PolynomialCalibrator>
+          </DefaultCalibrator>
+        </IntegerDataEncoding>
+      </FloatParameterType>
+
+      <BooleanParameterType name="OnOff_t" zeroStringValue="Off" oneStringValue="On">
+        <UnitSet/>
+        <IntegerDataEncoding encoding="unsigned" sizeInBits="8"/>
+      </BooleanParameterType>
+    </ParameterTypeSet>
+
+    <ParameterSet>
+      <Parameter name="Version" parameterTypeRef="Version_t"/>
+      <Parameter name="PacketType" parameterTypeRef="PacketType_t"/>
+      <Parameter name="SecondaryHeaderFlag" parameterTypeRef="SecondaryHeaderFlag_t"/>
+      <Parameter name="APID" parameterTypeRef="APID_t"
+                 shortDescription="Application process identifier"/>
+      <Parameter name="SequenceFlags" parameterTypeRef="SequenceFlags_t"/>
+      <Parameter name="SequenceCount" parameterTypeRef="SequenceCount_t"/>
+      <Parameter name="PacketLength" parameterTypeRef="PacketLength_t"
+                 shortDescription="Data field length minus one"/>
+
+      <Parameter name="BusVoltage" parameterTypeRef="Volts_t"
+                 shortDescription="Main bus voltage"/>
+      <Parameter name="BusCurrent" parameterTypeRef="Amps_t"
+                 shortDescription="Main bus current"/>
+      <Parameter name="Mode" parameterTypeRef="Mode_t"
+                 shortDescription="Spacecraft mode"/>
+
+      <Parameter name="RadiatorTemp" parameterTypeRef="Celsius_t"/>
+      <Parameter name="BatteryTemp" parameterTypeRef="Celsius_t"/>
+      <Parameter name="HeaterState" parameterTypeRef="OnOff_t"/>
+    </ParameterSet>
+
+    <ContainerSet>
+      <!--
+        Abstract: no packet is ever just a primary header, so this one is only
+        ever inherited from.
+      -->
+      <SequenceContainer name="PrimaryHeader" abstract="true"
+                         shortDescription="The six-octet CCSDS primary header">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Version"/>
+          <ParameterRefEntry parameterRef="PacketType"/>
+          <ParameterRefEntry parameterRef="SecondaryHeaderFlag"/>
+          <ParameterRefEntry parameterRef="APID"/>
+          <ParameterRefEntry parameterRef="SequenceFlags"/>
+          <ParameterRefEntry parameterRef="SequenceCount"/>
+          <ParameterRefEntry parameterRef="PacketLength"/>
+        </EntryList>
+      </SequenceContainer>
+
+      <SequenceContainer name="PowerReport"
+                         shortDescription="Electrical power subsystem housekeeping">
+        <EntryList>
+          <ParameterRefEntry parameterRef="BusVoltage"/>
+          <ParameterRefEntry parameterRef="BusCurrent"/>
+          <ParameterRefEntry parameterRef="Mode"/>
+        </EntryList>
+        <BaseContainer containerRef="PrimaryHeader">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="100"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+
+      <SequenceContainer name="ThermalReport"
+                         shortDescription="Thermal control subsystem housekeeping">
+        <EntryList>
+          <ParameterRefEntry parameterRef="RadiatorTemp"/>
+          <ParameterRefEntry parameterRef="BatteryTemp"/>
+          <ParameterRefEntry parameterRef="HeaterState"/>
+        </EntryList>
+        <BaseContainer containerRef="PrimaryHeader">
+          <RestrictionCriteria>
+            <Comparison parameterRef="APID" value="101"/>
+          </RestrictionCriteria>
+        </BaseContainer>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>
