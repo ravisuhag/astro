@@ -49,7 +49,7 @@
 // Not here: the compression identification packet of section 6, insertion into
 // space packets (§5.3, which the caller does), and the application-specific
 // predictor and mapper the standard names but does not define. See
-// docs/content/protocols/ldc/conformance.md.
+// docs/content/conformance/ldc.md.
 package ldc
 
 import "fmt"

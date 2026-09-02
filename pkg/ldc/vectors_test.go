@@ -9,7 +9,7 @@ package ldc_test
 // Every vector here must encode byte-identically and decode back to the
 // exact samples. The ExtendedParameters set is not vendored: its streams
 // use per-reference-interval byte alignment, which this package does not
-// implement (see docs/content/protocols/ldc/conformance.md).
+// implement (see docs/content/conformance/ldc.md).
 
 import (
 	"bytes"
