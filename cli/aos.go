@@ -25,6 +25,8 @@ func aosCmd() *cobra.Command {
 		aosEncodeCmd(),
 		aosDecodeCmd(),
 		aosInspectCmd(),
+		aosGapsCmd(),
+		aosDemuxCmd(),
 		aosGenCmd(),
 	)
 	return cmd
@@ -299,6 +301,186 @@ func aosGenCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&fecf, "fecf", false, "Append CRC-16 Frame Error Control Field")
 	cmd.Flags().StringVar(&outputFmt, "format", "bin", "Output format: bin or hex")
 	return cmd
+}
+
+func aosGapsCmd() *cobra.Command {
+	var (
+		inputFmt      string
+		frameLen      int
+		fecf          bool
+		ocf           bool
+		insertZoneLen int
+	)
+
+	cmd := &cobra.Command{
+		Use:   "gaps [file]",
+		Short: "Detect frame gaps using the VC frame counter",
+		Long: "Scan a stream of concatenated AOS Transfer Frames and report gaps in the Virtual Channel frame counter.\n\n" +
+			"AOS has no master channel frame count, so only virtual channel gaps are reported. Where a frame sets the VC Frame Count Usage Flag, the 4-bit cycle is folded in above the 24-bit count and the pair is treated as one 28-bit counter.",
+		Example: `  # Detect gaps in a binary capture
+  astro aos gaps --input bin --frame-len 1024 capture.bin
+
+  # Frames carrying an insert zone and FECF
+  astro aos gaps --input bin --frame-len 1115 --insert-len 8 --fecf capture.bin`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if frameLen <= 0 {
+				return fmt.Errorf("--frame-len is required and must be positive")
+			}
+
+			source, closer, err := openInput(args, inputFmt)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closer.Close() }()
+
+			scanner := newGapScanner(aosProtocol(insertZoneLen, ocf, fecf), os.Stdout, os.Stderr)
+			if err := streamFixed(source, frameLen,
+				scanner.track, trailingWarning(os.Stderr, frameLen)); err != nil {
+				return err
+			}
+			scanner.summary()
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
+	cmd.Flags().IntVar(&frameLen, "frame-len", 0, "Fixed frame length in bytes (required)")
+	cmd.Flags().BoolVar(&fecf, "fecf", false, "Frames include a 2-byte FECF")
+	cmd.Flags().BoolVar(&ocf, "ocf", false, "Frames include a 4-byte OCF")
+	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
+
+	_ = cmd.MarkFlagRequired("frame-len")
+
+	return cmd
+}
+
+func aosDemuxCmd() *cobra.Command {
+	var (
+		inputFmt      string
+		outputFmt     string
+		frameLen      int
+		filterVCID    uint8
+		fecf          bool
+		ocf           bool
+		insertZoneLen int
+	)
+
+	cmd := &cobra.Command{
+		Use:   "demux [file]",
+		Short: "Filter AOS frames by Virtual Channel ID",
+		Long:  "Demultiplex a stream of concatenated AOS Transfer Frames, passing on only the frames matching the given VCID.",
+		Example: `  # Extract VCID 2 frames from a binary capture
+  astro aos demux --input bin --frame-len 1024 --vcid 2 capture.bin
+
+  # Demux with JSON output
+  astro aos demux --input hex --frame-len 70 --vcid 0 --format json frames.hex`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if frameLen <= 0 {
+				return fmt.Errorf("--frame-len is required and must be positive")
+			}
+			if err := checkFrameFormat(outputFmt); err != nil {
+				return err
+			}
+
+			source, closer, err := openInput(args, inputFmt)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closer.Close() }()
+
+			demux := &demuxer{
+				proto:  aosProtocol(insertZoneLen, ocf, fecf),
+				vcid:   filterVCID,
+				out:    os.Stdout,
+				errOut: os.Stderr,
+				emit:   emitAOSFrame(outputFmt, insertZoneLen, ocf, fecf),
+			}
+			if err := streamFixed(source, frameLen,
+				demux.filter, trailingWarning(os.Stderr, frameLen)); err != nil {
+				return err
+			}
+			if outputFmt == "text" {
+				demux.summary()
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&inputFmt, "input", "hex", "Input format: hex or bin")
+	cmd.Flags().StringVar(&outputFmt, "format", "text", "Output format: text, json, or hex")
+	cmd.Flags().IntVar(&frameLen, "frame-len", 0, "Fixed frame length in bytes (required)")
+	cmd.Flags().Uint8Var(&filterVCID, "vcid", 0, "Virtual Channel ID to filter (0-63)")
+	cmd.Flags().BoolVar(&fecf, "fecf", false, "Frames include a 2-byte FECF")
+	cmd.Flags().BoolVar(&ocf, "ocf", false, "Frames include a 4-byte OCF")
+	cmd.Flags().IntVar(&insertZoneLen, "insert-len", 0, "Insert zone length in bytes")
+
+	_ = cmd.MarkFlagRequired("frame-len")
+	_ = cmd.MarkFlagRequired("vcid")
+
+	return cmd
+}
+
+// aosProtocol describes AOS Transfer Frames to the receive loop.
+//
+// The VC frame count is twenty-four bits (CCSDS 732.0-B-4 §4.1.2.3), and
+// where the VC Frame Count Usage Flag is set the signalling field carries a
+// four-bit cycle that increments on each wrap (§4.1.2.5.5.3). There is no
+// master channel frame count in an AOS header, so mcMask stays zero and no
+// master channel gaps are reported.
+func aosProtocol(insertZoneLen int, hasOCF, hasFECF bool) frameProtocol {
+	return frameProtocol{
+		vcMask:    aos.MaxVCFrameCount,
+		cycleMask: 0x0F,
+		ident: func(raw []byte) (frameIdent, error) {
+			frame, err := aos.DecodeTransferFrame(raw, insertZoneLen, hasOCF, hasFECF)
+			if err != nil {
+				return frameIdent{}, err
+			}
+			h := frame.Header
+			return frameIdent{
+				scid:     uint16(h.SCID),
+				vcid:     h.VCID,
+				vcCount:  uint64(h.VCFrameCount),
+				cycle:    h.VCFrameCountCycle,
+				hasCycle: h.VCFCUsageFlag,
+			}, nil
+		},
+	}
+}
+
+// emitAOSFrame returns the demux emitter for one output format.
+func emitAOSFrame(outputFmt string, insertZoneLen int, hasOCF, hasFECF bool) func(raw []byte, index int, ident frameIdent) error {
+	return func(raw []byte, index int, ident frameIdent) error {
+		frame, err := aos.DecodeTransferFrame(raw, insertZoneLen, hasOCF, hasFECF)
+		if err != nil {
+			return err
+		}
+
+		switch outputFmt {
+		case "json":
+			b, err := json.Marshal(toAOSFrameJSON(frame))
+			if err != nil {
+				return fmt.Errorf("encoding JSON output: %w", err)
+			}
+			fmt.Println(string(b))
+		case "hex":
+			fmt.Println(hex.EncodeToString(raw))
+		case "text":
+			fmt.Printf("--- Frame #%d (SCID=%d VCID=%d VC=%d) ---\n",
+				index, ident.scid, ident.vcid, ident.vcCount)
+			fmt.Printf("  Data: %d bytes", len(frame.DataField))
+			if aos.IsIdleFrame(frame) {
+				fmt.Print(" [IDLE]")
+			}
+			fmt.Println()
+		}
+
+		return nil
+	}
 }
 
 // printAOSFrame outputs a decoded AOS frame in the specified format.

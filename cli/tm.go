@@ -229,12 +229,20 @@ func tmGapsCmd() *cobra.Command {
 				return fmt.Errorf("--frame-len is required and must be positive")
 			}
 
-			data, err := readInput(args, inputFmt)
+			source, closer, err := openInput(args, inputFmt)
 			if err != nil {
 				return err
 			}
+			defer func() { _ = closer.Close() }()
 
-			return detectGaps(data, frameLen)
+			scanner := newGapScanner(tmProtocol(), os.Stdout, os.Stderr)
+			if err := streamFixed(source, frameLen,
+				scanner.track, trailingWarning(os.Stderr, frameLen)); err != nil {
+				return err
+			}
+			scanner.summary()
+
+			return nil
 		},
 	}
 
@@ -265,13 +273,32 @@ func tmDemuxCmd() *cobra.Command {
 			if frameLen <= 0 {
 				return fmt.Errorf("--frame-len is required and must be positive")
 			}
-
-			data, err := readInput(args, inputFmt)
-			if err != nil {
+			if err := checkFrameFormat(outputFmt); err != nil {
 				return err
 			}
 
-			return demuxFrames(data, frameLen, filterVCID, outputFmt)
+			source, closer, err := openInput(args, inputFmt)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closer.Close() }()
+
+			demux := &demuxer{
+				proto:  tmProtocol(),
+				vcid:   filterVCID,
+				out:    os.Stdout,
+				errOut: os.Stderr,
+				emit:   emitTMFrame(outputFmt),
+			}
+			if err := streamFixed(source, frameLen,
+				demux.filter, trailingWarning(os.Stderr, frameLen)); err != nil {
+				return err
+			}
+			if outputFmt == "text" {
+				demux.summary()
+			}
+
+			return nil
 		},
 	}
 
@@ -378,120 +405,74 @@ func printTMInspect(f *tmdl.TMTransferFrame, raw []byte) {
 	fmt.Print(hexDump(raw, "  "))
 }
 
-// splitFrames splits data into fixed-length frames.
-func splitFrames(data []byte, frameLen int) ([][]byte, error) {
-	if len(data)%frameLen != 0 {
-		fmt.Fprintf(os.Stderr, "Warning: data length %d is not a multiple of frame length %d, %d trailing bytes ignored\n",
-			len(data), frameLen, len(data)%frameLen)
+// tmProtocol describes TM Transfer Frames to the receive loop.
+//
+// Both counts are eight bits (CCSDS 132.0-B-3 §4.1.2.3 and §4.1.2.4) and TM
+// has no count cycle, so the cycle mask is zero. The masks match the ones
+// tmdl's own FrameGapDetector uses.
+func tmProtocol() frameProtocol {
+	return frameProtocol{
+		vcMask: 0xFF,
+		mcMask: 0xFF,
+		ident: func(raw []byte) (frameIdent, error) {
+			frame, err := tmdl.DecodeTMTransferFrame(raw)
+			if err != nil {
+				return frameIdent{}, err
+			}
+			h := frame.Header
+			return frameIdent{
+				scid:    h.SpacecraftID,
+				vcid:    h.VirtualChannelID,
+				vcCount: uint64(h.VCFrameCount),
+				mcCount: uint64(h.MCFrameCount),
+				hasMC:   true,
+			}, nil
+		},
 	}
-
-	var frames [][]byte
-	for offset := 0; offset+frameLen <= len(data); offset += frameLen {
-		frames = append(frames, data[offset:offset+frameLen])
-	}
-	return frames, nil
 }
 
-// detectGaps scans frames for MC/VC counter discontinuities.
-func detectGaps(data []byte, frameLen int) error {
-	chunks, err := splitFrames(data, frameLen)
-	if err != nil {
-		return err
-	}
-
-	type vcState struct {
-		lastVC    uint8
-		lastIndex int
-	}
-
-	lastMC := int(-1)
-	lastMCIndex := -1
-	vcStates := make(map[uint8]*vcState)
-	gapCount := 0
-
-	for i, chunk := range chunks {
-		frame, err := tmdl.DecodeTMTransferFrame(chunk)
+// emitTMFrame returns the demux emitter for one output format.
+//
+// The frame is decoded a second time here rather than carried over from
+// ident, because only the matching frames need a full decode and a demux
+// filtering one channel out of eight discards most of what it reads.
+func emitTMFrame(outputFmt string) func(raw []byte, index int, ident frameIdent) error {
+	return func(raw []byte, index int, ident frameIdent) error {
+		frame, err := tmdl.DecodeTMTransferFrame(raw)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: frame #%d decode error: %v, skipping\n", i+1, err)
-			continue
+			return err
 		}
 
-		h := frame.Header
-		mc := int(h.MCFrameCount)
-
-		// Check MC counter
-		if lastMC >= 0 {
-			expected := (lastMC + 1) & 0xFF
-			if mc != expected {
-				gapCount++
-				fmt.Printf("MC gap: frame #%d → #%d, expected MC=%d, got MC=%d (SCID=%d)\n",
-					lastMCIndex+1, i+1, expected, mc, h.SpacecraftID)
-			}
-		}
-		lastMC = mc
-		lastMCIndex = i
-
-		// Check VC counter
-		vcid := h.VirtualChannelID
-		if vs, ok := vcStates[vcid]; ok {
-			expectedVC := (int(vs.lastVC) + 1) & 0xFF
-			if int(h.VCFrameCount) != expectedVC {
-				gapCount++
-				fmt.Printf("VC gap: VCID=%d, frame #%d → #%d, expected VC=%d, got VC=%d\n",
-					vcid, vs.lastIndex+1, i+1, expectedVC, h.VCFrameCount)
-			}
-		}
-		vcStates[vcid] = &vcState{lastVC: h.VCFrameCount, lastIndex: i}
-	}
-
-	fmt.Printf("\nScanned %d frame(s), found %d gap(s).\n", len(chunks), gapCount)
-	return nil
-}
-
-// demuxFrames filters frames by VCID.
-func demuxFrames(data []byte, frameLen int, vcid uint8, outputFmt string) error {
-	chunks, err := splitFrames(data, frameLen)
-	if err != nil {
-		return err
-	}
-
-	matched := 0
-	for i, chunk := range chunks {
-		frame, err := tmdl.DecodeTMTransferFrame(chunk)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: frame #%d decode error: %v, skipping\n", i+1, err)
-			continue
-		}
-
-		if frame.Header.VirtualChannelID != vcid {
-			continue
-		}
-
-		matched++
 		switch outputFmt {
 		case "json":
-			j := toTMFrameJSON(frame)
-			b, err := json.Marshal(j)
+			b, err := json.Marshal(toTMFrameJSON(frame))
 			if err != nil {
 				return fmt.Errorf("encoding JSON output: %w", err)
 			}
 			fmt.Println(string(b))
 		case "hex":
-			fmt.Println(hex.EncodeToString(chunk))
+			fmt.Println(hex.EncodeToString(raw))
 		case "text":
 			fmt.Printf("--- Frame #%d (SCID=%d VCID=%d MC=%d VC=%d) ---\n",
-				i+1, frame.Header.SpacecraftID, frame.Header.VirtualChannelID,
-				frame.Header.MCFrameCount, frame.Header.VCFrameCount)
+				index, ident.scid, ident.vcid, ident.mcCount, ident.vcCount)
 			fmt.Printf("  Data: %d bytes", len(frame.DataField))
 			if tmdl.IsIdleFrame(frame) {
 				fmt.Print(" [IDLE]")
 			}
 			fmt.Println()
 		}
-	}
 
-	if outputFmt == "text" {
-		fmt.Printf("\nMatched %d of %d frame(s) on VCID=%d.\n", matched, len(chunks), vcid)
+		return nil
 	}
-	return nil
+}
+
+// checkFrameFormat rejects an unknown --format before any input is read, so
+// the command fails on the flag rather than part way through a stream.
+func checkFrameFormat(outputFmt string) error {
+	switch outputFmt {
+	case "text", "json", "hex":
+		return nil
+	default:
+		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", outputFmt)
+	}
 }

@@ -23,7 +23,7 @@ TM Transfer Frame operations — encode, decode, inspect, and analyze CCSDS TM T
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 
-Stream commands (`gaps`, `demux`) require `--frame-len` to split the input into fixed-length frames.
+Stream commands (`gaps`, `demux`) require `--frame-len` to split the input into fixed-length frames. They read as they go, so they work on a live pipe and on a capture larger than memory.
 
 ---
 
@@ -147,7 +147,9 @@ Raw Frame (13 bytes)
 
 ## astro tm gaps
 
-Scan a stream of concatenated TM Transfer Frames and report any gaps or discontinuities in the Master Channel (MC) and Virtual Channel (VC) frame counters. Useful for detecting lost frames in a capture.
+Scan a stream of concatenated TM Transfer Frames and report any gaps in the Master Channel (MC) and Virtual Channel (VC) frame counters. Each gap line gives the number of frames that went missing, not just that the counter jumped.
+
+Both counters are eight bits and the arithmetic is modular, so 254 → 255 → 1 reports the one frame that was lost, not 254 of them. Counters are tracked per spacecraft: a capture holding two SCIDs is compared within each, never across them.
 
 ```
 astro tm gaps [file] [flags]

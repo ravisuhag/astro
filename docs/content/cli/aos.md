@@ -1,6 +1,6 @@
 ---
 title: astro aos
-description: AOS transfer frames — encode, decode, inspect.
+description: AOS transfer frames — encode, decode, inspect, gaps, demux.
 order: 22
 ---
 
@@ -13,6 +13,8 @@ AOS Transfer Frame operations — encode, decode, inspect, and generate AOS Tran
 | `astro aos encode` | Construct an AOS Transfer Frame from fields |
 | `astro aos decode` | Decode an AOS Transfer Frame into header fields and data |
 | `astro aos inspect` | Annotated frame breakdown with hex dump |
+| `astro aos gaps` | Detect VC counter gaps in a frame stream |
+| `astro aos demux` | Filter frames by Virtual Channel ID |
 | `astro aos gen` | Generate synthetic AOS Transfer Frames |
 
 ## Common Flags
@@ -24,6 +26,8 @@ AOS Transfer Frame operations — encode, decode, inspect, and generate AOS Tran
 | `--fecf` | `false` | Toggle the 2-byte CRC-16 Frame Error Control Field |
 | `--ocf` (decode/inspect) | `false` | Frame includes a 4-byte OCF |
 | `--insert-len` | `0` | Insert zone length in bytes |
+
+Stream commands (`gaps`, `demux`) require `--frame-len`, because an AOS frame carries no length field — the length is a managed parameter agreed before the pass. They read as they go, so they work on a live pipe and on a capture larger than memory.
 
 ---
 
@@ -119,6 +123,72 @@ astro aos encode --scid 50 --vcid 1 --data 0102030405 --fecf | astro aos inspect
 
 # Inspect a binary file
 astro aos inspect --input bin frame.bin
+```
+
+---
+
+## astro aos gaps
+
+Scan a stream of concatenated AOS Transfer Frames and report gaps in the Virtual Channel frame counter. Each gap line gives the number of frames that went missing, not just that the counter jumped.
+
+AOS has no Master Channel frame count, so only virtual channel gaps are reported. Where a frame sets the VC Frame Count Usage Flag, the 4-bit cycle is folded in above the 24-bit count and the pair is treated as one 28-bit counter ([§4.1.2.5.5.3](https://public.ccsds.org/Pubs/732x0b4.pdf)), so a wrap of the count reads as contiguous rather than as sixteen million missing frames.
+
+Counters are tracked per spacecraft. A capture holding two SCIDs is compared within each, never across them.
+
+```
+astro aos gaps [file] [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | `hex` | Input format: `hex` or `bin` |
+| `--frame-len` | *(required)* | Fixed frame length in bytes |
+| `--fecf` | `false` | Frames include a 2-byte FECF |
+| `--ocf` | `false` | Frames include a 4-byte OCF |
+| `--insert-len` | `0` | Insert zone length in bytes |
+
+**Examples**
+
+```bash
+# Detect gaps in a binary capture
+astro aos gaps --input bin --frame-len 1024 capture.bin
+
+# Frames carrying an insert zone and FECF
+astro aos gaps --input bin --frame-len 1115 --insert-len 8 --fecf capture.bin
+```
+
+---
+
+## astro aos demux
+
+Demultiplex a stream of concatenated AOS Transfer Frames, passing on only the frames matching the given Virtual Channel ID.
+
+```
+astro aos demux [file] [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | `hex` | Input format: `hex` or `bin` |
+| `--format` | `text` | Output format: `text`, `json`, or `hex` |
+| `--frame-len` | *(required)* | Fixed frame length in bytes |
+| `--vcid` | *(required)* | Virtual Channel ID to filter (0-63) |
+| `--fecf` | `false` | Frames include a 2-byte FECF |
+| `--ocf` | `false` | Frames include a 4-byte OCF |
+| `--insert-len` | `0` | Insert zone length in bytes |
+
+**Examples**
+
+```bash
+# Extract VCID 2 frames from a binary capture
+astro aos demux --input bin --frame-len 1024 --vcid 2 capture.bin
+
+# Demux and pipe back into decode
+astro aos demux --input bin --frame-len 1024 --vcid 0 --format hex capture.bin | astro aos decode --input hex --format json
 ```
 
 ---

@@ -99,6 +99,10 @@ astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input h
 
 Scan a raw byte stream for CCSDS Attached Sync Markers (0x1ACFFC1D) and extract aligned CADUs of a given length.
 
+A CADU stream carries no length field, so alignment is found by searching for the marker. Octets outside any CADU are skipped and counted rather than treated as an error: a capture normally begins part way through a frame, and there is noise between passes. Alignment is reacquired at the next marker, so junk in the middle costs only the frames it overwrote.
+
+The scan is incremental, so it works on a live pipe and on a capture larger than memory.
+
 ```
 astro cadu sync [file] [flags]
 ```

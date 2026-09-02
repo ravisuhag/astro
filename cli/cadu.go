@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -194,13 +195,17 @@ func caduSyncCmd() *cobra.Command {
 			if frameLen <= 0 {
 				return fmt.Errorf("--frame-len is required and must be positive")
 			}
-
-			data, err := readInput(args, inputFmt)
-			if err != nil {
+			if err := checkFrameFormat(outputFmt); err != nil {
 				return err
 			}
 
-			return syncCADUs(data, frameLen, outputFmt)
+			source, closer, err := openInput(args, inputFmt)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = closer.Close() }()
+
+			return syncCADUs(source, frameLen, outputFmt)
 		},
 	}
 
@@ -263,38 +268,32 @@ func printCADUInspect(data []byte) {
 	fmt.Print(hexDump(data, "  "))
 }
 
-func syncCADUs(data []byte, frameLen int, outputFmt string) error {
+// syncCADUs finds frame alignment in a raw stream and extracts each CADU.
+//
+// A CADU stream carries no length field. CCSDS 131.0-B-5 attaches the sync
+// marker ahead of every codeblock and the receiver acquires alignment by
+// searching for it, so this searches too, and picks up again at the next
+// marker when alignment is lost. The reading is incremental: a live pipe
+// never reaches EOF, and a pass-length capture should not have to be resident
+// to be scanned.
+func syncCADUs(source io.Reader, frameLen int, outputFmt string) error {
 	asm := tmsc.DefaultASM()
+
 	found := 0
-	offset := 0
+	var skipped int64
 
-	for offset+frameLen <= len(data) {
-		// Search for ASM
-		idx := bytes.Index(data[offset:], asm)
-		if idx < 0 {
-			break
-		}
-
-		asmPos := offset + idx
-		if asmPos+frameLen > len(data) {
-			fmt.Fprintf(os.Stderr, "Warning: ASM at offset %d but insufficient data for full CADU (%d bytes needed, %d available)\n",
-				asmPos, frameLen, len(data)-asmPos)
-			break
-		}
-
-		cadu := data[asmPos : asmPos+frameLen]
+	handle := func(cadu []byte, offset int64) error {
 		found++
 
 		switch outputFmt {
 		case "json":
-			j := map[string]any{
+			b, err := json.Marshal(map[string]any{
 				"index":  found,
-				"offset": asmPos,
-				"asm":    hex.EncodeToString(cadu[:4]),
+				"offset": offset,
+				"asm":    hex.EncodeToString(cadu[:len(asm)]),
 				"cadu":   hex.EncodeToString(cadu),
 				"length": frameLen,
-			}
-			b, err := json.Marshal(j)
+			})
 			if err != nil {
 				return fmt.Errorf("encoding JSON output: %w", err)
 			}
@@ -302,16 +301,36 @@ func syncCADUs(data []byte, frameLen int, outputFmt string) error {
 		case "hex":
 			fmt.Println(hex.EncodeToString(cadu))
 		case "text":
-			fmt.Printf("--- CADU #%d (offset %d, %d bytes) ---\n", found, asmPos, frameLen)
-			fmt.Printf("  ASM: %s\n", hex.EncodeToString(cadu[:4]))
-			fmt.Printf("  Frame: %d bytes\n", frameLen-4)
+			fmt.Printf("--- CADU #%d (offset %d, %d bytes) ---\n", found, offset, frameLen)
+			fmt.Printf("  ASM: %s\n", hex.EncodeToString(cadu[:len(asm)]))
+			fmt.Printf("  Frame: %d bytes\n", frameLen-len(asm))
 		}
 
-		offset = asmPos + frameLen
+		return nil
+	}
+
+	// Octets between CADUs are not an error. A capture normally begins part
+	// way through a frame, and there is noise between passes.
+	noise := func(offset int64, n int) {
+		skipped += int64(n)
+	}
+
+	truncated := func(offset int64, n int) {
+		fmt.Fprintf(os.Stderr,
+			"Warning: sync marker at offset %d but only %d of %d octets follow, ignored\n",
+			offset, n, frameLen)
+	}
+
+	if err := streamMarked(source, asm, frameLen, handle, noise, truncated); err != nil {
+		return err
 	}
 
 	if outputFmt == "text" {
-		fmt.Printf("\nFound %d CADU(s) in %d bytes.\n", found, len(data))
+		fmt.Printf("\nFound %d CADU(s).\n", found)
+		if skipped > 0 {
+			fmt.Printf("%d octet(s) outside any CADU were skipped.\n", skipped)
+		}
 	}
+
 	return nil
 }

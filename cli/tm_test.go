@@ -102,14 +102,88 @@ func TestTMGapsDetectsSkippedFrame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gaps failed: %v", err)
 	}
-	if !strings.Contains(out, "Scanned 3 frame(s), found 2 gap(s).") {
-		t.Errorf("want 2 gaps (one MC, one VC), got:\n%s", out)
+	if !strings.Contains(out, "Scanned 3 frame(s), found 2 gap(s), 2 frame(s) missing.") {
+		t.Errorf("want 2 gaps (one MC, one VC) and 2 missing frames, got:\n%s", out)
 	}
 	if !strings.Contains(out, "MC gap:") {
 		t.Errorf("want an MC gap line, got:\n%s", out)
 	}
 	if !strings.Contains(out, "VC gap:") {
 		t.Errorf("want a VC gap line, got:\n%s", out)
+	}
+	// The gap is reported as a count of missing frames, not just as a
+	// discontinuity: one frame went missing on each counter.
+	if !strings.Contains(out, "1 frame(s) missing before MC=3") {
+		t.Errorf("want the MC gap sized, got:\n%s", out)
+	}
+}
+
+// A counter that skips far enough to wrap must report the short distance
+// forward, not the long way round. sdl.GapCounter does the modular
+// arithmetic; this checks the CLI actually routes through it.
+func TestTMGapsCountsMissingFramesAcrossWrap(t *testing.T) {
+	payload := []byte("frame-payload")
+	// 254 -> 255 -> 1 loses only the frame numbered 0.
+	stream, frameLen := tmStream(t,
+		buildTMFrame(t, 42, 0, 254, 254, payload),
+		buildTMFrame(t, 42, 0, 255, 255, payload),
+		buildTMFrame(t, 42, 0, 1, 1, payload),
+	)
+
+	out, err := runCLI(t, []byte(stream), "tm", "gaps",
+		"--input", "hex", "--frame-len", strconv.Itoa(frameLen))
+	if err != nil {
+		t.Fatalf("gaps failed: %v", err)
+	}
+	if !strings.Contains(out, "found 2 gap(s), 2 frame(s) missing.") {
+		t.Errorf("want one missing frame on each counter across the wrap, got:\n%s", out)
+	}
+}
+
+// Counts from two spacecraft are unrelated, so they must be tracked apart.
+// Interleaving them used to read as a gap on every frame.
+func TestTMGapsSeparatesSpacecraft(t *testing.T) {
+	payload := []byte("frame-payload")
+	stream, frameLen := tmStream(t,
+		buildTMFrame(t, 42, 0, 0, 0, payload),
+		buildTMFrame(t, 99, 0, 40, 40, payload),
+		buildTMFrame(t, 42, 0, 1, 1, payload),
+		buildTMFrame(t, 99, 0, 41, 41, payload),
+	)
+
+	out, err := runCLI(t, []byte(stream), "tm", "gaps",
+		"--input", "hex", "--frame-len", strconv.Itoa(frameLen))
+	if err != nil {
+		t.Fatalf("gaps failed: %v", err)
+	}
+	if !strings.Contains(out, "Scanned 4 frame(s), found 0 gap(s).") {
+		t.Errorf("want no gaps across two spacecraft, got:\n%s", out)
+	}
+	if !strings.Contains(out, "2 spacecraft seen") {
+		t.Errorf("want the two spacecraft noted, got:\n%s", out)
+	}
+}
+
+// A frame length above maxUnitHeader must work. The sizer path used for
+// variable-length packets gives up after 64 octets of header probing, so
+// fixed-length frames take their own reader.
+func TestTMGapsLongFrames(t *testing.T) {
+	payload := make([]byte, 300)
+	stream, frameLen := tmStream(t,
+		buildTMFrame(t, 42, 0, 0, 0, payload),
+		buildTMFrame(t, 42, 0, 1, 1, payload),
+	)
+	if frameLen <= 64 {
+		t.Fatalf("frame length %d does not exercise the long-frame path", frameLen)
+	}
+
+	out, err := runCLI(t, []byte(stream), "tm", "gaps",
+		"--input", "hex", "--frame-len", strconv.Itoa(frameLen))
+	if err != nil {
+		t.Fatalf("gaps failed on %d-octet frames: %v", frameLen, err)
+	}
+	if !strings.Contains(out, "Scanned 2 frame(s), found 0 gap(s).") {
+		t.Errorf("want both long frames scanned, got:\n%s", out)
 	}
 }
 

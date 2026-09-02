@@ -161,6 +161,290 @@ func TestStreamUnitsIsIncremental(t *testing.T) {
 	_ = pipeWriter.Close()
 }
 
+func TestStreamFixedSplitsOnLength(t *testing.T) {
+	input := []byte{1, 1, 2, 2, 3, 3}
+	var got [][]byte
+
+	err := streamFixed(bytes.NewReader(input), 2,
+		func(unit []byte) error {
+			got = append(got, append([]byte{}, unit...))
+			return nil
+		}, nil)
+	if err != nil {
+		t.Fatalf("streamFixed() = %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d units, want 3", len(got))
+	}
+	if got[2][0] != 3 {
+		t.Errorf("third unit = %v, want it to start with 3", got[2])
+	}
+}
+
+func TestStreamFixedReportsTrailingOctets(t *testing.T) {
+	input := []byte{1, 1, 2}
+	trailing := 0
+
+	err := streamFixed(bytes.NewReader(input), 2,
+		func([]byte) error { return nil },
+		func(n int) { trailing = n })
+	if err != nil {
+		t.Fatalf("streamFixed() = %v", err)
+	}
+	if trailing != 1 {
+		t.Errorf("trailing = %d, want 1", trailing)
+	}
+}
+
+// A frame longer than maxUnitHeader must still read. The sizer path probes at
+// most maxUnitHeader octets for a length, which a fixed frame length routinely
+// exceeds; streamFixed is not allowed to inherit that ceiling.
+func TestStreamFixedAcceptsFramesLongerThanAHeader(t *testing.T) {
+	const size = maxUnitHeader * 4
+	input := bytes.Repeat([]byte{0xA5}, size*2)
+	units := 0
+
+	err := streamFixed(bytes.NewReader(input), size,
+		func(unit []byte) error {
+			if len(unit) != size {
+				t.Errorf("unit length = %d, want %d", len(unit), size)
+			}
+			units++
+			return nil
+		}, nil)
+	if err != nil {
+		t.Fatalf("streamFixed() = %v", err)
+	}
+	if units != 2 {
+		t.Errorf("got %d units, want 2", units)
+	}
+}
+
+func TestStreamFixedEmptyInput(t *testing.T) {
+	err := streamFixed(bytes.NewReader(nil), 4,
+		func([]byte) error {
+			t.Error("a handler ran on empty input")
+			return nil
+		}, nil)
+	if err != nil {
+		t.Fatalf("streamFixed() = %v", err)
+	}
+}
+
+// The live-pipe property for fixed-length frames: a frame is handed over the
+// moment its last octet arrives, not when the input ends. A
+// read-everything implementation blocks here forever.
+func TestStreamFixedIsIncremental(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	delivered := make(chan int, 2)
+
+	go func() {
+		_ = streamFixed(pipeReader, 2,
+			func(unit []byte) error {
+				delivered <- int(unit[0])
+				return nil
+			}, nil)
+	}()
+
+	if _, err := pipeWriter.Write([]byte{0x07, 0x08}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-delivered:
+		if got != 7 {
+			t.Errorf("first frame = %d, want 7", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the first frame was not delivered while the input was still open")
+	}
+
+	_ = pipeWriter.Close()
+}
+
+var testMarker = []byte{0x1A, 0xCF, 0xFC, 0x1D}
+
+// markedStream builds a stream of size-octet units, each opening with the
+// marker, with the given noise spliced in front.
+func markedStream(noise []byte, size, count int) []byte {
+	stream := append([]byte{}, noise...)
+	for i := 0; i < count; i++ {
+		unit := make([]byte, size)
+		copy(unit, testMarker)
+		unit[len(testMarker)] = byte(i)
+		stream = append(stream, unit...)
+	}
+	return stream
+}
+
+func TestStreamMarkedFindsEveryUnit(t *testing.T) {
+	const size = 8
+	var offsets []int64
+
+	err := streamMarked(bytes.NewReader(markedStream(nil, size, 3)), testMarker, size,
+		func(unit []byte, offset int64) error {
+			offsets = append(offsets, offset)
+			return nil
+		}, nil, nil)
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+	if len(offsets) != 3 {
+		t.Fatalf("got %d units, want 3", len(offsets))
+	}
+	for i, offset := range offsets {
+		if want := int64(i * size); offset != want {
+			t.Errorf("unit %d at offset %d, want %d", i, offset, want)
+		}
+	}
+}
+
+// A capture normally starts part way through a frame, so leading octets that
+// are not a unit are skipped rather than failed, and the offsets stay
+// absolute.
+func TestStreamMarkedSkipsLeadingNoise(t *testing.T) {
+	const size = 8
+	noise := []byte{0xDE, 0xAD, 0xBE}
+	var offsets []int64
+	skippedTotal := 0
+
+	err := streamMarked(bytes.NewReader(markedStream(noise, size, 2)), testMarker, size,
+		func(unit []byte, offset int64) error {
+			offsets = append(offsets, offset)
+			return nil
+		},
+		func(offset int64, n int) { skippedTotal += n },
+		nil)
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+	if len(offsets) != 2 {
+		t.Fatalf("got %d units, want 2", len(offsets))
+	}
+	if offsets[0] != int64(len(noise)) {
+		t.Errorf("first unit at offset %d, want %d", offsets[0], len(noise))
+	}
+	if skippedTotal != len(noise) {
+		t.Errorf("skipped %d octets, want %d", skippedTotal, len(noise))
+	}
+}
+
+// Alignment is reacquired at the next marker: junk in the middle of a stream
+// costs the units it overwrote and nothing more.
+func TestStreamMarkedResyncsAfterJunk(t *testing.T) {
+	const size = 8
+	stream := markedStream(nil, size, 1)
+	stream = append(stream, bytes.Repeat([]byte{0x00}, 5)...)
+	stream = append(stream, markedStream(nil, size, 1)...)
+
+	units := 0
+	err := streamMarked(bytes.NewReader(stream), testMarker, size,
+		func([]byte, int64) error {
+			units++
+			return nil
+		}, nil, nil)
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+	if units != 2 {
+		t.Errorf("got %d units, want 2 either side of the junk", units)
+	}
+}
+
+// A marker split across two reads must still be found. The reader keeps the
+// last few octets of each window for exactly this.
+func TestStreamMarkedFindsAMarkerAcrossAReadBoundary(t *testing.T) {
+	const size = 6
+	// Noise whose length leaves the marker straddling a window edge.
+	stream := markedStream(bytes.Repeat([]byte{0x00}, size-2), size, 1)
+
+	units := 0
+	err := streamMarked(bytes.NewReader(stream), testMarker, size,
+		func([]byte, int64) error {
+			units++
+			return nil
+		}, nil, nil)
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+	if units != 1 {
+		t.Errorf("got %d units, want 1", units)
+	}
+}
+
+func TestStreamMarkedReportsATruncatedUnit(t *testing.T) {
+	const size = 8
+	stream := append([]byte{}, testMarker...)
+	stream = append(stream, 0x01)
+
+	truncated := -1
+	err := streamMarked(bytes.NewReader(stream), testMarker, size,
+		func([]byte, int64) error {
+			t.Error("an incomplete unit was handed over")
+			return nil
+		}, nil,
+		func(offset int64, n int) { truncated = n })
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+	if truncated != len(stream) {
+		t.Errorf("truncated = %d, want %d", truncated, len(stream))
+	}
+}
+
+func TestStreamMarkedNoMarkerAtAll(t *testing.T) {
+	err := streamMarked(bytes.NewReader(bytes.Repeat([]byte{0x00}, 32)), testMarker, 8,
+		func([]byte, int64) error {
+			t.Error("a unit was found in a stream with no marker")
+			return nil
+		}, nil, nil)
+	if err != nil {
+		t.Fatalf("streamMarked() = %v", err)
+	}
+}
+
+func TestStreamMarkedRejectsBadArguments(t *testing.T) {
+	nop := func([]byte, int64) error { return nil }
+
+	if err := streamMarked(bytes.NewReader(nil), nil, 8, nop, nil, nil); err == nil {
+		t.Error("an empty marker was accepted")
+	}
+	if err := streamMarked(bytes.NewReader(nil), testMarker, 2, nop, nil, nil); err == nil {
+		t.Error("a unit shorter than the marker was accepted")
+	}
+	if err := streamMarked(bytes.NewReader(nil), testMarker, maxStreamUnit+1, nop, nil, nil); err == nil {
+		t.Error("a unit past the maximum was accepted")
+	}
+}
+
+// The live-pipe property for marker framing.
+func TestStreamMarkedIsIncremental(t *testing.T) {
+	const size = 8
+	pipeReader, pipeWriter := io.Pipe()
+	delivered := make(chan int64, 2)
+
+	go func() {
+		_ = streamMarked(pipeReader, testMarker, size,
+			func(unit []byte, offset int64) error {
+				delivered <- offset
+				return nil
+			}, nil, nil)
+	}()
+
+	if _, err := pipeWriter.Write(markedStream(nil, size, 1)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-delivered:
+		if got != 0 {
+			t.Errorf("first unit at offset %d, want 0", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the first unit was not delivered while the input was still open")
+	}
+
+	_ = pipeWriter.Close()
+}
+
 func TestHexFilterStripsLayout(t *testing.T) {
 	source := strings.NewReader("de ad\nbe\tef\r\n")
 
