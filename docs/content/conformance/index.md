@@ -13,6 +13,10 @@ than a silent one, and it is the first thing a mission assurance reader looks
 for. Rows checked against a standard's prose rather than a published test
 vector are marked as derived.
 
+Start with [how this is verified](/docs/reference/verification). It says how much
+of this rests on a published vector, how much on a reading of the clause, and
+what has never been tested against another implementation.
+
 | Package | Go | |
 |---|---|---|
 | [Space Packet Protocol](/conformance/spp) | `pkg/spp` | [Protocol](/protocols/transport/spp) |

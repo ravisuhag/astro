@@ -20,11 +20,10 @@ Spacecraft                                    Ground
 ──────────                                    ──────
 housekeeping ──┐                          ┌── housekeeping
    APID 100    │                          │      APID 100
-               ├─► VC0 ─┐        ┌─► VC0 ─┤
+               └─► VC0 ─┐        ┌─► VC0 ─┘
                         │        │
 science ───────┐        ├► CADU ─┤        ┌── science
-   APID 200    ├─► VC1 ─┘        └─► VC1 ─┤      APID 200
-               │                          │
+   APID 200    └─► VC1 ─┘        └─► VC1 ─┘      APID 200
 ```
 
 Two applications, two virtual channels, one physical link. Housekeeping gets the higher priority.
@@ -161,4 +160,7 @@ Five packets in, five out. Note the arithmetic: two 408-byte science packets do 
 
 - [Handle a lossy link](/docs/guides/lossy-link), what happens when frames get dropped
 - [Build an uplink](/docs/guides/uplink), the other direction, with retransmission
+- [A full-duplex link](/docs/guides/full-duplex), this chain with the CLCW riding home, which is what a real mission runs
+- [Build a PUS service model](/docs/guides/pus-services), for what belongs inside these packets
+- [A high-rate downlink with AOS](/docs/guides/aos-high-rate), when TM's 8-bit counter is not enough
 - [TM protocol page](/protocols/data-link/tmdl) | [TMSC](/protocols/coding/tmsc) | [SPP](/protocols/transport/spp)

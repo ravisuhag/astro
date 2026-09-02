@@ -2,7 +2,7 @@
 title: Compose a link
 short: Compose
 description: One configuration builds both ends of a downlink or an uplink, so they cannot drift apart.
-order: 4
+order: 14
 ---
 
 [Build a downlink](/docs/guides/downlink) wires the layers by hand, which is what you want when you are learning where the boundaries are. This page is the short version: [`pkg/stack`](https://github.com/ravisuhag/astro/tree/main/pkg/stack) takes one configuration value and builds both the spacecraft side and the ground side from it.
@@ -75,6 +75,46 @@ for packet, err := range receiver.Packets(0) {
 ```
 
 `NewSender` and `NewReceiver` build the same objects wired the same way. They differ only in which direction data moves, which is what guarantees the two ends match.
+
+## The operational control field
+
+One setting needs more than a boolean. `OCF: true` reserves four octets in every frame, and something has to say what goes in them:
+
+```go
+config := stack.Downlink{
+    SpacecraftID: 42,
+    FrameLength:  1115,
+    FECF:         true,
+    OCF:          true,
+    Channels:     []stack.VC{{ID: 0, Priority: 1}},
+}
+
+sender, err := stack.NewSender(config, stack.WithOCF(func() []byte {
+    field, err := onboard.CLCW(0)
+    if err != nil {
+        return nil
+    }
+    return field
+}))
+```
+
+`NewSender` returns `ErrMissingOCF` if you set `OCF` and pass no supplier, and `ErrInvalidConfig` if you pass a supplier without setting `OCF`. Neither is fussiness. Four zero octets decode as a perfectly valid CLCW reporting V(R)=0, so a composer that invented them would hand the ground a spacecraft that appears to acknowledge nothing, and [FOP-1](/protocols/data-link/cop) would stop after one window's worth of commands with nothing reporting a fault.
+
+The supplier is called once per frame, and must return exactly four octets. A wrong length fails the frame rather than being padded, because a receiver reads the field by position.
+
+On the ground, `NextOCF` and `OCFs` drain what arrived:
+
+```go
+for field := range receiver.OCFs() {
+    if err := commander.AcceptCLCW(field); err != nil {
+        return err
+    }
+}
+```
+
+They are queued rather than reduced to a latest value, because a CLCW's flags are transient: a Retransmit that sets and clears between two reads is exactly the report FOP-1 needed. The queue holds `DefaultBuffer` fields and then drops the oldest, so a caller that never reads it leaks nothing.
+
+[The full-duplex guide](/docs/guides/full-duplex) is this loop end to end.
 
 ## What the shared config buys
 
@@ -149,8 +189,23 @@ They need their own packet service, because the bypass flag is stamped into the 
 
 `Accept` returns whether FARM-1 took the frame. A retransmission of something already accepted, or a frame outside the window, is exactly what the procedure exists to filter, so that comes back as `false`, not as an error. An error means the CLTU would not decode at all.
 
+## Things that will bite you
+
+**`Send` succeeding means queued, not transmitted.** Nothing reaches a CADU until a frame fills or you call `Flush`, so a pass that ends without a flush loses whatever was still buffered. This is the most common mistake with the composer and with the layer underneath.
+
+**`Next` returning false means "not yet", not "never".** A packet split across frames does not appear until its last frame has arrived. Treating false as end-of-stream drops the packet you were waiting for.
+
+**`Accept` treats an undecodable CADU as an error.** Only the caller can tell a corrupt frame from a misconfigured channel, so a station that wants to keep going has to log it and move to the next CADU itself.
+
+**`OCF: true` needs `WithOCF`.** `NewSender` refuses the configuration otherwise, on purpose: see above.
+
+**One `Sender` is one ordered stream.** Neither end is safe for concurrent use, because the frame counters say the frames are in an order. Serialising access is the caller's job.
+
+**The composer cannot express everything, and should not.** Reed-Solomon, a secondary header, a non-Space-Packet payload: each is a reason to drop to `pkg/tmdl` for that link, not a reason to grow this package until it can express them.
+
 ## Next
 
 - [Build a downlink](/docs/guides/downlink), the same chain with every layer visible
 - [Build an uplink](/docs/guides/uplink), the same commanding chain with every layer visible
+- [A full-duplex link](/docs/guides/full-duplex), the same chain joined to an uplink, with the CLCW in the OCF
 - [Handle a lossy link](/docs/guides/lossy-link), what happens when frames get dropped

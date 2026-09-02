@@ -1,9 +1,20 @@
 {
-  "title": "Building things",
+  "title": "Guides",
   "pages": [
     "downlink",
     "uplink",
     "lossy-link",
-    "composed-downlink"
+    "full-duplex",
+    "pus-services",
+    "xtce-database",
+    "file-downlink",
+    "time-correlation",
+    "aos-high-rate",
+    "secure-a-link",
+    "compression",
+    "dtn-deep-space",
+    "sle-ground-station",
+    "composed-downlink",
+    "debug-a-capture"
   ]
 }

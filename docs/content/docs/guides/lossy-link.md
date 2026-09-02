@@ -115,8 +115,22 @@ One lost frame cost exactly the packets that lived in it. Everything after resyn
 
 **Frame length** trades overhead against loss granularity. Shorter frames lose less when one goes missing, but pay the header and parity cost more often.
 
+## Things that will bite you
+
+**Reed-Solomon can "correct" into wrong data.** Past its correction capacity it either fails loudly or produces a clean-looking codeword that is not what was sent. That second case is the reason the frame CRC exists as an independent check, and it is why `RS failures: 0` is not on its own evidence that the data is good.
+
+**A corrupted frame is counted twice.** It shows up as a CRC reject and then again as a counter gap, because the frame it would have been is missing from the sequence. Adding the two together double-counts the loss.
+
+**An MC gap with no VC gap is not your problem.** It means the missing frame belonged to a different virtual channel. Alarming on the master channel count alone produces alerts for streams you are not watching.
+
+**The FHP is per frame, not per packet.** After a loss the receiver waits for the next frame carrying a packet start. A run of frames in the middle of one large packet carries no usable pointer, so recovery can take several frames longer than the one that was lost.
+
+**Randomization is not error correction.** It keeps the receiver's clock locked, which prevents errors rather than fixing them, and getting it wrong on one end produces garbage that Reed-Solomon cannot rescue. The [TC randomizer is not the TM randomizer](/protocols/coding/tcsc#gotchas).
+
 ## Next
 
+- [Build an uplink](/docs/guides/uplink), where loss *is* recoverable, by asking again
+- [Debug a real capture](/docs/guides/debug-a-capture), the same failures seen from a terminal with no documentation
+- [Store and forward for deep space](/docs/guides/dtn-deep-space), for when the link is not there at all
 - [TMSC protocol page](/protocols/coding/tmsc), Reed-Solomon, interleaving, virtual fill
 - [TM protocol page](/protocols/data-link/tmdl), the FHP and the frame counters
-- [Build an uplink](/docs/guides/uplink), where loss *is* recoverable, by asking again

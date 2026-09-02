@@ -20,12 +20,12 @@ Ground                                          Spacecraft
 ──────                                          ──────────
 critical ──► VC0 ──┐                       ┌──► VC0 ──► critical
   APID 100         │                       │
-                   ├─► FOP-1 ─► CLTU ──────┤ FARM-1
+                   ├─► FOP-1 ─► CLTU ──────┤    FARM-1
 routine  ──► VC1 ──┘                       │
   APID 200                                 └──► VC1 ──► routine
 
-              ◄──────── CLCW ─────────────────┘
-                   (rides home on TM)
+        FOP-1 ◄──────── CLCW ◄──────────────── FARM-1
+                    rides home on TM
 ```
 
 Two virtual channels, both using Type-A frames, sequence controlled, so anything lost gets sent again.
@@ -156,12 +156,14 @@ FOP-1 after CLCW processing:
 
 **Set V(R) will not clear a lockout.** Only Unlock does. If the spacecraft reports `Lockout: Yes`, send an Unlock first, read V(R) from the next CLCW, and set V(S) to match. Doing it in the other order looks like it should work and does not.
 
-**A CLCW rides home on the downlink.** It goes in the Operational Control Field of a [TM frame](/protocols/data-link/tmdl), which means your downlink config needs `HasOCF: true`. The downlink example turns it off, so the two examples are not directly composable.
+**A CLCW rides home on the downlink.** It goes in the Operational Control Field of a [TM frame](/protocols/data-link/tmdl), which means your downlink config needs `HasOCF: true`. The downlink example turns it off, so the two examples are not directly composable. [The full-duplex guide](/docs/guides/full-duplex) joins them.
 
 **Type-B frames skip everything.** `bypass=true` gets a command through even when COP-1 is wedged. That is what it is for. You lose the ordering guarantee, so use it for emergencies and recovery, not routine traffic.
 
 ## Next
 
+- [A full-duplex link](/docs/guides/full-duplex), this chain joined to a downlink, so the CLCW actually comes back
 - [Handle a lossy link](/docs/guides/lossy-link), the downlink under real loss
+- [Encrypt and authenticate a link](/docs/guides/secure-a-link), because a forged command is the real threat here
 - [COP-1 protocol page](/protocols/data-link/cop), both state machines in full
 - [TC](/protocols/data-link/tcdl) | [TCSC](/protocols/coding/tcsc)

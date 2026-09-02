@@ -1,8 +1,9 @@
 {
-  "title": "Guides",
+  "title": "Docs",
   "pages": [
     "start",
     "guides",
+    "reference",
     "contribute"
   ]
 }
