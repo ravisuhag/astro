@@ -1,4 +1,9 @@
 {
   "title": "Building things",
-  "pages": ["downlink", "uplink", "lossy-link"]
+  "pages": [
+    "downlink",
+    "uplink",
+    "lossy-link",
+    "composed-downlink"
+  ]
 }
