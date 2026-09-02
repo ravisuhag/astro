@@ -422,9 +422,10 @@ func TestComparisonAgainstSignedField(t *testing.T) {
 	}
 }
 
-// TestMatchRefusesUnsupportedCriteria checks that a BooleanExpression is
+// TestMatchRefusesUnsupportedCriteria checks that a CustomAlgorithm is
 // reported rather than quietly treated as false, which would silently
-// misroute packets.
+// misroute packets. It is the one criteria form that stays out of reach: the
+// algorithm is by definition not in the file.
 func TestMatchRefusesUnsupportedCriteria(t *testing.T) {
 	db := parse(t, wrap("Sat", `
   <ParameterTypeSet>
@@ -444,9 +445,7 @@ func TestMatchRefusesUnsupportedCriteria(t *testing.T) {
       <EntryList><ParameterRefEntry parameterRef="Payload"/></EntryList>
       <BaseContainer containerRef="Base">
         <RestrictionCriteria>
-          <BooleanExpression>
-            <Condition><ParameterInstanceRef parameterRef="ID"/><ComparisonOperator>==</ComparisonOperator><Value>1</Value></Condition>
-          </BooleanExpression>
+          <CustomAlgorithm name="PickIt"/>
         </RestrictionCriteria>
       </BaseContainer>
     </SequenceContainer>
@@ -454,7 +453,7 @@ func TestMatchRefusesUnsupportedCriteria(t *testing.T) {
 
 	base, _ := db.FindContainer("/Sat/Base")
 	if _, err := db.MatchFrom(base, []byte{1, 0}); !errors.Is(err, xtce.ErrUnsupportedCriteria) {
-		t.Errorf("MatchFrom(BooleanExpression) = %v, want ErrUnsupportedCriteria", err)
+		t.Errorf("MatchFrom(CustomAlgorithm) = %v, want ErrUnsupportedCriteria", err)
 	}
 }
 

@@ -146,8 +146,8 @@ a packet layout and read it. The full list is in
 Elements this package does not model are not silently dropped where dropping
 them would mislead. An unmodeled entry kind still occupies its place in an
 EntryList, because removing it would make the surrounding entries look adjacent
-when they are not. `IncludeCondition`, `BooleanExpression` and `CustomAlgorithm`
-are kept as raw XML so a caller can parse them.
+when they are not. `IncludeCondition` and `CustomAlgorithm` are kept as raw XML
+so a caller can parse them.
 
 ## No XSD validation
 
@@ -379,13 +379,14 @@ depend on the packet:
 | `referenceLocation="containerEnd"` or `"nextEntry"` | a forward reference that one pass cannot resolve |
 | entry kinds the model folds into `EntryOther` | their width is not modeled, so everything after them would be misplaced |
 
-`Match` refuses a `BooleanExpression` or a `CustomAlgorithm` in the criteria,
-and a `Comparison` with a non-zero `instance`, rather than quietly reading them
-as false — a criterion silently treated as false misroutes packets.
+`Match` refuses a `CustomAlgorithm` in the criteria, and a `Comparison` or
+`Condition` with a non-zero `instance`, rather than quietly reading them as
+false — a criterion silently treated as false misroutes packets. An algorithm
+is not in the file, and a non-zero instance is a value from another packet,
+which one packet cannot answer.
 
 Unsupported encodings are reported the same way: `MILSTD_1750A` and the decimal
-float forms, IEEE 754 widths other than 16, 32 and 64, and
-`MathOperationCalibrator`.
+float forms, and IEEE 754 widths other than 16, 32 and 64.
 
 Splines are limited the same way. Order 1 is a straight line between points,
 which is what a measured calibration curve is. Higher orders are refused

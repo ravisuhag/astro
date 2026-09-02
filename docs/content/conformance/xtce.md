@@ -101,7 +101,7 @@ Values inside a covered element still have to parse.
 | `DefaultCalibrator` | Supported | On integer and float encodings. |
 | `PolynomialCalibrator` | Supported | All terms, with coefficient and exponent. |
 | `SplineCalibrator` | Supported | All points, plus order and the extrapolate flag. |
-| `MathOperationCalibrator` | Opaque | Kept as raw XML, and `Calibrator.Kind()` reports it, so a caller is not told the type has no calibrator when it has one this package cannot evaluate. |
+| `MathOperationCalibrator` | Supported | The postfix expression is modeled in document order and evaluated. 47 of the 49 operators in `MathOperatorsType` are implemented; `~` and `div` are refused because the schema's definitions of them contradict themselves. `ParameterInstanceRefOperand` needs a value source, supplied through `ApplyWith`. |
 | `ContextCalibratorList` | Opaque | Calibration that depends on another parameter's value, kept as raw XML. `DataEncoding.HasContextCalibrators()` marks its presence, so a consumer knows the default curve alone may be wrong for a given packet. |
 
 ## Table A-6: Containers
@@ -123,8 +123,11 @@ Values inside a covered element still have to parse.
 | `IncludeCondition` | Opaque | Raw XML. `Layout` places the entry regardless; a caller that needs the condition can parse it. |
 | `TimeAssociation` | Ignored | |
 | `BaseContainer` | Supported | The reference is resolved and checked for cycles. |
-| `BaseContainer/RestrictionCriteria` | Yes | `Comparison` and `ComparisonList` are modeled and evaluated by `Match`. |
-| `RestrictionCriteria/BooleanExpression` | Opaque | Raw XML. A tree of ANDs and ORs needs its own evaluator; `Match` reports it rather than reading it as false. |
+| `BaseContainer/RestrictionCriteria` | Yes | `Comparison`, `ComparisonList` and `BooleanExpression` are modeled and evaluated by `Match`. |
+| `RestrictionCriteria/BooleanExpression` | Supported | `Condition`, `ANDedConditions` and `ORedConditions`, nested to any depth, evaluated by `Match`. |
+| `Condition` | Supported | Both forms of right-hand side: a `Value` literal, or a second `ParameterInstanceRef` so two fields can be compared against each other. |
+| `Condition/@useCalibratedValue` | Yes | Defaults to true, per `ParameterInstanceRefType`. |
+| `Condition/@instance` | Parsed | A value from another packet; `Match` reports a non-zero instance on either side rather than guessing. |
 | `RestrictionCriteria/CustomAlgorithm` | Opaque | Raw XML. By definition outside the file. |
 | `RestrictionCriteria/NextContainer` | Parsed | Deciding it needs the stream rather than one packet, so `Match` does not evaluate it. |
 | `Comparison/@useCalibratedValue` | Yes | Defaults to true, so a comparison is against the engineering value. |

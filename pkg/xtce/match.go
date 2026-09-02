@@ -161,8 +161,7 @@ func (s *SpaceSystem) satisfies(container *SequenceContainer, packet []byte) (bo
 		return len(criteria.ComparisonList.Comparisons) > 0, nil
 
 	case criteria.BooleanExpression != nil:
-		return false, fmt.Errorf("%w: container %q is selected by a BooleanExpression",
-			ErrUnsupportedCriteria, container.Name)
+		return s.satisfiesExpression(container, criteria.BooleanExpression, packet)
 
 	case criteria.CustomAlgorithm != nil:
 		return false, fmt.Errorf("%w: container %q is selected by a CustomAlgorithm",
@@ -188,42 +187,61 @@ func (s *SpaceSystem) compare(container *SequenceContainer, comparison *Comparis
 			ErrUnsupportedCriteria, comparison.Instance)
 	}
 
+	actual, field, present, err := s.readCriterionParameter(
+		container, comparison.ParameterRef, comparison.Calibrated(), packet)
+	if err != nil || !present {
+		return false, err
+	}
+	return evaluate(actual, comparison.Operator(), comparison.Value, field)
+}
+
+// readCriterionParameter reads the value of a parameter that restriction
+// criteria name.
+//
+// The parameter belongs to the container being inherited from, so it is read
+// from the base's layout: the derived container's own layout cannot be built
+// before we know the packet is one of those.
+//
+// present is false when the packet ends before the field. That is a failed
+// match rather than a broken database — a truncated packet simply is not the
+// container it was on its way to being — so it comes back without an error.
+func (s *SpaceSystem) readCriterionParameter(
+	container *SequenceContainer, ref string, calibrated bool, packet []byte,
+) (actual any, field Field, present bool, err error) {
 	base, err := container.owner.ResolveContainer(container.BaseContainer.ContainerRef)
 	if err != nil {
-		return false, err
+		return nil, Field{}, false, err
 	}
 	layout, err := base.Layout()
 	if err != nil {
-		return false, err
+		return nil, Field{}, false, err
 	}
 
-	param, err := container.owner.ResolveParameter(comparison.ParameterRef)
+	param, err := container.owner.ResolveParameter(ref)
 	if err != nil {
-		return false, err
+		return nil, Field{}, false, err
 	}
 
 	field, ok := findField(layout, param)
 	if !ok {
-		return false, fmt.Errorf("%w: container %q compares %q, which container %q does not carry",
-			ErrUnresolvedReference, container.Name, comparison.ParameterRef, base.Name)
+		return nil, Field{}, false, fmt.Errorf(
+			"%w: container %q tests %q, which container %q does not carry",
+			ErrUnresolvedReference, container.Name, ref, base.Name)
 	}
 
 	if uint(len(packet))*8 < field.BitOffset+field.BitSize {
-		// The packet is too short to hold the field being tested, so it cannot
-		// be this container. That is a failed match, not a broken database.
-		return false, nil
+		return nil, field, false, nil
 	}
 
 	value := extractField(bitReader{data: packet}, field)
 	if value.Err != nil {
-		return false, value.Err
+		return nil, field, false, value.Err
 	}
 
-	actual := value.Raw
-	if comparison.Calibrated() {
-		actual = value.Engineering
+	if calibrated {
+		return value.Engineering, field, true, nil
 	}
-	return evaluate(actual, comparison, field)
+	return value.Raw, field, true, nil
 }
 
 // findField returns the field a parameter occupies in a layout.
@@ -236,30 +254,31 @@ func findField(layout *Layout, param *Parameter) (Field, bool) {
 	return Field{}, false
 }
 
-// evaluate applies the comparison operator to a value and the criterion's
-// text.
-func evaluate(actual any, comparison *Comparison, field Field) (bool, error) {
-	operator := comparison.Operator()
-
+// evaluate applies a comparison operator to a decoded value and the
+// criterion's text.
+//
+// It serves both forms of criteria: a Comparison's value attribute and a
+// Condition's Value element are the same thing spelled two ways.
+func evaluate(actual any, operator string, text string, field Field) (bool, error) {
 	// Text compares as text. An enumeration's calibrated value is its label,
 	// and a label has no order, so only equality means anything there.
-	if text, ok := actual.(string); ok {
+	if got, ok := actual.(string); ok {
 		switch operator {
 		case "==":
-			return text == comparison.Value, nil
+			return got == text, nil
 		case "!=":
-			return text != comparison.Value, nil
+			return got != text, nil
 		default:
 			return false, fmt.Errorf("%w: operator %q on the text value %q",
-				ErrUnsupportedCriteria, operator, text)
+				ErrUnsupportedCriteria, operator, got)
 		}
 	}
 
 	// Binary compares as hex, again only for equality.
 	if raw, ok := actual.([]byte); ok {
-		want, err := hex.DecodeString(strings.TrimPrefix(comparison.Value, "0x"))
+		want, err := hex.DecodeString(strings.TrimPrefix(text, "0x"))
 		if err != nil {
-			return false, fmt.Errorf("%w: %q is not hex", ErrInvalidComparison, comparison.Value)
+			return false, fmt.Errorf("%w: %q is not hex", ErrInvalidComparison, text)
 		}
 		equal := len(raw) == len(want) && string(raw) == string(want)
 		switch operator {
@@ -281,7 +300,7 @@ func evaluate(actual any, comparison *Comparison, field Field) (bool, error) {
 	// so it is taken from the value that was actually decoded.
 	_, signed := actual.(int64)
 
-	want, err := parseComparisonValue(comparison.Value, field.BitSize, signed)
+	want, err := parseComparisonValue(text, field.BitSize, signed)
 	if err != nil {
 		return false, err
 	}

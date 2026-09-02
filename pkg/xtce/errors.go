@@ -84,4 +84,9 @@ var (
 	// ErrInvalidComparison indicates a Comparison whose value attribute cannot
 	// be read as the parameter's type.
 	ErrInvalidComparison = errors.New("comparison value cannot be parsed")
+
+	// ErrInvalidMathOperation indicates a MathOperationCalibrator whose
+	// postfix expression does not evaluate: an unbalanced stack, an operator
+	// outside the schema's set, or an operand outside an operator's domain.
+	ErrInvalidMathOperation = errors.New("math operation cannot be evaluated")
 )

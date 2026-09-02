@@ -27,7 +27,7 @@ func (c *Calibrator) Calibrate(raw float64) (float64, error) {
 	case c.Spline != nil:
 		return c.Spline.Apply(raw)
 	case c.MathOperation != nil:
-		return 0, fmt.Errorf("%w: MathOperationCalibrator", ErrUnsupportedCalibrator)
+		return c.MathOperation.Apply(raw)
 	default:
 		// A Calibrator element with nothing in it. The schema requires one of
 		// the three, so this is a malformed database rather than a plain

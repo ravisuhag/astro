@@ -367,18 +367,45 @@ func TestSplinePointsNeedNotBeSorted(t *testing.T) {
 	}
 }
 
-func TestMathOperationCalibratorIsRefused(t *testing.T) {
+// A MathOperationCalibrator on a field is evaluated like any other
+// calibrator, so the engineering value comes out of the expression.
+func TestMathOperationCalibratorIsApplied(t *testing.T) {
 	layout := oneField(t, `
     <FloatParameterType name="T" sizeInBits="64">
       <IntegerDataEncoding sizeInBits="8" encoding="unsigned">
         <DefaultCalibrator>
-          <MathOperationCalibrator><ValueOperand>1</ValueOperand></MathOperationCalibrator>
+          <MathOperationCalibrator>
+            <ThisParameterOperand/>
+            <ValueOperand>0.5</ValueOperand>
+            <Operator>*</Operator>
+          </MathOperationCalibrator>
         </DefaultCalibrator>
       </IntegerDataEncoding>
     </FloatParameterType>`)
 
-	if value := readOne(t, layout, []byte{5}); !errors.Is(value.Err, xtce.ErrUnsupportedCalibrator) {
-		t.Errorf("a MathOperationCalibrator gave %v, want ErrUnsupportedCalibrator", value.Err)
+	value := readOne(t, layout, []byte{5})
+	if value.Err != nil {
+		t.Fatalf("a MathOperationCalibrator gave %v", value.Err)
+	}
+	if value.Engineering != 2.5 {
+		t.Errorf("Engineering = %v, want 2.5", value.Engineering)
+	}
+}
+
+// An expression that does not balance is still refused, because there is no
+// value it could honestly produce.
+func TestMathOperationCalibratorRefusesAnUnbalancedExpression(t *testing.T) {
+	layout := oneField(t, `
+    <FloatParameterType name="T" sizeInBits="64">
+      <IntegerDataEncoding sizeInBits="8" encoding="unsigned">
+        <DefaultCalibrator>
+          <MathOperationCalibrator><ValueOperand>1</ValueOperand><ValueOperand>2</ValueOperand></MathOperationCalibrator>
+        </DefaultCalibrator>
+      </IntegerDataEncoding>
+    </FloatParameterType>`)
+
+	if value := readOne(t, layout, []byte{5}); !errors.Is(value.Err, xtce.ErrInvalidMathOperation) {
+		t.Errorf("an unbalanced expression gave %v, want ErrInvalidMathOperation", value.Err)
 	}
 }
 

@@ -227,14 +227,82 @@ type ContainerRef struct {
 // of them that must all hold, an arbitrary boolean expression, or an escape to
 // an external algorithm.
 //
-// The schema makes these a choice, so exactly one is set. The last two are
-// kept raw. A BooleanExpression is a tree of ANDs and ORs that would need its
-// own evaluator, and a CustomAlgorithm is by definition outside the file.
+// The schema makes these a choice, so exactly one is set. CustomAlgorithm is
+// kept raw, being by definition outside the file.
 type MatchCriteria struct {
-	Comparison        *Comparison     `xml:"http://www.omg.org/spec/XTCE/20180204 Comparison"`
-	ComparisonList    *ComparisonList `xml:"http://www.omg.org/spec/XTCE/20180204 ComparisonList"`
-	BooleanExpression *RawXML         `xml:"http://www.omg.org/spec/XTCE/20180204 BooleanExpression"`
-	CustomAlgorithm   *RawXML         `xml:"http://www.omg.org/spec/XTCE/20180204 CustomAlgorithm"`
+	Comparison        *Comparison        `xml:"http://www.omg.org/spec/XTCE/20180204 Comparison"`
+	ComparisonList    *ComparisonList    `xml:"http://www.omg.org/spec/XTCE/20180204 ComparisonList"`
+	BooleanExpression *BooleanExpression `xml:"http://www.omg.org/spec/XTCE/20180204 BooleanExpression"`
+	CustomAlgorithm   *RawXML            `xml:"http://www.omg.org/spec/XTCE/20180204 CustomAlgorithm"`
+}
+
+// BooleanExpression is the schema's BooleanExpressionType: one condition, or a
+// group of them joined by AND or by OR.
+//
+// The schema makes the three a choice, so exactly one is set.
+type BooleanExpression struct {
+	Condition       *Condition      `xml:"http://www.omg.org/spec/XTCE/20180204 Condition"`
+	ANDedConditions *ConditionGroup `xml:"http://www.omg.org/spec/XTCE/20180204 ANDedConditions"`
+	ORedConditions  *ConditionGroup `xml:"http://www.omg.org/spec/XTCE/20180204 ORedConditions"`
+}
+
+// ConditionGroup is the schema's ANDedConditionsType and ORedConditionsType,
+// which have the same shape: two or more members, each either a Condition or a
+// group of the opposite kind.
+//
+// Whether a group is an AND or an OR is decided by the element that holds it,
+// not by anything inside it, so one type serves both. The schema only nests
+// the opposite kind — an AND group holds OR groups — but both slices are here
+// because rejecting a document that nests the same kind would gain nothing:
+// AND and OR are each associative, so a nested AND inside an AND means what it
+// reads as.
+//
+// The members are kept in separate slices rather than in document order,
+// which loses nothing: both joins are commutative.
+type ConditionGroup struct {
+	Conditions      []Condition      `xml:"http://www.omg.org/spec/XTCE/20180204 Condition"`
+	ANDedConditions []ConditionGroup `xml:"http://www.omg.org/spec/XTCE/20180204 ANDedConditions"`
+	ORedConditions  []ConditionGroup `xml:"http://www.omg.org/spec/XTCE/20180204 ORedConditions"`
+}
+
+// Condition is the schema's ComparisonCheckType: a parameter tested against
+// either a value or another parameter.
+//
+// This is what a Condition has that a Comparison does not — the right-hand
+// side can be a second parameter, so a container can be selected by two
+// fields agreeing rather than by one field's value.
+type Condition struct {
+	// ParameterInstanceRefs holds the operands in document order. The schema
+	// names both sides ParameterInstanceRef, so they arrive in one slice: the
+	// first is the left-hand side, and a second, if there is one, is the
+	// right.
+	ParameterInstanceRefs []ParameterInstanceRef `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterInstanceRef"`
+	// ComparisonOperator is one of ==, !=, <, <=, > and >=. Unlike a
+	// Comparison's attribute, the schema requires this element, so there is no
+	// default to apply.
+	ComparisonOperator string `xml:"http://www.omg.org/spec/XTCE/20180204 ComparisonOperator"`
+	// Value is the right-hand side when it is a constant rather than a
+	// parameter. It is a pointer so an empty string can be told from an absent
+	// element.
+	Value *string `xml:"http://www.omg.org/spec/XTCE/20180204 Value"`
+}
+
+// Left returns the left-hand parameter reference, and whether there is one.
+func (c *Condition) Left() (ParameterInstanceRef, bool) {
+	if len(c.ParameterInstanceRefs) < 1 {
+		return ParameterInstanceRef{}, false
+	}
+	return c.ParameterInstanceRefs[0], true
+}
+
+// Right returns the right-hand parameter reference, and whether the
+// right-hand side is a parameter at all. When it is not, the comparison is
+// against Value.
+func (c *Condition) Right() (ParameterInstanceRef, bool) {
+	if len(c.ParameterInstanceRefs) < 2 {
+		return ParameterInstanceRef{}, false
+	}
+	return c.ParameterInstanceRefs[1], true
 }
 
 // ComparisonList is a set of comparisons that must all hold. The schema calls

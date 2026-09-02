@@ -607,10 +607,9 @@ type Calibrator struct {
 
 	Polynomial *PolynomialCalibrator `xml:"http://www.omg.org/spec/XTCE/20180204 PolynomialCalibrator"`
 	Spline     *SplineCalibrator     `xml:"http://www.omg.org/spec/XTCE/20180204 SplineCalibrator"`
-	// MathOperation is the third form. It is out of scope — evaluating an
-	// expression tree is a different job — so it is kept raw and Kind reports
-	// it so a caller is not misled into thinking the type has no calibrator.
-	MathOperation *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 MathOperationCalibrator"`
+	// MathOperation is the third form: a postfix expression rather than
+	// arithmetic the schema states outright.
+	MathOperation *MathOperationCalibrator `xml:"http://www.omg.org/spec/XTCE/20180204 MathOperationCalibrator"`
 }
 
 // Kind names which calibrator this is.
@@ -623,7 +622,7 @@ func (c *Calibrator) Kind() string {
 	case c.Spline != nil:
 		return "spline"
 	case c.MathOperation != nil:
-		return "math operation (not modeled)"
+		return "math operation"
 	default:
 		return "empty"
 	}
