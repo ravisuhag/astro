@@ -2,6 +2,7 @@ package xtce
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,29 @@ import (
 // The criteria test parameters that the *base* container defines, so they can
 // be checked before the derived container's own fields are read. That is what
 // makes the search possible at all.
+
+// layoutAgainst returns a container's layout, resolving it against the packet
+// when the database alone cannot settle the shape.
+//
+// Matching used to use Layout only, which meant a container whose shape its
+// own contents decide could neither be searched past nor selected: the walk
+// stopped at ErrDynamicSize. Falling back to ResolveLayout lets a packet be
+// identified among dynamic containers too, at the cost of a walk per
+// candidate rather than a cached layout per container.
+//
+// Only the two errors that mean "the packet decides this" trigger the
+// fallback. Anything else — an unresolved reference, a cycle — is a broken
+// database and is reported as it was.
+func layoutAgainst(container *SequenceContainer, packet []byte) (*Layout, error) {
+	layout, err := container.Layout()
+	if err == nil {
+		return layout, nil
+	}
+	if !errors.Is(err, ErrDynamicSize) && !errors.Is(err, ErrUnsupportedEntry) {
+		return nil, err
+	}
+	return container.ResolveLayout(packet)
+}
 
 // Match finds the container in this SpaceSystem tree that a packet satisfies,
 // and extracts it.
@@ -45,7 +69,7 @@ func (s *SpaceSystem) Match(root *SequenceContainer, packet []byte) (*Packet, er
 		return nil, fmt.Errorf("%w: no container derived from %q fits the packet", ErrNoMatch, root.Name)
 	}
 
-	layout, err := best.Layout()
+	layout, err := layoutAgainst(best, packet)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +125,7 @@ func (s *SpaceSystem) matchFrom(root *SequenceContainer, packet []byte) (*Sequen
 	// comparison on a field near the front while lacking most of the
 	// container, and calling that a match would hand the caller a layout that
 	// cannot be extracted.
-	layout, err := root.Layout()
+	layout, err := layoutAgainst(root, packet)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +236,7 @@ func (s *SpaceSystem) readCriterionParameter(
 	if err != nil {
 		return nil, Field{}, false, err
 	}
-	layout, err := base.Layout()
+	layout, err := layoutAgainst(base, packet)
 	if err != nil {
 		return nil, Field{}, false, err
 	}

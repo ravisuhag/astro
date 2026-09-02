@@ -614,3 +614,98 @@ func TestLinearAdjustmentDefaults(t *testing.T) {
 		t.Errorf("slope 2 intercept 1 on 7 gave %d, want 15", got)
 	}
 }
+
+// Match now works for a container whose shape its own contents decide. It
+// used to stop at ErrDynamicSize, so such a packet could be neither
+// identified nor searched past.
+func TestMatchSelectsADynamicContainer(t *testing.T) {
+	db := parse(t, wrap("Sat", `
+  <ParameterTypeSet>
+    <IntegerParameterType name="U8" signed="false">
+      <IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
+    </IntegerParameterType>
+    <BinaryParameterType name="Blob">
+      <BinaryDataEncoding>
+        <SizeInBits>
+          <DynamicValue>
+            <ParameterInstanceRef parameterRef="Length"/>
+            <LinearAdjustment slope="8"/>
+          </DynamicValue>
+        </SizeInBits>
+      </BinaryDataEncoding>
+    </BinaryParameterType>
+  </ParameterTypeSet>
+  <ParameterSet>
+    <Parameter name="Type" parameterTypeRef="U8"/>
+    <Parameter name="Length" parameterTypeRef="U8"/>
+    <Parameter name="Payload" parameterTypeRef="Blob"/>
+    <Parameter name="Fixed" parameterTypeRef="U8"/>
+  </ParameterSet>
+  <ContainerSet>
+    <SequenceContainer name="Packet" abstract="true">
+      <EntryList><ParameterRefEntry parameterRef="Type"/></EntryList>
+    </SequenceContainer>
+    <!-- Selected by Type 1, and its payload is sized by its own Length. -->
+    <SequenceContainer name="Variable">
+      <EntryList>
+        <ParameterRefEntry parameterRef="Length"/>
+        <ParameterRefEntry parameterRef="Payload"/>
+      </EntryList>
+      <BaseContainer containerRef="Packet">
+        <RestrictionCriteria>
+          <Comparison parameterRef="Type" value="1"/>
+        </RestrictionCriteria>
+      </BaseContainer>
+    </SequenceContainer>
+    <SequenceContainer name="Plain">
+      <EntryList><ParameterRefEntry parameterRef="Fixed"/></EntryList>
+      <BaseContainer containerRef="Packet">
+        <RestrictionCriteria>
+          <Comparison parameterRef="Type" value="2"/>
+        </RestrictionCriteria>
+      </BaseContainer>
+    </SequenceContainer>
+  </ContainerSet>`))
+
+	root, err := db.FindContainer("/Sat/Packet")
+	if err != nil {
+		t.Fatalf("FindContainer: %v", err)
+	}
+
+	// Type 1, length 2 octets, then the payload.
+	container, err := db.MatchFrom(root, []byte{1, 2, 0xAA, 0xBB})
+	if err != nil {
+		t.Fatalf("MatchFrom on the dynamic container: %v", err)
+	}
+	if container.Name != "Variable" {
+		t.Errorf("matched %q, want Variable", container.Name)
+	}
+
+	// And the fixed sibling still matches, so the fallback did not break the
+	// ordinary path.
+	container, err = db.MatchFrom(root, []byte{2, 0x7F})
+	if err != nil {
+		t.Fatalf("MatchFrom on the fixed container: %v", err)
+	}
+	if container.Name != "Plain" {
+		t.Errorf("matched %q, want Plain", container.Name)
+	}
+
+	// Matching and extracting together gives the payload at the width the
+	// packet stated.
+	packet, err := db.Match(root, []byte{1, 3, 0x11, 0x22, 0x33})
+	if err != nil {
+		t.Fatalf("Match: %v", err)
+	}
+	value, ok := packet.Get("/Sat/Payload")
+	if !ok {
+		t.Fatal("the payload is not in the extracted packet")
+	}
+	raw, ok := value.Raw.([]byte)
+	if !ok {
+		t.Fatalf("the payload decoded to a %T, want octets", value.Raw)
+	}
+	if len(raw) != 3 {
+		t.Errorf("the payload is %d octets, want the 3 the length field stated", len(raw))
+	}
+}

@@ -123,7 +123,7 @@ Values inside a covered element still have to parse.
 | `IncludeCondition` | Opaque | Raw XML. `Layout` places the entry regardless; a caller that needs the condition can parse it. |
 | `TimeAssociation` | Ignored | |
 | `BaseContainer` | Supported | The reference is resolved and checked for cycles. |
-| `BaseContainer/RestrictionCriteria` | Yes | `Comparison`, `ComparisonList` and `BooleanExpression` are modeled and evaluated by `Match`. |
+| `BaseContainer/RestrictionCriteria` | Yes | `Comparison`, `ComparisonList` and `BooleanExpression` are modeled and evaluated by `Match`, which resolves a candidate container against the packet when its shape depends on the contents. |
 | `RestrictionCriteria/BooleanExpression` | Supported | `Condition`, `ANDedConditions` and `ORedConditions`, nested to any depth, evaluated by `Match`. |
 | `Condition` | Supported | Both forms of right-hand side: a `Value` literal, or a second `ParameterInstanceRef` so two fields can be compared against each other. |
 | `Condition/@useCalibratedValue` | Yes | Defaults to true, per `ParameterInstanceRefType`. |

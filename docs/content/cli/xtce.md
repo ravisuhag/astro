@@ -172,6 +172,6 @@ astro xtce match mission.xml --root /Sat/Packet --format name < packet.hex
 
 `decode` resolves a packet-dependent container against the packet it is given, so delimited fields, length-sized blobs, dynamic repeat counts and `containerEnd` all read. What stays refused is what no single pass can settle: a `RepeatEntry` offset, `nextEntry`, a `LeadingSize` string, a `DiscreteLookupList`, and a forward reference to a field that has not arrived.
 
-`match` uses the static layout, so it selects among containers whose shape the database fixes. A `CustomAlgorithm` in the restriction criteria is refused, being by definition not in the file.
+`match` resolves candidates against the packet too, so a dynamic container can be identified as well as decoded. A `CustomAlgorithm` in the restriction criteria is refused, being by definition not in the file.
 
 See the [conformance statement](/conformance/xtce) for the row-by-row picture.
