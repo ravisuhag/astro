@@ -1,4 +1,4 @@
-.PHONY: build test race lint vet cover fuzz-smoke
+.PHONY: build test race lint vet cover bench fuzz-smoke
 
 build:
 	go build ./...
@@ -15,6 +15,13 @@ cover:
 
 vet:
 	go vet ./...
+
+# The paths a ground station runs at frame rate. -count 3 because a laptop's
+# clock speed is not constant and one sample of a 5-microsecond operation says
+# very little; compare medians, not single runs.
+BENCHTIME ?= 2s
+bench:
+	go test -bench . -benchmem -benchtime $(BENCHTIME) -count 3 ./pkg/crc/ ./pkg/tmdl/
 
 lint:
 	golangci-lint run
