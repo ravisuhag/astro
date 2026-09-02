@@ -81,6 +81,32 @@ var (
 	// ErrWrongState indicates an operation the association state does not allow.
 	ErrWrongState = errors.New("operation not allowed in the current association state")
 
+	// ErrInvalidProductionConfig indicates a transfer buffer size below one
+	// or a negative latency limit.
+	ErrInvalidProductionConfig = errors.New("invalid production configuration")
+
+	// ErrProductionNotRunning indicates a frame offered while production is
+	// halted or interrupted. A provider in either state has no data to
+	// deliver, and buffering one anyway would deliver it late and out of
+	// sequence when production resumed.
+	ErrProductionNotRunning = errors.New("production is not running")
+
+	// ErrDuplicateInstance indicates two service instances configured with
+	// one identifier. A BIND naming it would be ambiguous, and the standard
+	// gives no way to disambiguate.
+	ErrDuplicateInstance = errors.New("service instance is already configured")
+
+	// ErrUnknownInstance indicates a service instance identifier the complex
+	// does not serve.
+	ErrUnknownInstance = errors.New("no such service instance")
+
+	// ErrInstanceInUse indicates a BIND to an instance that is already bound.
+	ErrInstanceInUse = errors.New("service instance is already in use")
+
+	// ErrVersionNotSupported indicates a BIND asking for a version the
+	// instance was not configured for.
+	ErrVersionNotSupported = errors.New("service version is not supported by this instance")
+
 	// ErrNotBound indicates an operation requiring an established association.
 	ErrNotBound = errors.New("association is not bound")
 

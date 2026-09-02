@@ -52,9 +52,12 @@
 // including the OBJECT IDENTIFIER form of the service instance identifier
 // and the primitive [104] PEER-ABORT encoding. On top of that, the four
 // transfer services themselves: RAF, RCF, ROCF and FCLTU, each as a
-// caller-pumped user machine and a partial provider. GET-PARAMETER decodes
-// and answers cleanly, and the per-service parameter sets are named: all 50
-// alternatives across the four services, with integer values read and
-// structured ones left as raw BER. See docs/content/conformance/sle.md
+// caller-pumped user machine and a provider. On the provider side, Production
+// runs the transfer buffer and the production status of §3.1.9 and annex B,
+// and Complex serves several service instances and routes an inbound BIND
+// between them. GET-PARAMETER decodes and answers cleanly, and the
+// per-service parameter sets are named: all 50 alternatives across the four
+// services, with integer values read and structured ones left as raw BER.
+// See docs/content/conformance/sle.md
 // for the row-by-row conformance picture.
 package sle

@@ -58,4 +58,4 @@ A value the schema makes structured — a set of GVCIDs, the online/offline choi
 
 ## Limits
 
-The provider role is a test double rather than a production implementation. See the [conformance statement](/conformance/sle).
+The provider runs production and the transfer buffer, and serves several service instances; what it does not hold is a service agreement. See the [conformance statement](/conformance/sle).

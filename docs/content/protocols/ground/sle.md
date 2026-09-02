@@ -68,14 +68,18 @@ And the four transfer services built on it:
 
 **Not here yet.**
 
-- **A production provider.** The provider halves answer a user and no more:
-  no multi-association management, no transfer-buffer sizing or release
-  timers, no production. They are a test double and a starting point.
-- **Typed GET-PARAMETER values.** The operation itself works — invocation,
-  both return alternatives, and a clean 'unknown parameter' refusal — but the
-  per-service parameter CHOICEs travel as raw BER for you to interpret.
+- **A service agreement.** The provision periods, permitted parameter ranges
+  and scheduling that service management hands down are configuration a
+  mission supplies, and modelling them would be modelling a mission rather
+  than a protocol. `Complex` refuses a BIND for the reasons the instance set
+  settles — unknown instance, already bound, wrong version — and leaves the
+  agreement's reasons to you.
+- **Structured GET-PARAMETER values.** All 50 parameter alternatives are named
+  and the integer ones read. A value the schema makes structured — a set of
+  GVCIDs, a latency limit's online/offline choice — comes back as raw BER,
+  because typing each would commit the package to shapes it has no real
+  vectors to test against.
 - **TLS or any transport security** beyond ISP1's own credentials.
-- **CLI subcommands.**
 
 ## Three design decisions
 
@@ -256,10 +260,10 @@ the attribute's `Legacy` flag says so.
 ## The four services
 
 Each service is a user half and a provider half over one association. The user
-is the mission-control side, and it is the one implemented in full. The
-provider is partial — enough to answer a user and to test against, not enough
-to run a ground station. See [the PICS](/conformance/sle) for the row-by-row
-picture.
+is the mission-control side. The provider is the ground-station side: it
+answers the operations, runs production and the transfer buffer, and serves
+several service instances through `Complex`. What it does not hold is a service
+agreement — see [the PICS](/conformance/sle) for the row-by-row picture.
 
 | Service | Go types | What it carries |
 |---|---|---|
@@ -391,11 +395,100 @@ takes it:
 | forward online | radiates as CLTUs arrive | watches the buffer figure |
 | forward offline | queues for a later pass | — |
 
-In this package the mode is state, not an engine. The machines hold one PDU at
-a time and never queue, so the buffering that distinguishes the modes lives in
-your code. What the library does is refuse what the mode forbids and tell you
-what the mode asks of you, through `AllowsDiscard`, `RequiresBackpressure`,
-`AllowsPastStartTime` and `AllowsPeriodicStatusReport`.
+The mode itself is state, not an engine. What the library does with it is
+refuse what the mode forbids and tell you what the mode asks of you, through
+`AllowsDiscard`, `RequiresBackpressure`, `AllowsPastStartTime` and
+`AllowsPeriodicStatusReport`. The buffering the modes imply is in `Production`
+on the provider side; a user that wants to buffer what it receives does that
+itself, since only it knows what it is doing with the data.
+
+## Production and the transfer buffer
+
+A return-service provider does not send one PDU per frame. It fills a transfer
+buffer and passes the whole thing, which is what lets RAF carry a line-rate
+downlink over a TCP connection. `Production` is that buffer plus the production
+status, both from §3.1.9.1 and annex B.
+
+```go
+production, err := sle.NewProduction(sle.ProductionConfig{
+    BufferSize:   64,
+    LatencyLimit: 2 * time.Second,
+})
+
+notification, ok := production.SetRunning()   // halted -> running
+production.InsertNotification(notification, now)
+
+due, err := production.Insert(frame, now)
+if due || production.Expired(now) {
+    buffer := production.Release()
+    // send it
+}
+```
+
+Three things here are easy to get subtly wrong, so they are worth naming.
+
+**The release timer starts on insertion into an empty buffer** (§3.1.9.1.4),
+not on every insertion. So it measures how long the *oldest* record has waited,
+which is the latency the limit is about. Restarting it on each insertion would
+let a steady trickle hold a record forever.
+
+**Backpressure discards the whole buffer** (§3.1.9.1.9), not the one record
+that would not fit, and inserts a 'data discarded due to excessive backlog'
+notification. And while that notification waits, the buffer size is
+temporarily one larger (§3.1.9.1.10) — without that, a channel configured with
+a buffer size of one would carry nothing but backlog notifications.
+
+**A status change is notified in sequence.** `SetRunning`, `SetInterrupted` and
+`SetHalted` return the notification rather than sending it, so you insert it
+into the buffer and it lands between the frames acquired before the event and
+those acquired after. The transitions are table B-1's: halted→running,
+running→interrupted, interrupted→running, and anything→halted. A
+halted→interrupted is refused, because it is not a row in the table.
+
+Nothing here reads a clock. Every method that involves time takes the time,
+and the timer is read through `Due`, `Expired` and `Deadline` — the same
+decision as everywhere else in the package.
+
+## Serving several service instances
+
+One `ServiceProvider` is one service instance on one association. A station
+runs several: a RAF and an ROCF over the same pass, several spacecraft in a
+row, a user that binds and unbinds while another stays up. A BIND names the
+instance it wants, and something has to route it.
+
+`Complex` is that something, and the name is the standard's. CCSDS 910.4-B-2
+§4.4.2.1b defines an SLE Complex as "a set of SLE-FGs under a single management
+authority", and §4.4.2.4 puts the transfer ports a user binds to on the Complex
+rather than on any one functional group. So the Complex is what decides whether
+a BIND is acceptable.
+
+```go
+complex := sle.NewComplex()
+complex.Add(sle.InstanceConfig{Service: rafConfig, Production: &prodConfig})
+complex.Add(sle.InstanceConfig{Service: cltuConfig})   // forward: no buffer
+
+instance, diagnostic, err := complex.Route(bind)
+if err != nil {
+    // answer BIND-return with diagnostic
+}
+```
+
+`Route` refuses for the three reasons the instance set alone decides: an
+unknown identifier is `BindNoSuchServiceInstance`, an instance already bound is
+`BindAlreadyBound`, and a version the instance was not configured for is
+`BindVersionNotSupported`. It hands back the instance even when it refuses, so
+you can answer on the right association.
+
+The other four BIND diagnostics — access denied, not accessible to this
+initiator, invalid time, out of service — depend on a **service agreement**,
+and that is the one provider-side thing this package does not hold. Provision
+periods, permitted parameter ranges and which initiator may bind to what are a
+mission's configuration, not the protocol. Check them yourself and answer with
+the diagnostic that fits.
+
+`DueInstances` and `NextDeadline` let one loop drive every buffer: the first
+says which are ready to release now, the second says when the next one will
+be.
 
 ## Aborts and authentication levels
 
@@ -420,5 +513,6 @@ buffer entries included, before the machine acts on the PDU.
 - [CCSDS 911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf) — Return Channel Frames
 - [CCSDS 911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf) — Return Operational Control Fields
 - [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) — Forward CLTU
+- [CCSDS 910.4-B-2](https://ccsds.org/wp-content/uploads/gravity_forms/5-448e85c647331d9cbaf66c096458bdd5/2025/01//910x4b2e1s.pdf) — Cross Support Reference Model, where the vocabulary is defined. Retired in December 2023 with nothing named in its place, but still reference [1] of 911.1-B-5.
 - [ITU-T X.690](https://www.itu.int/rec/T-REC-X.690) — BER, CER and DER
 - [Conformance](/conformance/sle)

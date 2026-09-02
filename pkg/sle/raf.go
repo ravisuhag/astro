@@ -873,8 +873,9 @@ func (u *RAFUser) HandlePDU(data []byte, now time.Time) (*RAFUserEvent, error) {
 	}
 }
 
-// RAFProvider is the provider half of a RAF instance. It is partial; see
-// ServiceProvider for what that means.
+// RAFProvider is the provider half of a RAF instance. Pair it with a
+// Production for the transfer buffer that §3.1.9.1 requires of a return
+// service.
 type RAFProvider struct {
 	*ServiceProvider
 }

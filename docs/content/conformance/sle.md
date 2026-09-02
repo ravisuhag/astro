@@ -26,7 +26,7 @@ order: 170
 | Implementation Name | astro/pkg/sle |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library implementing the ISP1 transport and the four SLE transfer services. The **user role is implemented in full**; the **provider role is partial** and is meant for testing and prototyping, not for running a ground station. The package owns no goroutines, no timers and no sockets beyond the TML reader and writer: the caller drives every machine and supplies the clock. |
+| Other Information | Go library implementing the ISP1 transport and the four SLE transfer services. The **user role is implemented in full**. The **provider role** answers the association and data operations, runs production and the transfer buffer of §3.1.9 and annex B, and serves several service instances through `Complex`; what it does not hold is a **service agreement**, whose provision periods and parameter ranges are mission configuration. The package owns no goroutines, no timers and no sockets beyond the TML reader and writer: the caller drives every machine and supplies the clock. |
 
 ### A2.1.3 Identification of Supplier
 
@@ -45,8 +45,9 @@ order: 170
 | Have any exceptions been required? | Yes [X] No [ ] |
 
 NOTE — Non-supported and partly supported capabilities are identified in
-section A2.3 with explanations. The provider role is partial by design and is
-marked so on every row it touches.
+section A2.3 with explanations. What the provider does not hold is a service
+agreement, which is mission configuration rather than protocol; that is marked
+on every row it touches.
 
 ---
 
@@ -191,8 +192,8 @@ marked so on every row it touches.
 | SLE-5, SLE-31 | Heartbeat and return timers | The library runs no clock. It reports when a heartbeat is due, when a peer looks dead and which invocations are outstanding; the caller's loop acts. This is deliberate — see the guide's "No goroutines, no timers". |
 | SLE-20 | Version negotiation | Version 5 PDU semantics only. The number is carried and checked, but there is no fallback to an earlier version's PDU set. |
 | SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | Complete. All 50 alternatives across the four services are named, `parameterName` is checked against its tag so decoding against the wrong service is caught rather than mis-reported, and values the schema makes a single integer are read. Structured values — sets, nested CHOICEs — are handed back as raw BER rather than as guessed-at Go types. |
-| SLE-66 to SLE-71 | Delivery modes | Modeled as configuration and predicates, not as a buffering engine. All buffering is caller-side. |
-| The provider role, throughout | `ServiceProvider` and the four per-service providers | They answer a user, hold the three states correctly and let the caller push data. They do not manage multiple associations, size or release transfer buffers, run production, or enforce a service agreement. Use them to test a user or to prototype; do not run a ground station on them. |
+| SLE-66 to SLE-71 | Delivery modes | The mode is configuration and predicates. The buffering the modes imply is in `Production` for the provider side; a user that wants to buffer what it receives does that itself, since only it knows what it is doing with the data. |
+| The provider role, throughout | `ServiceProvider`, `Production`, `Complex` | The association, the states, the data operations, production and the transfer buffer of §3.1.9 and annex B, and routing a BIND across several service instances are all here. What is not is a **service agreement**: provision periods, permitted parameter ranges, which initiator may bind to what. Those are a mission's configuration rather than the protocol, so the four agreement-shaped BIND diagnostics — access denied, not accessible to this initiator, invalid time, out of service — are left for a caller to raise. See A2.4 and A2.5. |
 
 ### Fully Supported Mandatory Items
 
@@ -216,3 +217,42 @@ values read and structured ones left as raw BER.
 | ROCF | SLE-49–55 | `rocf.go`. |
 | FCLTU | SLE-56–65 | `fcltu.go`. |
 | Delivery modes | SLE-66–71 | `delivery.go`. |
+| Production | §3.1.9.1, annex B | `production.go` — the transfer buffer, the release timer, backpressure, the production status machine. |
+| Service instances | 910.4-B-2 §4.4.2 | `complex.go` — the instance set and BIND routing. |
+
+---
+
+## A2.4 PRODUCTION AND THE TRANSFER BUFFER
+
+`Production` implements §3.1.9.1 and annex B. It owns no clock: every method
+that involves time takes the time, and the release timer is read through `Due`,
+`Expired` and `Deadline`.
+
+| Requirement | Reference | Support | Notes |
+|---|---|---|---|
+| Transfer buffer holds transfer-data and sync-notify records | §3.1.9.1.2, §3.1.9.1.13 | Yes | Only those two are buffered; everything else is sent as soon as possible, which is the caller's to do. |
+| Release timer starts on insertion into an **empty** buffer | §3.1.9.1.4 | Yes | Not on every insert, so the timer measures how long the oldest record has waited. |
+| Timer duration is the latency limit | §3.1.9.1.5 | Yes | A zero limit runs no timer, which is the offline and complete-online case. |
+| Buffer holds transfer-buffer-size records | §3.1.9.1.6 | Yes | |
+| Release when full, on timer expiry, or on 'end of data' | §3.1.9.1.7 | Yes | All three conditions. |
+| Records released in insertion order | §3.1.9.1.8 | Yes | |
+| Backpressure discards the **whole** buffer and inserts 'data discarded due to excessive backlog' | §3.1.9.1.9 | Yes | The whole buffer, not the one record that would not fit. The release timer restarts from the moment of the backpressure. |
+| Buffer size temporarily incremented by one while that notification waits | §3.1.9.1.10 | Yes | Restored when the contents are passed on. Without it, a channel configured with a buffer size of one would carry nothing but backlog notifications. |
+| An accepted STOP builds and passes the buffer immediately | §3.1.9.1.11 | Yes | `Stop`. |
+| The buffer is cleared when the association is aborted | §3.1.9.1.12 | Yes | `Abort`, which delivers nothing. |
+| Production status transitions | table B-1 | Yes | halted→running, running→interrupted, interrupted→running, any→halted. halted→interrupted is refused: it is not a row in table B-1 and has no edge in figure B-1. |
+| Initial production status is halted | §B2.3 | Yes | Production is not yet configured for the instance. |
+| A status change is notified through the buffer, in sequence | §3.1.9.1.3 | Yes | The notification is returned by `SetRunning` and friends for the caller to insert, so it lands between the frames acquired before the event and those after. |
+
+## A2.5 SERVING SEVERAL SERVICE INSTANCES
+
+`Complex` holds the configured instances and routes an inbound BIND.
+
+| Requirement | Support | Notes |
+|---|---|---|
+| Several instances served at once | Yes | Each with its own provider, production and state. Two cannot share an identifier: a BIND naming it would be ambiguous. |
+| Route a BIND to the instance it names | Yes | `Route`, keyed on the service instance identifier. The Complex is the binding authority, per 910.4-B-2 §4.4.2.4. |
+| Refuse an unknown instance | Yes | `BindNoSuchServiceInstance`. |
+| Refuse an instance already bound | Yes | `BindAlreadyBound`. The instance still comes back, so a caller can answer on its association. |
+| Refuse an unsupported version | Yes | `BindVersionNotSupported`. |
+| Refuse for service-agreement reasons | N by design | Access denied, not accessible to this initiator, invalid time, out of service. Those depend on an agreement the complex does not hold; a caller checks them and answers with the diagnostic that fits. |

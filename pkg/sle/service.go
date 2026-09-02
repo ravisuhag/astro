@@ -502,13 +502,17 @@ func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
 
 // ServiceProvider is the provider half: the ground-station side.
 //
-// It is deliberately partial. It answers the operations a user drives — BIND,
-// START, STOP, UNBIND — and lets the caller push data while active, which is
-// enough to test a user against and enough to prototype with. It does not do
-// what a real provider does: manage many associations, size and release
-// transfer buffers, run production, or enforce a service agreement. Treat it
-// as a test double, and see docs/content/conformance/sle.md for the
-// row-by-row picture.
+// It answers the operations a user drives — BIND, START, STOP, UNBIND — and
+// lets the caller push data while active. One of these is one service
+// instance on one association.
+//
+// The rest of a real provider lives beside it rather than in it. Production
+// and the transfer buffer are in production.go; serving several instances and
+// routing an inbound BIND between them is Complex, in complex.go. What none
+// of them holds is a service agreement: the provision periods, permitted
+// parameter ranges and scheduling that service management hands down are
+// configuration a mission supplies. See docs/content/conformance/sle.md for
+// the row-by-row picture.
 type ServiceProvider struct {
 	*serviceCore
 
