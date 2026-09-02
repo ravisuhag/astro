@@ -42,6 +42,30 @@ astro cfdp decode --input hex < pdu.hex
 astro cfdp decode --input bin pdu.bin --format json
 ```
 
+## Part 2: the User Operations
+
+Section 6 puts proxy, directory, remote status, suspend and resume operations in a **Message to User TLV** in an ordinary transaction's metadata, not in PDUs of their own. So they surface when you decode a Metadata PDU, and `decode` names each one and reads its content.
+
+A Message to User is a protocol message only if it opens with the four ASCII characters `cfdp`. Anything else is an application message and is left alone, which is what that identifier exists for.
+
+```
+astro cfdp decode --input hex < metadata.hex
+```
+
+```
+CFDP File Directive PDU: Metadata
+  ...
+User operations (2 message(s)):
+  Proxy Put Request
+  Beneficiary ....... 3
+  Source file ....... /remote/a.dat
+  Destination file .. /local/a.dat
+  Originating Transaction ID
+  Originating transaction: entity 1, sequence 100
+```
+
 ## Limits
 
-Part 2 — proxy and remote operations — is not implemented, so a PDU carrying one decodes as far as its header and reports the directive as not decoded. See the [conformance statement](/conformance/cfdp).
+The message **formats** of Part 2 are implemented. The user **behaviour** around them is not, and the standard makes that the CFDP user's job — which primitive to call on receipt, and how to queue concurrent suspension orders, which §6.5.4.1.2 says outright is "an implementation matter".
+
+See the [conformance statement](/conformance/cfdp).

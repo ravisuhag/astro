@@ -137,7 +137,7 @@ order: 30
 | Filestore actions: append, replace | table 5-16 | N | Decoded; execution returns status 'not performed' (table 5-18 allows this). |
 | Filestore actions: create/remove directory, deny directory | table 5-16 | N | Same. The `Filestore` interface is deliberately file-only. |
 | Adaptive flow control from Keep Alive | §4.6 | N | Keep Alive and Prompt encode and decode; no rate adaptation. |
-| Proxy and remote operations | CFDP Part 2 | N | A separate standard, out of scope for this package. |
+| Part 2 user behaviour | §6 | N by design | The Part 2 message *formats* are implemented (see A1.8). What is not is the behaviour around them: which primitive to call on receipt, and how to queue concurrent suspension orders, which §6.5.4.1.2 calls "an implementation matter". |
 | Timers and inactivity detection | §4.6 | N by design | The library owns no clock. Retransmission and timeout scheduling are the caller's, exposed as `ResendEOF`, `RequestNAK`, `ResendFinished`, `ExpireCheckLimit`, and `DeclareFault`. Limit and inactivity faults raised through `DeclareFault` take the table 4-1 route. |
 
 ---
@@ -153,3 +153,44 @@ order: 30
 | Segment metadata length | 63 octets | 6-bit length field, table 5-14 |
 | File size, small file | 2^32 − 1 octets | 32-bit FSS, §5.1.10 |
 | File size, large file | 2^64 − 1 octets | 64-bit FSS, §5.1.10 |
+
+---
+
+## A1.8 PART 2: USER OPERATIONS
+
+Section 6 carries every User Operation as a Reserved CFDP Message inside a
+Message to User TLV in an ordinary transaction's metadata (§6.1.1), so Part 2
+adds no PDU of its own. The message identifier — the ASCII characters `cfdp`
+(table 6-1) — is what separates a protocol message from an application one,
+and `UserMessagesFrom` uses it to sift a metadata TLV run.
+
+All 20 message types of tables 6-3, 6-14, 6-17, 6-20 and 6-23 are named, and
+every content table is encoded and decoded.
+
+| Message | Reference | Support | Notes |
+|---|---|---|---|
+| Reserved CFDP Message header | table 6-1 | Yes | The `cfdp` identifier and the type octet. |
+| Originating Transaction ID | §6.1.5, table 6-2 | Yes | Common to every operation. The two 3-bit length fields hold the width less one; the reserved bits either side are checked to be zero. |
+| Proxy Put Request | table 6-4 | Yes | An omitted file name is a zero-length LV, not an absent field. |
+| Proxy Message to User | table 6-5 | Yes | |
+| Proxy Filestore Request | table 6-6 | Yes | An 8-bit length then a filestore request's TLV value, doing the job the TLV's own length would. |
+| Proxy Fault Handler Override | table 6-7 | Yes | |
+| Proxy Transmission Mode | table 6-8 | Yes | Table 5-1 makes '0' acknowledged, so the flag is inverted on the wire. |
+| Proxy Flow Label | table 6-9 | Yes | |
+| Proxy Segmentation Control | table 6-10 | Yes | '0' means record boundaries respected. |
+| Proxy Put Response | table 6-12 | Yes | Condition code, spare bit, delivery code, file status — the Finished PDU's packing. |
+| Proxy Filestore Response | table 6-13 | Yes | |
+| Proxy Put Cancel | §6.2.6.2 | Yes | Has no content, and is encoded with none. |
+| Proxy Closure Request | table 6-11 | Yes | |
+| Directory Listing Request | table 6-15 | Yes | |
+| Directory Listing Response | table 6-16 | Yes | Success is **'0'** here. |
+| Remote Status Report Request | table 6-18 | Yes | |
+| Remote Status Report Response | table 6-19 | Yes | Success is **'1'** here — the opposite polarity from table 6-16, and in the low bit rather than the high one. |
+| Remote Suspend Request | table 6-21 | Yes | §6.5.3.1.2 requires the carrying transaction to be Acknowledged; that is the caller's to arrange. |
+| Remote Suspend Response | table 6-22 | Yes | Carries the transaction ID, which is easy to miss because the field list runs onto a second page. |
+| Remote Resume Request | table 6-24 | Yes | |
+| Remote Resume Response | table 6-25 | Yes | Same body as table 6-22. §6.6.4.2 notes a successful resume may not change the suspension state, so the indicator reports state rather than outcome. |
+
+The message type numbering has a gap inside the proxy range: `0x0A` is the
+Originating Transaction ID, common to every operation rather than belonging to
+proxy, so proxy runs `0x00`–`0x09` and resumes at `0x0B`.

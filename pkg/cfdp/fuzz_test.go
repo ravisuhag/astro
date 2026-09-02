@@ -168,3 +168,70 @@ func FuzzReceiverHandle(f *testing.F) {
 		_ = rx.Complete()
 	})
 }
+
+// FuzzDecodeUserMessage throws arbitrary bytes at every Part 2 message
+// decoder.
+//
+// These are the newest wire decoders in the package and they all read
+// length-prefixed and width-prefixed fields out of untrusted input, which is
+// exactly the shape that reads past the end of a buffer when a length is not
+// checked against what remains.
+func FuzzDecodeUserMessage(f *testing.F) {
+	// Seeds: one well-formed message of each shape, so the fuzzer starts from
+	// something that parses rather than from noise.
+	id := cfdp.TransactionID{Source: cfdp.NewEntityID(1), Sequence: cfdp.NewEntityID(2)}
+
+	origin, _ := cfdp.OriginatingTransactionID{Transaction: id}.Encode()
+	put, _ := cfdp.ProxyPutRequest{
+		Destination:         cfdp.NewEntityID(3),
+		SourceFileName:      "/a",
+		DestinationFileName: "/b",
+	}.Encode()
+	response, _ := cfdp.ProxyPutResponse{}.Encode()
+	listing, _ := cfdp.DirectoryListingResponse{DirectoryName: "/d", DirectoryFileName: "/f"}.Encode()
+	report, _ := cfdp.RemoteStatusReportResponse{Transaction: id}.Encode()
+	suspend, _ := cfdp.RemoteSuspendResponse{
+		SuspensionResponse: cfdp.SuspensionResponse{Transaction: id},
+	}.Encode()
+
+	for _, message := range []cfdp.UserMessage{
+		origin, put, response, listing, report, suspend,
+		cfdp.ProxyPutCancel(),
+		cfdp.ProxyClosureRequest{ClosureRequested: true}.Encode(),
+	} {
+		f.Add(message.Encode())
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Property: no input makes any decoder panic. Every one is reached,
+		// whatever the type octet says, because a decoder must be safe
+		// against content that was never meant for it.
+		message, err := cfdp.DecodeUserMessage(data)
+		if err != nil {
+			return
+		}
+
+		_ = message.Type.String()
+		_ = message.Type.Valid()
+
+		_, _ = cfdp.DecodeOriginatingTransactionID(message.Content)
+		_, _ = cfdp.DecodeProxyPutRequest(message.Content)
+		_, _ = cfdp.DecodeProxyPutResponse(message.Content)
+		_, _ = cfdp.DecodeProxyMessageToUser(message.Content)
+		_, _ = cfdp.DecodeProxyFilestoreRequest(message.Content)
+		_, _ = cfdp.DecodeProxyFilestoreResponse(message.Content)
+		_, _ = cfdp.DecodeProxyFaultHandlerOverride(message.Content)
+		_, _ = cfdp.DecodeProxyTransmissionMode(message.Content)
+		_, _ = cfdp.DecodeProxySegmentationControl(message.Content)
+		_, _ = cfdp.DecodeProxyFlowLabel(message.Content)
+		_, _ = cfdp.DecodeProxyClosureRequest(message.Content)
+		_, _ = cfdp.DecodeDirectoryListingRequest(message.Content)
+		_, _ = cfdp.DecodeDirectoryListingResponse(message.Content)
+		_, _ = cfdp.DecodeRemoteStatusReportRequest(message.Content)
+		_, _ = cfdp.DecodeRemoteStatusReportResponse(message.Content)
+		_, _ = cfdp.DecodeRemoteSuspendRequest(message.Content)
+		_, _ = cfdp.DecodeRemoteSuspendResponse(message.Content)
+		_, _ = cfdp.DecodeRemoteResumeRequest(message.Content)
+		_, _ = cfdp.DecodeRemoteResumeResponse(message.Content)
+	})
+}

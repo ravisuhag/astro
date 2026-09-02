@@ -192,7 +192,15 @@ func describeCFDPDirective(code cfdp.DirectiveCode, body []byte, largeFile bool)
 		if err != nil {
 			return "", err
 		}
-		return pdu.Humanize(), nil
+
+		summary := pdu.Humanize()
+		// Part 2's User Operations travel as Reserved CFDP Messages in the
+		// metadata, so a proxy put or a directory listing shows up here
+		// rather than as a PDU of its own.
+		if operations := describeUserMessages(pdu.Options); operations != "" {
+			summary += "\n" + operations
+		}
+		return summary, nil
 	case cfdp.DirectiveNAK:
 		pdu, err := cfdp.DecodeNAKPDU(body, largeFile)
 		if err != nil {
@@ -208,6 +216,84 @@ func describeCFDPDirective(code cfdp.DirectiveCode, body []byte, largeFile bool)
 	default:
 		return "", fmt.Errorf("directive code 0x%02X is not one this build decodes", uint8(code))
 	}
+}
+
+// describeUserMessages renders the Part 2 User Operations a metadata PDU
+// carries.
+//
+// Section 6 puts every proxy, directory, remote status, suspend and resume
+// operation in a Message to User TLV rather than in a PDU of its own, so
+// this is where they surface. Application messages in the same run are left
+// alone.
+func describeUserMessages(options []cfdp.TLV) string {
+	messages := cfdp.UserMessagesFrom(options)
+	if len(messages) == 0 {
+		return ""
+	}
+
+	var out strings.Builder
+	fmt.Fprintf(&out, "User operations (%d message(s)):", len(messages))
+
+	for _, message := range messages {
+		fmt.Fprintf(&out, "\n  %s", message.Type)
+		if detail := describeUserMessageContent(message); detail != "" {
+			fmt.Fprintf(&out, "\n%s", detail)
+		}
+	}
+	return out.String()
+}
+
+// describeUserMessageContent renders one message's body where the content is
+// modeled, and says nothing where it is not — an empty string rather than a
+// guess, so the caller prints just the type.
+func describeUserMessageContent(message *cfdp.UserMessage) string {
+	switch message.Type {
+	case cfdp.MsgOriginatingTransactionID:
+		if m, err := cfdp.DecodeOriginatingTransactionID(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgProxyPutRequest:
+		if m, err := cfdp.DecodeProxyPutRequest(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgProxyPutResponse:
+		if m, err := cfdp.DecodeProxyPutResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgProxyFilestoreRequest:
+		if m, err := cfdp.DecodeProxyFilestoreRequest(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgProxyFilestoreResponse:
+		if m, err := cfdp.DecodeProxyFilestoreResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgDirectoryListingRequest:
+		if m, err := cfdp.DecodeDirectoryListingRequest(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgDirectoryListingResponse:
+		if m, err := cfdp.DecodeDirectoryListingResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgRemoteStatusReportRequest:
+		if m, err := cfdp.DecodeRemoteStatusReportRequest(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgRemoteStatusReportResponse:
+		if m, err := cfdp.DecodeRemoteStatusReportResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgRemoteSuspendResponse:
+		if m, err := cfdp.DecodeRemoteSuspendResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	case cfdp.MsgRemoteResumeResponse:
+		if m, err := cfdp.DecodeRemoteResumeResponse(message.Content); err == nil {
+			return m.Humanize()
+		}
+	}
+	return ""
 }
 
 // --- LTP ---

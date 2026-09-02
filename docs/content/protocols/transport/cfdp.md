@@ -43,19 +43,21 @@ rather than changing them.
 
 ## Scope
 
-**Implemented.** Both classes of service, the full PDU set, checksums, filestore requests, fault handling and cancellation, and the optional PDU CRC.
+**Implemented.** Both classes of service, the full PDU set, checksums, filestore requests, fault handling and cancellation, the optional PDU CRC, and the Part 2 User Operations message formats.
 
 The library owns no clock. You drive every timer yourself — see below.
 
 **Not here yet.**
 
-- **Proxy and remote operations** (Part 2 of the CFDP suite) — a separate
-  standard covering store-and-forward overlay.
+- **Part 2 user behaviour** — the message formats of §6 are here; what is not
+  is which primitive to call on receipt, and how to queue concurrent
+  suspension orders, which §6.5.4.1.2 calls "an implementation matter".
+- **Store-and-forward overlay** (Appendix A) — a separate overlay service, and
+  §6.2's note is explicit that the proxy mechanism may not invoke it.
 - **Extended filestore actions** — append, replace, and directory operations
   decode but do not execute.
 - **Adaptive flow control** — Keep Alive and Prompt PDUs encode and decode, but
   nothing tunes the send rate from them.
-- **CLI subcommands** — `astro cfdp` is a follow-up once this API settles.
 
 ## Two classes of service
 

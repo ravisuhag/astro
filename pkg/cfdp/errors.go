@@ -83,4 +83,16 @@ var (
 	// ErrInvalidFaultHandler indicates a fault handler override TLV whose
 	// handler code is not one of the four defined by §5.4.4.
 	ErrInvalidFaultHandler = errors.New("invalid fault handler code")
+
+	// ErrNotUserMessage indicates a Message to User TLV that does not open
+	// with the "cfdp" identifier, so it is an application message rather than
+	// a Reserved CFDP Message. It is how a receiver tells the two apart, not
+	// a malformed protocol message.
+	ErrNotUserMessage = errors.New("message to user is not a Reserved CFDP Message")
+
+	// ErrReservedBitsSet indicates a field the standard requires to be zero
+	// that is not. A sender setting one is using something this issue has not
+	// defined, and reading the rest of the field out from under it would be a
+	// guess.
+	ErrReservedBitsSet = errors.New("a field reserved for future use is not zero")
 )

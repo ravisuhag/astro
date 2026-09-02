@@ -221,6 +221,14 @@ const (
 	DeliveryDataIncomplete DeliveryCode = 1
 )
 
+// String names the delivery code.
+func (d DeliveryCode) String() string {
+	if d == DeliveryDataComplete {
+		return "data complete"
+	}
+	return "data incomplete"
+}
+
 // FileStatus reports what became of the delivered file (§5.2.3).
 type FileStatus uint8
 

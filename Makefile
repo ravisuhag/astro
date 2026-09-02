@@ -46,6 +46,7 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodePDU -fuzztime $(FUZZTIME) ./pkg/cfdp/
 	go test -run '^$$' -fuzz FuzzDecodeTLV -fuzztime $(FUZZTIME) ./pkg/cfdp/
 	go test -run '^$$' -fuzz FuzzReceiverHandle -fuzztime $(FUZZTIME) ./pkg/cfdp/
+	go test -run '^$$' -fuzz FuzzDecodeUserMessage -fuzztime $(FUZZTIME) ./pkg/cfdp/
 	go test -run '^$$' -fuzz FuzzDecodeTCHeader -fuzztime $(FUZZTIME) ./pkg/pus/
 	go test -run '^$$' -fuzz FuzzDecodeTMHeader -fuzztime $(FUZZTIME) ./pkg/pus/
 	go test -run '^$$' -fuzz FuzzRegistryDecode -fuzztime $(FUZZTIME) ./pkg/pus/
