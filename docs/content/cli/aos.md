@@ -10,7 +10,7 @@ AOS Transfer Frame operations: encode, decode, inspect, and generate AOS Transfe
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro aos encode` | Construct an AOS Transfer Frame from fields |
 | `astro aos decode` | Decode an AOS Transfer Frame into header fields and data |
 | `astro aos inspect` | Annotated frame breakdown with hex dump |
@@ -18,10 +18,10 @@ AOS Transfer Frame operations: encode, decode, inspect, and generate AOS Transfe
 | `astro aos demux` | Filter frames by Virtual Channel ID |
 | `astro aos gen` | Generate synthetic AOS Transfer Frames |
 
-## Common Flags
+## Common flags
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 | `--fecf` | `false` | Toggle the 2-byte CRC-16 Frame Error Control Field |
@@ -43,7 +43,7 @@ astro aos encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-255) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--data` | required | Data field as hex string |
@@ -80,7 +80,7 @@ astro aos decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--fecf` | `false` | Frame includes a 2-byte FECF |
@@ -110,7 +110,7 @@ astro aos inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--fecf` | `false` | Frame includes a 2-byte FECF |
 | `--ocf` | `false` | Frame includes a 4-byte OCF |
@@ -143,7 +143,7 @@ astro aos gaps [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--frame-len` | *(required)* | Fixed frame length in bytes |
 | `--fecf` | `false` | Frames include a 2-byte FECF |
@@ -173,7 +173,7 @@ astro aos demux [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--frame-len` | *(required)* | Fixed frame length in bytes |
@@ -205,7 +205,7 @@ astro aos gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-255) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--count` | `10` | Number of frames to generate |

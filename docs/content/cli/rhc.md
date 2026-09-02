@@ -14,7 +14,7 @@ It is **stateful**. Each output depends on the ones before it, so the cycles hav
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro rhc compress` | Compress a stream of vectors |
 | `astro rhc decompress` | Recover the vectors |
 
@@ -45,7 +45,7 @@ astro rhc compress [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--vector-bits` | *(required)* | Length of every input vector in bits, *F*: 1 to 65535 |
 | `--robustness` | `0` | Minimum required effective robustness, *R_t*: 0 to 7 |
 | `--new-mask` | `0` | Set the new mask flag every N cycles (0 never) |
@@ -78,7 +78,7 @@ astro rhc decompress [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--vector-bits` | *(required)* | Length of every vector in bits, must match `compress` |
 | `--strict` | `false` | After a reported loss, accept nothing but an uncompressed output |
 | `--format` | `bin` | Output format: `bin` or `hex` |

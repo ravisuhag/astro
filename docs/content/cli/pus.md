@@ -12,7 +12,7 @@ PUS rides inside a Space Packet's data field, so these commands work on what is 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro pus encode` | Build a secondary header with a body |
 | `astro pus decode` | Decode a secondary header and, where known, its body |
 | `astro pus services` | List the message types this build can decode |
@@ -22,7 +22,7 @@ PUS rides inside a Space Packet's data field, so these commands work on what is 
 ECSS-E-ST-70-41C states **no defaults** for the tailorable field widths. A real mission declares them, and two missions can disagree about the width of the same field. So they are flags, and both ends of a round trip have to be given the same ones.
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--tc-spare` | `0` | Octets of spare in the TC secondary header |
 | `--tm-spare` | `0` | Octets of spare in the TM secondary header |
 | `--time` | `cuc` | TM time format: `cuc`, `cuc-explicit`, `raw`, or `none` |
@@ -47,7 +47,7 @@ astro pus encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--direction` | `tc` | `tm` (report) or `tc` (request) |
 | `--service` | *(required)* | Service type (ST) |
 | `--subtype` | *(required)* | Message subtype |
@@ -88,7 +88,7 @@ astro pus decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--direction` | `tm` | `tm` (report) or `tc` (request) |
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
@@ -134,7 +134,7 @@ astro pus services [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--format` | `text` | Output format: `text` or `json` |
 
 **Examples**

@@ -12,7 +12,7 @@ Proximity-1 is the short-range link: a lander to an orbiter, rather than a space
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro pxdl encode` | Build a transfer frame |
 | `astro pxdl decode` | Decode a transfer frame |
 | `astro pxdl spdu` | Decode supervisory protocol data units |
@@ -28,7 +28,7 @@ astro pxdl encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (10 bits) |
 | `--port` | `0` | Port ID (3 bits) |
 | `--data` | *(required)* | Frame data as hex |
@@ -53,7 +53,7 @@ astro pxdl decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 
@@ -81,7 +81,13 @@ astro pxdl spdu [file] [flags]
 
 **Flags**
 
-Same as `decode`.
+| Flag | Default | Description |
+|---|---|---|
+| `--input` | `hex` | Input format: `hex` or `bin` |
+| `--format` | `text` | Output format: `text` or `json` |
+
+Note that `--format` takes no `hex` here, unlike `decode`: an SPDU decode
+reports several units, so there is no single octet string to hand back.
 
 ---
 

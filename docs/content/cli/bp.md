@@ -12,7 +12,7 @@ Decode Bundle Protocol bundles and administrative records ([CCSDS 734.2-B-1](htt
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro bp decode` | Decode a bundle: the primary block, then each canonical block |
 | `astro bp admin` | Decode an administrative record |
 
@@ -29,7 +29,7 @@ astro bp decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 

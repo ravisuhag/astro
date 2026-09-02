@@ -10,7 +10,7 @@ Space Packet Protocol operations: encode, decode, inspect, validate, and stream 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro spp decode` | Decode raw bytes into Space Packet fields |
 | `astro spp encode` | Construct a Space Packet from header fields and user data |
 | `astro spp inspect` | Pretty-print an annotated packet breakdown with hex dump |
@@ -18,18 +18,18 @@ Space Packet Protocol operations: encode, decode, inspect, validate, and stream 
 | `astro spp stream` | Decode a stream of concatenated Space Packets |
 | `astro spp gen` | Generate synthetic Space Packets |
 
-## Common Flags
+## Common flags
 
 All subcommands that read input support:
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` (hex-encoded text) or `bin` (raw binary) |
 
 All subcommands that produce output support:
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 
 Input can be provided as a file argument or piped via stdin. Hex input accepts optional `0x` prefix, spaces, and newlines.
@@ -47,7 +47,7 @@ astro spp decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--crc` | `false` | Treat the last 2 octets as a CRC-16-CCITT error control field and verify it |
@@ -83,7 +83,7 @@ astro spp encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--apid` | `0` | Application Process Identifier (0-2047) |
 | `--type` | `tm` | Packet type: `tm` or `tc` |
 | `--data` | *(required)* | User data as hex string |
@@ -118,7 +118,7 @@ astro spp inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--crc` | `false` | Treat the last 2 octets as a CRC-16-CCITT error control field and verify it |
 
@@ -169,7 +169,7 @@ astro spp validate [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--crc` | `false` | Verify CRC-16-CCITT error control field |
 
@@ -196,7 +196,7 @@ astro spp stream [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--crc` | `false` | Treat the last 2 octets of each packet as a CRC-16-CCITT error control field and verify it |
@@ -233,7 +233,7 @@ astro spp gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--apid` | `0` | Application Process Identifier (0-2047) |
 | `--type` | `tm` | Packet type: `tm` or `tc` |
 | `--count` | `10` | Number of packets to generate |

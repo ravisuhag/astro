@@ -10,7 +10,7 @@ Channel Access Data Unit operations: wrap, unwrap, inspect, and sync CADUs ([CCS
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro cadu wrap` | Wrap a TM frame into a CADU (prepend ASM, optionally randomize) |
 | `astro cadu unwrap` | Strip ASM and optionally de-randomize to extract TM frame |
 | `astro cadu inspect` | Annotated CADU breakdown with ASM validation and hex dump |
@@ -30,7 +30,7 @@ astro cadu wrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
 | `--randomize` | `false` | Apply CCSDS pseudo-randomization |
@@ -58,7 +58,7 @@ astro cadu unwrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
 | `--derandomize` | `false` | Apply CCSDS de-randomization |
@@ -86,7 +86,7 @@ astro cadu inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -112,7 +112,7 @@ astro cadu sync [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--frame-len` | *(required)* | Total CADU length in bytes including ASM |
@@ -140,7 +140,7 @@ astro cadu gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-7) |
 | `--count` | `10` | Number of CADUs to generate |

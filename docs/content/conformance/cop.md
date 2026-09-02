@@ -53,7 +53,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-1: FOP-1 State Machine (section 5.1)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-1 | S1, Active | 5.1, table 5-1 | M | Yes | `FOPActive`. Frames accepted, assigned V(S), transmitted within the sliding window. |
 | COP-2 | S2, Retransmit without Wait | 5.1 | M | Yes | `FOPRetransmitWithoutWait`. Entered on a retransmit-requesting CLCW or T1 expiry; unacknowledged frames re-queued for transmission. |
 | COP-3 | S3, Retransmit with Wait | 5.1 | M | Yes | `FOPRetransmitWithWait`. Entered on CLCW with Retransmit=1 and Wait=1; retransmissions held until the Wait flag clears. |
@@ -66,7 +66,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-2: FOP-1 Directives (section 5.2)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-9 | Initiate AD Service (without CLCW check) | 5.2 (E23) | M | Yes | `InitiateADWithoutCLCW()`; `Initialize(vs)` combines it with Set V(S). |
 | COP-10 | Initiate AD Service with CLCW check | 5.2 (E24) | M | Yes | `InitiateADWithCLCWCheck()`, waits in S4 for a clean CLCW (Lockout=0, Wait=0, Retransmit=0) under T1. |
 | COP-11 | Initiate AD Service with Unlock | 5.2 (E25) | M | Yes | `InitiateADWithUnlock(bcFrame)`, transmits the encoded BC Unlock frame (built with `tcdl.NewUnlockFrame`), retransmits on T1 expiry, completes when the CLCW Lockout flag clears. |
@@ -82,7 +82,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-3: FOP-1 Timer and Transmission Limit
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-20 | T1 Timer | 5.2 (E16-E18) | M | Yes | Caller-driven clock: `Tick(n)` advances it; `TimerRunning()` reports state. Started on frame queueing and initiate directives, restarted when new frames are acknowledged, stopped when everything is acknowledged. NOTE: the library holds no wall clock by design; the mission supplies the tick source. |
 | COP-21 | Transmission Limit / Transmission Count | 5.2 | M | Yes | `txCount` starts at 1, increments on every retransmission initiation, resets when new frames are acknowledged. When T1 expires (or a retransmit is requested) with the count at the limit and no progress: Alert(LIMIT) under TT0, suspend under TT1. |
 | COP-22 | Timer expiry actions | 5.2 (E16-E18) | M | Yes | Below the limit: re-queue unacknowledged AD frames (or re-serve the BC frame in S5), increment the count, restart T1. At the limit: TT0 -> `AlertLimit` (S1-S3) / `AlertT1` (S4-S5); TT1 -> suspend with SS 1-4. |
@@ -90,7 +90,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-4: FOP-1 CLCW Processing (E1-E14)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-23 | Lockout detection | E14 | M | Yes | CLCW Lockout=1 in S1-S4 -> Alert(LOCKOUT), purge, S6. In S5 the flag is expected (the Unlock has not landed yet) and is ignored. |
 | COP-24 | N(R) validity check | E13 | M | Yes | N(R) must lie in NN(R)..V(S) (mod 256). Violations -> Alert(NNR) and `ErrFOPInvalidNR`. |
 | COP-25 | Acknowledgment | E1/E5 | M | Yes | Frames with N(S) < N(R) removed from the sent and wait queues; NN(R) updated; transmission count reset and T1 restarted while frames remain outstanding, stopped when all are acknowledged. |
@@ -100,7 +100,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-5: FOP-1 Transmit Paths
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-28 | AD frame transmission | 5.1 | M | Yes | `TransmitFrame()` in S1-S3, assigns V(S), enforces the sliding window (`ErrFOPWindowFull`), starts T1. `ErrFOPNotActive` elsewhere. |
 | COP-29 | BC frame transmission | 5.1 | M | Yes | BC frames carried by the Initiate-with-Unlock / Set V(R) directives; served first by `GetNextFrame()` (N(S)=0) and retransmitted under T1. |
 | COP-30 | BD frame transmission | 5.1 | M | Yes | `TransmitBDFrame()`, expedited frames bypass sequence control, served ahead of AD frames, allowed in any state. |
@@ -108,7 +108,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-6: FARM-1 (section 6)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-31 | S1, Open | 6.1 | M | Yes | `FARMOpen`. |
 | COP-32 | S2, Wait | 6.1 (E2/E10) | M | Yes | `FARMWait`. Entered when an in-sequence frame arrives with no buffer free (frame discarded, Wait and Retransmit flags set); left when `ReleaseBuffer()` frees one. Buffer accounting configured with `SetBuffers(n)`; disabled by default. |
 | COP-33 | S3, Lockout | 6.1 (E5) | M | Yes | `FARMLockout`. Entered when N(S) falls outside both windows. The Retransmit flag is left untouched on entry. Cleared only by a BC Unlock. |
@@ -122,7 +122,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Table A-7: CLCW Format (section 4.2)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | COP-40 | CLCW field layout | 4.2 | M | Yes | `CLCW` struct, 4 bytes, all 12 fields (Control Word Type, Version, Status, COP in Effect, VCID, No RF Available, No Bit Lock, Lockout, Wait, Retransmit, FARM-B, Report Value) with bit-exact `Encode()`/`Decode()` and validation. |
 
 ---
@@ -132,7 +132,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 ### Overall Statistics
 
 | Category | Total Items | Supported | Not Supported |
-|----------|-------------|-----------|---------------|
+|---|---|---|---|
 | Mandatory (M) | 40 | 40 | 0 |
 | **Total** | **40** | **40** | **0** |
 
@@ -141,7 +141,7 @@ NOTE, The FOP-1 event/action behavior follows the state tables of the standard a
 The event/action tables of CCSDS 232.1-B-2 are followed as closely as practical for a library API. Known deviations:
 
 | Area | Deviation |
-|------|-----------|
+|---|---|
 | T1 timer | Caller-driven (`Tick`), not wall-clock; a T1 initial of 0 disables it. The standard assumes a real timer; the mission must supply the tick source. |
 | S5 confirmation | The BC frame is confirmed by observing the CLCW (Lockout cleared, or Report Value matching the pinned V(R)) rather than by tracking the FARM-B counter delta. |
 | Wait_Queue | Higher-layer flow control is a bounded queue (`TransmitFrame` + window check) rather than the standard's one-FDU Wait_Queue with Accept/Reject signals. |
@@ -150,7 +150,7 @@ The event/action tables of CCSDS 232.1-B-2 are followed as closely as practical 
 ### Key Implementations
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | FOP-1 states | COP-1-8 | S1-S6, SS 0-4, alerts with reason codes, purge-on-alert. |
 | FOP-1 directives | COP-9-19 | All 11 directives with parameter validation. |
 | Timer/limit | COP-20-22 | Caller-driven T1, transmission limit/count, TT0/TT1. |

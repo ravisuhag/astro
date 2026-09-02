@@ -2,10 +2,15 @@
 title: Encapsulation Packet Protocol
 short: EPP
 description: CCSDS 133.1-B-3, a thin wrapper for carrying IP and other non-CCSDS data.
+identifiers:
+  - "CCSDS 133.1-B-3 * Encapsulation Packet Protocol"
+  - "pkg/epp * astro epp"
 order: 11
 ---
 
 > **CCSDS 133.1-B-3** | [Blue Book](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](https://github.com/ravisuhag/astro/tree/main/pkg/epp) | [`astro epp`](/cli/epp)
+
+## Overview
 
 EPP wraps data that is not a Space Packet so it can travel on a CCSDS data link. An IP datagram, an LTP segment, anything with its own addressing. The header is 1, 2, 4, or 8 octets and does almost nothing except say what is inside.
 
@@ -71,7 +76,7 @@ From clause 4.1.2.3 and the SANA Encapsulation Protocol ID registry.
 
 header rules, see the [protocol page](/protocols/transport/epp).
 
-## Quick Start
+## Quick start
 
 ```go
 // Create a service over any io.ReadWriter (TCP conn, serial port, etc.)
@@ -84,7 +89,7 @@ err := svc.SendBytes(epp.ProtocolIDIPE, ipv4Datagram)
 pid, data, err := svc.ReceiveBytes()
 ```
 
-## Service Layer
+## Service layer
 
 The `Service` type provides send/receive operations over an `io.ReadWriter` transport:
 
@@ -94,7 +99,7 @@ svc := epp.NewService(conn, epp.ServiceConfig{
 })
 ```
 
-### Byte-Level Service
+### Byte-Level service
 
 The simplest way to send and receive data. The service wraps your bytes in a valid encapsulation packet automatically:
 
@@ -111,7 +116,7 @@ err := svc.SendBytes(epp.ProtocolIDExtended, data,
 pid, data, err := svc.ReceiveBytes()
 ```
 
-### Packet-Level Service
+### Packet-Level service
 
 For full control over the packet structure, build an `EncapsulationPacket` and send it directly:
 
@@ -123,7 +128,7 @@ err := svc.SendPacket(packet)
 packet, err := svc.ReceivePacket()
 ```
 
-## Creating Packets
+## Creating packets
 
 For use cases outside the Service layer (testing, offline encoding, custom transports), construct packets directly:
 
@@ -151,7 +156,7 @@ packet, err := epp.NewPacket(epp.ProtocolIDIPE, data)
 than an 8-bit length field can describe automatically selects the 4-octet
 header, and so on.
 
-### Packet Options
+### Packet options
 
 Options configure the header size and optional fields:
 
@@ -174,7 +179,7 @@ packet, err := epp.NewPacket(epp.ProtocolIDExtended, data,
 )
 ```
 
-### Inspecting Packets
+### Inspecting packets
 
 ```go
 // Check if a packet is an idle packet
@@ -184,7 +189,7 @@ if packet.IsIdle() { ... }
 fmt.Println(packet.Humanize())
 ```
 
-### Packet Sizing
+### Packet sizing
 
 The `PacketSizer` function returns the total packet length from the header bytes of an Encapsulation Packet. It implements the `sdl.PacketSizer` signature, allowing EPP packets to be extracted from fixed-length transfer frames by the `tmdl` and `tcdl` service layers:
 
@@ -193,7 +198,7 @@ The `PacketSizer` function returns the total packet length from the header bytes
 totalLen := epp.PacketSizer(headerBytes)
 ```
 
-## Encoding and Decoding
+## Encoding and decoding
 
 ```go
 // Encode a packet to bytes for transmission
@@ -208,9 +213,9 @@ fmt.Println(decoded.Header.Size())
 fmt.Println(decoded.Data)
 ```
 
-## Full Pipeline Example
+## Full pipeline example
 
-### Send Path
+### Send path
 
 ```go
 // Create an EPP packet carrying an IPv4 datagram
@@ -223,7 +228,7 @@ encoded, err := packet.Encode()
 frame, err := tmdl.NewTMTransferFrame(0x1A, 1, encoded, nil, nil)
 ```
 
-### Receive Path
+### Receive path
 
 ```go
 // Extract packet bytes from a transfer frame
@@ -242,7 +247,7 @@ fmt.Printf("Data: %x\n", packet.Data)
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrInvalidPVN` | PVN is not 7 ('111') |
 | `ErrInvalidProtocolID` | Protocol ID outside 0-7 |
 | `ErrInvalidLengthOfLength` | Length of Length field outside 0-3 |

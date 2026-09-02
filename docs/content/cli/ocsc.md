@@ -16,7 +16,7 @@ That matters for `randomize`: randomising the padding would corrupt the block, s
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro ocsc condition` | Split frames into SCPPM codeblocks |
 | `astro ocsc randomize` | Apply the randomiser to a codeblock |
 
@@ -35,7 +35,7 @@ astro ocsc condition [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--frame-len` | *(required)* | Fixed frame length in octets |
 | `--rate` | `1/2` | SCPPM code rate: `1/3`, `1/2`, or `2/3` |
 | `--input` | `bin` | Input format: `hex` or `bin` |
@@ -60,7 +60,7 @@ astro ocsc randomize [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--bits` | *(all of the input)* | Codeblock length in bits |
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `json` |

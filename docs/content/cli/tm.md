@@ -10,7 +10,7 @@ TM Transfer Frame operations: encode, decode, inspect, and analyze CCSDS TM Tran
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro tm decode` | Decode a TM Transfer Frame into header fields and data |
 | `astro tm encode` | Construct a TM Transfer Frame from fields |
 | `astro tm inspect` | Annotated frame breakdown with hex dump |
@@ -18,10 +18,10 @@ TM Transfer Frame operations: encode, decode, inspect, and analyze CCSDS TM Tran
 | `astro tm demux` | Filter frames by Virtual Channel ID |
 | `astro tm gen` | Generate synthetic TM Transfer Frames |
 
-## Common Flags
+## Common flags
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 
@@ -40,7 +40,7 @@ astro tm decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 
@@ -70,7 +70,7 @@ astro tm encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-7) |
 | `--data` | *(required)* | Data field as hex string |
@@ -103,7 +103,7 @@ astro tm inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -160,7 +160,7 @@ astro tm gaps [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--frame-len` | *(required)* | Fixed frame length in bytes |
 
@@ -187,7 +187,7 @@ astro tm demux [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--frame-len` | *(required)* | Fixed frame length in bytes |
@@ -219,7 +219,7 @@ astro tm gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-7) |
 | `--count` | `10` | Number of frames to generate |

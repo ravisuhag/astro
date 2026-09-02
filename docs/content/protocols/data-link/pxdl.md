@@ -2,6 +2,9 @@
 title: Proximity-1 Data Link Layer
 short: PXDL
 description: CCSDS 211.0-B-6, the short-range link between an orbiter and a lander or rover.
+identifiers:
+  - "CCSDS 211.0-B-6 * Proximity-1 Data Link Layer"
+  - "pkg/pxdl * astro pxdl"
 order: 24
 ---
 
@@ -83,7 +86,7 @@ Two details worth pinning down.
 octet of the data field. An 11-bit field therefore tops out at a 2048-octet
 frame.
 
-### Quality of Service
+### Quality of service
 
 One bit, two services (clause 3.2.2.3):
 
@@ -207,7 +210,7 @@ One quirk: **the variable-length SPDU's length field is the actual count, not
 a count-less-one.** clause 3.2.4.2.2 calls this out explicitly, presumably because
 everything else in CCSDS goes the other way.
 
-### The Proximity Link Control Word
+### The Proximity link control word
 
 The one fixed-length SPDU defined so far. It is Proximity-1's acknowledgement.
 The same job COP-1's CLCW does for TC links (clause 3.2.4.3.2):

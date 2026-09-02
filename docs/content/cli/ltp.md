@@ -10,7 +10,7 @@ Decode LTP segments ([CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro ltp decode` | Decode one segment: the header, then its content |
 
 ---
@@ -26,7 +26,7 @@ astro ltp decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 

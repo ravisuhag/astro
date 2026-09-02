@@ -62,7 +62,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 ### Table A-1: Frame Synchronization (section 9)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TMSC-1 | ASM bit pattern 0x1ACFFC1D for uncoded, convolutional, Reed-Solomon, concatenated, rate-7/8 LDPC (Transfer Frame), and all LDPC (stream of SMTFs) coded data | 9.2, 9.3.1 | M | Yes | `DefaultASM()` returns the 32-bit pattern 0x1ACFFC1D. Fresh copy returned each call to prevent mutation. |
 | TMSC-2 | ASM attachment: the ASM immediately precedes the codeblock or Transfer Frame, with no intervening bits | 9.4.1, 9.4.2 | M | Yes | `WrapCADU()` prepends the ASM directly to the (optionally randomized) codeblock or frame data. Custom ASM supported via parameter. |
 | TMSC-3 | ASM detection/stripping (receive) | 9.1, 9.4 | M | Yes | `UnwrapCADU()` validates and strips the ASM. Returns `ErrSyncMarkerMismatch` if the ASM is not found at the expected position. |
@@ -73,7 +73,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 ### Table A-2: Pseudo-Randomizer (section 10)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TMSC-7 | Randomization method: exclusive-OR of each bit of the codeblock/frame with a standard pseudo-random sequence | 10.2.1, 10.2.2 | M | Yes | `Randomize(data)` XORs data with the PN sequence. Returns a new slice; input not modified. Applied after RS encoding, ASM excluded. |
 | TMSC-8 | Synchronization and application: sequence starts at the first bit after the ASM; generator reinitialized for each codeblock/frame; ASM itself never randomized | 10.3, 10.4.3 | M | Yes | `WrapCADU()` randomizes before prepending the ASM; `UnwrapCADU()` de-randomizes after stripping it. The generator restarts on every call. |
 | TMSC-9 | 131071-bit pseudo-random sequence, h(x) = x^17 + x^14 + 1 | 10.4.1 | O.2 | No | Not implemented. This is the preferred sequence in Issue 5 for obviating spectral spikes on high-data-rate links. |
@@ -83,7 +83,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 ### Table A-3: Reed-Solomon Coding (section 4)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TMSC-12 | Parameters: J = 8 bits per symbol; E = 16 (255,223) | 4.3.1 | M | Yes | `NewRS255_223()`, 32 check symbols, corrects up to 16 symbol errors per codeword. |
 | TMSC-13 | Parameters: J = 8 bits per symbol; E = 8 (255,239) | 4.3.1 | M | Yes | `NewRS255_239()`, 16 check symbols, corrects up to 8 symbol errors per codeword. E is a mission-selected managed parameter (12.5, table 12-3). |
 | TMSC-14 | General characteristics: n = 255 symbols per codeword, 2E check symbols, k = n - 2E information symbols | 4.3.2 | M | Yes | `DataLen()` = 223 or 239; `NRoots()` = 32 or 16. |
@@ -102,7 +102,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 ### Table A-4: Coding Methods (sections 3, 5-8; selection per table 12-1)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TMSC-26 | Basic convolutional coding (rate 1/2, K = 7, G1 = 171 octal, G2 = 133 octal, G2 inverted) | 3.3 | O.1 | No | Not implemented. |
 | TMSC-27 | Punctured convolutional coding (rates 2/3, 3/4, 5/6, 7/8) | 3.4 | O.1 | No | Not implemented. |
 | TMSC-28 | Reed-Solomon coding | 4 | O.1 | Yes | See table A-3. |
@@ -118,7 +118,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 ### Overall Statistics
 
 | Category | Total Items | Supported | Not Supported |
-|----------|-------------|-----------|---------------|
+|---|---|---|---|
 | Mandatory within supported options (M) | 18 | 18 | 0 |
 | Coding methods (O.1) | 8 | 1 | 7 |
 | Randomizer sequences (O.2) | 2 | 1 | 1 |
@@ -135,7 +135,7 @@ None. Every mandatory requirement of the supported options (Reed-Solomon coding 
 ### Non-Supported Optional Items
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | TMSC-5 | Scheme-specific ASMs | The turbo/LDPC schemes they belong to are not implemented. |
 | TMSC-6 | Embedded data stream ASM | Not implemented; custom ASMs can be supplied by the caller. |
 | TMSC-9 | 131071-bit pseudo-randomizer | Not implemented; the legacy 255-bit sequence is provided. Missions requiring ITU power-flux-density compliance at high data rates should note 10.4.2's caveats. |
@@ -147,7 +147,7 @@ None. Every mandatory requirement of the supported options (Reed-Solomon coding 
 ### Fully Supported Areas
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | Frame synchronization | TMSC-1-4 | `DefaultASM()`, `WrapCADU()`, `UnwrapCADU()`; ASM outside the coded/randomized data space. |
 | Pseudo-randomization (255-bit) | TMSC-7, 8, 10, 11 | `GeneratePNSequence()`, `Randomize()` (self-inverse), integrated into the CADU pipeline. |
 | Reed-Solomon coding | TMSC-12-25 | GF(2^8) over 0x187, roots β^(112+j) with β = α^11, dual-basis wire representation, systematic encode, full decode pipeline with post-correction syndrome recheck, shortened codeblocks via virtual fill, interleaving depths 1, 2, 3, 4, 5, 8. |

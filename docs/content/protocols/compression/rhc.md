@@ -1,7 +1,10 @@
 ---
 title: Housekeeping Compression
 short: RHC
-description: Robust Compression of Housekeeping Data (CCSDS 124.0-B-1), POCKET+, lossless compression that survives packet loss.
+description: CCSDS 124.0-B-1, POCKET+, lossless compression that survives packet loss.
+identifiers:
+  - "CCSDS 124.0-B-1 * Housekeeping Compression"
+  - "pkg/rhc * astro rhc"
 order: 51
 ---
 
@@ -15,11 +18,11 @@ bits are identical to the last sample. POCKET+ exists to send only the ones
 that are not.
 
 ```
-  housekeeping reports  ──►  pkg/rhc  ──►  packetization by the caller
-    e.g. PUS ST[03]              │
-    from pkg/pus                 │
-                        send only the bits
-                        that actually changed
+housekeeping reports ──► pkg/rhc ──► packetization by the caller
+e.g. PUS ST[03]          │
+from pkg/pus             │
+                         send only the bits
+                         that actually changed
 ```
 
 The mechanism is a **mask**: one bit per position in the packet, saying whether

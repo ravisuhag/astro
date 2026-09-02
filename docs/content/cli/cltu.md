@@ -10,7 +10,7 @@ Command Link Transmission Unit operations: wrap, unwrap, and inspect CLTUs ([CCS
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro cltu wrap` | Wrap a TC frame into a CLTU (BCH encode, add start/tail sequences) |
 | `astro cltu unwrap` | Validate sequences, BCH decode, extract TC frame |
 | `astro cltu inspect` | Annotated CLTU breakdown with codeblock details |
@@ -29,7 +29,7 @@ astro cltu wrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
 | `--randomize` | `false` | Apply CCSDS pseudo-randomization |
@@ -57,7 +57,7 @@ astro cltu unwrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
 | `--derandomize` | `false` | Apply CCSDS de-randomization |
@@ -85,7 +85,7 @@ astro cltu inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -124,7 +124,7 @@ astro cltu gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--count` | `10` | Number of CLTUs to generate |

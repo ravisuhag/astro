@@ -2,10 +2,15 @@
 title: AOS Space Data Link Protocol
 short: AOS
 description: CCSDS 732.0-B-4, high-rate downlink frames for Earth observation and deep space.
+identifiers:
+  - "CCSDS 732.0-B-4 * AOS Space Data Link Protocol"
+  - "pkg/aos * astro aos"
 order: 22
 ---
 
 > **CCSDS 732.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/732x0b4.pdf) | [`pkg/aos`](https://github.com/ravisuhag/astro/tree/main/pkg/aos) | [`astro aos`](/cli/aos)
+
+## Overview
 
 AOS is the downlink protocol for missions that send a lot of data for a long time. Earth observation, lunar, deep space. It does the same job as [TM](/protocols/data-link/tmdl) but scales further in three ways: a 24-bit frame counter instead of 8 bits, an insert zone that puts a fixed field at every frame boundary, and a bitstream service for data that is not packets.
 

@@ -2,10 +2,15 @@
 title: Time Code Formats
 short: TCF
 description: CCSDS 301.0-B-4, how spacecraft timestamps are encoded, and what leap seconds do to them.
+identifiers:
+  - "CCSDS 301.0-B-4 * Time Code Formats"
+  - "pkg/tcf * astro time"
 order: 60
 ---
 
 > **CCSDS 301.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](https://github.com/ravisuhag/astro/tree/main/pkg/tcf) | [`astro time`](/cli/time)
+
+## Overview
 
 When a sensor reading, an image, or a command acknowledgement needs a timestamp, this is how it gets written. The standard gives four formats with different trade-offs between size, precision, and how easy they are to read.
 
@@ -96,7 +101,7 @@ The full table of integer TAI-UTC offsets is embedded in the package. They are h
 
 **Practical advice.** Store TAI or mission elapsed time onboard. Convert to UTC only at the ground system boundary, where the leap second table is available and someone is keeping it current.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tcf"
@@ -110,10 +115,10 @@ decoded, _ := tcf.DecodeCUC(encoded, time.Time{})
 fmt.Println(decoded.Time()) // Go time.Time
 ```
 
-## Supported Formats
+## Supported formats
 
 | Format | Description | Encoding | Use Case |
-|--------|-------------|----------|----------|
+|---|---|---|---|
 | **CUC** | Unsegmented Time Code | Binary counter (seconds + fraction) | High-rate telemetry, onboard clocks |
 | **CDS** | Day Segmented Time Code | Day + milliseconds + optional sub-ms | Ground systems, event logging |
 | **CCS** | Calendar Segmented Time Code | BCD-encoded calendar fields | Human-readable binary timestamps |
@@ -153,7 +158,7 @@ Binary counter split into coarse time (seconds since epoch) and fine time (binar
 **Fine time resolution:**
 
 | Fine Octets | Resolution |
-|-------------|------------|
+|---|---|
 | 0 | 1 s |
 | 1 | ~3.9 ms (2^-8 s) |
 | 2 | ~15.3 us (2^-16 s) |
@@ -181,7 +186,7 @@ cuc, err := tcf.NewCUC(time.Now(),
 )
 ```
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode to bytes (P-field + T-field)
@@ -210,7 +215,7 @@ Day count since epoch plus milliseconds of day, with optional sub-millisecond pr
 **Sub-millisecond precision:**
 
 | Sub-ms Bytes | Resolution |
-|--------------|------------|
+|---|---|
 | 0 | 1 ms |
 | 2 | microseconds (0-999) |
 | 4 | picoseconds (0-999999999) |
@@ -234,7 +239,7 @@ cds, err := tcf.NewCDS(time.Now(),
 )
 ```
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode to bytes
@@ -288,7 +293,7 @@ ccs, err := tcf.NewCCS(time.Now(),
 ccs, err := tcf.NewCCS(time.Now(), tcf.WithCCSSubSecBytes(3))
 ```
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode to bytes (BCD-encoded)
@@ -311,7 +316,7 @@ Human-readable text formats derived from ISO 8601.
 - **Type A** (calendar): `YYYY-MM-DDThh:mm:ss.dddZ`
 - **Type B** (ordinal): `YYYY-DDDThh:mm:ss.dddZ`
 
-### Creating and Using
+### Creating and using
 
 ```go
 // Type A with default 3 fractional digits
@@ -330,7 +335,7 @@ t, err := ascii.Decode("2026-03-18T14:30:15.123Z")
 
 The `Z` terminator is always appended on encode and is optional on decode.
 
-## P-Field (Preamble)
+## P-Field (preamble)
 
 The P-field is managed automatically by the format constructors. For advanced use cases, it can be inspected directly:
 
@@ -345,7 +350,7 @@ fmt.Println(cuc.PField.Size())     // 1 or 2
 **Time Code IDs:**
 
 | Constant | Value | Format |
-|----------|-------|--------|
+|---|---|---|
 | `TimeCodeCUCLevel1` | `0x01` | CUC with CCSDS epoch |
 | `TimeCodeCUCLevel2` | `0x02` | CUC with agency-defined epoch |
 | `TimeCodeCDS` | `0x04` | CDS (Level 1 or 2) |
@@ -356,7 +361,7 @@ fmt.Println(cuc.PField.Size())     // 1 or 2
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | Data too short to decode time code |
 | `ErrInvalidPField` | P-field doesn't conform to CCSDS 301.0-B-4 |
 | `ErrInvalidTimeCodeID` | Unrecognized time code identification |

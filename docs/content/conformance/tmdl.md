@@ -56,7 +56,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-1: TM Service Data Units
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TM-1 | Packet SDU | 3.2.2 | M | Yes | Space Packets are carried in `TMTransferFrame.DataField`. The `VirtualChannelPacketService` accepts packet data via `Send()`, pushes frames into a `VirtualChannel`, and delivers data via `Receive()`. |
 | TM-2 | VCA_SDU | 3.2.3 | M | Yes | `VirtualChannelAccessService` accepts fixed-length VCA SDUs via `Send()` with `VCASize` enforcement, pushes frames into a `VirtualChannel`, and delivers them via `Receive()`. |
 | TM-3 | FSH_SDU | 3.2.4 | M | Yes | `SecondaryHeader.DataField` carries the FSH SDU. Presence indicated by `PrimaryHeader.FSHFlag`. Encoded/decoded via `SecondaryHeader.Encode()` / `SecondaryHeader.Decode()`. |
@@ -66,7 +66,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-2: Service Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | | **VCP Packet Service Parameters** | | | | | |
 | TM-6 | Packet | 3.3.2.2 | M | - | Yes | Packet data passed as `[]byte` to `VirtualChannelPacketService.Send()`. Frame pushed into `VirtualChannel`. Delivered via `Receive()`. |
 | TM-7 | GVCID | 3.3.2.3 | M | - | Yes | Derived from `PrimaryHeader.GVCID()` (TFVN + SCID + VCID). VCID configured at service construction. |
@@ -109,7 +109,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-3: Service Primitives
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | | **VCP Service Primitives** | | | | |
 | TM-34 | VCP.request | 3.3.3.2 | M | Yes | `VirtualChannelPacketService.Send(data)` implements VCP.request. When `ChannelConfig` is set, packs packets into fixed-length frames using native FHP (multi-packet packing: tail-of-previous + start-of-next in same frame). `Flush()` fills the remaining space with an SPP idle packet and emits the resulting frame(s). |
 | TM-35 | VCP.indication | 3.3.3.3 | M | Yes | `VirtualChannelPacketService.Receive()` implements VCP.indication. When `ChannelConfig` is set, uses FHP to locate packet boundaries and `PacketSizer` (via `spp.PacketSizer`) to extract complete packets. `SetPacketSizer` must be called explicitly. Resyncs via FHP after VC frame count gaps. Skips idle frames and discards extracted idle packets (APID 0x7FF). |
@@ -138,7 +138,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-4: TM Protocol Data Unit
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TM-50 | TM Transfer Frame | 4.1.1 | M | Yes | `TMTransferFrame` struct with `Encode()` / `DecodeTMTransferFrame()` round-trip. |
 | TM-51 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader`, 6 octets (48 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (3 bits), OCF Flag (1 bit), MC Frame Count (8 bits), VC Frame Count (8 bits), Transfer Frame Data Field Status (16 bits). Big-endian encoding via `Encode()` / `Decode()`. Validated via `Validate()`. |
 | TM-52 | Transfer Frame Secondary Header | 4.1.3 | M | Yes | `SecondaryHeader` struct: Version Number (2 bits, enforced as `00`), Header Length (6 bits, 0-63), Data Field (variable). `Encode()` / `Decode()` / `Validate()` methods. Presence controlled by FSHFlag. |
@@ -149,7 +149,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-5: Protocol Procedures
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TM-56 | Packet Processing Function | 4.2.2 | M | Yes | `VirtualChannelPacketService.Send()` accepts packet data and packs it contiguously across fixed-length frames when `ChannelConfig` is set, with native FirstHeaderPtr management. `Flush()` fills spare data field space with SPP idle packets (APID 0x7FF), spanning into following frames when the spare space is under the 7-octet minimum packet size. |
 | TM-57 | VC Generation Function | 4.2.3 | M | Yes | `NewTMTransferFrame()` generates frames with SCID, VCID, data, optional secondary header, and optional OCF. CRC auto-computed. Frame counts applied by `stampFrame()` when a `FrameCounter` is provided. |
 | TM-58 | VC Multiplexing Function | 4.2.4 | M | Yes | `VirtualChannelMultiplexer` schedules frames from multiple Virtual Channels using weighted round-robin via `GetNextFrame()`. Integrated into `MasterChannel`. `GetNextFrameOrIdle()` creates the OID Transfer Frame clause 4.2.4.4 requires when no valid frame is available at release time: First Header Pointer '11111111110', a VCID that carries packets (clause 4.1.4.6.3, the lowest registered channel or the one pinned by `SetIdleVCID()`), a PN-filled data field, and MC/VC frame counts continuing the channel's sequence. |
@@ -166,7 +166,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-6: Management Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | | **Managed Parameters for a Physical Channel** | | | | | |
 | TM-68 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name`, configured at construction via `NewPhysicalChannel(name, config)`. |
 | TM-69 | Transfer Frame Length (octets) | Table 5-1 | M | Integer | Yes | `ChannelConfig.FrameLength` defines the fixed frame length. Enforced by VCP (packing + idle-packet fill) and VCA (padding) during frame construction, and by the codec itself: `EncodeWithConfig()` and `DecodeTMTransferFrameWithConfig()` reject any other length with `ErrFrameLengthMismatch`. `DataFieldCapacity()` computes available data space. |
@@ -196,7 +196,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-7: Protocol Specification with SDLS Option
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TM-89 | SDLS Protocol | (see ref. [10]) | O | No | SDLS Option not implemented. |
 | TM-90 | Security Header | 6.3.4 | C3 | N/A | SDLS Option not implemented. |
 | TM-91 | Transfer Frame Data Field in a TM Frame with SDLS | 6.3.5 | C3 | N/A | SDLS Option not implemented. |
@@ -218,7 +218,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Table A-8: Additional Managed Parameters with SDLS Option
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | TM-103 | Presence of Space Data Link Security Header | Table 6-1 | C5 | Present ('1') / Absent ('0') | N/A | SDLS Option not implemented. |
 | TM-104 | Presence of Space Data Link Security Trailer | Table 6-1 | C5 | Present ('1') / Absent ('0') | N/A | SDLS Option not implemented. |
 | TM-105 | Length of Space Data Link Security Header (octets) | Table 6-1 | C5 | Integer (see ref. [10]) | N/A | SDLS Option not implemented. |
@@ -233,7 +233,7 @@ the protocol procedures at both ends. Optional items not supported: TM-9
 ### Overall Statistics
 
 | Category | Total Items | Supported | Partial | Not Supported |
-|----------|-------------|-----------|---------|---------------|
+|---|---|---|---|---|
 | Mandatory (M) | 78 | 78 | 0 | 0 |
 | Optional (O) | 9 | 7 | 0 | 2 |
 | Conditional (C2) | 2 | 0 | 0 | 0 (N/A) |
@@ -256,14 +256,14 @@ VC_OCF have per-service suppliers of the same shape.
 ### Non-Supported Optional Items
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | TM-9 | Packet Quality Indicator | Not implemented. No packet quality/confidence reporting. |
 | TM-89 | SDLS Protocol | SDLS Option not implemented. Planned for future phase. |
 
 ### Supported Optional Items
 
 | Item | Description | Implementation |
-|------|-------------|----------------|
+|---|---|---|
 | TM-14 | VCA SDU Loss Flag | `FrameGapDetector` via `MasterChannel.VCFrameGap()`. |
 | TM-18 | FSH_SDU Loss Flag | `FrameGapDetector` via `MasterChannel.MCFrameGap()` / `VCFrameGap()`. |
 | TM-21 | OCF SDU Frame Loss Flag | `FrameGapDetector` via `MasterChannel.MCFrameGap()` / `VCFrameGap()`. |
@@ -277,7 +277,7 @@ VC_OCF have per-service suppliers of the same shape.
 All 78 mandatory items are fully supported. Key implementations:
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | Service Data Units | TM-1-5 | `TMTransferFrame` encode/decode, `SecondaryHeader`, `OperationalControl`. |
 | VCP Service | TM-6-8, TM-34-35 | `VirtualChannelPacketService` with native multi-packet packing via FHP, SPP idle-packet fill, `PacketSizer`-based reassembly with FHP resync on loss and idle-packet discard. |
 | VCA Service | TM-11-13, TM-36-37 | `VirtualChannelAccessService` with fixed SDU size enforcement, `LastStatus()` for status fields. |

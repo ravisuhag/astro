@@ -2,6 +2,9 @@
 title: Bundle Protocol
 short: BP
 description: CCSDS 734.2-B-1, store-and-forward bundles for delay-tolerant networking.
+identifiers:
+  - "CCSDS 734.2-B-1 * Bundle Protocol"
+  - "pkg/bp * astro bp"
 order: 14
 ---
 
@@ -161,7 +164,7 @@ fragmentation. And an anonymous bundle (source `dtn:none`) must not
 request custody and must set the "must not be fragmented" flag, because
 without a source it is not uniquely identifiable.
 
-## Extended Class of Service
+## Extended class of service
 
 CCSDS 734.2-B-1 clause 3.3 **requires** conformant implementations to support the
 ECOS block. Three priority levels are not enough for spacecraft operations.

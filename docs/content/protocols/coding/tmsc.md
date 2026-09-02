@@ -1,11 +1,16 @@
 ---
 title: TM Sync and Channel Coding
 short: TMSC
-description: TM Synchronization and Channel Coding (CCSDS 131.0-B-5), sync markers, randomization, and Reed-Solomon on the downlink.
+description: CCSDS 131.0-B-5, sync markers, randomization, and Reed-Solomon on the downlink.
+identifiers:
+  - "CCSDS 131.0-B-5 * TM Sync and Channel Coding"
+  - "pkg/tmsc * astro cadu"
 order: 30
 ---
 
 > **CCSDS 131.0-B-5** | [Blue Book](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](https://github.com/ravisuhag/astro/tree/main/pkg/tmsc) | [`astro cadu`](/cli/cadu)
+
+## Overview
 
 This is the layer between a [TM frame](/protocols/data-link/tmdl) and the radio. It does three things: puts a known pattern in front of each frame so a receiver can find frame boundaries in a continuous bitstream, scrambles the bits so the receiver's clock recovery has transitions to lock onto, and adds Reed-Solomon parity so bit errors can be corrected without asking for a resend.
 
@@ -56,7 +61,7 @@ Q must be a multiple of the interleave depth, so each codeword shortens equally,
 
 **Interleaving is what makes burst errors survivable.** A fade that corrupts 30 consecutive bytes would blow past RS(255,223)'s 16-symbol limit inside one codeword. At depth 5 the same burst puts 6 bytes into each of 5 codewords, and every one of them is correctable.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tmsc"
@@ -89,7 +94,7 @@ The TMSC sublayer sits between the TM Data Link Protocol (`tmdl`) and the physic
 +-----------------------------------------+
 ```
 
-## Attached Sync Marker (ASM)
+## Attached sync marker (ASM)
 
 The ASM is a known 4-byte bit pattern prepended to each Transfer Frame. The receiver uses it to find frame boundaries in the continuous bitstream.
 
@@ -100,7 +105,7 @@ asm := tmsc.DefaultASM() // Returns []byte{0x1A, 0xCF, 0xFC, 0x1D}
 
 The ASM was carefully chosen for its autocorrelation properties. It can be detected reliably even in the presence of noise. A fresh copy is returned each call to prevent accidental mutation.
 
-## CADU Wrapping and Unwrapping
+## CADU wrapping and unwrapping
 
 A **Channel Access Data Unit (CADU)** is the combination of ASM + Transfer Frame data. This is the unit that is actually transmitted over the physical link.
 
@@ -112,7 +117,7 @@ A **Channel Access Data Unit (CADU)** is the combination of ASM + Transfer Frame
 |<------------ CADU ------------->|
 ```
 
-### Wrapping (Send Path)
+### Wrapping (send path)
 
 ```go
 // Wrap with default ASM and pseudo-randomization
@@ -126,7 +131,7 @@ customASM := []byte{0xDE, 0xAD, 0xBE, 0xEF}
 cadu := tmsc.WrapCADU(encodedFrame, customASM, true)
 ```
 
-### Unwrapping (Receive Path)
+### Unwrapping (receive path)
 
 ```go
 // Unwrap with default ASM and de-randomization
@@ -160,18 +165,18 @@ pnSeq := tmsc.GeneratePNSequence(1024)
 
 **Important:** The ASM is never randomized. Only the Transfer Frame content is XORed.
 
-## Reed-Solomon Error Correction
+## Reed-Solomon error correction
 
 The package provides CCSDS Reed-Solomon codes over GF(2^8) with primitive polynomial `0x187` and first consecutive root (FCR) 112.
 
-### Available Codes
+### Available codes
 
 | Code | Parity Symbols | Error Correction | Use Case |
-|------|---------------|-----------------|----------|
+|---|---|---|---|
 | RS(255,223) | 32 | Up to 16 errors | Standard CCSDS coding |
 | RS(255,239) | 16 | Up to 8 errors | Lower overhead alternative |
 
-### Basic Encoding and Decoding
+### Basic encoding and decoding
 
 ```go
 // Create a codec
@@ -189,7 +194,7 @@ if errors.Is(err, tmsc.ErrUncorrectable) {
 fmt.Printf("Corrected %d symbol errors\n", numErrors)
 ```
 
-### Interleaved Encoding and Decoding
+### Interleaved encoding and decoding
 
 CCSDS supports symbol interleaving to spread burst errors across multiple codewords, improving resilience against clustered bit errors.
 
@@ -215,7 +220,7 @@ corrected, totalErrors, err := rs.DecodeInterleaved(interleaved, depth)
 
 On decode, the reverse is performed. This means a burst error affecting consecutive bytes in the interleaved stream is distributed across multiple codewords, where each codeword sees only a few symbol errors.
 
-### Codec Properties
+### Codec properties
 
 ```go
 rs := tmsc.NewRS255_223()
@@ -223,9 +228,9 @@ rs.NRoots()  // 32 (number of parity symbols
 rs.DataLen() // 223) data bytes per codeword
 ```
 
-## Full Pipeline Example
+## Full pipeline example
 
-### Send Path (Spacecraft to Ground)
+### Send path (spacecraft to ground)
 
 ```go
 import (
@@ -248,7 +253,7 @@ cadu := tmsc.WrapCADU(encoded, nil, true)
 transmit(cadu)
 ```
 
-### Receive Path (Ground Station)
+### Receive path (ground station)
 
 ```go
 // 1. Receive CADU from physical link
@@ -270,7 +275,7 @@ if err != nil { /* handle CRC errors */ }
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | CADU too short to contain the ASM |
 | `ErrSyncMarkerMismatch` | CADU does not start with the expected ASM |
 | `ErrInvalidDataLength` | Data length does not match RS code parameters |

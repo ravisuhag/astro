@@ -12,7 +12,7 @@ Samples are whole numbers of a fixed width, not octets: a stream of 12-bit readi
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro ldc compress` | Compress a sample stream |
 | `astro ldc decompress` | Recover the samples |
 | `astro ldc inspect` | Show a compressed file's header without decompressing |
@@ -34,7 +34,7 @@ astro ldc compress [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--resolution` | `8` | Bits per input sample, *n*: 1 to 32 |
 | `--block-size` | `16` | Samples per block, *J*: 8, 16, 32 or 64 |
 | `--predictor` | `unit-delay` | Preprocessor: `unit-delay`, `none`, or `bypass` |
@@ -71,7 +71,7 @@ astro ldc decompress [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `bin` | Input format: `hex` or `bin` |
 | `--format` | `bin` | Output format: `bin`, `hex`, or `text` |
 
@@ -98,7 +98,7 @@ astro ldc inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `bin` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 

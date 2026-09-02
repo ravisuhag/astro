@@ -2,6 +2,9 @@
 title: Lossless Data Compression
 short: LDC
 description: CCSDS 121.0-B-3, the Rice adaptive entropy coder, every bit recoverable.
+identifiers:
+  - "CCSDS 121.0-B-3 * Lossless Data Compression"
+  - "pkg/ldc * astro ldc"
 order: 50
 ---
 
@@ -18,11 +21,11 @@ It is the most widely used CCSDS compression standard, and it is small. Two
 stages, both pure integer arithmetic:
 
 ```
-  samples ──►  preprocessor  ──►  adaptive entropy coder  ──►  coded data sets
-                   Clause 4                     clause 3                        clause 5
-              decorrelate            price every option
-              and fold to            for each block and
-              non-negative           write the cheapest
+samples ──► preprocessor ──► adaptive entropy coder ──► coded data sets
+            clause 4         clause 3                   clause 5
+            decorrelate      price every option
+            and fold to      for each block and
+            non-negative     write the cheapest
 ```
 
 Where it sits in this library: an instrument produces samples, `pkg/ldc`

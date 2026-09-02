@@ -10,16 +10,16 @@ USLP Transfer Frame operations: encode, decode, inspect, and generate USLP Trans
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro usdl decode` | Decode a USLP Transfer Frame into header fields and data |
 | `astro usdl encode` | Construct a USLP Transfer Frame from fields |
 | `astro usdl inspect` | Annotated frame breakdown with hex dump |
 | `astro usdl gen` | Generate synthetic USLP Transfer Frames |
 
-## Common Flags
+## Common flags
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 | `--no-fecf` | `false` | Frame carries no FECF (decode/inspect) |
@@ -38,7 +38,7 @@ astro usdl decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 | `--no-fecf` | `false` | Frame carries no FECF |
@@ -67,7 +67,7 @@ astro usdl encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-65535) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--mapid` | `0` | MAP ID (0-15) |
@@ -105,7 +105,7 @@ astro usdl inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--no-fecf` | `false` | Frame carries no FECF |
 | `--insert-len` | `0` | Octets of insert zone the frame carries |
@@ -133,7 +133,7 @@ astro usdl gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-65535) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--mapid` | `0` | MAP ID (0-15) |

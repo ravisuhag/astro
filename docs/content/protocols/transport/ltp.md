@@ -2,6 +2,9 @@
 title: Licklider Transmission Protocol
 short: LTP
 description: CCSDS 734.1-B-1, reliable block transfer over long, one-way-ish links.
+identifiers:
+  - "CCSDS 734.1-B-1 * Licklider Transmission Protocol"
+  - "pkg/ltp * astro ltp"
 order: 13
 ---
 
@@ -43,7 +46,7 @@ red data above a green one, is a **miscolored** block and cancels the session.
 ┌─────────────────────────────────────────────┐
 │  Bundle Protocol / CFDP / application       │
 ├─────────────────────────────────────────────┤
-│  LTP, reliable block delivery              │  <- this package
+│  LTP, reliable block delivery               │  <- this package
 ├─────────────────────────────────────────────┤
 │  Link layer (frames, or UDP on the ground)  │
 └─────────────────────────────────────────────┘

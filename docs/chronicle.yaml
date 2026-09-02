@@ -1,6 +1,6 @@
 site:
   title: Astro
-  description: CCSDS and ECSS space communication standards, implemented in Go.
+  description: Conformance-tested CCSDS and ECSS protocols for building spacecraft and ground software.
 
 url: https://astro-docs.vercel.app
 preset: vercel
@@ -10,8 +10,8 @@ theme:
 
 content:
   - dir: docs
-    label: Guides
-    description: Install Astro, learn the stack, and build a link end to end.
+    label: Docs
+    description: Install Astro, learn the stack, build a link end to end, and contribute.
   - dir: protocols
     label: Protocols
     description: Every implemented standard — scope, field maps, Go API, conformance.

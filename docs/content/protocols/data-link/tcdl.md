@@ -2,10 +2,15 @@
 title: TC Space Data Link Protocol
 short: TCDL
 description: CCSDS 232.0-B-4, variable-length command frames on the uplink.
+identifiers:
+  - "CCSDS 232.0-B-4 * TC Space Data Link Protocol"
+  - "pkg/tcdl * astro tc"
 order: 21
 ---
 
 > **CCSDS 232.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tcdl) | [`astro tc`](/cli/tc)
+
+## Overview
 
 TC carries commands from the ground to a spacecraft. Frames are variable length, up to 1024 bytes, because a "turn on the heater" command is ten bytes and padding it to a fixed size would waste most of an uplink.
 
@@ -78,7 +83,7 @@ Every Type-A frame carries N(S) in its header, and that number drives the slidin
 
 Type-B frames skip all of it. That is the point of them, see the note below.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tcdl"
@@ -119,11 +124,11 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 
 > **Note:** The sync and channel coding layer (CLTU, BCH encoding) is handled by the [`tcsc` package](/protocols/coding/tcsc).
 
-## Transfer Frames
+## Transfer frames
 
 The `TCTransferFrame` is the fundamental data unit. TC frames are variable-length (up to 1024 bytes) and carry telecommand data identified by Spacecraft ID and Virtual Channel ID.
 
-### Creating Frames
+### Creating frames
 
 ```go
 // Basic frame with SCID=0x1A, VCID=1
@@ -149,7 +154,7 @@ frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data,
 )
 ```
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode to bytes (includes CRC-16)
@@ -166,7 +171,7 @@ if tcdl.IsBypass(frame) { /* Type-B expedited frame */ }
 if tcdl.IsControlFrame(frame) { /* Control command */ }
 ```
 
-### Inspecting Frames
+### Inspecting frames
 
 ```go
 // Human-readable header dump
@@ -177,7 +182,7 @@ mcid := frame.Header.MCID()   // Master Channel ID (TFVN + SCID)
 gvcid := frame.Header.GVCID() // Global Virtual Channel ID (MCID + VCID)
 ```
 
-## Virtual Channels
+## Virtual channels
 
 A `VirtualChannel` is a buffered frame queue identified by a VCID (0-63). TC supports up to 64 Virtual Channels, significantly more than TM's 8.
 
@@ -190,7 +195,7 @@ vc := tcdl.NewVirtualChannel(1, 100)
 
 Three service types provide different data transfer models over Virtual Channels:
 
-### MAP Packet Service
+### MAP Packet service
 
 Supports segmentation: packets larger than one frame are automatically split across multiple frames using segment header sequence flags.
 
@@ -219,7 +224,7 @@ pkt, err := svc.Receive()
 svc := tcdl.NewMAPPacketService(0x1A, 1, 0, true, vc, counter)
 ```
 
-### MAP Access Service
+### MAP access service
 
 Sends raw data units without packet boundaries. Each data unit produces a single unsegmented frame.
 
@@ -233,7 +238,7 @@ err := svc.Send(rawData)
 data, err := svc.Receive()
 ```
 
-### VC Frame Service
+### VC Frame service
 
 Pass-through service, sends and receives pre-encoded frames without modification.
 
@@ -248,7 +253,7 @@ err := vcf.Send(encodedFrameBytes)
 data, err := vcf.Receive()
 ```
 
-### Frame Counter
+### Frame counter
 
 Manages per-VC 8-bit frame sequence numbers N(S) used by COP-1:
 
@@ -305,7 +310,7 @@ hasPending := pc.HasPendingFrames()
 numMCs := pc.Len()
 ```
 
-## Service Manager
+## Service manager
 
 `TCServiceManager` provides a high-level API that wires the full pipeline:
 
@@ -329,9 +334,9 @@ frame, err := mgr.GetNextFrameFromMasterChannel(0x1A)
 hasPending := mgr.HasPendingFramesInMasterChannel(0x1A)
 ```
 
-## Full Pipeline Example
+## Full pipeline example
 
-### Send Path (Ground to Spacecraft)
+### Send path (ground to spacecraft)
 
 ```go
 // 1. Create channel hierarchy
@@ -357,7 +362,7 @@ for pc.HasPendingFrames() {
 }
 ```
 
-### Receive Path (Spacecraft)
+### Receive path (spacecraft)
 
 ```go
 // 1. Create matching channel hierarchy
@@ -404,7 +409,7 @@ farm := cop.NewFARM(1, 10)
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | Data too short to decode |
 | `ErrInvalidVersion` | Version is not 0 |
 | `ErrInvalidSpacecraftID` | SCID outside 0-1023 |

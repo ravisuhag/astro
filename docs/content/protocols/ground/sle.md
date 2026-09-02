@@ -2,6 +2,9 @@
 title: Space Link Extension
 short: SLE
 description: CCSDS 911.x, 912.1, 913.1, getting frames to and from a ground station over the internet.
+identifiers:
+  - "CCSDS 913.1-B-2 (ISP1) * Space Link Extension"
+  - "pkg/sle * astro sle"
 order: 40
 ---
 
@@ -284,7 +287,7 @@ way the specs do so a logged state matches the table you are reading:
   │         │ ◄─────── │         │ ◄────────── │         │
   └─────────┘  UNBIND  └─────────┘   STOP      └─────────┘
        ▲                                            │
-       └────────────── PEER-ABORT ───────────────────┘
+       └──────────────── PEER-ABORT ────────────────┘
 ```
 
 Data moves only in state 3. An operation the state does not allow is refused

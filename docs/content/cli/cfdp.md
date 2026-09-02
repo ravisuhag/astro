@@ -10,7 +10,7 @@ Decode CFDP Protocol Data Units ([CCSDS 727.0-B-5](https://public.ccsds.org/Pubs
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro cfdp decode` | Decode a PDU: the fixed header, then its directive or file data |
 
 ---
@@ -32,7 +32,7 @@ astro cfdp decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 

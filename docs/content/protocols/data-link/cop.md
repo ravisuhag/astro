@@ -1,11 +1,16 @@
 ---
 title: COP-1
 short: COP
-description: Communications Operation Procedure-1 (CCSDS 232.1-B-2), reliable telecommand delivery with FOP-1 and FARM-1.
+description: CCSDS 232.1-B-2, reliable telecommand delivery with FOP-1 and FARM-1.
+identifiers:
+  - "CCSDS 232.1-B-2 * COP-1"
+  - "pkg/cop * astro cop"
 order: 25
 ---
 
 > **CCSDS 232.1-B-2** | [Blue Book](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](https://github.com/ravisuhag/astro/tree/main/pkg/cop) | [`astro cop`](/cli/cop)
+
+## Overview
 
 COP-1 is what makes telecommand reliable. It sits on top of [TC](/protocols/data-link/tcdl) and manages sequence numbers, acknowledgement, and retransmission. It is a sliding window protocol, like TCP's, built for links where the round trip is seconds to hours and a wrong command can end the mission.
 
@@ -109,7 +114,7 @@ A control command is Bypass=1 *and* Control Command=1. Bypass=0 with Control Com
 
 **T1 will not fire unless you tick it.** No goroutine, no wall clock. If your loop forgets to call `Tick`, a lost CLCW stalls the machine forever, which is exactly what T1 exists to prevent.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/cop"
@@ -128,21 +133,21 @@ clcw := farm.GenerateCLCW()
 encoded, _ := clcw.Encode()
 ```
 
-## How COP-1 Works
+## How COP-1 works
 
 COP-1 provides reliable TC frame delivery over the inherently unreliable space link. It uses a sliding window protocol with three cooperating components:
 
 ```
-Ground Station                              Spacecraft
-+------------------+                        +------------------+
-|   FOP-1          |    TC Uplink           |   FARM-1         |
-|   (sends frames, |  ─────────────────>    |   (validates     |
-|    manages window,|   TC Transfer Frames  |    sequence,     |
-|    retransmits)   |                       |    accepts/       |
-|                   |    TM Return Link     |    rejects)      |
-|   Processes CLCW  |  <─────────────────   |                  |
-|                   |   CLCW in TM OCF      |   Generates CLCW |
-+------------------+                        +------------------+
+Ground Station                             Spacecraft
+┌───────────────────┐                      ┌───────────────────┐
+│  FOP-1            │      TC uplink       │  FARM-1           │
+│  sends frames,    │  ──────────────────► │  validates the    │
+│  manages the      │  TC Transfer Frames  │  sequence,        │
+│  window,          │                      │  accepts or       │
+│  retransmits      │     TM return link   │  rejects          │
+│                   │  ◄────────────────── │                   │
+│  processes CLCWs  │   CLCW in the TM OCF │  generates CLCWs  │
+└───────────────────┘                      └───────────────────┘
 ```
 
 1. **FOP-1** (ground) assigns sequence numbers to Type-A frames and transmits them.
@@ -150,20 +155,20 @@ Ground Station                              Spacecraft
 3. **FARM-1** generates a **CLCW** reporting its state (including V(R)) back via the TM downlink.
 4. **FOP-1** processes the CLCW to acknowledge frames, detect lockout, and trigger retransmission.
 
-## Frame Types
+## Frame types
 
 TC frames come in two types, determined by the Bypass Flag in the TC header:
 
 | Type | Bypass Flag | Description |
-|------|------------|-------------|
+|---|---|---|
 | **Type-A** | 0 | Sequence-controlled. Subject to COP-1 window-based acceptance. Frames are delivered in order with gap detection. |
 | **Type-B** | 1 | Expedited/bypass. Always accepted by FARM-1. Used for urgent commands that must get through regardless of sequencing state. |
 
-## FOP-1 (Ground Side)
+## FOP-1 (ground side)
 
 The Flight Operations Procedure manages frame transmission with sliding window acknowledgment.
 
-### Creating and Initializing
+### Creating and initializing
 
 ```go
 // Create FOP-1 for SCID=0x1A, VCID=1 with sliding window width 10
@@ -173,7 +178,7 @@ fop := cop.NewFOP(0x1A, 1, 10)
 fop.Initialize(0)
 ```
 
-### Transmitting Frames
+### Transmitting frames
 
 ```go
 // Queue a Type-A frame for transmission
@@ -190,7 +195,7 @@ if ok {
 }
 ```
 
-### Processing CLCW Acknowledgments
+### Processing CLCW acknowledgments
 
 ```go
 // When a CLCW arrives on the TM return link
@@ -208,7 +213,7 @@ if errors.Is(err, cop.ErrFOPLockout) {
 - If the Retransmit flag is set, re-queues unacknowledged frames for retransmission.
 - If the Lockout flag is set, transitions FOP to Initial state.
 
-### Inspecting State
+### Inspecting state
 
 ```go
 state := fop.State()        // FOPActive or FOPInitial
@@ -216,7 +221,7 @@ vs := fop.VS()              // Current V(S) value
 pending := fop.PendingCount() // Unacknowledged frames in sent queue
 ```
 
-## FARM-1 (Spacecraft Side)
+## FARM-1 (spacecraft side)
 
 The Frame Acceptance and Reporting Mechanism validates incoming TC frames.
 
@@ -227,7 +232,7 @@ The Frame Acceptance and Reporting Mechanism validates incoming TC frames.
 farm := cop.NewFARM(1, 10)
 ```
 
-### Processing Incoming Frames
+### Processing incoming frames
 
 ```go
 // Process a Type-A data frame
@@ -237,7 +242,7 @@ accepted, err := farm.ProcessFrame(bypassFlag, controlCommandFlag, frameSeqNum)
 **Acceptance rules for Type-A frames:**
 
 | Condition | Result |
-|-----------|--------|
+|---|---|
 | N(S) == V(R) | Accepted. V(R) incremented. Retransmit flag cleared. |
 | N(S) within window but != V(R) | Rejected. Retransmit flag set. |
 | N(S) outside window | Rejected. FARM enters Lockout state. |
@@ -261,7 +266,7 @@ encoded, _ := clcw.Encode()
 // The CLCW is typically placed in the TM Transfer Frame's OCF field
 ```
 
-### Inspecting State
+### Inspecting state
 
 ```go
 state := farm.State() // FARMOpen, FARMWait, or FARMLockout
@@ -282,7 +287,7 @@ Byte 3: [ReportValue:8]
 ```
 
 | Field | Bits | Description |
-|-------|------|-------------|
+|---|---|---|
 | Control Word Type | 1 | Always 0 for CLCW |
 | Version | 2 | Always 00 |
 | Status Field | 3 | Mission-specific status |
@@ -296,7 +301,7 @@ Byte 3: [ReportValue:8]
 | FARM-B Counter | 2 | Type-B frame acceptance counter (0-3) |
 | Report Value | 8 | V(R), next expected frame sequence number |
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode CLCW to bytes
@@ -315,9 +320,9 @@ err := clcw.Decode(data)
 fmt.Println(clcw.Humanize())
 ```
 
-## Full Integration Example
+## Full integration example
 
-### Ground-to-Spacecraft Round Trip
+### Ground-to-spacecraft round trip
 
 ```go
 import (
@@ -374,7 +379,7 @@ fop.ProcessCLCW(&returnedCLCW)
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | Data too short to decode CLCW |
 | `ErrInvalidCLCWType` | Control word type is not 0 |
 | `ErrInvalidCLCWVersion` | CLCW version is not 00 |

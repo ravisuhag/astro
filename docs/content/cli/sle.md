@@ -10,7 +10,7 @@ Decode SLE transfer service PDUs (CCSDS [911.1-B-5](https://public.ccsds.org/Pub
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro sle decode` | Decode a PDU envelope: which service and operation, and the content |
 
 ## Why --service is required
@@ -36,7 +36,7 @@ astro sle decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--service` | *(required)* | Transfer service: `raf`, `rcf`, `rocf`, or `fcltu` |
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |

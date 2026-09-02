@@ -2,10 +2,15 @@
 title: TM Space Data Link Protocol
 short: TMDL
 description: CCSDS 132.0-B-3, fixed-length telemetry frames on the downlink.
+identifiers:
+  - "CCSDS 132.0-B-3 * TM Space Data Link Protocol"
+  - "pkg/tmdl * astro tm"
 order: 20
 ---
 
 > **CCSDS 132.0-B-3** | [Blue Book](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](https://github.com/ravisuhag/astro/tree/main/pkg/tmdl) | [`astro tm`](/cli/tm)
+
+## Overview
 
 TM carries telemetry from a spacecraft to the ground in fixed-length transfer frames. The length is chosen once per physical channel and never changes. Inside a frame you usually find [Space Packets](/protocols/transport/spp), packed end to end and spanning frame boundaries when they are too big to fit.
 
@@ -52,7 +57,7 @@ Two derived identifiers are available as methods: `PrimaryHeader.MCID()` and `Pr
 
 Channel-wide settings live on `ChannelConfig`, `FrameLength`, `HasOCF`, `HasFEC`, and `FSHDataLength`. `ChannelConfig.DataFieldCapacity(n)` does the arithmetic for you.
 
-### First Header Pointer
+### First Header pointer
 
 The FHP is how a receiver finds packet boundaries in a fixed-length stream, and how it recovers after losing a frame. When `SyncFlag` is false:
 
@@ -80,7 +85,7 @@ When `SyncFlag` is true the FHP is undefined. Astro sends `0x07FF` and a receive
 
 **VCP needs a `PacketSizer` before it can receive.** It has to know how long the packet at the FHP offset claims to be. Without one you get `ErrNoPacketSizer`.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tmdl"
@@ -121,11 +126,11 @@ The package follows a layered architecture mapping to the CCSDS data plane:
 
 > **Note:** The sync and channel coding layer (ASM, pseudo-randomization, CADU framing) is handled by the `tmsc` package, which implements CCSDS 131.0-B-5. See [tmsc](/protocols/coding/tmsc) for details.
 
-## Transfer Frames
+## Transfer frames
 
 The `TMTransferFrame` is the fundamental data unit. Each frame has a fixed length on a given physical channel and carries telemetry data identified by Spacecraft ID and Virtual Channel ID.
 
-### Creating Frames
+### Creating frames
 
 ```go
 // Basic frame with SCID=0x1A, VCID=1
@@ -145,7 +150,7 @@ idle, err := tmdl.NewIdleFrame(0x1A, 7, config)
 idle, err := tmdl.NewIdleFrameWithCounter(0x1A, 1, config, counter, oidFill)
 ```
 
-### Encoding and Decoding
+### Encoding and decoding
 
 ```go
 // Encode to bytes (includes CRC-16)
@@ -161,7 +166,7 @@ frame, err := tmdl.DecodeTMTransferFrame(encoded)
 if tmdl.IsIdleFrame(frame) { ... }
 ```
 
-### Inspecting Frames
+### Inspecting frames
 
 ```go
 // Human-readable header dump
@@ -172,7 +177,7 @@ mcid := frame.Header.MCID()   // Master Channel ID (TFVN + SCID)
 gvcid := frame.Header.GVCID() // Global Virtual Channel ID (MCID + VCID)
 ```
 
-## Channel Configuration
+## Channel configuration
 
 `ChannelConfig` defines the fixed parameters shared by all frames on a physical channel:
 
@@ -193,7 +198,7 @@ capacity := config.DataFieldCapacity(len(secHeaderData)) // With secondary heade
 
 `DataFieldCapacity` accounts for the 6-byte primary header, optional secondary header (1 + N bytes), optional OCF (4 bytes), and optional FEC (2 bytes).
 
-## Virtual Channels
+## Virtual channels
 
 A `VirtualChannel` is a buffered frame queue identified by a VCID (0-7). It provides thread-safe FIFO storage for frames within a single data stream.
 
@@ -212,7 +217,7 @@ count := vc.Len()
 
 Three service types provide different data transfer models over Virtual Channels:
 
-### Virtual Channel Packet Service (VCP)
+### Virtual Channel Packet service (VCP)
 
 Multiplexes CCSDS Space Packets into fixed-length frames using FirstHeaderPointer for packet boundary detection.
 
@@ -254,7 +259,7 @@ vcp.SetPacketSizer(func(data []byte) int {
 
 **Receive-side resync:** After a frame gap is detected (via `FrameGapDetector`), the receiver discards its buffer and resyncs at the next `FirstHeaderPtr` offset.
 
-### Virtual Channel Frame Service (VCF)
+### Virtual Channel Frame service (VCF)
 
 Pass-through service, sends and receives pre-encoded frames without modification.
 
@@ -269,7 +274,7 @@ err := vcf.Send(encodedFrameBytes)
 data, err := vcf.Receive()
 ```
 
-### Virtual Channel Access Service (VCA)
+### Virtual Channel access service (VCA)
 
 Fixed-length SDU service for housekeeping data or fixed-rate streams. Sets `SyncFlag=true` per CCSDS 132.0-B-3 clause 4.1.2.7.3.2.
 
@@ -286,7 +291,7 @@ data, err := vca.Receive()
 status := vca.LastStatus() // VCAStatus{SyncFlag, PacketOrderFlag, SegmentLengthID, FirstHeaderPtr}
 ```
 
-### VCA Status Fields
+### VCA status fields
 
 With the Synchronization Flag set, the Packet Order Flag, Segment Length Identifier, and First Header Pointer are undefined by CCSDS and belong to the VCA service user: they are the VCA Status Fields of clause 3.4.2.3, a mandatory parameter whose meaning the mission chooses (validity, sequence, or other status of the SDU):
 
@@ -303,7 +308,7 @@ status := rx.LastStatus() // the receiving user reads them back
 
 Without `SetSendStatus`, the First Header Pointer defaults to all ones (`FHPNoPacketStart`), which is what a receiver ignoring the status fields expects to see.
 
-### Secondary Header and OCF Services (VC_FSH, VC_OCF)
+### Secondary Header and OCF services (VC_FSH, VC_OCF)
 
 The VCP and VCA services carry data for two more of the standard's services: VC_FSH (clause 3.5) puts an SDU in every frame's Transfer Frame Secondary Header, VC_OCF (clause 3.6) puts four octets in every frame's Operational Control Field. Both are synchronous with frame release, so they are installed as suppliers polled as each frame is built:
 
@@ -319,7 +324,7 @@ fsh := svc.LastFSH()
 
 The FSH SDU must be exactly `FSHDataLength` octets, and the OCF SDU exactly 4; a wrong size is refused rather than truncated. Without a supplier the fields are zero-filled, because clause 4.1.3.1.5 requires the secondary header in every frame of a channel that has one.
 
-### Frame Counter
+### Frame counter
 
 Manages 8-bit MC and VC frame counters. Share a single counter across all services for the same spacecraft:
 
@@ -356,7 +361,7 @@ vcGap := mc.VCFrameGap() // VC frame gap from last AddFrame
 hasPending := mc.HasPendingFrames()
 ```
 
-### Master Channel FSH and OCF Services (MC_FSH, MC_OCF)
+### Master Channel FSH and OCF services (MC_FSH, MC_OCF)
 
 The master channel has its own pair of services (clause 3.8, clause 3.9). Their SDUs go into *every* frame the master channel releases, whichever virtual channel it came from, and overwrite anything the virtual channel level put there. That is the Master Channel Generation Function of clause 4.2.5:
 
@@ -371,7 +376,7 @@ ocf := mc.LastOCF()
 
 Use the master-channel services when the data is spacecraft-wide (a time code, the CLCW for the whole link) and the virtual-channel ones when it differs per stream. A supplier on a channel whose frames have nowhere to put the SDU fails with `ErrFSHNotPresent` or `ErrOCFNotPresent` rather than dropping it.
 
-### Idle (OID) Frames
+### Idle (OID) frames
 
 When no virtual channel has a frame ready at release time, `GetNextFrameOrIdle` creates an Only Idle Data frame to keep the stream continuous (clause 4.2.4.4). Getting one right takes more than zero-filling:
 
@@ -422,7 +427,7 @@ unwrapped, _ := tmsc.UnwrapCADU(cadu, nil, true) // nil=default ASM, true=derand
 frame, _ := tmdl.DecodeTMTransferFrame(unwrapped)
 ```
 
-## Service Manager
+## Service manager
 
 `TMServiceManager` provides a high-level API that wires the full pipeline:
 
@@ -449,9 +454,9 @@ frame, err := mgr.GetNextFrameFromMasterChannel(0x1A)
 hasPending := mgr.HasPendingFramesInMasterChannel(0x1A)
 ```
 
-## Full Pipeline Example
+## Full pipeline example
 
-### Send Path (Spacecraft to Ground)
+### Send path (spacecraft to ground)
 
 ```go
 // 1. Configure the physical channel
@@ -486,7 +491,7 @@ for pc.HasPendingFrames() {
 }
 ```
 
-### Receive Path (Ground Station)
+### Receive path (ground station)
 
 ```go
 // 1. Create matching channel hierarchy
@@ -520,7 +525,7 @@ pkt, err := vcp.Receive()
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | Data too short to decode |
 | `ErrInvalidVersion` | Version is not 0 |
 | `ErrInvalidSpacecraftID` | SCID outside 0-1023 |

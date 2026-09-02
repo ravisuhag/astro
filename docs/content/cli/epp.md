@@ -10,7 +10,7 @@ Encapsulation Packet Protocol operations: encode, decode, inspect, validate, and
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro epp decode` | Decode raw bytes into Encapsulation Packet fields |
 | `astro epp encode` | Construct an Encapsulation Packet from header fields and data zone |
 | `astro epp inspect` | Pretty-print an annotated packet breakdown with hex dump |
@@ -18,18 +18,18 @@ Encapsulation Packet Protocol operations: encode, decode, inspect, validate, and
 | `astro epp stream` | Decode a stream of concatenated Encapsulation Packets |
 | `astro epp gen` | Generate synthetic Encapsulation Packets |
 
-## Common Flags
+## Common flags
 
 All subcommands that read input support:
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` (hex-encoded text) or `bin` (raw binary) |
 
 All subcommands that produce output support:
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--format` | varies | Output format: `text`, `json`, or `hex` |
 
 Input can be provided as a file argument or piped via stdin. Hex input accepts optional `0x` prefix, spaces, and newlines.
@@ -47,7 +47,7 @@ astro epp decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 
@@ -77,7 +77,7 @@ astro epp encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--pid` | `2` | Protocol ID (0=idle, 1=LTP, 2=IPE, 6=extended, 7=mission) |
 | `--data` | | Data zone as hex string (omit for the 1-octet idle packet) |
 | `--long-length` | `false` | Force at least a 4-octet header (2-octet length field) |
@@ -121,7 +121,7 @@ astro epp inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -165,7 +165,7 @@ astro epp validate [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -194,7 +194,7 @@ astro epp stream [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 
@@ -228,7 +228,7 @@ astro epp gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--pid` | `2` | Protocol ID (1=LTP, 2=IPE, 7=mission) |
 | `--count` | `10` | Number of packets to generate |
 | `--size` | `64` | Data zone size in bytes per packet |

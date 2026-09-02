@@ -14,7 +14,7 @@ FOP-1 and FARM-1 themselves are state machines driven by a session, not by a sin
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro cop clcw-encode` | Build a CLCW from fields |
 | `astro cop clcw-decode` | Decode a CLCW |
 
@@ -33,7 +33,7 @@ astro cop clcw-encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID, for the text summary only |
 | `--vcid` | `0` | Virtual Channel ID this CLCW reports on (0-63) |
 | `--report-value` | `0` | Next frame sequence number the receiver expects, N(R) |
@@ -72,7 +72,7 @@ astro cop clcw-decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 

@@ -2,6 +2,9 @@
 title: Packet Utilization Standard
 short: PUS
 description: ECSS-E-ST-70-41C, what goes inside a telemetry or telecommand packet.
+identifiers:
+  - "ECSS-E-ST-70-41C (PUS-C) * Packet Utilization Standard"
+  - "pkg/pus * astro pus"
 order: 70
 ---
 
@@ -38,7 +41,7 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 ┌─────────────────────────────────────────────┐
 │  Mission operations (commanding, telemetry) │
 ├─────────────────────────────────────────────┤
-│  PUS, services, requests, reports          │  <- this package
+│  PUS, services, requests, reports           │  <- this package
 │  secondary header │ application data        │
 ├─────────────────────────────────────────────┤
 │  Space Packet Protocol (pkg/spp)            │  <- carries it

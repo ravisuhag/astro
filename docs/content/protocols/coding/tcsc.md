@@ -1,11 +1,16 @@
 ---
 title: TC Sync and Channel Coding
 short: TCSC
-description: TC Synchronization and Channel Coding (CCSDS 231.0-B-4), CLTU framing, BCH coding, and randomization on the uplink.
+description: CCSDS 231.0-B-4, CLTU framing, BCH coding, and randomization on the uplink.
+identifiers:
+  - "CCSDS 231.0-B-4 * TC Sync and Channel Coding"
+  - "pkg/tcsc * astro cltu"
 order: 31
 ---
 
 > **CCSDS 231.0-B-4** | [Blue Book](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](https://github.com/ravisuhag/astro/tree/main/pkg/tcsc) | [`astro cltu`](/cli/cltu)
+
+## Overview
 
 This is the layer between a [TC frame](/protocols/data-link/tcdl) and the uplink radio. It wraps the frame in a **CLTU** (a Command Link Transmission Unit) codes it in 7-byte chunks with BCH parity, and scrambles the bits.
 
@@ -73,7 +78,7 @@ A Physical Layer Operations Procedure (clause 8) decides how CLTUs land on the c
 
 Build the stream with `AcquisitionSequence()`, `IdleSequence()`, and `UplinkSequence(plop, cltus, acqOctets, idleOctets)`.
 
-## Quick Start
+## Quick start
 
 ```go
 import "github.com/ravisuhag/astro/pkg/tcsc"
@@ -105,7 +110,7 @@ The TCSC sublayer sits between the TC Data Link Protocol (`tcdl`) and the physic
 +-----------------------------------------+
 ```
 
-## Command Link Transmission Unit (CLTU)
+## Command link transmission unit (CLTU)
 
 A **CLTU** is the unit transmitted over the physical uplink. It consists of a start sequence, one or more BCH-encoded codeblocks, and a tail sequence.
 
@@ -117,7 +122,7 @@ A **CLTU** is the unit transmitted over the physical uplink. It consists of a st
 |<------------------------- CLTU ---------------------------------->|
 ```
 
-### Start and Tail Sequences
+### Start and tail sequences
 
 ```go
 // Standard CCSDS start sequence (0xEB90)
@@ -129,7 +134,7 @@ tail := tcsc.DefaultTailSequence()
 
 The start sequence marks the beginning of a CLTU in the bitstream. The tail sequence marks the end and allows the decoder to detect the final codeblock boundary. Fresh copies are returned each call to prevent accidental mutation.
 
-### Wrapping (Send Path)
+### Wrapping (send path)
 
 ```go
 // Wrap with default sequences and pseudo-randomization
@@ -150,7 +155,7 @@ cltu, err := tcsc.WrapCLTU(encodedFrame, customStart, customTail, true)
 3. BCH-encode each 7-byte block into an 8-byte codeblock
 4. Prepend start sequence, append tail sequence
 
-### Unwrapping (Receive Path)
+### Unwrapping (receive path)
 
 ```go
 // Unwrap with default sequences and de-randomization
@@ -183,7 +188,7 @@ Each codeblock uses a BCH code that encodes 56 information bits (7 bytes) into 6
 - **Error detection:** Up to 3 bit errors per codeblock
 - **Filler bit:** Complement of the last parity bit (prevents all-zero codeblocks)
 
-### Direct BCH Usage
+### Direct BCH usage
 
 ```go
 // Encode 7 information bytes into an 8-byte codeblock
@@ -218,9 +223,9 @@ This is **not** the TM sequence. CCSDS 131.0-B-5 clause 10.4.2 uses a different 
 pnSeq := tcsc.GeneratePNSequence(256)
 ```
 
-## Full Pipeline Example
+## Full pipeline example
 
-### Send Path (Ground to Spacecraft)
+### Send path (ground to spacecraft)
 
 ```go
 import (
@@ -239,7 +244,7 @@ cltu, _ := tcsc.WrapCLTU(encoded, nil, nil, true)
 transmit(cltu)
 ```
 
-### Receive Path (Spacecraft)
+### Receive path (spacecraft)
 
 ```go
 // 1. Receive CLTU from physical link
@@ -259,7 +264,7 @@ if err != nil { /* handle CRC errors */ }
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrDataTooShort` | CLTU too short to contain start sequence, codeblock, and tail |
 | `ErrStartSequenceMismatch` | CLTU does not start with the expected start sequence |
 | `ErrTailSequenceMismatch` | CLTU does not end with the expected tail sequence |

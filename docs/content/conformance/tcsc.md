@@ -55,7 +55,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Table A-1: BCH(63,56) Coding (section 3)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TCSC-1 | BCH Generator Polynomial | 3.3 | M | Yes | g(x) = x^7 + x^6 + x^2 + 1, represented as `bchPoly = 0xC5`. |
 | TCSC-2 | BCH Codeblock Structure | 3.2 | M | Yes | 64 bits per codeblock: 56 information bits (7 bytes) + 7 parity bits + 1 filler bit. Constants: `InfoBytes = 7`, `CodeblockBytes = 8`. |
 | TCSC-3 | BCH Systematic Encoding with Complemented Parity | 3.3 | M | Yes | `BCHEncode(info)`, 7-bit LFSR systematic encoding. The transmitted parity bits are the COMPLEMENT of the LFSR remainder (`parity = ^sr & 0x7F`), per the standard. Information bytes unchanged in first 7 bytes; parity in high 7 bits of the 8th byte. Pinned to the known vector: all-zeros information octets encode to last octet 0xFE. |
@@ -69,7 +69,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Table A-2: Pseudo-Randomization (section 6)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TCSC-10 | PN Sequence Generation | 6.2 | M | Yes | `GeneratePNSequence(length)`, 8-bit LFSR, h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, preset to all ones. Pinned to the published first 40 digits (0xFF 0x39 0x9E 0x5A 0x68). This is the TC polynomial; the TM randomizer of CCSDS 131.0-B-5 clause 10.4.2 is a different sequence and is not used here. |
 | TCSC-11 | Randomization (Send) | 6.3 | M | Yes | `Randomize(data)` XORs data with the PN sequence. Returns new slice; input not modified. |
 | TCSC-12 | De-Randomization (Receive) | 6.3 | M | Yes | Same `Randomize()` function, XOR is self-inverse. Integrated into `UnwrapCLTU()` when randomize=true. |
@@ -78,7 +78,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Table A-3: CLTU (section 5)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TCSC-14 | CLTU Start Sequence | 5.2.2 | M | Yes | `DefaultStartSequence()` returns the standard 2-byte start sequence 0xEB90. Custom sequences supported via `WrapCLTU()` parameter. |
 | TCSC-15 | CLTU Tail Sequence | 5.2.4 | M | Yes | `DefaultTailSequence()` returns the standard 8-byte tail sequence 0xC5C5C5C5C5C5C579. The pattern is chosen so that it fails BCH decoding even after any single bit error, which is what terminates reception. |
 | TCSC-16 | CLTU Assembly (Send) | 5.2 | M | Yes | `WrapCLTU(frameData, startSeq, tailSeq, randomize)`: 0x55 padding to the 7-byte boundary, optional randomization of the padded buffer, BCH encoding of each block, start sequence prepend, tail sequence append. |
@@ -90,7 +90,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Table A-4: Acquisition, Idle, and PLOP (section 7)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TCSC-21 | Acquisition Sequence | 7.2.2 | M | Yes | `AcquisitionSequence(octets)`, alternating '01' pattern (0x55 octets); defaults to the recommended minimum of 16 octets (128 bits). |
 | TCSC-22 | Idle Sequence | 7.2.4 | M | Yes | `IdleSequence(octets)`, alternating '01' pattern between CLTUs. The length is unconstrained by 7.2.4 and is a managed parameter; `DefaultIdleOctets = 8` is this library's practical default, not a requirement. |
 | TCSC-23 | PLOP-1 | 7.4 | M | Yes | `UplinkSequence(PLOP1, ...)`, each CLTU preceded by its own acquisition sequence (session ends after each CLTU). |
@@ -100,7 +100,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Table A-5: Optional Coding Schemes
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | TCSC-26 | LDPC Coding | 4 | O | No | Not implemented. |
 | TCSC-27 | Concatenated BCH + Convolutional | - | O | No | Convolutional inner code not implemented. BCH outer code is available. |
 
@@ -111,7 +111,7 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Overall Statistics
 
 | Category | Total Items | Supported | Not Supported |
-|----------|-------------|-----------|---------------|
+|---|---|---|---|
 | Mandatory (M) | 25 | 24 | 1 |
 | Optional (O) | 2 | 0 | 2 |
 | **Total** | **27** | **24** | **3** |
@@ -119,20 +119,20 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 ### Non-Conformances (Mandatory Items Not Supported)
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | TCSC-25 | CMM state machine | The library produces the physical-channel symbol stream (`UplinkSequence`) but does not model the carrier modulation mode transitions; carrier on/off control belongs to the transmitting equipment, not to a codec library. |
 
 ### Non-Supported Optional Items
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | TCSC-26 | LDPC Coding | Not implemented. Specialized application for high-data-rate TC links. |
 | TCSC-27 | Concatenated BCH + Convolutional | Convolutional inner code not implemented. |
 
 ### Key Implementations
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | BCH(63,56) Coding | TCSC-1-9 | `BCHEncode()` (complemented parity, filler '0', all-zeros -> 0xFE vector), `BCHDecode()` / `BCHDecodeWithMode()` with SEC and TED modes. |
 | Pseudo-Randomization | TCSC-10-13 | `GeneratePNSequence()`, `Randomize()`; fill-then-randomize order in `WrapCLTU()`. |
 | CLTU | TCSC-14-20 | `WrapCLTU()`, `UnwrapCLTU()` / `UnwrapCLTUWithMode()` terminating on the first failed codeblock. |

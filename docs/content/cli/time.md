@@ -10,16 +10,16 @@ CCSDS Time Code Format operations: encode, decode, and inspect CCSDS time codes 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro time decode` | Decode a binary/hex time code into a human-readable timestamp |
 | `astro time encode` | Encode a timestamp into a CCSDS time code |
 | `astro time inspect` | Annotated P-field and T-field breakdown with hex dump |
 | `astro time now` | Encode the current UTC time in all supported formats |
 
-## Supported Formats
+## Supported formats
 
 | Format | Codec Flag | Description |
-|--------|-----------|-------------|
+|---|---|---|
 | CUC | `cuc` | CCSDS Unsegmented Time Code, coarse + fine seconds since epoch |
 | CDS | `cds` | CCSDS Day Segmented, day count + milliseconds of day |
 | CCS | `ccs` | CCSDS Calendar Segmented, calendar fields (year, day, hour, etc.) |
@@ -41,7 +41,7 @@ astro time decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
 | `--codec` | auto | Time code format: `cuc`, `cds`, `ccs`, `ascii-a`, `ascii-b` |
@@ -75,7 +75,7 @@ astro time encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--codec` | `cuc` | Time code format: `cuc`, `cds`, `ccs`, `ascii-a`, `ascii-b` |
 | `--time` | `now` | Timestamp to encode (RFC3339 or `now`) |
 | `--format` | `hex` | Output format: `text`, `json`, or `hex` |
@@ -83,28 +83,28 @@ astro time encode [flags]
 **CUC-specific flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--coarse-bytes` | `4` | Coarse time octets (1-4) |
 | `--fine-bytes` | `0` | Fine time octets (0-3) |
 
 **CDS-specific flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--day-bytes` | `2` | Day segment width (2 or 3) |
 | `--subms-bytes` | `0` | Sub-millisecond width (0, 2, or 4) |
 
 **CCS-specific flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--month-day` | `false` | Use month/day variant instead of day-of-year |
 | `--sub-sec-bytes` | `0` | Sub-second octets (0-6) |
 
 **ASCII-specific flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--precision` | `3` | Fractional second digits (0-9) |
 
 **Examples**
@@ -142,7 +142,7 @@ astro time inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--codec` | auto | Time code format: `cuc`, `cds`, `ccs` |
 
@@ -190,7 +190,7 @@ astro time now [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--codec` | all | Specific format: `cuc`, `cds`, `ccs`, `ascii-a`, `ascii-b` |
 | `--format` | `text` | Output format: `text` or `json` |
 

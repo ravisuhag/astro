@@ -53,7 +53,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Table A-1: Encapsulation Packet Structure
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | EPP-1 | Encapsulation Packet | 4.1.1 | M | Yes | `EncapsulationPacket` struct with `Header` and `Data` fields. `Encode()` / `Decode()` with golden wire-vector tests in addition to round-trips. |
 | EPP-2 | Packet Version Number | 4.1.2.2 | M | Yes | Bits 0-2 of octet 0, enforced as '111' (7) via `ErrInvalidPVN`. Distinguishes from Space Packets (PVN '000'). |
 | EPP-3 | Encapsulation Protocol ID | 4.1.2.3 | M | Yes | Bits 3-5 of octet 0. Named constants per the SANA registry: `ProtocolIDIdle` (0), `ProtocolIDLTP` (1), `ProtocolIDIPE` (2), `ProtocolIDExtended` (6), `ProtocolIDMission` (7). Validated in `Header.Validate()`. |
@@ -67,7 +67,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Table A-2: Header Sizes (figure 4-2 / table 4-1)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | EPP-10 | 1-octet header (LoL '00') | 4.1.2 | M | Yes | Idle packets only; encodes as 0xE0. `NewIdlePacket()` constructor; golden vector test. |
 | EPP-11 | 2-octet header (LoL '01') | 4.1.2 | M | Yes | 1-octet Packet Length, max total 255. Default for small payloads. |
 | EPP-12 | 4-octet header (LoL '10') | 4.1.2 | M | Yes | UDF + PIE octet, 2-octet Packet Length, max total 65,535. Selected automatically for larger payloads or via `WithLongLength()` / `WithUserDefined()` / `WithExtendedProtocolID()`. |
@@ -77,7 +77,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Table A-3: Protocol ID Values (SANA registry)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | EPP-15 | Idle Packet (PID 0) | 4.1.2.3 NOTE 1 | M | Yes | `NewIdlePacket()` (1-octet form) and `NewIdleFillPacket(totalLength, fill)` for multi-octet idle fill packets used to fill fixed-length transfer frames. `IsIdle()` detection. |
 | EPP-16 | LTP (PID 1) | SANA registry | O | Yes | `ProtocolIDLTP` constant; `NewLTPPacket()` constructor. |
 | EPP-17 | Internet Protocol Extension (PID 2) | SANA registry | O | Yes | `ProtocolIDIPE` constant; `NewIPEPacket()` constructor. |
@@ -88,7 +88,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Table A-4: Service Interface
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | EPP-21 | ENCAPSULATION.request | 3.3 | M | Yes | `Service.SendBytes(protocolID, data, opts...)` and `Service.SendPacket(packet)`. |
 | EPP-22 | ENCAPSULATION.indication | 3.3 | M | Yes | `Service.ReceiveBytes()` and `Service.ReceivePacket()` with header-size-aware streaming reads. |
 | EPP-23 | Packet Sizing | - | - | Yes | `PacketSizer(data)` implements `sdl.PacketSizer`: total length from the first octet's LoL field (1 for the idle byte). Compatible with `tmdl` and `tcdl` VCP services. |
@@ -96,7 +96,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Table A-5: Management Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | EPP-24 | Maximum Packet Length | 5 | M | Integer | Yes | `ServiceConfig.MaxPacketLength`. Defaults to 4,294,967,295 (the protocol maximum) so no spec-valid packet is rejected unless a mission sets a lower limit. |
 | EPP-25 | Packet Multiplexing | - | O | Mission specific | No | No multiplexing or scheduling logic. Caller controls ordering of `SendPacket()` calls. |
 
@@ -107,7 +107,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Overall Statistics
 
 | Category | Total Items | Supported | Partial | Not Supported |
-|----------|-------------|-----------|---------|---------------|
+|---|---|---|---|---|
 | Mandatory (M) | 17 | 17 | 0 | 0 |
 | Optional (O) | 4 | 3 | 0 | 1 |
 | Unclassified (, ) | 2 | 1 | 1 | 0 |
@@ -116,13 +116,13 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 ### Non-Conformances (Optional Items Not Supported)
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | EPP-25 | Packet Multiplexing | No multiplexing, scheduling, or interleaving logic. |
 
 ### Partial Conformances (Items Requiring Attention)
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | EPP-20 | Reserved Protocol IDs | Reserved PIDs (3, 4, 5) can be constructed and decoded, but no named constants are provided. |
 
 ### Verification Notes

@@ -10,7 +10,7 @@ XTCE mission database operations: validate a database, see what it defines, and 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro xtce validate` | Check a database for the errors the schema cannot catch |
 | `astro xtce list` | List the space systems, parameters and containers it defines |
 | `astro xtce layout` | Show the fields a container lays out, with bit offsets |
@@ -50,7 +50,7 @@ astro xtce list <file> [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--kind` | `all` | What to list: `all`, `systems`, `parameters`, or `containers` |
 | `--format` | `text` | Output format: `text` or `json` |
 
@@ -79,7 +79,7 @@ astro xtce layout <file> <container> [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--format` | `text` | Output format: `text` or `json` |
 
 **Examples**
@@ -118,7 +118,7 @@ astro xtce decode <file> [packet-file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--container` | *(required)* | Qualified container name to decode against |
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text` or `json` |
@@ -151,7 +151,7 @@ astro xtce match <file> [packet-file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--root` | *(required)* | Qualified name of the container to search down from |
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `name` |

@@ -10,7 +10,7 @@ TC Transfer Frame operations: encode, decode, and inspect CCSDS TC Transfer Fram
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro tc decode` | Decode a TC Transfer Frame with CRC verification |
 | `astro tc encode` | Construct a TC Transfer Frame from fields |
 | `astro tc inspect` | Annotated frame breakdown with hex dump |
@@ -29,7 +29,7 @@ astro tc decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `json`, or `hex` |
 
@@ -56,7 +56,7 @@ astro tc encode [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--data` | *(required)* | Data field as hex string |
@@ -94,7 +94,7 @@ astro tc inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 
 **Examples**
@@ -145,7 +145,7 @@ astro tc gen [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--scid` | `0` | Spacecraft ID (0-1023) |
 | `--vcid` | `0` | Virtual Channel ID (0-63) |
 | `--count` | `10` | Number of frames to generate |

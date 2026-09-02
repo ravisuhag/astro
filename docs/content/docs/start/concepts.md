@@ -33,7 +33,7 @@ This page is the map. Every protocol page links back here rather than re-explain
        │
        ▼
 ┌──────────────────┐
-│  ASM  ->  CADU    │   pkg/tmsc    "a frame starts HERE"
+│  ASM  ->  CADU   │   pkg/tmsc    "a frame starts HERE"
 └──────────────────┘
        │
        ▼
@@ -61,9 +61,13 @@ The ground runs the same thing backwards.
 | Reliability | - | [COP-1](/protocols/data-link/cop) |
 | Security | [SDLS](/protocols/data-link/sdls) | [SDLS](/protocols/data-link/sdls) |
 
-**TM or AOS?** TM for a normal downlink. AOS when the data rate is high enough that TM's 8-bit frame counter wraps too fast to be useful, Earth observation, deep space.
+**TM or AOS?** TM for a normal downlink. AOS when the data rate is high enough that TM's 8-bit frame counter wraps too fast to be useful, Earth observation, deep space. AOS also carries a raw bitstream or opaque blocks, which TM cannot. Guide: [a high-rate downlink with AOS](/docs/guides/aos-high-rate).
 
 **Why is the uplink different?** Commands must arrive correctly and in order, because a wrong one can end the mission. TC frames are variable length so a ten-byte command costs ten bytes, and [COP-1](/protocols/data-link/cop) sits on top to retransmit anything that goes missing. The downlink has no equivalent: it detects loss but cannot ask again.
+
+That makes the two directions one system rather than two, because COP-1's acknowledgement travels back in the Operational Control Field of a telemetry frame. Guide: [a full-duplex link](/docs/guides/full-duplex).
+
+**Security is not optional in practice.** A downlink is readable by anyone with a dish and an uplink is forgeable by anyone with a transmitter, so [SDLS](/protocols/data-link/sdls) encrypts or authenticates the frame data field. Guide: [encrypt and authenticate a link](/docs/guides/secure-a-link).
 
 **USLP** does both directions with one frame format. It is the newer answer to running three stacks at once.
 
@@ -71,17 +75,17 @@ The ground runs the same thing backwards.
 
 Some protocols do not sit in that stack at all.
 
-**Between ground systems.** [SLE](/protocols/ground/sle) moves frames between a ground station and a control centre over the internet. It is the only protocol here that never touches a spacecraft.
+**Between ground systems.** [SLE](/protocols/ground/sle) moves frames between a ground station and a control centre over the internet. It is the only protocol here that never touches a spacecraft. Guide: [pull frames from a ground station](/docs/guides/sle-ground-station).
 
 **Between spacecraft.** [Proximity-1](/protocols/data-link/pxdl) is the short-range link, a rover to an orbiter overhead, which then relays to Earth on a completely separate downlink. It has its own coding layer, [PXSC](/protocols/coding/pxsc), which wraps frames in PLTUs the way TMSC wraps them in CADUs.
 
 **Over a laser.** [OCSC](/protocols/coding/ocsc) is the coding layer for optical links. It replaces Reed-Solomon with SCPPM and works in bits rather than octets, because a codeblock's length is not a whole number of them.
 
-**Files and networking.** [CFDP](/protocols/transport/cfdp) moves files. [LTP](/protocols/transport/ltp) and [BP](/protocols/transport/bp) do delay-tolerant networking for multi-hop paths.
+**Files and networking.** [CFDP](/protocols/transport/cfdp) moves files. [LTP](/protocols/transport/ltp) and [BP](/protocols/transport/bp) do delay-tolerant networking for multi-hop paths. Guides: [downlink a file](/docs/guides/file-downlink) and [store and forward](/docs/guides/dtn-deep-space).
 
-**Inside the packet.** [PUS](/protocols/mission/pus) defines what a telemetry or telecommand packet's payload actually means, housekeeping reports, event notifications, command acknowledgements. [Time codes](/protocols/mission/tcf) are how timestamps are written. [XTCE](/protocols/mission/xtce) is the database that says which bytes are which parameter.
+**Inside the packet.** [PUS](/protocols/mission/pus) defines what a telemetry or telecommand packet's payload actually means, housekeeping reports, event notifications, command acknowledgements. [Time codes](/protocols/mission/tcf) are how timestamps are written. [XTCE](/protocols/mission/xtce) is the database that says which bytes are which parameter. Guides: [PUS services](/docs/guides/pus-services), [time correlation](/docs/guides/time-correlation) and [a mission database](/docs/guides/xtce-database).
 
-**Before transmission.** [LDC](/protocols/compression/ldc) and [RHC](/protocols/compression/rhc) compress data losslessly, because downlink is the scarcest thing a mission has.
+**Before transmission.** [LDC](/protocols/compression/ldc) and [RHC](/protocols/compression/rhc) compress data losslessly, because downlink is the scarcest thing a mission has. Guide: [compress before you downlink](/docs/guides/compression).
 
 ## A worked path
 
@@ -97,4 +101,4 @@ Follow one housekeeping reading end to end:
 8. The packet's APID says it is housekeeping. [XTCE](/protocols/mission/xtce) says byte 4 is the temperature.
 9. Someone sees 22.5 °C.
 
-The [downlink guide](/docs/guides/downlink) builds steps 2 through 7 in real code.
+The [downlink guide](/docs/guides/downlink) builds steps 2 through 7 in real code. Step 1 is [the PUS guide](/docs/guides/pus-services), step 8 is [the mission database guide](/docs/guides/xtce-database), and [debug a real capture](/docs/guides/debug-a-capture) runs steps 6 to 8 backwards from a binary file.

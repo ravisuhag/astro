@@ -59,7 +59,9 @@ Frontmatter first: `title`, a `short` sidebar label, `description`, and an `orde
 > **CCSDS 123.4-B-5** | [Blue Book](url) | [`pkg/foo`](url) | [`astro foo`](/cli/foo)
 ```
 
-Then a paragraph or two on what the protocol is for, linking to [the stack](/docs/start/concepts) rather than re-explaining the layers. Then these sections:
+Then these sections. Headings are **sentence case** throughout, so `## Quick start`, not `## Quick Start`. Acronyms and named CCSDS fields keep their capitals: `## Master Channel`, `## Octet String Service`.
+
+**`## Overview`**: a paragraph or two on what the protocol is for, linking to [the stack](/docs/start/concepts) rather than re-explaining the layers. Every protocol page opens with one, so the table of contents has an entry for the introduction rather than starting at Scope.
 
 **`## Scope`** is the most valuable section on the page. Four things:
 
@@ -78,7 +80,11 @@ Then a paragraph or two on what the protocol is for, linking to [the stack](/doc
 
 A table, not a walkthrough. If a reader wants the bit diagram they can open the PDF. What they cannot get anywhere else is the mapping to your struct.
 
-**`## Gotchas`**: the rules that bite. Off-by-ones, fields that must agree with each other, things that fail silently, defaults that differ from a neighbouring protocol. Cite the clause. Name the error the package returns. Where there is a wire format, this section and Scope are why the page exists.
+**The rules that bite**: off-by-ones, fields that must agree with each other, things that fail silently, defaults that differ from a neighbouring protocol. Cite the clause. Name the error the package returns. Where there is a wire format, this and Scope are why the page exists.
+
+Put them under `## Gotchas` on a page with a handful, or give each one its own named heading when there is more to say: [`ltp`](/protocols/transport/ltp) has `## The library owns no clock`, [`pxsc`](/protocols/coding/pxsc) has `## The CRC-32 is not the one you expect`. A named heading is easier to link to and tells a reader what the trap is before they read the paragraph, so prefer it once a page has more than about three.
+
+The guides use `## Things that will bite you` for the same job. That is deliberate: a guide is read start to finish, a protocol page is scanned.
 
 **`## Using the package`**: quick start, the types and options that matter, and an error table. Sits between Gotchas and Notes. Name the sections for what they do (`## Quick start`, `## Errors`) rather than nesting them all under one heading; the page's table of contents is the navigation.
 

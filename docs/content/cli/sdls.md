@@ -18,7 +18,7 @@ Reading the header needs no keys at all, and it is usually what you want when a 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro sdls inspect` | Decode a Security Header |
 
 ---
@@ -38,7 +38,7 @@ astro sdls inspect [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--iv` | `0` | Initialisation vector length in octets |
 | `--seq` | `0` | Anti-replay sequence number length in octets |
 | `--pad` | `0` | Pad length field width in octets |

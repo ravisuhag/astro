@@ -1,11 +1,16 @@
 ---
 title: Space Packet Protocol
 short: SPP
-description: CCSDS 133.0-B-2. The packet that carries application data across a mission.
+description: CCSDS 133.0-B-2, the packet that carries application data across a mission.
+identifiers:
+  - "CCSDS 133.0-B-2 * Space Packet Protocol"
+  - "pkg/spp * astro spp"
 order: 10
 ---
 
 > **CCSDS 133.0-B-2** | [Blue Book](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](https://github.com/ravisuhag/astro/tree/main/pkg/spp) | [`astro spp`](/cli/spp)
+
+## Overview
 
 A Space Packet is the unit an application sends. It carries a 6-byte header and a payload of 1 to 65,536 bytes. The header names the application it came from or is going to, and counts packets so the receiver can spot gaps.
 
@@ -59,13 +64,13 @@ Constants live in `header.go`. A whole packet is 7 to 65,542 bytes.
 
 **Sequence counts are per APID.** A gap on APID 100 says nothing about APID 200. The service tracks each separately and reports skips in `Indication.DataLoss`.
 
-### Error Control
+### Error control
 
 The optional 2-byte CRC-16-CCITT at the end of the data field is **not part of CCSDS 133.0-B-2**. It is a mission and PUS-style convention that lives inside the data field, which the standard leaves to the mission, so it stays wire-compatible. Astro offers it because most missions want it.
 
 It covers the whole packet up to but not including itself. Polynomial `0x1021`, initial value `0xFFFF`. Turn it on with `WithErrorControl()` when sending and `WithDecodeErrorControl()` when receiving. A receiver that does not expect it will read the two bytes as payload.
 
-## Quick Start
+## Quick start
 
 ```go
 // Create a service over any io.ReadWriter (TCP conn, serial port, etc.)
@@ -81,7 +86,7 @@ ind, err := svc.ReceiveBytes()
 fmt.Println(ind.APID, ind.Data, ind.SecondaryHeaderIndicator, ind.DataLoss)
 ```
 
-## Service Layer
+## Service layer
 
 The `Service` type provides two CCSDS-defined service interfaces over an `io.ReadWriter` transport:
 
@@ -102,7 +107,7 @@ svc := spp.NewService(conn, spp.ServiceConfig{
 })
 ```
 
-### Per-APID Receive Configuration
+### Per-APID receive configuration
 
 CCSDS 133.0-B-2 manages the secondary header contents per APID (table 5-1), so two APIDs on one transport may carry different header formats, and one may carry a trailing CRC while another does not. `ServiceConfig.APIDs` overrides the receive-side handling for chosen APIDs:
 
@@ -146,14 +151,14 @@ ind, err := svc.ReceiveBytes()
 `ReceiveBytes` returns an `Indication`:
 
 | Field | Meaning |
-|-------|---------|
+|---|---|
 | `Data` | The octet string |
 | `APID` | The managed data path it arrived on |
 | `SecondaryHeaderIndicator` | Whether the packet carried a Packet Secondary Header |
 | `DataLoss` | Whether the sequence count for this APID skipped ahead |
 | `PacketsLost` | How many packets the count skipped |
 
-### Packet Service
+### Packet service
 
 For full control over the packet structure, build a `SpacePacket` and send it directly:
 
@@ -172,7 +177,7 @@ if ind.PacketLoss {
 }
 ```
 
-### QoS Requirement
+### QoS requirement
 
 `WithQoS` attaches the optional QoS Requirement of PACKET.request (CCSDS 3.3.2.4), which selects a service level when the underlying subnetwork offers more than one, for example Type-A versus Type-B service on a telecommand link. The transport declares support by implementing `QoSWriter`; without it, a send carrying a QoS requirement is refused with `ErrQoSUnsupported` before anything reaches the wire:
 
@@ -182,13 +187,13 @@ err := svc.SendPacket(packet, spp.WithQoS(1))
 
 What each level means belongs to the transport. The Octet String Service has no QoS parameter (3.4.3.2.2), so `SendBytes` takes no QoS option.
 
-### Sequence Counting
+### Sequence counting
 
 The service automatically maintains a per-APID 14-bit sequence counter (CCSDS 133.0-B-2 4.1.3.4.3). Each call to `SendPacket` or `SendBytes` stamps the packet with the next count for its APID and wraps at 16383.
 
 Pinning a count with `WithSequenceCount` (or `WithSendSequenceCount`) does not break the run: the service resynchronizes its counter to one past the pinned value, so the APID's count stays continuous as 4.1.3.4.3.4 requires.
 
-### Loss Detection
+### Loss detection
 
 Every received packet is checked for sequence count continuity on its APID, modulo 16384 (CCSDS 4.3.2.2). `ReceiveBytes` reports the result on the `Indication` and `ReceivePacketIndication` on the `PacketIndication`, bound to the delivered packet. After a plain `ReceivePacket`, read it with `LastDataLoss()`, but note the figure is service-wide, so with concurrent receivers prefer `ReceivePacketIndication`:
 
@@ -204,7 +209,7 @@ svc.ResetContinuity()
 
 The first packet seen on an APID never reports a loss.
 
-## Creating Packets
+## Creating packets
 
 For use cases outside the Service layer (testing, offline encoding, custom transports), construct packets directly:
 
@@ -219,7 +224,7 @@ packet, err := spp.NewTCPacket(200, []byte("SET_MODE=SAFE"))
 packet, err := spp.NewSpacePacket(100, spp.PacketTypeTM, data)
 ```
 
-### Packet Options
+### Packet options
 
 Options configure optional fields:
 
@@ -243,7 +248,7 @@ packet, err := spp.NewTMPacket(100, data,
 )
 ```
 
-### Inspecting Packets
+### Inspecting packets
 
 ```go
 // Check if a packet is an idle packet (APID 0x7FF)
@@ -256,7 +261,7 @@ if spp.IsIdleBytes(raw) { ... }
 fmt.Println(packet.Humanize())
 ```
 
-### Packet Sizing
+### Packet sizing
 
 Two functions read a packet's length, and which one you want depends on whether you already hold the octets.
 
@@ -277,7 +282,7 @@ if n > 0 {
 total := spp.DeclaredPacketSize(header) // header need only be 6 octets
 ```
 
-## Encoding and Decoding
+## Encoding and decoding
 
 ```go
 // Encode a packet to bytes for transmission
@@ -305,7 +310,7 @@ The Secondary Header Flag is the only signal that a header is present (CCSDS 4.1
 
 When `WithDecodeErrorControl()` is used, the trailing 2 bytes are extracted as a CRC-16-CCITT checksum and verified against the packet contents. If the CRC does not match, `ErrCRCValidationFailed` is returned.
 
-## Secondary Headers
+## Secondary headers
 
 The secondary header's contents and length are mission-defined (CCSDS 4.1.4.2.1.4). Its layout is not free-form: 4.1.4.2.1.5 allows a Time Code Field alone, an Ancillary Data Field alone, or a Time Code Field followed by an Ancillary Data Field, and 4.1.4.2.1.6 requires the same choice throughout a managed data path's life. The interface sees only octets, so keeping to one of those three shapes is your implementation's job.
 
@@ -351,7 +356,7 @@ func (h *TimestampHeader) Size() int { return 6 }
 All errors are exported package-level variables, suitable for use with `errors.Is`:
 
 | Error | Meaning |
-|-------|---------|
+|---|---|
 | `ErrInvalidVersion` | Version is not 0 |
 | `ErrInvalidType` | Type is not 0 or 1 |
 | `ErrInvalidAPID` | APID outside 0-2047 |

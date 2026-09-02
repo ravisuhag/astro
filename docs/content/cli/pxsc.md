@@ -12,7 +12,7 @@ A PLTU is the Proximity-1 equivalent of a CADU: the sync marker `0xFAF320`, the 
 ## Subcommands
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `astro pxsc wrap` | Wrap a transfer frame as a PLTU |
 | `astro pxsc unwrap` | Extract the frame, verifying the CRC-32 |
 | `astro pxsc sync` | Scan a byte stream for PLTUs |
@@ -32,7 +32,7 @@ astro pxsc wrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
 
@@ -57,7 +57,7 @@ astro pxsc unwrap [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
 | `--max-frame` | `2048` | Largest frame to accept, in octets |
@@ -83,7 +83,7 @@ astro pxsc sync [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `text` | Output format: `text`, `hex`, or `json` |
 
@@ -100,7 +100,7 @@ astro pxsc encode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
 | `--flush` | `true` | Append the zero tail the decoder needs |
@@ -126,7 +126,7 @@ astro pxsc decode [file] [flags]
 **Flags**
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---|---|
 | `--input` | `hex` | Input format: `hex` or `bin` |
 | `--format` | `hex` | Output format: `text`, `hex`, or `bin` |
 

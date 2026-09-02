@@ -2,6 +2,9 @@
 title: Space Data Link Security
 short: SDLS
 description: CCSDS 355.0-B-2, encrypting and authenticating transfer frame contents.
+identifiers:
+  - "CCSDS 355.0-B-2 * Space Data Link Security"
+  - "pkg/sdls * astro sdls"
 order: 26
 ---
 
@@ -68,7 +71,7 @@ The protected bytes become the frame's data field. Nothing in `pkg/tmdl`,
   this package takes no outside dependencies, so it is implemented in
   `internal/cmac` and verified against the RFC 4493 and NIST SP 800-38B
   vectors. Select it with `AuthAlgorithm: sdls.AuthCMAC`, see
-  [Telecommand: the clause E2 CMAC baseline](/protocols/data-link/sdls#telecommand-the-e2-cmac-baseline).
+  [Telecommand: the clause E2 CMAC baseline](/protocols/data-link/sdls#telecommand-the-clause-e2-cmac-baseline).
 
 It also offers **GMAC** for authentication without encryption. GMAC is not an
 annex baseline itself; it is the natural authentication-only companion of the
@@ -99,7 +102,7 @@ The whole header is capped at 64 octets (clause 4.1.1.1.4). The baseline uses 14
 
 The trailer is just the MAC: 16 octets in the baseline (clause E1.3).
 
-## Building a Security Association
+## Building a security association
 
 ```go
 import "github.com/ravisuhag/astro/pkg/sdls"

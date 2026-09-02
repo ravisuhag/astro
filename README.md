@@ -61,14 +61,34 @@ Each package ships a [conformance statement](https://astro-docs.vercel.app/confo
 
 ## Examples
 
-```bash
-go run ./examples/downlink/    # telemetry, spacecraft to ground
-go run ./examples/uplink/      # commands, with COP-1 reliable delivery
-go run ./examples/lossylink/   # the same downlink under frame loss
-go run ./examples/composed/    # both ends from one configuration
-```
+Fifteen runnable programs, each with a walkthrough under [guides](https://astro-docs.vercel.app/docs/guides).
 
-Each has a walkthrough under [building things](https://astro-docs.vercel.app/docs/guides/downlink).
+```bash
+# The core chain
+go run ./examples/downlink/          # telemetry, spacecraft to ground
+go run ./examples/uplink/            # commands, with COP-1 reliable delivery
+go run ./examples/lossylink/         # the same downlink under frame loss
+go run ./examples/duplex/            # both directions, with the CLCW riding home
+go run ./examples/composed/          # both ends from one configuration
+
+# What the bytes mean
+go run ./examples/pus/               # five ECSS services working together
+go run ./examples/xtce/              # decoding from a mission database
+go run ./examples/timecorrelation/   # a drifting clock turned into real time
+
+# Moving more than a packet
+go run ./examples/cfdp/              # a file, with the hole in it filled
+go run ./examples/dtn/               # store and forward over BP and LTP
+
+# High rate and protected
+go run ./examples/aos/               # packets, a bitstream, and opaque blocks
+go run ./examples/sdls/              # AES-GCM and AES-CMAC, plus three attacks
+go run ./examples/compression/       # Rice coding and POCKET+
+
+# Ground segment
+go run ./examples/sle/               # an SLE session over a real TCP connection
+go run ./examples/capture/           # writes a capture to practise debugging on
+```
 
 ## Contributing
 

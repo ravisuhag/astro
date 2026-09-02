@@ -1,7 +1,10 @@
 ---
 title: XTCE
 short: XTCE
-description: XML Telemetric and Command Exchange (XTCE 1.2), reading the mission database that says what the octets mean.
+description: XTCE 1.2, reading the mission database that says what the octets mean.
+identifiers:
+  - "XTCE 1.2 (OMG) * XTCE"
+  - "pkg/xtce * astro xtce"
 order: 80
 ---
 

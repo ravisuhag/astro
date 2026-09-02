@@ -65,7 +65,7 @@ in section A2.3.
 ### Table A-1: Adaptive entropy coder, parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | LDC-1 | Block size J | 3.1.6 | M | 8, 16, 32, 64 | Yes | `Params.BlockSize`. Any other value is `ErrInvalidBlockSize`. |
 | LDC-2 | Sample resolution n | 3.1.6 | M | 1 to 32 bits | Yes | `Params.Resolution`. |
 | LDC-3 | Unsigned sample range | 3.1.6, 4.4 | M | 0 to 2^n-1 | Yes | |
@@ -75,7 +75,7 @@ in section A2.3.
 ### Table A-2: Code options
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-6 | Fundamental sequence option | 3.2 | M | Yes | Table 3-1 transcribed as a test. Implemented as the split-sample option with k=0, which clause 3.3.2 says it is. |
 | LDC-7 | Split-sample options | 3.3 | M | Yes | Every k the resolution allows: up to 5, 13 or 29 in the three basic columns of table 5-1. |
 | LDC-8 | Split-sample field order | 3.3.3 | M | Yes | All FS codewords for the block first, then all split bits. Not interleaved. The spec is explicit and the obvious implementation is wrong. |
@@ -90,7 +90,7 @@ in section A2.3.
 ### Table A-3: Code selection
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-16 | Select the option minimizing encoded bits, identifier included | 3.7.1, 3.7.3 | M | Yes | Every option is priced without being emitted, which matters: an FS codeword at 32-bit resolution can be four billion bits long. |
 | LDC-17 | Zero-block always selected for all-zeros runs | 3.7.2 | M | Yes | Not priced against the others; imposed. |
 | LDC-18 | Tie-breaking order | 3.7.4 | M | Yes | No compression, then second extension, then smallest k. Pinned by test, because it is not the order an implementer would guess. |
@@ -98,7 +98,7 @@ in section A2.3.
 ### Table A-4: Preprocessor
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-19 | Preprocessor may be omitted | 4.1 | O | Yes | `PredictorNone`. |
 | LDC-20 | Unit-delay predictor | 4.2.5 | M | Yes | The only predictor the standard specifies. |
 | LDC-21 | First sample of a reference interval predicts itself | 4.2.5 | M | Yes | So its prediction error is zero. |
@@ -113,7 +113,7 @@ in section A2.3.
 ### Table A-5: Coded data set formats
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-29 | Option identification key | 5.2.1, table 5-1 | M | Yes | All five resolution columns, transcribed in full as a test. |
 | LDC-30 | Basic code option set | 5.2.1.1 | M | Yes | 3, 4 and 5-bit identifiers by resolution. |
 | LDC-31 | Restricted code option set | 5.2.1.1 | O | Yes | 1 and 2-bit identifiers, allowed only at n <= 4. Requesting it above that is `ErrRestrictedNotAllowed`. |
@@ -126,7 +126,7 @@ in section A2.3.
 ### Table A-6: File format
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-37 | File header, 12 octets | 7.2.2, table 7-1 | O | Yes | Every field, encoded and decoded. |
 | LDC-38 | Output word size B | 7.2.1.2 | O | Yes | 1 to 8 octets. |
 | LDC-39 | Reserved fields are zero | table 7-1 | M | Yes | All three checked on decode; a set bit is `ErrReservedFieldSet`. |
@@ -138,7 +138,7 @@ in section A2.3.
 ### Table A-7: Packet formats
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | LDC-44 | CDSes inserted into space packets | 5.3 | O | No | Out of scope by design: this package emits coded data sets and the caller packetizes, with `pkg/spp`. |
 | LDC-45 | Compression identification packet | 6 | O | No | The standard marks section 6 optional. The file header of section 7 covers the same need and is implemented instead. |
 
@@ -149,7 +149,7 @@ in section A2.3.
 ### Non-Supported Items
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | LDC-23 | Application-specific predictor | clause 4.2.4 names it and leaves it undefined: "such a predictor is unique to the application and is not specified in this Recommended Standard." There is nothing to implement. A file header requesting it is refused rather than silently decoded with the wrong predictor. |
 | LDC-41 | Application-specific mapper | Same reasoning, from table 7-1. |
 | LDC-44 | Insertion into space packets | The caller composes coded data sets into packets. Keeping the two apart is what lets this package be used with the file format, with packets, or with neither. |
@@ -186,7 +186,7 @@ both directions, along with both specified predictors, the mapper, the coded
 data set formats, and the option selection rule including its tie-breaks.
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | Parameters | LDC-1-5 | `params.go` |
 | Bit packing | LDC-36 | `bits.go` |
 | Code options | LDC-6-15 | `options.go` |

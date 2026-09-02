@@ -56,7 +56,7 @@ on every row it touches.
 ### Table A-1: Transport Mapping Layer (CCSDS 913.1-B-2 clause 3.3)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-1 | TML message framing | 3.3.2 | M | Yes | `Message` with an eight-octet header. `DecodeMessage`, `ReadMessage`, `WriteMessage`. |
 | SLE-2 | Context message | 3.3.2.2.4 | M | Yes | `ContextMessage`, a fixed 12-octet body carrying 'ISP1', version 1, the heartbeat interval and the dead factor. |
 | SLE-3 | Heartbeat message | 3.3.2.2.5 | M | Yes | `HeartbeatMessage()`. An empty body is required and enforced. |
@@ -67,7 +67,7 @@ on every row it touches.
 ### Table A-2: BER encoding (ITU-T X.690, as SLE uses it)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-7 | Definite-length form | X.690 8.1.3 | M | Yes | Short and long forms, encoding and decoding. |
 | SLE-8 | Indefinite-length form | X.690 8.1.3.6 | O | Yes | Accepted on decode by scanning for the end-of-contents octets, because real providers emit it. The encoder always emits the definite form. A primitive indefinite length is refused per clause 8.1.3.2 (`ErrIndefiniteLength`). |
 | SLE-9 | INTEGER, OCTET STRING, OBJECT IDENTIFIER, VisibleString, NULL, SEQUENCE | X.690 8 | M | Yes | `AppendInteger`, `AppendOctetString`, `AppendObjectIdentifier`, `AppendVisibleString`, `AppendNull`, `AppendSequence`. |
@@ -76,7 +76,7 @@ on every row it touches.
 ### Table A-3: Credentials and authentication (CCSDS 913.1-B-2 clause 3.1.2)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-11 | ISP1 credentials | 3.1.2 | M | Yes | `Credentials` with time, random number and a SHA-256 digest. A digest decodes only at 20 or 32 octets, the two lengths clause 3.2.3 note 2 defines. |
 | SLE-12 | SHA-256 digest | 3.1.2.3 | M | Yes | 32 octets. `DigestSizeSHA256`. Issue 2 replaced SHA-1; this implements Issue 2 only. A 20-octet legacy digest decodes but fails verification, because the superseded SHA-1 scheme is not implemented. |
 | SLE-13 | Credential time window | 3.1.2.2.1 | M | Yes | `AcceptableDelay` on `AssociationConfig`. Zero disables the check. |
@@ -86,7 +86,7 @@ on every row it touches.
 ### Table A-4: Association operations (common PDUs module)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-16 | BIND invocation and return | 911.1-B-5 3.2 | M | Yes | `BindInvocation`, `BindReturn`, `Association.Bind`, `HandleBindInvocation`, `HandleBindReturn`. |
 | SLE-17 | UNBIND invocation and return | 3.3 | M | Yes | `UnbindInvocation`, `UnbindReturn`, with the 'end' and 'suspend' reasons. |
 | SLE-18 | PEER-ABORT | 3.11 | M | Yes | `PeerAbort` with the full diagnostic set. Encoded as the primitive `[104]` with the bare diagnostic octet (`9F 68 01 xx`), per the IMPLICIT TAGS module. Sent on any PDU the state forbids. `PeerAbort.UrgentData` and `Association.HandleUrgentData` carry the ISP1 urgent-data mapping of 913.1-B-2 clause 3.4; writing the octet out of band is the caller's, since the library owns no socket. |
@@ -96,7 +96,7 @@ on every row it touches.
 ### Table A-5: Service state machine (911.1-B-5 clause 4.2, and the same in the other three)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-21 | State 1 'unbound' | 4.2.1 | M | Yes | `ServiceUnbound`. |
 | SLE-22 | State 2 'ready' | 4.2.1 | M | Yes | `ServiceReady`. |
 | SLE-23 | State 3 'active' | 4.2.1 | M | Yes | `ServiceActive`. |
@@ -114,7 +114,7 @@ on every row it touches.
 ### Table A-6: Return All Frames (CCSDS 911.1-B-5)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-33 | RAF-START | 3.4 | M | Yes | `RAFStartInvocation`, `RAFStartReturn`, with both diagnostic alternatives and the conditional time range. |
 | SLE-34 | RAF-STOP | 3.5 | M | Yes | `StopInvocation` and `Acknowledgement`, shared across services. |
 | SLE-35 | RAF-TRANSFER-DATA | 3.6 | M | Yes | `RAFTransferDataInvocation`: earth receive time, antenna id, data link continuity, delivered frame quality, private annotation, frame. |
@@ -128,7 +128,7 @@ on every row it touches.
 ### Table A-7: Return Channel Frames (CCSDS 911.2-B-4)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-42 | RCF-START with GVCID | 3.4 | M | Yes | `RCFStartInvocation` carrying `RequestedGVCID`. No frame quality: RCF delivers only good frames. |
 | SLE-43 | GvcId SEQUENCE | annex A | M | Yes | `GVCID` with the master-channel alternative. Spacecraft ranges checked per frame version, and the virtual channel held to `VcId (0 .. 63)`. |
 | SLE-44 | Transfer frame version numbers | annex A | M | Yes | TM 0, AOS 1, USLP 12. The USLP value is the four-bit wire field `'1100'`, not the "version 4" the protocol is named for. |
@@ -140,7 +140,7 @@ on every row it touches.
 ### Table A-8: Return Operational Control Fields (CCSDS 911.5-B-4)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-49 | ROCF-START | 3.4 | M | Yes | `ROCFStartInvocation`: GVCID, control word type, update mode. |
 | SLE-50 | ControlWordType CHOICE | annex A | M | Yes | `ControlWordType`: all control words, CLCW (optionally from one TC virtual channel), or not CLCW. The TC virtual channel is held to `VcId (0 .. 63)`. |
 | SLE-51 | Update mode | 3.4.2 | M | Yes | `UpdateContinuous` and `UpdateChangeBased`. |
@@ -152,7 +152,7 @@ on every row it touches.
 ### Table A-9: Forward CLTU (CCSDS 912.1-B-5)
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-56 | CLTU-START | 3.4 | M | Yes | `FCLTUStartInvocation` with the first CLTU identification; `FCLTUStartReturn` whose positive result carries the radiation window. |
 | SLE-57 | CLTU-TRANSFER-DATA | 3.6 | M | Yes | `FCLTUTransferDataInvocation`: CLTU id, earliest and latest transmission time, delay, radiation notification request, the CLTU. |
 | SLE-58 | CLTU identification sequence | 3.6.2.5 | M | Yes | `FCLTUUser` keeps the count and advances it as each CLTU is sent, so CLTUs pipeline without waiting for returns (clause 3.1.6). A refusal resynchronises the count from the number the provider quotes. `FCLTUProvider` enforces the rule and quotes the expected number in a refusal. |
@@ -167,7 +167,7 @@ on every row it touches.
 ### Table A-10: Delivery modes
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SLE-66 | Return timely online | 911.1-B-5 1.2.2 | M | Partial | The mode is carried and its predicates reported. Discarding is the caller's: the machines hold one PDU and never queue. |
 | SLE-67 | Return complete online | 1.2.2 | M | Partial | As above; backpressure is the caller's. |
 | SLE-68 | Return offline | 1.2.2 | O | Partial | Modeled as configuration. `AllowsPastStartTime` and `AllowsPeriodicStatusReport` change what the user machine will ask for. No store is read; the caller supplies the data. |
@@ -182,13 +182,13 @@ on every row it touches.
 ### Non-Supported Items
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | SLE-32 | Provider-initiated BIND | Only the user initiates an association. A provider-initiated one is a ground-station arrangement outside what a library consumer needs. |
 
 ### Partly Supported Items
 
 | Item | Description | What is missing |
-|------|-------------|-----------------|
+|---|---|---|
 | SLE-5, SLE-31 | Heartbeat and return timers | The library runs no clock. It reports when a heartbeat is due, when a peer looks dead and which invocations are outstanding; the caller's loop acts. This is deliberate, see the guide's "No goroutines, no timers". |
 | SLE-20 | Version negotiation | Version 5 PDU semantics only. The number is carried and checked, but there is no fallback to an earlier version's PDU set. |
 | SLE-40, 48, 55, 65 | GET-PARAMETER for all four services | Complete. All 50 alternatives across the four services are named, `parameterName` is checked against its tag so decoding against the wrong service is caught rather than mis-reported, and values the schema makes a single integer are read. Structured values, sets, nested CHOICEs, are handed back as raw BER rather than as guessed-at Go types. |
@@ -206,7 +206,7 @@ CHOICEs are named: all 50 alternatives across the four services, with integer
 values read and structured ones left as raw BER.
 
 | Area | Items | Implementation |
-|------|-------|----------------|
+|---|---|---|
 | Transport | SLE-1-6 | `tml.go`, framing, context, heartbeat. |
 | Encoding | SLE-7-10 | `ber.go`, the definite-length subset SLE uses. |
 | Authentication | SLE-11-15 | `credentials.go`, `assoc.go`. |

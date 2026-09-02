@@ -2,6 +2,9 @@
 title: CCSDS File Delivery Protocol
 short: CFDP
 description: CCSDS 727.0-B-5, moving files across a space link, reliably or not.
+identifiers:
+  - "CCSDS 727.0-B-5 * CCSDS File Delivery Protocol"
+  - "pkg/cfdp * astro cfdp"
 order: 12
 ---
 
@@ -34,7 +37,7 @@ rather than changing them.
 ┌─────────────────────────────────────────────┐
 │  Files (images, logs, software loads)       │
 ├─────────────────────────────────────────────┤
-│  CFDP, transactions, PDUs, checksums       │  <- this package
+│  CFDP, transactions, PDUs, checksums        │  <- this package
 ├─────────────────────────────────────────────┤
 │  Space Packet / Encapsulation Packet        │  <- carries the PDU bytes
 ├─────────────────────────────────────────────┤

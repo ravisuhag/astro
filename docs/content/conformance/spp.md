@@ -55,14 +55,14 @@ are listed in section A2.3.
 ### Table A-1: SPP Service Data Units
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SPP-1 | Space Packet SDU | 3.2.2 | M | Yes | `SpacePacket` struct models the SDU. `Service` provides a formal service-layer abstraction via `SendPacket()` / `ReceivePacket()` with explicit service parameters configured through `ServiceConfig`. |
 | SPP-2 | Octet String SDU | 3.2.3 | M | Yes | `Service.SendBytes()` accepts raw octet strings with service parameters (APID, packet type, sequence count/packet name, and the Secondary Header Indicator in either form). `Service.ReceiveBytes()` returns an `Indication` carrying the octet string, APID, Secondary Header Indicator, and Data Loss Indicator. Per 3.2.3.1 an octet string is 1 to 65536 octets, which is exactly the Packet Data Field range the packet-length checks enforce. |
 
 ### Table A-2: Service Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | SPP-3 | APID | 3.3.2.2 | M | 0-2047 | Yes | `PrimaryHeader.APID` (11-bit). Validated in `PrimaryHeader.Validate()`. |
 | SPP-4 | Packet Loss Indicator | 3.3.2.3 | O | - | Yes | `Service.ReceivePacket()` runs the sequence count continuity check per APID; `Service.ReceivePacketIndication()` delivers the packet with the loss bound to it (`PacketIndication.PacketLoss` / `PacketsLost`), which is the PACKET.indication parameter list of 3.3.3.3.2; `Service.LastDataLoss()` reports the same figure service-wide for the packet most recently received. `Service.ResetContinuity()` clears the state after a link outage. Counts are tracked per APID and never shared across APIDs (4.1.3.4.3.3), so idle packets (APID 0x7FF) have their own sequence and cannot disturb an application's. |
 | SPP-5 | QoS Requirement | 3.3.2.4 | O | - | Yes | `WithQoS(qos)` on `Service.SendPacket()` attaches the per-packet QoS Requirement. The levels themselves belong to the underlying subnetwork (3.3.2.4 leaves them there), so the transport declares support by implementing `QoSWriter`; a send carrying a QoS requirement over a transport without it is refused with `ErrQoSUnsupported` before any octet or sequence count is spent, rather than silently downgraded. Not offered on `SendBytes()`: the OCTET_STRING.request primitive of 3.4.3.2.2 carries no QoS parameter. |
@@ -74,7 +74,7 @@ are listed in section A2.3.
 ### Table A-3: Service Primitives
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SPP-10 | Packet.request | 3.3.3.2 | M | Yes | `Service.SendPacket(packet)` implements the Packet.request primitive. Accepts a pre-built `*SpacePacket`, encodes it, enforces the configurable maximum packet length, and writes to the transport. A packet whose count the caller owns is sent unchanged, one built with `WithSequenceCount()`, and one returned by `Decode()`, which already carries the count its originating application assigned (4.1.3.4.3.3, 3.3.1). In both cases the service resynchronizes its counter for that APID to one past the value it sent, so the count stays continuous modulo 16384 per 4.1.3.4.3.4. Any other packet is stamped with the next count for its APID (4.1.3.4.3), mutating the caller's packet. A send that fails before reaching the transport returns the count to the counter rather than leaving a hole. |
 | SPP-11 | Packet.indication | 3.3.3.3 | M | Yes | `Service.ReceivePacket()` implements the Packet.indication primitive. Reads the primary header, calculates total packet size, reads remaining octets, and decodes into a `*SpacePacket`. `ServiceConfig.NewSecondaryHeader` is a factory, so every delivered packet gets its own decoder instance, configured by the caller, a header whose width lives in the value (a PUS header reads it from its mission profile) is built correctly because only the caller can build it. `ServiceConfig.APIDs` overrides the secondary header decoder and error control expectation per APID, since table 5-1 manages both per APID and managed data path. `Service.ReceivePacketIndication()` delivers the parameter list of 3.3.3.3.2 with the Packet Loss Indicator bound to the returned packet. `ServiceConfig.DiscardIdle` drops received idle packets. A packet longer than the managed Maximum Packet Length is rejected *and* its body skipped, so the reader stays on a real packet boundary instead of resynchronizing mid-packet and delivering packets that were never sent. |
 | SPP-12 | Octet_String.request | 3.4.3.2 | M | Yes | `Service.SendBytes(apid, data, opts...)` implements the OctetString.request primitive. All parameters of 3.4.3.2.2 are available: octet string and APID as arguments, Secondary Header Indicator via `WithSendSecondaryHeader()`, Packet Type via `WithSendPacketType()` (defaulting to `ServiceConfig.PacketType`), and Packet Sequence Count/Packet Name via `WithSendSequenceCount()` / `WithSendPacketName()`. |
@@ -83,7 +83,7 @@ are listed in section A2.3.
 ### Table A-4: SPP Protocol Data Unit
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SPP-14 | Space Packet | 4.1 | M | Yes | `SpacePacket` struct with `Encode()` / `Decode()` round-trip support. `Decode(data, opts...)` accepts functional options: `WithDecodeSecondaryHeader()` to decode mission-specific header bytes, and `WithDecodeErrorControl()` to extract and verify the trailing CRC-16-CCITT. If no secondary header decoder is provided, secondary header bytes are included in `UserData` and the packet re-encodes byte for byte, so a relay can forward it. `WithSecondaryHeaderIndicator()` lets a caller assemble the same shape from octets it did not parse. The Secondary Header Flag and the `SecondaryHeader` field must agree (4.1.3.3.3.2): a header set with the flag clear returns `ErrSecondaryHeaderFlagClear`, and a packet with the flag set and neither a parsed header nor header octets in its data field returns `ErrSecondaryHeaderMissing`. Both `NewSpacePacket()` and `Decode()` copy the octets they are handed, so neither a caller's buffer nor a decoded packet can be changed through the other. A failed `Encode()` leaves the packet exactly as the caller had it. |
 | SPP-15 | Packet Primary Header | 4.1.3 | M | Yes | `PrimaryHeader`, 6 octets. All fields implemented per CCSDS: Version Number (3 bits, enforced as 0 for CCSDS v1 via `ErrInvalidVersion`), Packet Type (1 bit, `PacketTypeTM`=0 / `PacketTypeTC`=1), Secondary Header Flag (1 bit), APID (11 bits), Sequence Flags (2 bits, named constants `SeqFlagContinuation`/`SeqFlagFirstSegment`/`SeqFlagLastSegment`/`SeqFlagUnsegmented`, configurable via `WithSequenceFlags()`), Sequence Count (14 bits, auto-incremented per APID in `Service`, manually configurable via `WithSequenceCount()`), Packet Data Length (16 bits). Big-endian encoding. |
 | SPP-16 | Packet Data Field | 4.1.4 | M | Yes | Composed of optional Secondary Header + User Data + optional Error Control. Length calculation follows CCSDS formula: `Packet Data Length = (data field octets) - 1`. The Error Control field is **not defined by CCSDS 133.0-B-2**; it is a mission/PUS-style extension carried inside the packet data field (wire-compatible, since the standard leaves data field content to the mission). Set on encode via `WithErrorControl()` (CRC-16-CCITT), verified on decode via `WithDecodeErrorControl()`. Configurable at the service level via `ServiceConfig.ErrorControl`. |
@@ -99,7 +99,7 @@ Secondary Header is not present; otherwise, it is optional.
 ### Table A-5: Protocol Procedures
 
 | Item | Description | Reference | Status | Support | Notes |
-|------|-------------|-----------|--------|---------|-------|
+|---|---|---|---|---|---|
 | SPP-19 | Packet Assembly Function | 4.2.2 | M | Yes | `NewSpacePacket()` constructs the packet with functional options (`WithSecondaryHeader()`, `WithErrorControl()`, `WithSequenceCount()`, `WithSequenceFlags()`). `Encode()` serializes Primary Header + Secondary Header + User Data + Error Control into an octet stream. Packet Data Length is computed automatically. When error control is enabled, `Encode()` auto-computes the CRC-16-CCITT over the serialized header and data, then appends it. |
 | SPP-20 | Packet Transfer Function | 4.2.3 | M | Yes | `Service.SendPacket()` writes the encoded packet to the transport via `io.ReadWriter`. A packet obtained from `Decode()` is forwarded byte for byte: the sequence count is not rewritten, because 3.3.1 requires Packet Service SDUs to travel "without further formatting", 4.1.3.4.3.3 makes the count the property of the originating application, and the sequence counter belongs to the Packet Assembly Function of 4.2.2.4, which serves the Octet String Service. Packets the local user originates without a count are stamped per APID (14-bit, wraps at 16383). Multiplexing of packets from multiple APIDs is delegated to the caller, which controls the order and scheduling of `SendPacket()` calls. The multiplexing scheme itself is an optional management parameter (SPP-25). |
 | SPP-21 | Packet Extraction Function | 4.3.2 | M | Yes | `Service.ReceivePacket()` reads the 6-octet Primary Header, computes total packet size from the header's Packet Length field, reads the remaining octets, and invokes `Decode()` with configured decode options (a per-packet secondary header decoder and error control validation). Both mandatory parts of 4.3.2.2 are performed: the octet string is extracted by removing the primary header and nothing else, with the Secondary Header Indicator generated for every received packet (`Indication.SecondaryHeaderIndicator`) to announce a secondary header at the start of it; and the Packet Sequence Count is checked for continuity per APID modulo 16384. Only the Data Loss Indicator *parameter* is optional (SPP-9); the check that produces it is not, and it is always run. |
@@ -108,7 +108,7 @@ Secondary Header is not present; otherwise, it is optional.
 ### Table A-6: Management Parameters
 
 | Item | Description | Reference | Status | Values Allowed | Support | Notes |
-|------|-------------|-----------|--------|----------------|---------|-------|
+|---|---|---|---|---|---|---|
 | SPP-23 | Maximum Packet Length (octets) | Table 5-1 | M | Integer | Yes | Configurable via `ServiceConfig.MaxPacketLength`. Defaults to 65542 octets, the absolute maximum of 3.2.2.1. Enforced on send in `Service.SendPacket()` and on receive in `Service.ReceivePacket()`, where an oversize packet is rejected and its body skipped so the reader keeps its framing. Minimum packet size of 7 octets enforced in `NewSpacePacket()`. |
 | SPP-24 | Packet Type of Outgoing Packets | Table 5-1 | M | 0 or 1 | Yes | Configurable via `ServiceConfig.PacketType`. Selectable via named constants `PacketTypeTM` (0) and `PacketTypeTC` (1). Validated by `ErrInvalidType`. Convenience constructors `NewTMPacket()` and `NewTCPacket()` also available. |
 | SPP-25 | Packet Multiplexing Scheme | Table 5-1 | O | Mission specific | No | Not implemented. No multiplexing, scheduling, or interleaving logic. |
@@ -123,7 +123,7 @@ Secondary Header is not present; otherwise, it is optional.
 The proforma in Annex A of CCSDS 133.0-B-2 runs from SPP-1 to SPP-26; there are no items beyond that.
 
 | Category | Total Items | Supported | Partial | Not Supported |
-|----------|-------------|-----------|---------|---------------|
+|---|---|---|---|---|
 | Mandatory (M) | 20 | 20 | 0 | 0 |
 | Optional (O) | 4 | 3 | 0 | 1 |
 | Conditional (C) | 2 | 2 | 0 | 0 |
@@ -132,7 +132,7 @@ The proforma in Annex A of CCSDS 133.0-B-2 runs from SPP-1 to SPP-26; there are 
 ### Non-Conformances (Optional Items Not Supported)
 
 | Item | Description | Reason |
-|------|-------------|--------|
+|---|---|---|
 | SPP-25 | Packet Multiplexing Scheme | No multiplexing, scheduling, or interleaving logic. |
 
 ### Partial Conformances (Items Requiring Attention)
@@ -156,7 +156,7 @@ nobody reads a "Yes" against SPP-17 as more than it is.
 The items below are not PICS items (the CCSDS 133.0-B-2 proforma does not list them) but they come up often enough to be worth stating.
 
 | Topic | Reference | Status |
-|-------|-----------|--------|
+|---|---|---|
 | Segmentation / reassembly | 4.1.3.4.2 | The sequence flag values (`SeqFlagFirstSegment`, `SeqFlagContinuation`, `SeqFlagLastSegment`) can be set via `WithSequenceFlags()`, but the package provides no segmentation or reassembly procedures; applications split and rejoin large data units themselves. Note that 4.1.3.4.2.3 forbids segmentation on any managed data path that uses the Octet String Service. |
 | Idle packet handling | 4.1.3.3.4.4 | `NewIdlePacket()` builds them, `IsIdleBytes()` recognizes an encoded one (reading the 11 APID bits only, so a telecommand idle packet is recognized too), and `ServiceConfig.DiscardIdle` makes the receiving service drop them instead of delivering fill to an application. Idle packets are counted under APID 0x7FF, which is a sequence of its own, so discarding them cannot disturb an application's continuity. |
 | Concurrent use | - | `Service` is safe for concurrent use. Sends are serialized against each other so a count and the octets carrying it reach the transport together, which 4.1.3.4.3.4 requires; receives are serialized against each other so a packet's header and body are not spliced with another reader's. Sending and receiving proceed independently. |
@@ -165,7 +165,7 @@ The items below are not PICS items (the CCSDS 133.0-B-2 proforma does not list t
 ### Fully Supported Items
 
 | Item | Description | Implementation |
-|------|-------------|----------------|
+|---|---|---|
 | SPP-1 | Space Packet SDU | `SpacePacket` struct with `Service.SendPacket()` / `Service.ReceivePacket()` service-layer abstraction. |
 | SPP-2 | Octet String SDU | `Service.SendBytes()` / `Service.ReceiveBytes()` for raw octet string I/O. |
 | SPP-3 | APID | `PrimaryHeader.APID` with validation. |
