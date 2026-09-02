@@ -73,17 +73,30 @@ func printManual(docsFS embed.FS, protocol string) error {
 		return fmt.Errorf("unknown protocol %q — run 'astro manual' to see available topics", protocol)
 	}
 
-	content, err := docsFS.ReadFile("docs/cli/" + filename)
+	content, err := docsFS.ReadFile("docs/content/cli/" + filename)
 	if err != nil {
 		return fmt.Errorf("reading manual for %s: %w", protocol, err)
 	}
 
-	out, err := printer.Markdown(string(content))
+	out, err := printer.Markdown(stripFrontmatter(string(content)))
 	if err != nil {
 		return err
 	}
 	fmt.Print(out)
 	return nil
+}
+
+// stripFrontmatter removes the leading YAML frontmatter block that the docs
+// site reads for page titles and sidebar order. The terminal has no use for
+// it, and rendering it would print the raw YAML above the manual page.
+func stripFrontmatter(s string) string {
+	if !strings.HasPrefix(s, "---\n") {
+		return s
+	}
+	if _, rest, ok := strings.Cut(s[4:], "\n---\n"); ok {
+		return strings.TrimLeft(rest, "\n")
+	}
+	return s
 }
 
 func protocolNames() []string {

@@ -75,7 +75,7 @@ type Layout struct {
 // Every field must have a width the database states outright. A delimited
 // string, a binary field sized by another parameter, or a repeat count read
 // from the packet all make the layout depend on the packet's contents, and
-// this returns ErrDynamicSize rather than guessing. See docs/guides/xtce.md.
+// this returns ErrDynamicSize rather than guessing. See docs/content/protocols/xtce/index.md.
 func (c *SequenceContainer) Layout() (*Layout, error) {
 	if c.owner == nil {
 		return nil, fmt.Errorf("%w: the container did not come from Load, so its references cannot resolve",

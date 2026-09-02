@@ -132,7 +132,7 @@ func resolveRef(from *SpaceSystem, ref string) (holder *SpaceSystem, name string
 		// the root's name it is taken as the spelled-out form and skipped;
 		// otherwise it is looked up among the root's children. The ambiguous
 		// case is a child of the root sharing the root's name, which the
-		// spelled-out reading wins. See docs/guides/xtce.md.
+		// spelled-out reading wins. See docs/content/protocols/xtce/index.md.
 		if len(path) > 0 && path[0] == current.Name {
 			path = path[1:]
 		}

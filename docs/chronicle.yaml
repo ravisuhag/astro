@@ -1,27 +1,48 @@
-title: Astro
-description: Space Communication Protocols
-content: .
+site:
+  title: Astro
+  description: CCSDS and ECSS space communication standards, implemented in Go.
+
+url: https://astro-docs.vercel.app
+preset: vercel
 
 theme:
   name: paper
 
+content:
+  - dir: docs
+    label: Guides
+    description: Install Astro, learn the stack, and build a link end to end.
+  - dir: protocols
+    label: Protocols
+    description: Every implemented standard — scope, field maps, Go API, conformance.
+  - dir: cli
+    label: CLI
+    description: Encode, decode, inspect, and validate from the terminal.
+  - dir: conformance
+    label: Conformance
+    description: What each package implements clause by clause, and what it does not.
+
+latest:
+  label: "0.3"
+  landing: true
+
 navigation:
   links:
-    - label: GitHub
+    - label: pkg.go.dev
+      href: https://pkg.go.dev/github.com/ravisuhag/astro
+  social:
+    - type: github
       href: https://github.com/ravisuhag/astro
+
+links:
+  - label: GitHub
+    href: https://github.com/ravisuhag/astro
+  - label: Report an issue
+    href: https://github.com/ravisuhag/astro/issues
 
 search:
   enabled: true
   placeholder: Search docs...
 
-llms:
-  enabled: true
-
 telemetry:
   enabled: false
-
-footer:
-  copyright: "© 2026 Ravi Suhag. All rights reserved."
-  links:
-    - label: GitHub
-      href: https://github.com/ravisuhag/astro

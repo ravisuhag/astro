@@ -8,7 +8,7 @@ import (
 	"github.com/ravisuhag/astro/cli"
 )
 
-//go:embed docs/cli/*.md
+//go:embed docs/content/cli/*.md
 var docsFS embed.FS
 
 func main() {

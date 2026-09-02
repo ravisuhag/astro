@@ -60,7 +60,7 @@
 // (§3), mask update (§4) and encoder (§5). The standard specifies nothing
 // else — there is no decoder section and the conformance list in annex A has
 // only encoder items — so the decompressor here is the encoder run backwards,
-// which §2.1 lays out the requirements for. See docs/pics/rhc-pics.md.
+// which §2.1 lays out the requirements for. See docs/content/protocols/rhc/conformance.md.
 package rhc
 
 import "fmt"

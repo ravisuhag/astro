@@ -54,6 +54,6 @@
 // transfer services themselves: RAF, RCF, ROCF and FCLTU, each as a
 // caller-pumped user machine and a partial provider. GET-PARAMETER decodes
 // and answers cleanly, though the per-service parameter CHOICEs travel as
-// raw BER rather than typed values. See docs/pics/sle-pics.md for the
+// raw BER rather than typed values. See docs/content/protocols/sle/conformance.md for the
 // row-by-row conformance picture.
 package sle

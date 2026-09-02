@@ -56,7 +56,7 @@
 //
 // When you do not know what a packet is, Match searches: it follows each
 // container whose RestrictionCriteria the packet satisfies and takes the
-// deepest one that fits. See docs/guides/xtce.md.
+// deepest one that fits. See docs/content/protocols/xtce/index.md.
 package xtce
 
 import (
@@ -123,7 +123,7 @@ type Header struct {
 // TelemetryMetaData holds everything about the downlink.
 //
 // The schema also allows MessageSet, StreamSet and AlgorithmSet here. This
-// package does not model them; see docs/pics/xtce-coverage.md.
+// package does not model them; see docs/content/protocols/xtce/conformance.md.
 type TelemetryMetaData struct {
 	ParameterTypeSet *ParameterTypeSet `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterTypeSet"`
 	ParameterSet     *ParameterSet     `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterSet"`

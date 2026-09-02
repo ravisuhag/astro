@@ -65,9 +65,32 @@ All four must be clean.
 pkg/       one package per standard, flat, stdlib only
 internal/  shared implementation with no API commitment
 cli/       cobra commands
-docs/guides/   one guide per package, prose
-docs/pics/     one conformance statement per package
+docs/content/docs/         narrative docs: start, guides, contribute
+docs/content/protocols/    one folder per layer, one folder per standard
+docs/content/cli/          one page per command (embedded in the binary)
+docs/content/conformance/  one page per standard
 ```
+
+Protocols are grouped by the layer they sit at, because a flat list of 22 is
+not scannable:
+
+```
+docs/content/protocols/<layer>/<pkg>.md
+docs/content/conformance/<pkg>.md
+```
+
+One page per protocol. It runs scope, field map, gotchas, how to call the
+package, then commentary — because a reader arriving at a protocol wants all
+of it, and splitting the API onto its own page bought nothing but a click.
+
+The layers are `transport`, `data-link`, `coding`, `ground`, `compression`
+and `mission`. Conformance lives in its own section rather than beside the
+API: its readers are doing assurance, not writing code, and they read the
+statements as a set.
+
+`docs/content/cli/*.md` is embedded into the binary by `main.go` and served by
+`astro manual <topic>`. Moving or renaming a file there means updating the
+`protocols` map in `cli/manual.go`.
 
 **`pkg/` takes no dependencies outside the standard library.** The CLI may.
 This is deliberate: a mission integrating one protocol should not inherit a
@@ -80,15 +103,35 @@ and its issue.
 
 ## Documentation
 
-A new protocol package lands with three things, or it is not finished:
+**The docs bridge the Blue Book and the code. They do not replace the Blue
+Book.** Blue Books are free public PDFs and Green Books already give the
+friendly overview. Retyping a field table here buys nothing and goes stale on
+the next issue. Write the part nobody else can: what this package does, what it
+refuses to do, and where the standard left a choice open.
 
-1. `docs/guides/<pkg>.md` — what the protocol is for and how to use this
-   package, in prose. Explain the *why*, not just the API.
-2. `docs/pics/<pkg>-pics.md` — a conformance statement. Where the standard
-   ships a PICS proforma, fill that in. Otherwise write a coverage matrix.
-   **Record what is not implemented**, and why; an honest gap is worth more
-   than a silent one.
-3. A row in the README protocol table.
+A new protocol package lands with these, or it is not finished:
+
+1. `docs/content/protocols/<layer>/<pkg>.md`, with frontmatter (`title`,
+   `description`, `order`) and these sections:
+   - **Scope** — what is implemented, what is deliberately absent, what is left
+     to the caller, and what lives in another package.
+   - **Field map** — a compact table mapping each wire field to its Go field.
+     A table, not a walkthrough. If a reader wants the bit diagram they can
+     open the PDF; what they cannot get anywhere else is the mapping.
+   - **Gotchas** — the rules that bite. Off-by-ones, fields that must agree,
+     things that fail silently. Cite the clause.
+   - **Using the package** — quick start, the types and options that matter,
+     and an error table. Put it after Gotchas and before Notes.
+   - **Notes** — optional commentary on why the format looks the way it does.
+     Mark it as commentary, or cite the Green Book. Do not present a
+     reconstruction as fact.
+2. `docs/content/conformance/<pkg>.md` — where the standard ships a
+   PICS proforma, fill it in. Otherwise write a coverage matrix. **Record what
+   is not implemented**, and why; an honest gap is worth more than a silent one.
+3. Rows in `docs/content/protocols/<layer>/index.md` and
+   `docs/content/conformance/index.md`, plus the `pages` array in the layer's
+   `meta.json`.
+4. A row in the README protocol table.
 
 ## Commits
 

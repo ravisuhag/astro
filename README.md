@@ -4,131 +4,81 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ravisuhag/astro)](https://goreportcard.com/report/github.com/ravisuhag/astro)
 
-Astro is an open-source Go library implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards — the international protocols used by NASA, ESA, JAXA, and other space agencies for spacecraft communication and data systems.
+Astro is an open-source Go library and CLI implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards — the protocols NASA, ESA, JAXA and other agencies use for spacecraft communication and data systems.
 
-## Installation
+22 standards across packets, data link, coding and synchronization, ground transfer, compression, time, packet utilization, and mission databases. No dependencies outside the Go standard library.
 
-### Library
+**[Documentation](https://astro-docs.vercel.app)** · [Protocols](https://astro-docs.vercel.app/protocols) · [CLI](https://astro-docs.vercel.app/cli)
 
-```bash
-go get github.com/ravisuhag/astro
-```
-
-### CLI
-
-```bash
-go install github.com/ravisuhag/astro@latest
-```
+## Install
 
 Requires Go 1.26 or later.
 
-## CLI
-
-The `astro` CLI provides commands for encoding, decoding, inspecting, and validating CCSDS data directly from the terminal.
-
 ```bash
-# Encode a telemetry Space Packet
-astro spp encode --apid 100 --type tm --data 68656c6c6f
-
-# Inspect a packet with annotated hex dump
-astro spp encode --apid 100 --type tm --data 68656c6c6f | astro spp inspect --input hex
-
-# Validate a packet with CRC verification
-astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate --input hex --crc
+go get github.com/ravisuhag/astro          # library
+go install github.com/ravisuhag/astro@latest   # CLI
 ```
 
-| Command | Description | Docs |
-|---------|-------------|------|
-| `astro spp` | Space Packet Protocol — encode, decode, inspect, validate, stream, gen | [Reference](docs/cli/spp.md) |
-| `astro epp` | Encapsulation Packet Protocol — encode, decode, inspect, validate, stream, gen | [Reference](docs/cli/epp.md) |
-| `astro time` | CCSDS Time Code Formats — encode, decode, inspect, now | [Reference](docs/cli/time.md) |
-| `astro tm` | TM Transfer Frames — encode, decode, inspect, gaps, demux, gen | [Reference](docs/cli/tm.md) |
-| `astro tc` | TC Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/tc.md) |
-| `astro cadu` | Channel Access Data Units — wrap, unwrap, inspect, sync, gen | [Reference](docs/cli/cadu.md) |
-| `astro cltu` | Command Link Transmission Units — wrap, unwrap, inspect, gen | [Reference](docs/cli/cltu.md) |
-| `astro usdl` | USLP Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/usdl.md) |
-| `astro aos` | AOS Transfer Frames — encode, decode, inspect, gen | [Reference](docs/cli/aos.md) |
-
-## Library Usage
+## Library
 
 ```go
 import (
-	"github.com/ravisuhag/astro/pkg/crc"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tmdl"
 	"github.com/ravisuhag/astro/pkg/tmsc"
 )
 
-// Create and encode a telemetry packet
-packet, _ := spp.NewTMPacket(123, []byte("temperature=22.5"))
+// A telemetry packet from application 100.
+packet, _ := spp.NewTMPacket(100, []byte("temperature=22.5"))
 encoded, _ := packet.Encode()
 
-// Frame the packet with TM Data Link
-frame, _ := tmdl.NewTMTransferFrame(0x1A, 1, encoded, nil, nil)
+// Framed for the downlink: spacecraft 42, virtual channel 0.
+frame, _ := tmdl.NewTMTransferFrame(42, 0, encoded, nil, nil)
 frameBytes, _ := frame.Encode()
 
-// Wrap the frame as a Channel Access Data Unit (CADU)
-cadu, _ := tmsc.NewCADU(frameBytes)
-caduBytes, _ := cadu.Encode()
-
-// Compute CRC for error detection
-checksum := crc.CRC16CCITT(caduBytes)
+// Sync marker attached, ready for the radio.
+cadu := tmsc.WrapCADU(frameBytes, tmsc.DefaultASM(), true)
 ```
+
+See the [Go quickstart](https://astro-docs.vercel.app/docs/start/quickstart-go) to go further, or [build a downlink](https://astro-docs.vercel.app/docs/guides/downlink) for the full chain with services and virtual channels.
+
+## CLI
+
+```bash
+# Encode a telemetry Space Packet
+astro spp encode --apid 100 --type tm --data 68656c6c6f
+
+# Inspect one with an annotated hex dump
+astro spp encode --apid 100 --type tm --data 68656c6c6f | astro spp inspect --input hex
+
+# Verify a CRC
+astro spp encode --apid 100 --type tm --data a1b2c3d4 --crc | astro spp validate --input hex --crc
+```
+
+Commands: `spp`, `epp`, `tm`, `tc`, `aos`, `usdl`, `cadu`, `cltu`, `time`. Run `astro manual` for the built-in reference, or see the [CLI docs](https://astro-docs.vercel.app/cli).
 
 ## Protocols
 
-| Protocol | Standard | Package | Docs |
-|----------|----------|---------|------|
-| **Space Packet and Transport** | | | |
-| Space Packet Protocol | [CCSDS 133.0-B-2](https://public.ccsds.org/Pubs/133x0b2e2.pdf) | [`pkg/spp`](pkg/spp) | [Guide](docs/guides/spp.md) \| [CLI](docs/cli/spp.md) \| [PICS](docs/pics/spp-pics.md) |
-| Encapsulation Packet Protocol | [CCSDS 133.1-B-3](https://public.ccsds.org/Pubs/133x1b3e1.pdf) | [`pkg/epp`](pkg/epp) | [Reference](docs/reference/epp.md) \| [CLI](docs/cli/epp.md) \| [PICS](docs/pics/epp-pics.md) |
-| CCSDS File Delivery Protocol | [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf) | [`pkg/cfdp`](pkg/cfdp) | [Guide](docs/guides/cfdp.md) \| [PICS](docs/pics/cfdp-pics.md) |
-| Licklider Transmission Protocol | [CCSDS 734.1-B-1](https://public.ccsds.org/Pubs/734x1b1.pdf) | [`pkg/ltp`](pkg/ltp) | [Guide](docs/guides/ltp.md) \| [PICS](docs/pics/ltp-pics.md) |
-| Bundle Protocol | [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf) | [`pkg/bp`](pkg/bp) | [Guide](docs/guides/bp.md) \| [PICS](docs/pics/bp-pics.md) |
-| **Space Data Link** | | | |
-| TM Space Data Link Protocol | [CCSDS 132.0-B-3](https://public.ccsds.org/Pubs/132x0b3.pdf) | [`pkg/tmdl`](pkg/tmdl) | [Guide](docs/guides/tmdl.md) \| [CLI](docs/cli/tm.md) \| [PICS](docs/pics/tmdl-pics.md) |
-| Proximity-1 Data Link Layer | [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf) | [`pkg/pxdl`](pkg/pxdl) | [Guide](docs/guides/pxdl.md) \| [PICS](docs/pics/pxdl-pics.md) |
-| TC Space Data Link Protocol | [CCSDS 232.0-B-4](https://public.ccsds.org/Pubs/232x0b4e1c1.pdf) | [`pkg/tcdl`](pkg/tcdl) | [Guide](docs/guides/tcdl.md) \| [CLI](docs/cli/tc.md) \| [PICS](docs/pics/tcdl-pics.md) |
-| Communications Operation Procedure-1 | [CCSDS 232.1-B-2](https://public.ccsds.org/Pubs/232x1b2e1.pdf) | [`pkg/cop`](pkg/cop) | [Guide](docs/guides/cop.md) \| [PICS](docs/pics/cop-pics.md) |
-| Space Data Link Security | [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf) | [`pkg/sdls`](pkg/sdls) | [Guide](docs/guides/sdls.md) \| [PICS](docs/pics/sdls-pics.md) |
-| AOS Space Data Link Protocol | [CCSDS 732.0-B-4](https://public.ccsds.org/Pubs/732x0b4.pdf) | [`pkg/aos`](pkg/aos) | [Guide](docs/guides/aos.md) \| [CLI](docs/cli/aos.md) \| [PICS](docs/pics/aos-pics.md) |
-| Unified Space Data Link Protocol | [CCSDS 732.1-B-3](https://ccsds.org/Pubs/732x1b3e1.pdf) | [`pkg/usdl`](pkg/usdl) | [Guide](docs/guides/usdl.md) \| [CLI](docs/cli/usdl.md) \| [PICS](docs/pics/usdl-pics.md) |
-| **Synchronization and Channel Coding** | | | |
-| TM Synchronization and Channel Coding | [CCSDS 131.0-B-5](https://public.ccsds.org/Pubs/131x0b5.pdf) | [`pkg/tmsc`](pkg/tmsc) | [Guide](docs/guides/tmsc.md) \| [CLI](docs/cli/cadu.md) \| [PICS](docs/pics/tmsc-pics.md) |
-| Optical Communications Coding and Sync | [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf) | [`pkg/ocsc`](pkg/ocsc) | [Guide](docs/guides/ocsc.md) \| [PICS](docs/pics/ocsc-pics.md) |
-| Proximity-1 Coding and Sync | [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf) | [`pkg/pxsc`](pkg/pxsc) | [Guide](docs/guides/pxsc.md) \| [PICS](docs/pics/pxsc-pics.md) |
-| TC Synchronization and Channel Coding | [CCSDS 231.0-B-4](https://public.ccsds.org/Pubs/231x0b4e1.pdf) | [`pkg/tcsc`](pkg/tcsc) | [Guide](docs/guides/tcsc.md) \| [CLI](docs/cli/cltu.md) \| [PICS](docs/pics/tcsc-pics.md) |
-| **Space Link Extension** | | | |
-| SLE Return All Frames | [CCSDS 911.1-B-5](https://public.ccsds.org/Pubs/911x1b5e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
-| SLE Return Channel Frames | [CCSDS 911.2-B-4](https://public.ccsds.org/Pubs/911x2b4e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
-| SLE Return Operational Control Fields | [CCSDS 911.5-B-4](https://public.ccsds.org/Pubs/911x5b4e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
-| SLE Forward CLTU | [CCSDS 912.1-B-5](https://public.ccsds.org/Pubs/912x1b5e1.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
-| SLE Internet Protocol for Transfer Services | [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf) | [`pkg/sle`](pkg/sle) | [Guide](docs/guides/sle.md) \| [PICS](docs/pics/sle-pics.md) |
-| **Data Compression** | | | |
-| Lossless Data Compression | [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf) | [`pkg/ldc`](pkg/ldc) | [Guide](docs/guides/ldc.md) \| [PICS](docs/pics/ldc-pics.md) |
-| Image Data Compression | [CCSDS 122.0-B-2](https://public.ccsds.org/Pubs/122x0b2e1.pdf) | | |
-| Spectral Preprocessing Transform | [CCSDS 122.1-B-1](https://public.ccsds.org/Pubs/122x1b1e1.pdf) | | |
-| Low-Complexity Lossless Image Compression | [CCSDS 123.0-B-2](https://public.ccsds.org/Pubs/123x0b2e2c3.pdf) | | |
-| Robust Compression of Housekeeping Data | [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf) | [`pkg/rhc`](pkg/rhc) | [Guide](docs/guides/rhc.md) \| [PICS](docs/pics/rhc-pics.md) |
-| **Time** | | | |
-| Time Code Formats | [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf) | [`pkg/tcf`](pkg/tcf) | [Guide](docs/guides/tcf.md) |
-| **Packet Utilization** | | | |
-| Packet Utilization Standard | [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/) | [`pkg/pus`](pkg/pus) | [Guide](docs/guides/pus.md) \| [PICS](docs/pics/pus-pics.md) |
-| Test and Operations Procedure Language | [ECSS-E-ST-70-32C](https://ecss.nl/standard/ecss-e-st-70-32c-rev-1-test-and-operations-procedure-language/) | | |
-| Space Data Links — Telemetry Transfer Frame Protocol | [ECSS-E-ST-50-03C](https://ecss.nl/standard/ecss-e-st-50-03c-space-data-links-telemetry-transfer-frame-protocol/) | [`pkg/tmdl`](pkg/tmdl) | [Conformance](docs/pics/ecss-50-03c-conformance.md) |
-| **Mission Database** | | | |
-| XML Telemetric and Command Exchange | [XTCE 1.2](https://www.omg.org/spec/XTCE/) / [CCSDS 660.1-G-2](https://public.ccsds.org/Pubs/660x1g2.pdf) | [`pkg/xtce`](pkg/xtce) | [Guide](docs/guides/xtce.md) \| [Coverage](docs/pics/xtce-coverage.md) |
-| **Shared Utilities** | | | |
-| CRC-16-CCITT | [CCSDS 130.0-G-3](https://public.ccsds.org/Pubs/130x0g3.pdf) | [`pkg/crc`](pkg/crc) | |
+The full table — every standard, its package, and its conformance statement — is in the [protocol index](https://astro-docs.vercel.app/protocols).
+
+Briefly: [SPP](https://astro-docs.vercel.app/protocols/transport/spp) and [EPP](https://astro-docs.vercel.app/protocols/transport/epp) for packets; [TM](https://astro-docs.vercel.app/protocols/data-link/tmdl), [TC](https://astro-docs.vercel.app/protocols/data-link/tcdl), [AOS](https://astro-docs.vercel.app/protocols/data-link/aos), [USLP](https://astro-docs.vercel.app/protocols/data-link/usdl) and [Proximity-1](https://astro-docs.vercel.app/protocols/data-link/pxdl) for data link; [TMSC](https://astro-docs.vercel.app/protocols/coding/tmsc), [TCSC](https://astro-docs.vercel.app/protocols/coding/tcsc), [PXSC](https://astro-docs.vercel.app/protocols/coding/pxsc) and [OCSC](https://astro-docs.vercel.app/protocols/coding/ocsc) for coding; [COP-1](https://astro-docs.vercel.app/protocols/data-link/cop) for reliable commanding and [SDLS](https://astro-docs.vercel.app/protocols/data-link/sdls) for security; [CFDP](https://astro-docs.vercel.app/protocols/transport/cfdp), [LTP](https://astro-docs.vercel.app/protocols/transport/ltp) and [BP](https://astro-docs.vercel.app/protocols/transport/bp) for files and delay-tolerant networking; [SLE](https://astro-docs.vercel.app/protocols/ground/sle) for ground-to-ground; [LDC](https://astro-docs.vercel.app/protocols/compression/ldc) and [RHC](https://astro-docs.vercel.app/protocols/compression/rhc) for compression; [time codes](https://astro-docs.vercel.app/protocols/mission/tcf), [PUS](https://astro-docs.vercel.app/protocols/mission/pus), and [XTCE](https://astro-docs.vercel.app/protocols/mission/xtce).
+
+## Examples
+
+Runnable programs in [`examples/`](examples), each with a [walkthrough](https://astro-docs.vercel.app/docs/guides/downlink):
+
+```bash
+go run ./examples/downlink/    # telemetry, spacecraft to ground
+go run ./examples/uplink/      # commands, with COP-1 reliable delivery
+go run ./examples/lossylink/   # the same downlink under frame loss
+```
 
 ## Contributing
 
-Contributions are welcome. Each protocol listed above without a package is open for implementation. To get started:
+Contributions are welcome. Several standards are still unimplemented and open.
 
-1. Read the relevant CCSDS Blue Book or ECSS standard (linked in the table above).
-2. Look at [`pkg/spp`](pkg/spp), [`pkg/tmdl`](pkg/tmdl), [`pkg/tmsc`](pkg/tmsc), or [`pkg/crc`](pkg/crc) for the established patterns — struct design, encode/decode, validation, options, and tests.
-3. Open an issue to discuss your approach before submitting a PR.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) — especially the rule about never coding a constant or field layout from memory — and [adding a protocol](https://astro-docs.vercel.app/docs/contribute/adding-a-protocol) for the conventions and required docs. Open an issue to discuss your approach before submitting a pull request.
 
 ## License
 
-This project is licensed under the [Apache 2.0 License](LICENSE).
+[Apache 2.0](LICENSE).

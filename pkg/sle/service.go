@@ -507,7 +507,7 @@ func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
 // enough to test a user against and enough to prototype with. It does not do
 // what a real provider does: manage many associations, size and release
 // transfer buffers, run production, or enforce a service agreement. Treat it
-// as a test double, and see docs/pics/sle-pics.md for the row-by-row picture.
+// as a test double, and see docs/content/protocols/sle/conformance.md for the row-by-row picture.
 type ServiceProvider struct {
 	*serviceCore
 
