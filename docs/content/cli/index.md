@@ -16,11 +16,13 @@ If you have not used it yet, start with the [CLI quickstart](/docs/start/quickst
 | [`astro epp`](/cli/epp) | Encapsulation Packets | encode, decode, inspect, validate, stream, gen |
 | [`astro tm`](/cli/tm) | TM transfer frames | encode, decode, inspect, gaps, demux, gen |
 | [`astro tc`](/cli/tc) | TC transfer frames | encode, decode, inspect, gen |
-| [`astro aos`](/cli/aos) | AOS transfer frames | encode, decode, inspect, gen |
+| [`astro aos`](/cli/aos) | AOS transfer frames | encode, decode, inspect, gaps, demux, gen |
 | [`astro usdl`](/cli/usdl) | USLP transfer frames | encode, decode, inspect, gen |
 | [`astro cadu`](/cli/cadu) | Channel Access Data Units | wrap, unwrap, inspect, sync, gen |
 | [`astro cltu`](/cli/cltu) | Command Link Transmission Units | wrap, unwrap, inspect, gen |
 | [`astro time`](/cli/time) | Time codes | encode, decode, inspect, now |
+| [`astro xtce`](/cli/xtce) | XTCE mission databases | validate, list, layout, decode, match |
+| [`astro pus`](/cli/pus) | PUS services | encode, decode, services |
 
 ## Shared flags
 
