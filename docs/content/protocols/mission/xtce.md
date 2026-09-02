@@ -372,11 +372,24 @@ do not already fit it.
 `Layout` refuses rather than guessing when the database makes a packet's shape
 depend on the packet:
 
+| Refused by `Layout` | Resolved by `ResolveLayout` |
+|---|---|
+| delimited or dynamically sized fields | yes — the packet states the width |
+| `RepeatEntry` with a dynamic count | yes — the packet states the count |
+| an entry positioned by a `DynamicValue` | yes |
+| `referenceLocation="containerEnd"` | yes, against the packet length |
+
+`Layout` settles a container once, ahead of any packet, which is what makes it cheap to build per packet type and reuse. When a container's shape depends on its own contents it returns `ErrDynamicSize`, and `ResolveLayout` is the other path: it walks the packet and the container together, decoding each field as it places it so a later field can be sized or positioned by an earlier one's value. The layout it returns describes that one packet.
+
+These stay refused on both paths:
+
 | Refused | Why |
 |---|---|
-| delimited or dynamically sized fields | the width is not in the database, so `ErrDynamicSize` |
-| `RepeatEntry` with a dynamic count or an `Offset` | same, and the offset form wants a real database to check against |
-| `referenceLocation="containerEnd"` or `"nextEntry"` | a forward reference that one pass cannot resolve |
+| `RepeatEntry` with an `Offset` | the gap between repetitions is not modeled, and packing them without it would place them wrongly |
+| `referenceLocation="nextEntry"` | it positions the *following* entry; treating it as `previousEntry` would silently misplace the field |
+| a `LeadingSize` string | the width of the size field is an attribute of an element kept raw, so there is no way to know how far to skip |
+| a `DiscreteLookupList` size, count or position | a table of comparisons rather than a single reference |
+| a forward `DynamicValue` reference | one pass cannot read a field that has not arrived |
 | entry kinds the model folds into `EntryOther` | their width is not modeled, so everything after them would be misplaced |
 
 `Match` refuses a `CustomAlgorithm` in the criteria, and a `Comparison` or

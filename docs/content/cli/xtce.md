@@ -108,6 +108,8 @@ Values are the engineering ones by default: calibrated numbers and enumeration l
 
 A field that cannot be decoded is reported on stderr and the rest of the packet still comes out, so one unsupported encoding in the middle does not hide everything after it.
 
+A container whose shape depends on its own contents — a delimited string, a blob sized by a length field, a packet-decided repeat count — is resolved against the packet being decoded, and the text output says so. The field map that results describes that packet only: the same container may read a different shape from the next one.
+
 ```
 astro xtce decode <file> [packet-file] [flags]
 ```
@@ -168,4 +170,8 @@ astro xtce match mission.xml --root /Sat/Packet --format name < packet.hex
 
 ## Limits
 
-`decode` and `match` refuse what the database does not settle ahead of the packet: delimited or dynamically sized fields, dynamic repeat counts, and `referenceLocation="containerEnd"`. A `CustomAlgorithm` in the restriction criteria is refused too, being by definition not in the file. See the [conformance statement](/conformance/xtce) for the row-by-row picture.
+`decode` resolves a packet-dependent container against the packet it is given, so delimited fields, length-sized blobs, dynamic repeat counts and `containerEnd` all read. What stays refused is what no single pass can settle: a `RepeatEntry` offset, `nextEntry`, a `LeadingSize` string, a `DiscreteLookupList`, and a forward reference to a field that has not arrived.
+
+`match` uses the static layout, so it selects among containers whose shape the database fixes. A `CustomAlgorithm` in the restriction criteria is refused, being by definition not in the file.
+
+See the [conformance statement](/conformance/xtce) for the row-by-row picture.

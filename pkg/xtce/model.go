@@ -419,9 +419,12 @@ type LocationInContainer struct {
 	// FixedValue is the offset in bits when it is a constant, which is the
 	// usual case.
 	FixedValue *FixedInteger `xml:"http://www.omg.org/spec/XTCE/20180204 FixedValue"`
-	// DynamicValue and DiscreteLookupList are the non-constant forms, kept raw.
-	DynamicValue       *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
-	DiscreteLookupList *RawXML `xml:"http://www.omg.org/spec/XTCE/20180204 DiscreteLookupList"`
+	// DynamicValue reads the value from another parameter in the same packet,
+	// which is what makes a container's shape depend on its contents.
+	// DiscreteLookupList is the other non-constant form and is kept raw: it
+	// is a table of comparisons rather than a single reference.
+	DynamicValue       *DynamicValue `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
+	DiscreteLookupList *RawXML       `xml:"http://www.omg.org/spec/XTCE/20180204 DiscreteLookupList"`
 }
 
 // ReferenceLocationOrDefault returns the anchor the offset is measured from,
@@ -443,7 +446,7 @@ type Repeat struct {
 // read from another parameter, or looked up.
 type IntegerValue struct {
 	FixedValue         *FixedInteger `xml:"http://www.omg.org/spec/XTCE/20180204 FixedValue"`
-	DynamicValue       *RawXML       `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
+	DynamicValue       *DynamicValue `xml:"http://www.omg.org/spec/XTCE/20180204 DynamicValue"`
 	DiscreteLookupList *RawXML       `xml:"http://www.omg.org/spec/XTCE/20180204 DiscreteLookupList"`
 }
 
@@ -604,4 +607,48 @@ type Argument struct {
 	ShortDescription string `xml:"shortDescription,attr"`
 	ArgumentTypeRef  string `xml:"argumentTypeRef,attr"`
 	InitialValue     string `xml:"initialValue,attr"`
+}
+
+// DynamicValue is the schema's DynamicValueType: a value read from another
+// parameter in the same packet, optionally scaled.
+//
+// This is what lets a container's shape depend on its contents — a repeat
+// count taken from a "number of samples" field, a binary blob whose width a
+// length field states. Resolving one means having already decoded the
+// parameter it names, which is why it needs a packet rather than just a
+// database.
+type DynamicValue struct {
+	// Parameter names where the value comes from. The schema requires it.
+	Parameter *ParameterInstanceRef `xml:"http://www.omg.org/spec/XTCE/20180204 ParameterInstanceRef"`
+
+	// Adjustment scales the value before it is used, for a field that counts
+	// in units other than the one the layout needs.
+	Adjustment *LinearAdjustment `xml:"http://www.omg.org/spec/XTCE/20180204 LinearAdjustment"`
+}
+
+// LinearAdjustment is the schema's LinearAdjustmentType: slope and intercept
+// applied to a dynamic value.
+type LinearAdjustment struct {
+	// Slope multiplies the value. The schema gives it no default, and zero
+	// would discard the parameter entirely, so it is a pointer and an absent
+	// slope means one.
+	Slope *float64 `xml:"slope,attr"`
+	// Intercept is added after the slope. The schema defaults it to zero.
+	Intercept float64 `xml:"intercept,attr"`
+}
+
+// Apply scales a raw value the way the adjustment says.
+//
+// A nil adjustment is the identity, and so is an adjustment with no slope:
+// the schema states no default for slope, and treating an absent one as zero
+// would throw the parameter away.
+func (a *LinearAdjustment) Apply(value int64) int64 {
+	if a == nil {
+		return value
+	}
+	slope := 1.0
+	if a.Slope != nil {
+		slope = *a.Slope
+	}
+	return int64(float64(value)*slope + a.Intercept)
 }

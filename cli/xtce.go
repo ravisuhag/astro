@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -152,7 +153,7 @@ func xtceLayoutCmd() *cobra.Command {
 				return fmt.Errorf("loading %s: %w", args[0], err)
 			}
 
-			layout, err := db.LayoutOf(args[1])
+			layout, _, err := layoutFor(db, args[1], nil)
 			if err != nil {
 				return fmt.Errorf("laying out %s: %w", args[1], err)
 			}
@@ -189,7 +190,8 @@ func xtceDecodeCmd() *cobra.Command {
 		Use:   "decode <file> [packet-file]",
 		Short: "Decode a packet against a container in the database",
 		Long: "Read a packet against a named container and print each field's value.\n\n" +
-			"Values are the engineering ones by default: calibrated numbers and enumeration labels. Use --raw for the counts as the packet carried them.",
+			"Values are the engineering ones by default: calibrated numbers and enumeration labels. Use --raw for the counts as the packet carried them.\n\n" +
+			"A container whose shape depends on its own contents — a delimited string, a blob sized by a length field, a packet-decided repeat count — is resolved against the packet being decoded, and the text output says so. The resulting field map describes that packet only.",
 		Example: `  # Decode a hex packet from stdin
   astro spp encode --apid 100 --type tm --data 0102 | astro xtce decode mission.xml --container /Sat/Telemetry
 
@@ -206,14 +208,17 @@ func xtceDecodeCmd() *cobra.Command {
 				return fmt.Errorf("loading %s: %w", args[0], err)
 			}
 
-			layout, err := db.LayoutOf(container)
-			if err != nil {
-				return fmt.Errorf("laying out %s: %w", container, err)
-			}
-
 			data, err := readInput(args[1:], inputFmt)
 			if err != nil {
 				return err
+			}
+
+			layout, resolved, err := layoutFor(db, container, data)
+			if err != nil {
+				return fmt.Errorf("laying out %s: %w", container, err)
+			}
+			if resolved && outputFmt == "text" {
+				fmt.Println("Layout resolved against this packet: the container's shape depends on its contents.")
 			}
 
 			packet, err := layout.Extract(data)
@@ -297,6 +302,43 @@ func xtceMatchCmd() *cobra.Command {
 	cmd.Flags().StringVar(&root, "root", "", "Qualified name of the container to search down from (required)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Show the raw values rather than the calibrated ones")
 	return cmd
+}
+
+// layoutFor returns a container's layout, resolving it against the packet
+// when the database alone cannot settle it.
+//
+// Most containers fix every field's width, and for those the static layout is
+// both cheaper and independent of any packet. Some do not — a delimited
+// string, a length-sized blob, a packet-decided repeat count — and those need
+// the packet. A caller should not have to know which kind they have, so this
+// tries the cheap path and falls back.
+//
+// packet may be nil, for a caller that only wants the static shape; the
+// fallback then reports why the layout could not be settled.
+func layoutFor(db *xtce.SpaceSystem, name string, packet []byte) (*xtce.Layout, bool, error) {
+	container, err := db.FindContainer(name)
+	if err != nil {
+		return nil, false, err
+	}
+
+	layout, err := container.Layout()
+	if err == nil {
+		return layout, false, nil
+	}
+	if packet == nil {
+		return nil, false, err
+	}
+	if !errors.Is(err, xtce.ErrDynamicSize) && !errors.Is(err, xtce.ErrUnsupportedEntry) {
+		return nil, false, err
+	}
+
+	// The container's shape depends on the packet, so read it against this
+	// one. The layout that comes back describes this packet only.
+	resolved, resolveErr := container.ResolveLayout(packet)
+	if resolveErr != nil {
+		return nil, false, resolveErr
+	}
+	return resolved, true, nil
 }
 
 // databaseNames is what list reports.
@@ -460,7 +502,7 @@ func printXTCEPacket(packet *xtce.Packet, raw bool, outputFmt string) error {
 			}
 			fmt.Printf("%-8d %-8d %-28s %v\n",
 				value.Field.BitOffset, value.Field.BitSize,
-				value.Field.Name, pick(value, raw))
+				value.Field.Name, displayValue(pick(value, raw)))
 		}
 		if failed > 0 {
 			fmt.Printf("\n%d field(s) could not be decoded; see stderr.\n", failed)
@@ -478,6 +520,18 @@ func pick(value xtce.Value, raw bool) any {
 		return value.Raw
 	}
 	return value.Engineering
+}
+
+// displayValue renders a decoded value for the text output.
+//
+// A binary field is a run of octets, and Go prints a []byte as a list of
+// decimal numbers, which nobody reads bytes as. Hex is what the rest of these
+// commands use.
+func displayValue(value any) any {
+	if data, ok := value.([]byte); ok {
+		return hex.EncodeToString(data)
+	}
+	return value
 }
 
 // jsonSafeValue turns a decoded value into something json.Marshal renders

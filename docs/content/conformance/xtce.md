@@ -86,8 +86,8 @@ Values inside a covered element still have to parse.
 |---|---|---|
 | `IntegerDataEncoding` | Supported | Encoding, size, bit and byte order, default calibrator. |
 | `FloatDataEncoding` | Supported | Same. |
-| `StringDataEncoding` | Supported | Fixed size supported; `Variable` is opaque. |
-| `BinaryDataEncoding` | Supported | Fixed size supported; dynamic size is opaque. |
+| `StringDataEncoding` | Supported | Fixed size in `Layout`. `TerminationChar` resolves through `ResolveLayout`, with the terminator counted toward the field because it occupies packet space; a delimited string starting off an octet boundary is refused, since searching over octets would be meaningless. `LeadingSize` is refused by name: the width of the size field is an attribute of an element kept raw, so there is no way to know how far to skip. `Variable` is opaque. |
+| `BinaryDataEncoding` | Supported | Fixed size in `Layout`; a `DynamicValue` size resolves through `ResolveLayout`. A negative resolved width is refused rather than read as zero. |
 | `@changeThreshold` | Supported | Carried on both numeric encodings, as a pointer so absent — meaning any change is significant — stays distinguishable from zero. |
 | `@bitOrder`, `@byteOrder` | Supported | Defaults applied through accessors. `Validate` checks that `encoding`, `bitOrder` and `byteOrder` are legal enumeration members (`ErrInvalidEncoding`). |
 | `ErrorDetectCorrect` | Ignored | Checksums and CRCs described in the database. This repository's own CRCs are in `pkg/crc`. |
@@ -118,8 +118,8 @@ Values inside a covered element still have to parse.
 | `StreamSegmentEntry` | Opaque | Same. |
 | `IndirectParameterRefEntry` | Opaque | Same. |
 | `ArrayParameterRefEntry` | Opaque | Same. |
-| `LocationInContainerInBits` | Supported | Fixed values in every `FixedIntegerValueType` spelling — decimal, `0x`, `0o`, `0b`. The reference location is carried, defaulting through `ReferenceLocationOrDefault()`. Dynamic and lookup forms are opaque. |
-| `RepeatEntry` | Supported | Count and offset, fixed forms, in every `FixedIntegerValueType` spelling. |
+| `LocationInContainerInBits` | Supported | Fixed values in every `FixedIntegerValueType` spelling — decimal, `0x`, `0o`, `0b`. The reference location is carried, defaulting through `ReferenceLocationOrDefault()`. `DynamicValue` resolves through `ResolveLayout`; `DiscreteLookupList` is opaque. `containerEnd` resolves against the packet length for the container being read, and is refused for a spliced inner container whose end is not yet known. `nextEntry` is refused: it positions the *following* entry, and treating it as `previousEntry` would silently misplace the field. |
+| `RepeatEntry` | Supported | Fixed counts in every `FixedIntegerValueType` spelling, and `DynamicValue` counts through `ResolveLayout`. `Offset` is refused: the gap between repetitions is not modeled, and packing them without it would place them wrongly. |
 | `IncludeCondition` | Opaque | Raw XML. `Layout` places the entry regardless; a caller that needs the condition can parse it. |
 | `TimeAssociation` | Ignored | |
 | `BaseContainer` | Supported | The reference is resolved and checked for cycles. |
@@ -132,6 +132,8 @@ Values inside a covered element still have to parse.
 | `RestrictionCriteria/NextContainer` | Parsed | Deciding it needs the stream rather than one packet, so `Match` does not evaluate it. |
 | `Comparison/@useCalibratedValue` | Yes | Defaults to true, so a comparison is against the engineering value. |
 | `Comparison/@instance` | Parsed | A value from another packet; `Match` reports a non-zero instance rather than guessing. |
+| `DynamicValue` | Supported | `ParameterInstanceRef` plus an optional `LinearAdjustment`. Resolved by `ResolveLayout`, which decodes each field as it places it so a later one can be sized or positioned by an earlier one's value. A forward reference is refused rather than guessed. A non-zero `instance` reads another packet and is refused. |
+| `LinearAdjustment` | Supported | Slope and intercept. An absent slope is one, not zero: the schema states no default, and zero would discard the parameter. |
 | `DefaultRateInStream`, `RateInStreamSet` | Ignored | |
 | `BinaryEncoding` on a container | Ignored | |
 
