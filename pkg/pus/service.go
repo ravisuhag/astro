@@ -143,14 +143,15 @@ func (r *Registry) KnownReports() []MessageKey {
 
 // NewDefaultRegistry returns a registry with every service this package
 // implements already registered: ST[01] request verification, ST[03]
-// housekeeping, ST[05] event reporting, and ST[17] test.
+// housekeeping, ST[05] event reporting, ST[08] function management, and
+// ST[17] test.
 func NewDefaultRegistry(profile MissionProfile) (*Registry, error) {
 	r, err := NewRegistry(profile)
 	if err != nil {
 		return nil, err
 	}
 	for _, register := range []func(*Registry) error{
-		registerST01, registerST03, registerST05, registerST17,
+		registerST01, registerST03, registerST05, registerST08, registerST17,
 	} {
 		if err := register(r); err != nil {
 			return nil, err

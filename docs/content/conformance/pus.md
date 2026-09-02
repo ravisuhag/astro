@@ -26,7 +26,7 @@ order: 210
 | Implementation Name | astro/pkg/pus |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | Every codec is parameterized by an explicit `MissionProfile`; there is no package-level default |
-| Other Information | Go library implementing PUS-C secondary headers and four services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
+| Other Information | Go library implementing PUS-C secondary headers and five services. The TC and TM secondary headers implement `spp.SecondaryHeader`, so they compose with `pkg/spp` without changes to either package. The TM absolute time field encodes via `pkg/tcf` CUC. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -109,6 +109,8 @@ order: 210
 | TC[5,6] disable event reporting | 8.5.2.6 | O | Y |
 | TC[5,7] report disabled events | 8.5.2.7 | O | Y — empty body |
 | TM[5,8] disabled events list report | 8.5.2.8 | O | Y |
+| ST[08] function management | 8.8 | O | Y — the one message type the service defines |
+| TC[8,1] perform a function | 8.8.2.1 | O | Y — function ID, the optional argument group, and a caller-driven split of the argument block |
 | ST[17] test | 8.17 | O | Y |
 | TC[17,1] / TM[17,2] are-you-alive | 8.17.2.1, 8.17.2.2 | O | Y |
 | TC[17,3] / TM[17,4] on-board connection | 8.17.2.3, 8.17.2.4 | O | Y — APID width declared by `APIDBytes`, two octets by default |
@@ -137,7 +139,9 @@ those trailing octets verbatim by design.
 | ST[03] parameter functional reporting, subtypes [3,37] to [3,44] | 8.3.2 | N | The whole functional-reporting capability is excluded. A follow-up. |
 | Packet error control field | 7.4.3.2d to f, 7.4.4.2d | N | Checksumming is declared per mission; `pkg/spp` offers the CRC-16 alternative via `WithErrorControl`. The ISO 16-bit checksum alternative the standard also allows is not implemented anywhere in this stack, so a mission declaring it cannot use these packages unmodified. |
 | User data spare and padding word size | 7.4.3.2b, 7.4.4.2b | N | Padding of the user data field to the mission word size is left to the caller. For the secondary headers, a declared `WordSizeBytes` makes `MissionProfile.Validate` check word alignment; zero leaves it unchecked. |
-| ST[02], ST[04], ST[06], ST[08], ST[09], ST[11] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[02], ST[04], ST[06], ST[09], ST[11] to ST[16], ST[18] to ST[23] | clauses 6 and 8 | N | Deliberately out of scope for this first pass. Each is a follow-up. |
+| ST[08] argument values | 8.8.2.1, 6.8.3.1b | N by design | Figure 8-87 types each argument value as "deduced": its width comes from the function's argument declaration, which is mission configuration. The block is carried verbatim, and `FunctionArguments.SplitArguments` splits it against a width function the caller supplies. |
+| ST[08] function and argument semantics | 6.8.1.1, 6.8.4d | N by design | Which functions exist, what their arguments mean and what running one does are outside the standard. The three rejection conditions of 6.8.4d all test a request against the mission's declarations, so only the flight software can apply them. |
 | On-board scheduling semantics | 6.11, 6.22 | N | Out of scope. |
 
 ---
@@ -157,6 +161,8 @@ standard leaves it to the mission:
 | `EventDefinitionIDBytes` | Figure 8-59 |
 | `HousekeepingStructureIDBytes`, `ParameterIDBytes`, `CollectionIntervalBytes`, `CountBytes` | Figure 8-21 |
 | `APIDBytes` | 8.17.2.3, 8.17.2.4 (the ST[17] APID is enumerated, no stated width; zero selects the common 2-octet width) |
+| `FunctionIDBytes` | Figure 8-87 (a fixed character-string, no stated width; zero selects 8 octets, this package's choice) |
+| `FunctionArgumentCountBytes`, `FunctionArgumentIDBytes` | Figure 8-87 (unsigned integer and enumerated, neither with a stated width; zero selects 1 octet) |
 | `WordSizeBytes` | 7.4.3.1l, 7.4.4.1g (when non-zero, `Validate` requires both secondary header sizes to be whole multiples of it) |
 
 Widths the standard fixes, and this implementation therefore treats as

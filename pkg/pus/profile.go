@@ -135,6 +135,16 @@ type MissionProfile struct {
 	CollectionIntervalBytes      int
 	CountBytes                   int
 
+	// Function management widths for ST[08] (Figure 8-87).
+	//
+	// FunctionIDBytes is the width of the fixed character-string that names
+	// the function. FunctionArgumentCountBytes sizes N, and
+	// FunctionArgumentIDBytes sizes the enumerated argument ID. The standard
+	// states no width for any of the three.
+	FunctionIDBytes            int
+	FunctionArgumentCountBytes int
+	FunctionArgumentIDBytes    int
+
 	// APIDBytes sizes the APID field of TC[17,3] and TM[17,4]. Clauses
 	// 8.17.2.3 and 8.17.2.4 mark it enumerated without a stated width, so it
 	// is mission-tailorable like the other enumerated fields. Zero selects
@@ -168,8 +178,39 @@ func DefaultProfile() MissionProfile {
 		ParameterIDBytes:             2,
 		CollectionIntervalBytes:      4,
 		CountBytes:                   1,
+		FunctionIDBytes:              8,
+		FunctionArgumentCountBytes:   1,
+		FunctionArgumentIDBytes:      1,
 		APIDBytes:                    2,
 	}
+}
+
+// FunctionIDSize returns the width of the ST[08] function ID field in octets:
+// FunctionIDBytes, or 8 when the profile leaves it zero. Eight is this
+// package's choice, not the standard's — figure 8-87 gives the field no width.
+func (p MissionProfile) FunctionIDSize() int {
+	if p.FunctionIDBytes == 0 {
+		return 8
+	}
+	return p.FunctionIDBytes
+}
+
+// FunctionArgumentCountSize returns the width of the ST[08] argument count N,
+// or 1 when the profile leaves it zero.
+func (p MissionProfile) FunctionArgumentCountSize() int {
+	if p.FunctionArgumentCountBytes == 0 {
+		return 1
+	}
+	return p.FunctionArgumentCountBytes
+}
+
+// FunctionArgumentIDSize returns the width of the ST[08] argument ID, or 1
+// when the profile leaves it zero.
+func (p MissionProfile) FunctionArgumentIDSize() int {
+	if p.FunctionArgumentIDBytes == 0 {
+		return 1
+	}
+	return p.FunctionArgumentIDBytes
 }
 
 // APIDSize returns the width of the ST[17] APID field in octets: APIDBytes,
@@ -228,6 +269,8 @@ func (p MissionProfile) Validate() error {
 		p.TimeRawBytes, p.StepIDBytes, p.FailureCodeBytes,
 		p.EventDefinitionIDBytes, p.HousekeepingStructureIDBytes,
 		p.ParameterIDBytes, p.CollectionIntervalBytes, p.CountBytes,
+		p.FunctionIDBytes, p.FunctionArgumentCountBytes,
+		p.FunctionArgumentIDBytes,
 		p.APIDBytes, p.WordSizeBytes,
 	}
 	for _, w := range widths {

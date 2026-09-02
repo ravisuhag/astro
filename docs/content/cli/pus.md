@@ -143,4 +143,4 @@ astro pus services
 
 ## Limits
 
-The implemented services are ST[01] request verification, ST[03] housekeeping, ST[05] event reporting and ST[17] test. ST[08] function management, ST[11] scheduling and ST[12] monitoring are not implemented, so their bodies come back as octets. See the [conformance statement](/conformance/pus).
+The implemented services are ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management and ST[17] test. ST[11] scheduling and ST[12] monitoring are not implemented, so their bodies come back as octets. See the [conformance statement](/conformance/pus).

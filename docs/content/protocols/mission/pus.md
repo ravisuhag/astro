@@ -24,6 +24,7 @@ Services are numbered. A few you will meet constantly:
 | ST[01] | Request verification | Reports whether your telecommand was accepted, started, progressed, completed |
 | ST[03] | Housekeeping | Defines periodic parameter reports and carries their values |
 | ST[05] | Event reporting | On-board events at four severities |
+| ST[08] | Function management | Tells a process to run one of its own functions |
 | ST[17] | Test | "Are you alive?" |
 
 A message type is written `TC[3,1]` for a telecommand and `TM[1,2]` for
@@ -46,19 +47,19 @@ telemetry: service 3 subtype 1, service 1 subtype 2.
 
 ## Scope
 
-**Implemented.** Four services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, and ST[17] test — plus the PUS secondary headers, mission profiles, and the time field.
+**Implemented.** Five services — ST[01] request verification, ST[03] housekeeping, ST[05] event reporting, ST[08] function management, and ST[17] test — plus the PUS secondary headers, mission profiles, and the time field.
 
 **Not here yet.**
 
-This package ships four services. The standard defines twenty-plus, and the
-rest are deliberate follow-ups:
+The standard defines twenty-plus services, and the rest are deliberate
+follow-ups:
 
 ST[02] device access, ST[04] parameter statistics, ST[06] memory management,
-ST[08] function management, ST[09] time management, ST[11] time-based
-scheduling, ST[12] on-board monitoring, ST[13] large packet transfer, ST[14]
-real-time forwarding, ST[15] storage and retrieval, ST[18] on-board control
-procedures, ST[19] event-action, ST[20] parameter management, ST[21] request
-sequencing, ST[22] position-based scheduling, ST[23] file management.
+ST[09] time management, ST[11] time-based scheduling, ST[12] on-board
+monitoring, ST[13] large packet transfer, ST[14] real-time forwarding, ST[15]
+storage and retrieval, ST[18] on-board control procedures, ST[19] event-action,
+ST[20] parameter management, ST[21] request sequencing, ST[22] position-based
+scheduling, ST[23] file management.
 
 Also absent: on-board scheduling semantics of any kind, and CLI subcommands.
 
