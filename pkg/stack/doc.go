@@ -61,6 +61,31 @@
 // accepts frames and produces them, asymmetric in a way the two downlink
 // ends are not. See uplink.go for why that shapes the API.
 //
+// # Joining the two
+//
+// That CLCW travels in the operational control field of a telemetry frame,
+// which makes the two directions one system rather than two. A downlink
+// setting Downlink.OCF takes a WithOCF supplier for the field, and the ground
+// reads what arrives with Receiver.NextOCF:
+//
+//	sender, err := stack.NewSender(downlink, stack.WithOCF(func() []byte {
+//	    field, err := onboard.CLCW(0)
+//	    if err != nil {
+//	        return nil
+//	    }
+//	    return field
+//	}))
+//
+//	for field := range receiver.OCFs() {
+//	    if err := commander.AcceptCLCW(field); err != nil {
+//	        return err
+//	    }
+//	}
+//
+// The supplier is required rather than defaulted, because four zero octets
+// decode as a valid CLCW reporting V(R)=0 and a ground station believing that
+// would never advance its window. See Downlink.OCF.
+//
 // Reed-Solomon is deliberately absent. CCSDS 131.0 puts the codeblock between
 // the frame and the sync marker, and a caller who wants it can run
 // pkg/tmsc over the encoded frame before handing the octets on, but the

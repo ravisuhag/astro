@@ -51,6 +51,13 @@ type Downlink struct {
 
 	// OCF carries the four-octet operational control field, which is where
 	// the CLCW travels on a mission that uses COP-1 (clause 4.1.5).
+	//
+	// Setting it obliges the sender to say what goes in the field, so
+	// NewSender wants a WithOCF supplier alongside it. The field content is
+	// the OCF service user's (clause 4.1.5) and this package has none of its
+	// own; emitting the zeros it would otherwise have to invent is worse than
+	// refusing, because a receiver reads four zero octets as a valid CLCW
+	// reporting V(R)=0 rather than as an empty field.
 	OCF bool
 
 	// Randomize applies the CCSDS pseudo-randomizer to the frame before the
@@ -135,7 +142,10 @@ type endpoint struct {
 }
 
 // newEndpoint builds the channel tree for one end of the link.
-func newEndpoint(config Downlink, name string) (*endpoint, error) {
+//
+// ocf is the operational control field supplier, nil on a receiver and on a
+// sender whose channel carries no OCF.
+func newEndpoint(config Downlink, name string, ocf func() []byte) (*endpoint, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -165,6 +175,12 @@ func newEndpoint(config Downlink, name string) (*endpoint, error) {
 		// own length, so the sizer reads it.
 		service.SetPacketSizer(spp.PacketSizer)
 
+		// Every frame on the channel carries the field, whichever virtual
+		// channel released it, so every service asks the same supplier.
+		if ocf != nil {
+			service.SetOCFSupplier(ocf)
+		}
+
 		services[channel.ID] = service
 	}
 
@@ -189,9 +205,57 @@ type Sender struct {
 	*endpoint
 }
 
+// SenderOption configures a Sender at construction.
+type SenderOption func(*senderOptions)
+
+// senderOptions collects what the options set.
+type senderOptions struct {
+	ocf func() []byte
+}
+
+// WithOCF installs the operational control field supplier for a channel
+// configured with Downlink.OCF.
+//
+// It is called once per emitted frame and must return exactly four octets.
+// On a mission running COP-1 those octets are a CLCW that FARM-1 generated,
+// which is what carries the uplink's acknowledgement home:
+//
+//	stack.NewSender(config, stack.WithOCF(func() []byte {
+//	    encoded, err := onboard.CLCW(vcid)
+//	    if err != nil {
+//	        return nil // a wrong length is refused rather than transmitted
+//	    }
+//	    return encoded
+//	}))
+//
+// Returning anything but four octets fails the frame with
+// tmdl.ErrInvalidOCFLength rather than padding or truncating, because a
+// receiver reads the field by position and cannot tell a short one from data.
+func WithOCF(supplier func() []byte) SenderOption {
+	return func(o *senderOptions) { o.ocf = supplier }
+}
+
 // NewSender builds the spacecraft side of a downlink.
-func NewSender(config Downlink) (*Sender, error) {
-	end, err := newEndpoint(config, "downlink-sender")
+//
+// A configuration carrying an OCF needs WithOCF to say what goes in it. See
+// Downlink.OCF for why that is required rather than defaulted.
+func NewSender(config Downlink, options ...SenderOption) (*Sender, error) {
+	var settings senderOptions
+	for _, option := range options {
+		option(&settings)
+	}
+
+	switch {
+	case config.OCF && settings.ocf == nil:
+		return nil, fmt.Errorf("%w: pass stack.WithOCF to say what goes in it",
+			ErrMissingOCF)
+	case !config.OCF && settings.ocf != nil:
+		return nil, fmt.Errorf("%w: WithOCF was given but the channel carries no "+
+			"operational control field, so the supplier would never be called",
+			ErrInvalidConfig)
+	}
+
+	end, err := newEndpoint(config, "downlink-sender", settings.ocf)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +362,11 @@ func (s *Sender) HasPending() bool { return s.physical.HasPendingFrames() }
 // frames arrive in an order that means something.
 type Receiver struct {
 	*endpoint
+
+	// ocf holds the operational control fields of the frames accepted so far,
+	// oldest first. See NextOCF for why they are queued rather than kept as a
+	// single latest value.
+	ocf [][]byte
 }
 
 // NewReceiver builds the ground side of a downlink.
@@ -305,7 +374,7 @@ type Receiver struct {
 // Give it the same Downlink value the sender was built from. That is what
 // makes the two ends agree.
 func NewReceiver(config Downlink) (*Receiver, error) {
-	end, err := newEndpoint(config, "downlink-receiver")
+	end, err := newEndpoint(config, "downlink-receiver", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -335,10 +404,68 @@ func (r *Receiver) Accept(cadu []byte) error {
 		return fmt.Errorf("decoding frame: %w", err)
 	}
 
+	// Keep the operational control field before the frame is routed, since
+	// the packet services do not carry it up.
+	if len(frame.OperationalControl) > 0 {
+		field := make([]byte, len(frame.OperationalControl))
+		copy(field, frame.OperationalControl)
+
+		if len(r.ocf) == maxPendingOCF {
+			r.ocf = r.ocf[1:]
+		}
+		r.ocf = append(r.ocf, field)
+	}
+
 	if err := r.physical.AddFrame(frame); err != nil {
 		return fmt.Errorf("routing frame: %w", err)
 	}
 	return nil
+}
+
+// maxPendingOCF bounds the operational control fields a receiver holds for a
+// caller that never reads them.
+const maxPendingOCF = DefaultBuffer
+
+// NextOCF returns the operational control field of the next accepted frame
+// that carried one, oldest first, or false when none is waiting.
+//
+// They are queued rather than reduced to a latest value because the flags in
+// a CLCW are transient: a Retransmit that sets and clears between two reads
+// is exactly the report FOP-1 needed to see. The queue holds DefaultBuffer
+// fields and then drops the oldest, so a caller that never reads it leaks
+// nothing.
+//
+// On a mission running COP-1 the four octets go straight to the commander:
+//
+//	for field, ok := receiver.NextOCF(); ok; field, ok = receiver.NextOCF() {
+//	    if err := commander.AcceptCLCW(field); err != nil {
+//	        return err
+//	    }
+//	}
+func (r *Receiver) NextOCF() ([]byte, bool) {
+	if len(r.ocf) == 0 {
+		return nil, false
+	}
+	field := r.ocf[0]
+	r.ocf = r.ocf[1:]
+	return field, true
+}
+
+// OCFs iterates the operational control fields waiting to be read, draining
+// them. It ends when none is left, so a caller feeding CADUs in as they
+// arrive should call it again after each batch.
+func (r *Receiver) OCFs() func(yield func([]byte) bool) {
+	return func(yield func([]byte) bool) {
+		for {
+			field, ok := r.NextOCF()
+			if !ok {
+				return
+			}
+			if !yield(field) {
+				return
+			}
+		}
+	}
 }
 
 // Next returns the next whole Space Packet from a virtual channel, or false

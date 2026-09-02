@@ -49,7 +49,22 @@ func packet(t *testing.T, apid uint16, sequence uint16, size int) []byte {
 func transfer(t *testing.T, config stack.Downlink, vcid uint8, packets [][]byte) [][]byte {
 	t.Helper()
 
-	sender, err := stack.NewSender(config)
+	got, _ := transferWithOCF(t, config, vcid, packets, nil)
+	return got
+}
+
+// transferWithOCF is transfer for a channel carrying an operational control
+// field. It returns the packets recovered and the fields the receiver read.
+func transferWithOCF(t *testing.T, config stack.Downlink, vcid uint8,
+	packets [][]byte, ocf func() []byte) (recovered [][]byte, fields [][]byte) {
+	t.Helper()
+
+	var options []stack.SenderOption
+	if ocf != nil {
+		options = append(options, stack.WithOCF(ocf))
+	}
+
+	sender, err := stack.NewSender(config, options...)
 	if err != nil {
 		t.Fatalf("NewSender: %v", err)
 	}
@@ -81,6 +96,10 @@ func transfer(t *testing.T, config stack.Downlink, vcid uint8, packets [][]byte)
 		t.Fatal("the sender produced no CADUs")
 	}
 
+	for field := range receiver.OCFs() {
+		fields = append(fields, field)
+	}
+
 	var got [][]byte
 	for p, err := range receiver.Packets(vcid) {
 		if err != nil {
@@ -88,7 +107,7 @@ func transfer(t *testing.T, config stack.Downlink, vcid uint8, packets [][]byte)
 		}
 		got = append(got, p)
 	}
-	return got
+	return got, fields
 }
 
 // The property the package exists for: one configuration builds both ends,
@@ -221,11 +240,170 @@ func TestDownlinkWithOCF(t *testing.T) {
 	config := testConfig()
 	config.OCF = true
 
+	field := []byte{0x01, 0x00, 0x00, 0x07}
 	sent := [][]byte{packet(t, 100, 0, 12)}
-	got := transfer(t, config, 0, sent)
+	got, _ := transferWithOCF(t, config, 0, sent, func() []byte { return field })
 
 	if len(got) != 1 || !bytes.Equal(got[0], sent[0]) {
 		t.Error("a downlink carrying an OCF did not round-trip")
+	}
+}
+
+// A configuration carrying an OCF has to say what goes in it. Four zero
+// octets decode as a valid CLCW reporting V(R)=0, so inventing them would
+// have the ground believe a spacecraft was acknowledging nothing.
+func TestSenderRefusesOCFWithoutSupplier(t *testing.T) {
+	config := testConfig()
+	config.OCF = true
+
+	if _, err := stack.NewSender(config); !errors.Is(err, stack.ErrMissingOCF) {
+		t.Errorf("NewSender with an OCF and no supplier = %v, want ErrMissingOCF", err)
+	}
+}
+
+// The opposite mistake: a supplier that would never be called.
+func TestSenderRefusesSupplierWithoutOCF(t *testing.T) {
+	config := testConfig() // OCF is false
+
+	_, err := stack.NewSender(config, stack.WithOCF(func() []byte {
+		return make([]byte, 4)
+	}))
+	if !errors.Is(err, stack.ErrInvalidConfig) {
+		t.Errorf("NewSender with a supplier and no OCF = %v, want ErrInvalidConfig", err)
+	}
+}
+
+// What the supplier returns is what arrives, on every frame of the channel
+// whichever virtual channel released it.
+func TestOCFReachesTheReceiver(t *testing.T) {
+	config := testConfig()
+	config.OCF = true
+
+	// A CLCW reporting V(R)=9 on virtual channel 0: control word type 0,
+	// version 0, COP-1 in effect.
+	field := []byte{0x01, 0x00, 0x00, 0x09}
+
+	// Two packets long enough to span, so several frames go down and each
+	// one has to carry the field.
+	sent := [][]byte{packet(t, 100, 0, 80), packet(t, 100, 1, 80)}
+	got, fields := transferWithOCF(t, config, 0, sent, func() []byte { return field })
+
+	if len(got) != len(sent) {
+		t.Fatalf("recovered %d packets, want %d", len(got), len(sent))
+	}
+	if len(fields) < 2 {
+		t.Fatalf("the receiver read %d operational control fields, want one per frame", len(fields))
+	}
+	for i, f := range fields {
+		if !bytes.Equal(f, field) {
+			t.Errorf("field %d = % x, want % x", i, f, field)
+		}
+	}
+}
+
+// A changing supplier is the real case: FARM-1 reports a different V(R) as
+// frames are accepted, and each frame carries the value at the time it was
+// built.
+func TestOCFIsSampledPerFrame(t *testing.T) {
+	config := testConfig()
+	config.OCF = true
+
+	report := byte(0)
+	supplier := func() []byte {
+		report++
+		return []byte{0x01, 0x00, 0x00, report}
+	}
+
+	sent := [][]byte{packet(t, 100, 0, 200)} // spans several frames
+	_, fields := transferWithOCF(t, config, 0, sent, supplier)
+
+	if len(fields) < 2 {
+		t.Fatalf("read %d fields, want several", len(fields))
+	}
+	for i, f := range fields {
+		if want := byte(i + 1); f[3] != want {
+			t.Errorf("field %d reports %d, want %d: the supplier is not being "+
+				"sampled once per frame", i, f[3], want)
+		}
+	}
+}
+
+// A supplier returning the wrong length fails the frame rather than being
+// padded or truncated, because a receiver reads the field by position.
+func TestOCFWrongLengthFailsTheFrame(t *testing.T) {
+	config := testConfig()
+	config.OCF = true
+
+	sender, err := stack.NewSender(config, stack.WithOCF(func() []byte {
+		return []byte{0x01, 0x00} // two octets, not four
+	}))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+
+	if err := sender.Send(0, packet(t, 100, 0, 12)); err != nil {
+		// The failure may surface on Send, when the frame fills, or on Flush.
+		return
+	}
+	if err := sender.Flush(); err == nil {
+		t.Error("a two-octet operational control field was accepted")
+	}
+}
+
+// The receiver holds a bounded queue, so a caller that never reads it does
+// not grow one frame at a time forever.
+func TestOCFQueueIsBounded(t *testing.T) {
+	config := testConfig()
+	config.OCF = true
+
+	report := byte(0)
+	sender, err := stack.NewSender(config, stack.WithOCF(func() []byte {
+		report++
+		return []byte{0x01, 0x00, 0x00, report}
+	}))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	receiver, err := stack.NewReceiver(config)
+	if err != nil {
+		t.Fatalf("NewReceiver: %v", err)
+	}
+
+	// Enough traffic to produce more frames than the queue holds. The
+	// packets are drained each round so the frame buffer does not fill; the
+	// operational control fields deliberately are not.
+	for i := range 200 {
+		if err := sender.Send(0, packet(t, 100, uint16(i), 40)); err != nil {
+			t.Fatalf("Send %d: %v", i, err)
+		}
+		for cadu, err := range sender.CADUs() {
+			if err != nil {
+				t.Fatalf("CADUs: %v", err)
+			}
+			if err := receiver.Accept(cadu); err != nil {
+				t.Fatalf("Accept: %v", err)
+			}
+		}
+		for _, err := range receiver.Packets(0) {
+			if err != nil {
+				t.Fatalf("Packets: %v", err)
+			}
+		}
+	}
+
+	held := 0
+	for range receiver.OCFs() {
+		held++
+	}
+	if held == 0 {
+		t.Fatal("the receiver kept no operational control fields")
+	}
+	if held > stack.DefaultBuffer {
+		t.Errorf("the receiver held %d fields, want at most %d",
+			held, stack.DefaultBuffer)
+	}
+	if int(report) <= held {
+		t.Skip("not enough frames were produced to overflow the queue")
 	}
 }
 
