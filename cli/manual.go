@@ -22,6 +22,7 @@ var protocols = map[string]string{
 	"aos":  "aos.md",
 	"xtce": "xtce.md",
 	"pus":  "pus.md",
+	"ldc":  "ldc.md",
 }
 
 func manualCmd(docsFS embed.FS) *cobra.Command {
@@ -62,6 +63,7 @@ func printManualIndex() error {
 	sb.WriteString("| AOS Space Data Link Protocol | `astro manual aos` |\n")
 	sb.WriteString("| XTCE Mission Databases | `astro manual xtce` |\n")
 	sb.WriteString("| PUS Packet Utilisation Services | `astro manual pus` |\n")
+	sb.WriteString("| Lossless Data Compression | `astro manual ldc` |\n")
 
 	out, err := printer.Markdown(sb.String())
 	if err != nil {

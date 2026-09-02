@@ -23,6 +23,7 @@ If you have not used it yet, start with the [CLI quickstart](/docs/start/quickst
 | [`astro time`](/cli/time) | Time codes | encode, decode, inspect, now |
 | [`astro xtce`](/cli/xtce) | XTCE mission databases | validate, list, layout, decode, match |
 | [`astro pus`](/cli/pus) | PUS services | encode, decode, services |
+| [`astro ldc`](/cli/ldc) | Lossless data compression | compress, decompress, inspect |
 
 ## Shared flags
 
