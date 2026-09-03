@@ -34,8 +34,8 @@
     },
     {
       "name": "cltu-start-sequence",
-      "clause": "3.4",
-      "note": "The CLTU start sequence is the two octets 0xeb 0x90. A receiver hunts for this pattern to find the start of a command, so it is fixed by the standard and not negotiable.",
+      "clause": "5.2.2",
+      "note": "The CLTU start sequence for BCH coding is the two octets 0xeb 0x90. Clause 5.2.2.2 prints the 16-bit pattern 1110 1011 1001 0000. A receiver hunts for it to find the start of a command, so it is fixed by the standard and not negotiable.",
       "fields": {
         "sequence": "start"
       },
@@ -43,8 +43,8 @@
     },
     {
       "name": "cltu-tail-sequence",
-      "clause": "3.4",
-      "note": "The CLTU tail sequence is seven octets of 0xc5 followed by 0x79. It is deliberately not a valid codeblock, so a decoder recognises the end of the command rather than trying to correct it.",
+      "clause": "5.2.4",
+      "note": "The CLTU tail sequence for BCH coding is seven octets of 0xc5 followed by 0x79. Clause 5.2.4.1 prints it as C5C5 C5C5 C5C5 C579 and says it is constructed specifically to be a non-correctable pattern, so a decoder recognises the end of the command rather than trying to correct it.",
       "fields": {
         "sequence": "tail"
       },
