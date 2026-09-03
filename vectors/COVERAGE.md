@@ -142,6 +142,22 @@ risk is gone — the CCSDS 121.0 data set, the annex F checksum, the RFC
 5050 SDNV examples, the RFC 4493 and NIST CMAC sets, the published
 randomizer sequences. Everywhere else it stands.
 
+**Six layers cannot be corroborated from outside at all, and the reason
+is structural.** `bp`, `cop`, `epp`, `ltp`, `ocsc` and `sdls` rest on
+clause derivation alone, and no amount of effort changes that cheaply.
+
+Corroboration works where an implementation exposes a *codec*: a
+function from field values to octets, callable in isolation. Where the
+only implementations expose a protocol *engine* instead -- a daemon with
+its own database, a whole self-consistent frame with matching managed
+parameters, a server component that reads a stream -- there is nothing
+to call. Their state lives across a session rather than in a return
+value.
+
+That is why these six are the gap and the others are not, and why
+closing it means standing up a running system rather than installing a
+library. Anyone attempting it should know that before starting.
+
 **Reject vectors carry weaker evidence than encode vectors, and always
 will.** Another implementation confirms octets by producing them. It can
 only confirm a rejection by refusing something, and implementations are
