@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 734.1-B-1 / RFC 5326",
+  "package": "ltp",
+  "source": "derived from the clause 3.2 segment header layout",
+  "note": "LTP segment headers. The header is a control octet carrying a 4-bit version and 4-bit segment type, then the session ID as two SDNVs, then one octet whose high nibble counts header extensions and low nibble counts trailer extensions. Because the session ID is SDNV-encoded the header is variable length, so the extension-count octet is not at a fixed offset \u2014 a decoder that assumes it is will misparse every session with an engine ID above 127. The session and receiver machines are not yet covered. The SDNV encodings used here are pinned independently in vectors/sdnv/sdnv.json.",
+  "encode": [
+    {
+      "name": "red-data-segment-single-octet-session",
+      "clause": "3.2",
+      "note": "Segment type 0 with engine ID 1 and session number 1, no extensions. Control octet = version 0<<4 | type 0 = 0x00; the two SDNVs are each a single octet 0x01; the extension counts octet is 0x00.",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 1,
+        "session_number": 1
+      },
+      "want": "00010100"
+    },
+    {
+      "name": "wider-session-identifiers",
+      "clause": "3.2",
+      "note": "Engine ID 0x2a fits one SDNV octet but session number 0x1234 needs two: 0xa4 0x34. So the header is five octets, not four. This is the vector that catches a decoder assuming a fixed header size.",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 42,
+        "session_number": 4660
+      },
+      "want": "002aa43400"
+    },
+    {
+      "name": "engine-id-crossing-the-sdnv-boundary",
+      "clause": "3.2",
+      "note": "Engine ID 128 is the first value needing two SDNV octets (0x81 0x00), so the session number that follows shifts by one. A decoder that read the session number at a fixed offset would read 0x00 here instead of 1.",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 128,
+        "session_number": 1
+      },
+      "want": "0081000100"
+    },
+    {
+      "name": "report-segment-type",
+      "clause": "3.2",
+      "note": "Segment type 12 is a report segment. Control octet = 0<<4 | 12 = 0x0c. The type occupies the low nibble, so a value above 15 has no representation.",
+      "fields": {
+        "segment_type": 12,
+        "engine_id": 1,
+        "session_number": 1
+      },
+      "want": "0c010100"
+    }
+  ],
+  "decode": [
+    {
+      "name": "red-data-segment-inverse",
+      "clause": "3.2",
+      "note": "The inverse of red-data-segment-single-octet-session. A decoder must report how many octets the header consumed, because the segment content starts there and the header is variable length.",
+      "input": "00010100",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 1,
+        "session_number": 1,
+        "consumed": 4
+      }
+    },
+    {
+      "name": "wider-session-identifiers-inverse",
+      "clause": "3.2",
+      "note": "The inverse of wider-session-identifiers: five octets consumed, not four.",
+      "input": "002aa43400",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 42,
+        "session_number": 4660,
+        "consumed": 5
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "version-not-zero",
+      "clause": "3.2",
+      "note": "Only LTP version 0 is defined. Control octet 0x10 declares version 1, which a decoder must refuse rather than misparse as a segment type.",
+      "input": "10010100",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "header-ends-inside-the-session-id",
+      "clause": "3.2",
+      "note": "The engine ID SDNV sets its continuation bit but the data ends, so the session ID never completes.",
+      "input": "0081",
+      "error": "truncated"
+    },
+    {
+      "name": "extension-count-octet-missing",
+      "clause": "3.2",
+      "note": "Both session SDNVs are present but the extension counts octet that must follow them is not.",
+      "input": "000101",
+      "error": "truncated"
+    }
+  ]
+}

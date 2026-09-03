@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "standard": "ECSS-E-ST-70-41C (PUS-C)",
+  "package": "pus",
+  "source": "derived from the clause 7.4.4.1 figure 7-9 layout",
+  "note": "PUS-C telecommand secondary headers. Octet 0 carries the 4-bit PUS version (2 for PUS-C) and the 4-bit acknowledgement flags; then the service type, the subtype, a 16-bit source ID, and mission-declared spare padding. The wire format is NOT self-describing: the spare width is a per-application-process declaration, so a decoder must already hold the mission profile. That is why the profile appears in each vector's config rather than its fields. The service state machines is not yet covered.",
+  "encode": [
+    {
+      "name": "tc-service-17-subtype-1-connection-test",
+      "clause": "7.4.4.1",
+      "note": "Service 17 subtype 1 is the PUS connection test, the simplest real telecommand. No acknowledgement requested, source ID 0, no spare. octet 0 = version 2<<4 | ack 0 = 0x20; then 0x11 0x01; then the 16-bit source ID 0x0000.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "fields": {
+        "ack_flags": 0,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 0
+      },
+      "want": "2011010000"
+    },
+    {
+      "name": "tc-all-acknowledgement-flags-set",
+      "clause": "7.4.4.1d",
+      "note": "All four acknowledgement flags requested: octet 0 = 2<<4 | 0xf = 0x2f. Source ID 0x1234 shows the field is big-endian. The flags occupy the low nibble, so a value above 15 has no representation.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "fields": {
+        "ack_flags": 15,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 4660
+      },
+      "want": "2f11011234"
+    },
+    {
+      "name": "tc-service-3-housekeeping",
+      "clause": "7.4.4.1e",
+      "note": "Service 3 subtype 25 is a housekeeping parameter report request. Source ID 42. Distinct service and subtype values so a decoder that swapped the two octets fails here.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "fields": {
+        "ack_flags": 0,
+        "service": 3,
+        "subtype": 25,
+        "source_id": 42
+      },
+      "want": "200319002a"
+    },
+    {
+      "name": "tc-with-one-spare-octet",
+      "clause": "7.4.4.1g",
+      "note": "The same connection test under a profile declaring one spare octet, which pads the header to the mission's word size. The spare is zero and appends after the source ID, making the header six octets rather than five. Nothing on the wire says the spare is there \u2014 only the profile does.",
+      "config": {
+        "tc_spare_bytes": 1
+      },
+      "fields": {
+        "ack_flags": 0,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 0
+      },
+      "want": "201101000000"
+    },
+    {
+      "name": "tc-maximum-field-values",
+      "clause": "7.4.4.1",
+      "note": "Service and subtype are a full octet each and the source ID is 16 bits, so 255, 255 and 65535 pin all three field widths at once.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "fields": {
+        "ack_flags": 0,
+        "service": 255,
+        "subtype": 255,
+        "source_id": 65535
+      },
+      "want": "20ffffffff"
+    }
+  ],
+  "decode": [
+    {
+      "name": "tc-service-17-subtype-1-inverse",
+      "clause": "7.4.4.1",
+      "note": "The inverse of the connection test vector. The decoder must already carry the profile, since the octets do not say how wide the spare is.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "input": "2011010000",
+      "fields": {
+        "ack_flags": 0,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 0
+      }
+    },
+    {
+      "name": "tc-with-spare-inverse",
+      "clause": "7.4.4.1g",
+      "note": "The same octets plus a spare, read under the profile that declares it. Read under the zero-spare profile these six octets would leave one unconsumed, which is the failure mode the profile prevents.",
+      "config": {
+        "tc_spare_bytes": 1
+      },
+      "input": "201101000000",
+      "fields": {
+        "ack_flags": 0,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 0
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "pus-version-not-two",
+      "clause": "7.4.4.1",
+      "note": "This implementation speaks PUS-C, version 2. octet 0 = 0x10 declares version 1, which must be refused rather than misparsed \u2014 the field layout changed between versions.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "input": "1011010000",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "header-shorter-than-the-profile-requires",
+      "clause": "7.4.4.1",
+      "note": "Four octets cannot hold a five-octet header. The profile fixes the expected width, so a decoder knows this is short even though nothing on the wire says so.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "input": "20110100",
+      "error": "truncated"
+    },
+    {
+      "name": "acknowledgement-flags-above-four-bit-field",
+      "clause": "7.4.4.1d",
+      "note": "16 does not fit the 4-bit acknowledgement flags nibble.",
+      "config": {
+        "tc_spare_bytes": 0
+      },
+      "fields": {
+        "ack_flags": 16,
+        "service": 17,
+        "subtype": 1,
+        "source_id": 0
+      },
+      "error": "field_out_of_range"
+    }
+  ]
+}

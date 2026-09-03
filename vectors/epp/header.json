@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 133.1-B-3",
+  "package": "epp",
+  "source": "derived from the clause 4.1.2 field layout",
+  "note": "Encapsulation Packet Protocol headers. The header size is a pure function of the 2-bit Length of Length field (table 4-1): '00' gives 1 octet, '01' gives 2, '10' gives 4, '11' gives 8. All four forms are pinned. Protocol ID '110' means the real protocol is named by the Protocol ID Extension field, which is distinct from '111', mission-specific data \u2014 a confusion worth pinning, since both have the high bit set.",
+  "encode": [
+    {
+      "name": "one-octet-idle-header",
+      "clause": "4.1.2.4.4",
+      "note": "The 1-octet header, legal only for idle packets. octet 0 = PVN '111'<<5 | protocol ID '000'<<2 | LoL '00' = 0xe0. Length of Length '00' means there is no packet length field at all, which is why only idle packets may use it: their length is implied by the frame that carries them.",
+      "fields": {
+        "protocol_id": 0,
+        "length_of_length": 0,
+        "packet_length": 1
+      },
+      "want": "e0"
+    },
+    {
+      "name": "two-octet-idle-fill",
+      "clause": "4.1.2",
+      "note": "LoL '01' gives a 2-octet header with an 8-bit length. octet 0 = 111<<5 | 000<<2 | 01 = 0xe1, octet 1 = total packet length 8.",
+      "fields": {
+        "protocol_id": 0,
+        "length_of_length": 1,
+        "packet_length": 8
+      },
+      "want": "e108"
+    },
+    {
+      "name": "two-octet-ltp",
+      "clause": "4.1.2",
+      "note": "Protocol ID '001' is LTP (CCSDS 734.1). octet 0 = 111<<5 | 001<<2 | 01 = 0xe5, octet 1 = length 3.",
+      "fields": {
+        "protocol_id": 1,
+        "length_of_length": 1,
+        "packet_length": 3
+      },
+      "want": "e503"
+    },
+    {
+      "name": "two-octet-ipe",
+      "clause": "4.1.2",
+      "note": "Protocol ID '010' is the Internet Protocol Extension. octet 0 = 111<<5 | 010<<2 | 01 = 0xe9.",
+      "fields": {
+        "protocol_id": 2,
+        "length_of_length": 1,
+        "packet_length": 6
+      },
+      "want": "e906"
+    },
+    {
+      "name": "two-octet-cfdp",
+      "clause": "4.1.2",
+      "note": "Protocol ID '011' is CFDP (CCSDS 727.0). octet 0 = 111<<5 | 011<<2 | 01 = 0xed.",
+      "fields": {
+        "protocol_id": 3,
+        "length_of_length": 1,
+        "packet_length": 4
+      },
+      "want": "ed04"
+    },
+    {
+      "name": "two-octet-bundle-protocol",
+      "clause": "4.1.2",
+      "note": "Protocol ID '100' is the Bundle Protocol (CCSDS 734.2). octet 0 = 111<<5 | 100<<2 | 01 = 0xf1.",
+      "fields": {
+        "protocol_id": 4,
+        "length_of_length": 1,
+        "packet_length": 4
+      },
+      "want": "f104"
+    },
+    {
+      "name": "two-octet-mission-specific",
+      "clause": "4.1.2",
+      "note": "Protocol ID '111' is mission-specific, privately defined data. octet 0 = 111<<5 | 111<<2 | 01 = 0xfd. Note this is distinct from '110', the extended protocol ID.",
+      "fields": {
+        "protocol_id": 7,
+        "length_of_length": 1,
+        "packet_length": 5
+      },
+      "want": "fd05"
+    },
+    {
+      "name": "four-octet-with-user-defined-field",
+      "clause": "4.1.2",
+      "note": "LoL '10' gives a 4-octet header: octet 0, then the user defined field in the high nibble of octet 1 and the protocol ID extension in the low nibble, then a 16-bit length. octet 0 = 111<<5|010<<2|10 = 0xea, octet 1 = 0x5<<4|0x0 = 0x50, octets 2-3 = length 6.",
+      "fields": {
+        "protocol_id": 2,
+        "length_of_length": 2,
+        "user_defined": 5,
+        "packet_length": 6
+      },
+      "want": "ea500006"
+    },
+    {
+      "name": "four-octet-extended-protocol-id",
+      "clause": "4.1.2",
+      "note": "Protocol ID '110' says the real protocol is named by the Protocol ID Extension field instead. octet 0 = 111<<5|110<<2|10 = 0xfa, octet 1 = 0x0<<4|0x3 = 0x03 carrying extension 3.",
+      "fields": {
+        "protocol_id": 6,
+        "length_of_length": 2,
+        "extended_protocol_id": 3,
+        "packet_length": 6
+      },
+      "want": "fa030006"
+    },
+    {
+      "name": "eight-octet-full-header",
+      "clause": "4.1.2",
+      "note": "LoL '11' gives the full 8-octet header: octet 0, the UDF/PIE octet, a 2-octet CCSDS defined field, then a 32-bit length. octet 0 = 111<<5|110<<2|11 = 0xfb, octet 1 = 0xa<<4|0x3 = 0xa3, octets 2-3 = 0x1234, octets 4-7 = 70000 = 0x00011170. The 32-bit length is what makes this header size necessary; 70000 does not fit 16 bits.",
+      "fields": {
+        "protocol_id": 6,
+        "length_of_length": 3,
+        "user_defined": 10,
+        "extended_protocol_id": 3,
+        "ccsds_defined": 4660,
+        "packet_length": 70000
+      },
+      "want": "fba3123400011170"
+    }
+  ],
+  "decode": [
+    {
+      "name": "eight-octet-full-header-inverse",
+      "clause": "4.1.2",
+      "note": "The inverse of eight-octet-full-header. Every field of the widest header form read back from its octets, which is the case where a misplaced nibble is easiest to make and hardest to notice.",
+      "input": "fba3123400011170",
+      "fields": {
+        "pvn": 7,
+        "protocol_id": 6,
+        "length_of_length": 3,
+        "user_defined": 10,
+        "extended_protocol_id": 3,
+        "ccsds_defined": 4660,
+        "packet_length": 70000
+      }
+    },
+    {
+      "name": "one-octet-idle-header-inverse",
+      "clause": "4.1.2.4.4",
+      "note": "A single 0xe0 octet decodes to an idle packet header with no length field. A decoder must not read a second octet.",
+      "input": "e0",
+      "fields": {
+        "pvn": 7,
+        "protocol_id": 0,
+        "length_of_length": 0
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "packet-version-number-not-all-ones",
+      "clause": "4.1.2.2",
+      "note": "The EPP packet version number is always '111'. octet 0 = 0x00 has PVN '000', which identifies a Space Packet, not an encapsulation packet. A decoder must refuse rather than misparse.",
+      "input": "00",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "one-octet-header-for-a-non-idle-protocol",
+      "clause": "4.1.2.4.4",
+      "note": "LoL '00' omits the length field entirely, so only idle packets may use it. octet 0 = 0xe4 is protocol ID '001' (LTP) with LoL '00', which leaves the packet length unknowable.",
+      "input": "e4",
+      "error": "reserved_value"
+    },
+    {
+      "name": "header-shorter-than-its-length-of-length-requires",
+      "clause": "4.1.2",
+      "note": "octet 0 = 0xfb declares LoL '11', an 8-octet header, but only two octets follow.",
+      "input": "fba3",
+      "error": "truncated"
+    },
+    {
+      "name": "header-empty",
+      "clause": "4.1.2",
+      "note": "No octets at all.",
+      "input": "",
+      "error": "truncated"
+    }
+  ]
+}

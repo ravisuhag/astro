@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 133.0-B-2",
+  "package": "spp",
+  "source": "derived from the clause 4.1.3 field layout",
+  "note": "The 6-octet Space Packet primary header. Field layout from clause 4.1.3: version 3 bits, type 1 bit, secondary header flag 1 bit, APID 11 bits, sequence flags 2 bits, sequence count 14 bits, then the 16-bit packet data length. Each vector below isolates one field so a packing error names itself instead of hiding in a full packet.",
+  "encode": [
+    {
+      "name": "sequence-flag-continuation",
+      "clause": "4.1.3.4.2.2",
+      "note": "Sequence flags '00' means a continuation segment. byte 2 = 00<<6 | (count>>8) = 0x00 with count 1, byte 3 = 0x01.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 0,
+        "sequence_count": 1,
+        "packet_length": 0
+      },
+      "want": "006400010000"
+    },
+    {
+      "name": "sequence-flag-first-segment",
+      "clause": "4.1.3.4.2.2",
+      "note": "Sequence flags '01' means the first segment. byte 2 = 01<<6 = 0x40 with count 1 in the low 14 bits.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 1,
+        "sequence_count": 1,
+        "packet_length": 0
+      },
+      "want": "006440010000"
+    },
+    {
+      "name": "sequence-flag-last-segment",
+      "clause": "4.1.3.4.2.2",
+      "note": "Sequence flags '10' means the last segment. byte 2 = 10<<6 = 0x80.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 2,
+        "sequence_count": 1,
+        "packet_length": 0
+      },
+      "want": "006480010000"
+    },
+    {
+      "name": "sequence-flag-unsegmented",
+      "clause": "4.1.3.4.2.2",
+      "note": "Sequence flags '11' means unsegmented, a standalone packet. byte 2 = 11<<6 = 0xc0. This is the common case and the default every other vector here uses.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 3,
+        "sequence_count": 1,
+        "packet_length": 0
+      },
+      "want": "0064c0010000"
+    },
+    {
+      "name": "packet-type-tm",
+      "clause": "4.1.3.2",
+      "note": "The packet type bit is bit 4 of byte 0 and is 0 for telemetry. With APID 0x123: byte 0 = 000<<5 | 0<<4 | 0<<3 | 0x123>>8 = 0x01, byte 1 = 0x23.",
+      "fields": {
+        "apid": 291,
+        "packet_type": 0,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0123c0000000"
+    },
+    {
+      "name": "packet-type-tc",
+      "clause": "4.1.3.2",
+      "note": "The same APID with the type bit set for telecommand: byte 0 = 0<<5 | 1<<4 | 0<<3 | 0x123>>8 = 0x11. Only bit 4 differs from packet-type-tm, which is the point of the pair.",
+      "fields": {
+        "apid": 291,
+        "packet_type": 1,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "1123c0000000"
+    },
+    {
+      "name": "secondary-header-flag-clear",
+      "clause": "4.1.3.3.2",
+      "note": "The secondary header flag is bit 3 of byte 0. Clear with APID 100: byte 0 = 0x00.",
+      "fields": {
+        "apid": 100,
+        "secondary_header_flag": 0,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0064c0000000"
+    },
+    {
+      "name": "secondary-header-flag-set",
+      "clause": "4.1.3.3.2",
+      "note": "The same header with the flag set: byte 0 = 1<<3 | 0x064>>8 = 0x08. Only bit 3 differs from secondary-header-flag-clear.",
+      "fields": {
+        "apid": 100,
+        "secondary_header_flag": 1,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0864c0000000"
+    },
+    {
+      "name": "apid-zero",
+      "clause": "4.1.3.3",
+      "note": "The APID is the low 11 bits of the first two octets. Zero gives bytes 0-1 = 00 00.",
+      "fields": {
+        "apid": 0,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0000c0000000"
+    },
+    {
+      "name": "apid-all-ones-is-idle",
+      "clause": "4.1.3.3.4",
+      "note": "APID 'all ones' (0x7ff, 2047) is reserved for idle packets. Bytes 0-1 = 07 ff. This is the largest value the 11-bit field holds, so it also pins the field width.",
+      "fields": {
+        "apid": 2047,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "07ffc0000000"
+    },
+    {
+      "name": "apid-alternating-bits",
+      "clause": "4.1.3.3",
+      "note": "APID 0x2aa alternates bits across the octet boundary, so a shift error shows up. byte 0 = 0x2aa>>8 = 0x02, byte 1 = 0x2aa&0xff = 0xaa.",
+      "fields": {
+        "apid": 682,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "02aac0000000"
+    },
+    {
+      "name": "sequence-count-zero",
+      "clause": "4.1.3.4.3",
+      "note": "The sequence count is the low 14 bits of octets 2-3. Zero with unsegmented flags gives bytes 2-3 = c0 00.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0064c0000000"
+    },
+    {
+      "name": "sequence-count-max",
+      "clause": "4.1.3.4.3",
+      "note": "16383 is the largest value 14 bits hold. With unsegmented flags: bytes 2-3 = 11<<14 | 0x3fff = 0xffff. A count that overflowed into the flag bits would be indistinguishable from this, which is why the maximum is pinned.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 3,
+        "sequence_count": 16383,
+        "packet_length": 0
+      },
+      "want": "0064ffff0000"
+    },
+    {
+      "name": "packet-length-one-octet-data-field",
+      "clause": "4.1.3.5.3",
+      "note": "The packet data length field carries the data field size minus one, so the smallest legal data field of one octet gives a length field of zero. Bytes 4-5 = 00 00.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 0
+      },
+      "want": "0064c0000000"
+    },
+    {
+      "name": "packet-length-max",
+      "clause": "4.1.3.5.3",
+      "note": "A length field of 0xffff means a data field of 65536 octets, the largest the standard allows. Bytes 4-5 = ff ff.",
+      "fields": {
+        "apid": 100,
+        "sequence_flags": 3,
+        "sequence_count": 0,
+        "packet_length": 65535
+      },
+      "want": "0064c000ffff"
+    }
+  ],
+  "decode": [
+    {
+      "name": "all-fields-at-once",
+      "clause": "4.1.3",
+      "note": "One header with every field set to a distinct non-default value, so a decoder that reads two fields from the same bits fails here. version 0, type 1 (TC), secondary header flag 1, APID 0x2aa, sequence flags '10' (last segment), count 0x1234, length 0x00ff. byte 0 = 0<<5|1<<4|1<<3|0x02 = 0x1a, byte 1 = 0xaa, byte 2 = 10<<6|0x12 = 0x92, byte 3 = 0x34, bytes 4-5 = 00 ff.",
+      "input": "1aaa923400ff",
+      "fields": {
+        "version": 0,
+        "packet_type": 1,
+        "secondary_header_flag": 1,
+        "apid": 682,
+        "sequence_flags": 2,
+        "sequence_count": 4660,
+        "packet_length": 255
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "header-truncated-to-five-octets",
+      "clause": "4.1.3",
+      "note": "The primary header is always exactly six octets, so five cannot hold it.",
+      "input": "0064c00000",
+      "error": "truncated"
+    },
+    {
+      "name": "header-empty",
+      "clause": "4.1.3",
+      "note": "No octets at all.",
+      "input": "",
+      "error": "truncated"
+    }
+  ]
+}

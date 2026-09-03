@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID)",
+  "package": "pn",
+  "source": "digit strings published in the standards",
+  "note": "The pseudo-randomizer sequences. Each is an 8-bit LFSR preset to all ones, and the standards publish the opening digits so an implementation can prove its taps are right. That matters more than it looks: the randomizer is XOR, so it is its own inverse and any sequence at all round-trips perfectly. Only these published digits distinguish correct taps from a self-consistent wrong set.",
+  "encode": [
+    {
+      "name": "tm-sequence-first-five-octets",
+      "clause": "131.0-B-5 10.4.2",
+      "note": "h(x) = x^8 + x^7 + x^5 + x^3 + 1, preset to all ones. CCSDS 142.0-B-1 clause 3.5.2.1 adopts the same sequence and publishes its first 40 digits: 1111 1111 0100 1000 0000 1110 1100 0000 1001 1010, which as octets is ff 48 0e c0 9a.",
+      "fields": {
+        "sequence": "tm",
+        "length": 5
+      },
+      "want": "ff480ec09a"
+    },
+    {
+      "name": "tc-sequence-first-five-octets",
+      "clause": "231.0-B-4 6.2",
+      "note": "h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, also preset to all ones. CCSDS 231.0-B-4 prints the first 40 digits: 1111 1111 0011 1001 1001 1110 0101 1010 0110 1000, which as octets is ff 39 9e 5a 68. TC does not reuse the TM randomizer. Both open with 0xff because both registers preset to all ones; they part company at the second octet, so only an octet past the first distinguishes them.",
+      "fields": {
+        "sequence": "tc",
+        "length": 5
+      },
+      "want": "ff399e5a68"
+    },
+    {
+      "name": "oid-sequence-first-ten-octets",
+      "clause": "132.0-B-3 4.1.4.6.2.2",
+      "note": "The 32-cell generator used to fill Only Idle Data frames. CCSDS 132.0-B-3 clause 4.1.4.6.2.2 (with annex D) and CCSDS 732.1-B-3 clause 4.1.4.1.10 (annex H) mandate the same generator and publish these octets: ff ff ff ff 6d b6 d8 61 45 1f. Transcribed from the published digits, which are the authority for this value.",
+      "fields": {
+        "sequence": "oid",
+        "length": 10
+      },
+      "want": "ffffffff6db6d861451f"
+    }
+  ]
+}

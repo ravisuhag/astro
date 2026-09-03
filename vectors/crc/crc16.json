@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT)",
+  "package": "crc",
+  "source": "published check value, plus derivations from the generator and preset",
+  "note": "CRC-16-CCITT as CCSDS uses it for frame and packet error control: generator 0x1021, preset all ones, most-significant bit first, no reflection and no final inversion. A scalar result is written as hex at its natural width, big-endian, which is also the order the field takes on the wire.",
+  "encode": [
+    {
+      "name": "check-value-123456789",
+      "clause": "4.1.6",
+      "note": "The standard check value for this CRC: the ASCII string \"123456789\" gives 0x29b1. Published for CRC-16/CCITT-FALSE.",
+      "fields": {
+        "data": "313233343536373839"
+      },
+      "want": "29b1"
+    },
+    {
+      "name": "empty-input-returns-the-preset",
+      "clause": "4.1.6",
+      "note": "With no data the register is never clocked, so the result is the preset itself, 0xffff. Follows directly from the all-ones preset.",
+      "fields": {
+        "data": ""
+      },
+      "want": "ffff"
+    },
+    {
+      "name": "single-zero-octet",
+      "clause": "4.1.6",
+      "note": "One zero octet against the all-ones preset gives 0xe1f0. Clocking the register eight times from 0xffff with generator 0x1021 produces it.",
+      "fields": {
+        "data": "00"
+      },
+      "want": "e1f0"
+    },
+    {
+      "name": "single-ff-octet",
+      "clause": "4.1.6",
+      "note": "One 0xff octet clears the top byte of the all-ones preset before clocking, giving 0xff00.",
+      "fields": {
+        "data": "ff"
+      },
+      "want": "ff00"
+    }
+  ]
+}

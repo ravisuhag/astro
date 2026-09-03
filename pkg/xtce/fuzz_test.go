@@ -1,6 +1,7 @@
 package xtce_test
 
 import (
+	"github.com/ravisuhag/astro/internal/vectors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,15 +19,15 @@ import (
 // whenever Load succeeds, because a document that parses can still steer them
 // somewhere odd.
 func FuzzLoad(f *testing.F) {
-	entries, err := os.ReadDir("testdata")
+	entries, err := os.ReadDir(filepath.Join(vectors.Root(), "xtce"))
 	if err != nil {
-		f.Fatalf("reading testdata: %v", err)
+		f.Fatalf("reading the shared XTCE fixtures: %v", err)
 	}
 	for _, entry := range entries {
 		if filepath.Ext(entry.Name()) != ".xml" {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join("testdata", entry.Name()))
+		data, err := os.ReadFile(filepath.Join(vectors.Root(), "xtce", entry.Name()))
 		if err != nil {
 			f.Fatalf("reading %s: %v", entry.Name(), err)
 		}

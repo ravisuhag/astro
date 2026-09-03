@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 211.2-B-3 annex C (Proximity-1 CRC-32)",
+  "package": "crc",
+  "source": "derived from the annex C generator, preset and bit order",
+  "note": "The Proximity-1 CRC-32: generator 0x00a00805, zero preset, most-significant bit first, no reflection and no final inversion. The zero preset is what makes the empty and all-zero cases zero, and it is why a correct codeword has a zero syndrome.",
+  "encode": [
+    {
+      "name": "ascii-123456789",
+      "clause": "C",
+      "note": "The ASCII string \"123456789\" gives 0x51693c0c under generator 0x00a00805 with a zero preset.",
+      "fields": {
+        "data": "313233343536373839"
+      },
+      "want": "51693c0c"
+    },
+    {
+      "name": "empty-input-is-zero",
+      "clause": "C",
+      "note": "The register starts at zero and is never clocked, so the result is zero. Follows from the zero preset.",
+      "fields": {
+        "data": ""
+      },
+      "want": "00000000"
+    },
+    {
+      "name": "single-zero-octet-stays-zero",
+      "clause": "C",
+      "note": "A zero octet against a zero register produces no feedback at any of the eight steps, so the register stays zero. This is the case that distinguishes a zero preset from an all-ones one.",
+      "fields": {
+        "data": "00"
+      },
+      "want": "00000000"
+    },
+    {
+      "name": "four-ff-octets",
+      "clause": "C",
+      "note": "Four 0xff octets give 0x71800472.",
+      "fields": {
+        "data": "ffffffff"
+      },
+      "want": "71800472"
+    },
+    {
+      "name": "deadbeef",
+      "clause": "C",
+      "note": "The four octets de ad be ef give 0x4440d14c.",
+      "fields": {
+        "data": "deadbeef"
+      },
+      "want": "4440d14c"
+    }
+  ]
+}

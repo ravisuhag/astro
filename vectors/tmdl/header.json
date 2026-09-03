@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 132.0-B-3",
+  "package": "tmdl",
+  "source": "derived from the clause 4.1.2 field layout and bit positions",
+  "note": "The 6-octet TM transfer frame primary header. Each vector isolates one field so a packing error names the field rather than hiding in a whole frame. Two semantic rules constrain octet 4 and are pinned as reject vectors: with the sync flag clear, the packet order flag must be zero (clause 4.1.2.7.4) and the segment length identifier must be '11' (clause 4.1.2.7.5).",
+  "encode": [
+    {
+      "name": "baseline-header",
+      "clause": "4.1.2",
+      "note": "The reference header every other vector below varies by one field. TFVN '00', SCID 0x2ab, VCID 0, no OCF, both frame counts zero, no secondary header, segment length ID '11' (no segmentation), first header pointer 0. octets 0-1 = 0<<14 | 0x2ab<<4 | 0<<1 | 0 = 0x2ab0; octets 4-5 = 11<<11 | 0 = 0x1800.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0
+      },
+      "want": "2ab000001800"
+    },
+    {
+      "name": "spacecraft-id-max",
+      "clause": "4.1.2.2",
+      "note": "The SCID is 10 bits, so 0x3ff is its maximum. octets 0-1 = 0x3ff<<4 = 0x3ff0. A value that overflowed would corrupt the VCID beside it, which is why the maximum is pinned.",
+      "fields": {
+        "spacecraft_id": 1023,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0
+      },
+      "want": "3ff000001800"
+    },
+    {
+      "name": "spacecraft-id-zero",
+      "clause": "4.1.2.2",
+      "note": "SCID zero, octets 0-1 = 0x0000.",
+      "fields": {
+        "spacecraft_id": 0,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0
+      },
+      "want": "000000001800"
+    },
+    {
+      "name": "virtual-channel-id-max",
+      "clause": "4.1.2.3",
+      "note": "The VCID is 3 bits at positions 12-14, so 7 is its maximum: octets 0-1 = 0x2ab<<4 | 7<<1 = 0x2abe. Bit 15 beside it is the OCF flag and stays clear.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 7,
+        "segment_length_id": 3,
+        "first_header_pointer": 0
+      },
+      "want": "2abe00001800"
+    },
+    {
+      "name": "ocf-flag-set",
+      "clause": "4.1.2.4",
+      "note": "The OCF flag is the single bit 15, immediately after the VCID. Set: octets 0-1 = 0x2ab<<4 | 0<<1 | 1 = 0x2ab1. Only this bit differs from baseline-header.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "ocf_flag": true
+      },
+      "want": "2ab100001800"
+    },
+    {
+      "name": "master-channel-frame-count",
+      "clause": "4.1.2.5",
+      "note": "The master channel frame count is octet 2 on its own. 0xab: octet 2 = ab, octet 3 (the VC count) stays 00.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "mc_frame_count": 171
+      },
+      "want": "2ab0ab001800"
+    },
+    {
+      "name": "virtual-channel-frame-count",
+      "clause": "4.1.2.6",
+      "note": "The virtual channel frame count is octet 3 on its own. 0xcd: octet 3 = cd while octet 2 stays 00. The pair with master-channel-frame-count catches the two counts being swapped, which no round trip would notice.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "vc_frame_count": 205
+      },
+      "want": "2ab000cd1800"
+    },
+    {
+      "name": "secondary-header-flag-set",
+      "clause": "4.1.2.7.2",
+      "note": "The frame secondary header flag is bit 32, the top bit of octet 4. Set: octets 4-5 = 1<<15 | 11<<11 = 0x9800.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "fsh_flag": true
+      },
+      "want": "2ab000009800"
+    },
+    {
+      "name": "sync-flag-set",
+      "clause": "4.1.2.7.3",
+      "note": "The synchronization flag is bit 33. Set: octets 4-5 = 1<<14 | 11<<11 = 0x5800.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "sync_flag": true
+      },
+      "want": "2ab000005800"
+    },
+    {
+      "name": "sync-and-packet-order-flags-set",
+      "clause": "4.1.2.7.4",
+      "note": "The packet order flag is bit 34, but it is only meaningful when the sync flag (bit 33) is set: with sync clear the frame carries packets and clause 4.1.2.7.4 requires the order flag to be zero. So this vector sets both. octets 4-5 = 1<<14 | 1<<13 | 11<<11 = 0x7800. The invalid combination is covered by the packet-order-flag-set-with-sync-clear reject vector.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 0,
+        "sync_flag": true,
+        "packet_order_flag": true
+      },
+      "want": "2ab000007800"
+    },
+    {
+      "name": "first-header-pointer-no-packet-starts",
+      "clause": "4.1.2.7.6",
+      "note": "First header pointer 'all ones' (0x7ff) means no packet starts in this frame. octets 4-5 = 11<<11 | 0x7ff = 0x1fff.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 2047
+      },
+      "want": "2ab000001fff"
+    },
+    {
+      "name": "first-header-pointer-only-idle-data",
+      "clause": "4.1.2.7.6",
+      "note": "First header pointer 0x7fe, one below all ones, means the frame carries only idle data. octets 4-5 = 11<<11 | 0x7fe = 0x1ffe. It differs from the no-packet-starts value by one, so a vector for each is the only way to tell them apart.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 2046
+      },
+      "want": "2ab000001ffe"
+    }
+  ],
+  "decode": [
+    {
+      "name": "all-fields-at-once",
+      "clause": "4.1.2",
+      "note": "Every field set to a distinct non-default value at once, so a decoder reading two fields from overlapping bits fails here. SCID 0x2ab, VCID 5, OCF set, MC count 0x12, VC count 0x34, secondary header flag set, sync flag set, packet order clear, segment length ID '11', first header pointer 0x123. octets 0-1 = 0x2ab<<4|5<<1|1 = 0x2abb; octets 4-5 = 1<<15|1<<14|0<<13|11<<11|0x123 = 0xd923.",
+      "input": "2abb1234d923",
+      "fields": {
+        "version_number": 0,
+        "spacecraft_id": 683,
+        "virtual_channel_id": 5,
+        "ocf_flag": true,
+        "mc_frame_count": 18,
+        "vc_frame_count": 52,
+        "fsh_flag": true,
+        "sync_flag": true,
+        "packet_order_flag": false,
+        "segment_length_id": 3,
+        "first_header_pointer": 291
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "header-truncated-to-five-octets",
+      "clause": "4.1.2",
+      "note": "The TM primary header is always exactly six octets.",
+      "input": "2ab0000018",
+      "error": "truncated"
+    },
+    {
+      "name": "spacecraft-id-above-ten-bit-field",
+      "clause": "4.1.2.2",
+      "note": "1024 does not fit the 10-bit SCID field; one more would overflow into the version number.",
+      "fields": {
+        "spacecraft_id": 1024,
+        "virtual_channel_id": 0
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "virtual-channel-id-above-three-bit-field",
+      "clause": "4.1.2.3",
+      "note": "8 does not fit the 3-bit VCID field; it would overflow into the OCF flag.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 8
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "packet-order-flag-set-with-sync-clear",
+      "clause": "4.1.2.7.4",
+      "note": "With the sync flag clear the frame carries packets, and the standard requires the packet order flag to be zero. Setting it is not a representable frame, so it is refused at construction. This rule is easy to miss and a decoder that ignores it will accept frames no conforming sender produces.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "sync_flag": false,
+        "packet_order_flag": true,
+        "segment_length_id": 3
+      },
+      "error": "reserved_value"
+    },
+    {
+      "name": "segment-length-id-not-all-ones-with-sync-clear",
+      "clause": "4.1.2.7.5",
+      "note": "With the sync flag clear, segmentation is not in use and the segment length identifier must be '11'. Any other value is refused. The pair with the rule above is why both flags in octet 4 need their own reject vectors rather than one combined check.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "sync_flag": false,
+        "segment_length_id": 1
+      },
+      "error": "reserved_value"
+    },
+    {
+      "name": "first-header-pointer-above-eleven-bit-field",
+      "clause": "4.1.2.7.6",
+      "note": "2048 does not fit the 11-bit first header pointer field.",
+      "fields": {
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3,
+        "first_header_pointer": 2048
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "transfer-frame-version-number-not-zero",
+      "clause": "4.1.2.1",
+      "note": "The TM transfer frame version number is always '00'. A non-zero value identifies a different frame type and must be refused rather than misparsed.",
+      "fields": {
+        "version_number": 1,
+        "spacecraft_id": 683,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3
+      },
+      "error": "unsupported_version"
+    },
+    {
+      "name": "spacecraft-id-above-ten-bit-field-via-constructor",
+      "clause": "4.1.2.2",
+      "note": "1024 does not fit the 10-bit SCID field. It must be refused rather than masked: masking would address the frame to a different spacecraft than the caller named.",
+      "fields": {
+        "spacecraft_id": 1024,
+        "virtual_channel_id": 0,
+        "segment_length_id": 3
+      },
+      "error": "field_out_of_range"
+    }
+  ]
+}

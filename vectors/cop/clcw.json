@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 232.0-B-4",
+  "package": "cop",
+  "source": "derived from the clause 4.2.1 field layout",
+  "note": "The Communications Link Control Word: four octets a spacecraft sends in the operational control field of a downlink frame to report what its FARM-1 has accepted. Each vector isolates one field or flag, because the five status flags are independent bits and a decoder that treats them as an enumeration will misreport link state. Only the wire layer is here; FOP-1 and FARM-1 themselves are state machines and are not covered. Every field narrower than the type that carries it has a reject vector, because packing by shift would otherwise substitute a different value rather than refusing one.",
+  "encode": [
+    {
+      "name": "nominal-cop1-all-clear",
+      "clause": "4.2.1",
+      "note": "The CLCW a healthy link carries: COP-1 in effect ('01'), virtual channel 0, every flag clear, V(R) = 0. octet 0 = control word type 0<<7 | version 00<<5 | status 000<<2 | 01 = 0x01. The remaining octets are zero. This is the value a spacecraft sends before it has accepted anything.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0
+      },
+      "want": "01000000"
+    },
+    {
+      "name": "virtual-channel-id-max",
+      "clause": "4.2.1",
+      "note": "The VCID is 6 bits at the top of octet 1, so 63 is its maximum: octet 1 = 63<<2 = 0xfc. The two low bits are the reserved spare and stay zero.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 63
+      },
+      "want": "01fc0000"
+    },
+    {
+      "name": "status-field-all-ones",
+      "clause": "4.2.1",
+      "note": "The 3-bit mission-specific status field sits above COP in effect in octet 0: 7<<2 | 01 = 0x1d. Pins that status does not bleed into the version bits above it.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "status_field": 7
+      },
+      "want": "1d000000"
+    },
+    {
+      "name": "no-rf-available-flag",
+      "clause": "4.2.1",
+      "note": "The no-RF-available flag is bit 7 of octet 2, the highest of the five status flags. Set alone: octet 2 = 0x80. It says the spacecraft receiver has no carrier at all.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "no_rf_available_flag": true
+      },
+      "want": "01008000"
+    },
+    {
+      "name": "no-bit-lock-flag",
+      "clause": "4.2.1",
+      "note": "The no-bit-lock flag is bit 6 of octet 2: 0x40. Carrier present but the receiver cannot recover the bit clock.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "no_bit_lock_flag": true
+      },
+      "want": "01004000"
+    },
+    {
+      "name": "lockout-flag",
+      "clause": "4.2.1",
+      "note": "The lockout flag is bit 5 of octet 2: 0x20. FARM-1 has locked out and will discard type-A frames until the sender recovers it, so a ground system that misreads this bit will keep transmitting into a channel that is ignoring it.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "lockout_flag": true
+      },
+      "want": "01002000"
+    },
+    {
+      "name": "wait-flag",
+      "clause": "4.2.1",
+      "note": "The wait flag is bit 4 of octet 2: 0x10. The spacecraft cannot accept more data for now.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "wait_flag": true
+      },
+      "want": "01001000"
+    },
+    {
+      "name": "retransmit-flag",
+      "clause": "4.2.1",
+      "note": "The retransmit flag is bit 3 of octet 2: 0x08. FARM-1 is asking for a retransmission, which is what drives FOP-1 to go back.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "retransmit_flag": true
+      },
+      "want": "01000800"
+    },
+    {
+      "name": "farm-b-counter-max",
+      "clause": "4.2.1",
+      "note": "The FARM-B counter is 2 bits at positions 2-1 of octet 2, so 3 is its maximum: 3<<1 = 0x06. Bit 0 below it is spare.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "farm_b_counter": 3
+      },
+      "want": "01000600"
+    },
+    {
+      "name": "report-value-max",
+      "clause": "4.2.1",
+      "note": "V(R), the next expected frame sequence number, is the whole of octet 3. 255 is its maximum: 0xff.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "report_value": 255
+      },
+      "want": "010000ff"
+    },
+    {
+      "name": "acknowledging-the-first-frame",
+      "clause": "4.2.1",
+      "note": "The realistic case: after accepting frame 0 the spacecraft reports V(R) = 1 and every flag clear. octet 3 = 0x01. This is what carries the uplink's acknowledgement home in the operational control field of a downlink frame.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "report_value": 1
+      },
+      "want": "01000001"
+    },
+    {
+      "name": "lockout-and-retransmit-together",
+      "clause": "4.2.1",
+      "note": "Both lockout and retransmit set with V(R) = 5: octet 2 = 0x20 | 0x08 = 0x28, octet 3 = 0x05. Flags combine, so a decoder reading them as an enumeration rather than independent bits fails here.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "lockout_flag": true,
+        "retransmit_flag": true,
+        "report_value": 5
+      },
+      "want": "01002805"
+    }
+  ],
+  "decode": [
+    {
+      "name": "all-zero-octets-decode-as-a-valid-clcw",
+      "clause": "4.2.1",
+      "note": "Four zero octets are a *structurally valid* CLCW reporting V(R) = 0 with COP in effect '00'. This is why an implementation must refuse to invent an operational control field when a channel declares one but no source is supplied: a receiver cannot tell four invented zeros from a real report, so FOP-1 would believe a spacecraft was acknowledging nothing and never advance its window. The vector exists to document that a decoder must accept these octets, which is precisely what makes inventing them dangerous.",
+      "input": "00000000",
+      "fields": {
+        "control_word_type": 0,
+        "version": 0,
+        "status_field": 0,
+        "cop_in_effect": 0,
+        "virtual_channel_id": 0,
+        "no_rf_available_flag": false,
+        "no_bit_lock_flag": false,
+        "lockout_flag": false,
+        "wait_flag": false,
+        "retransmit_flag": false,
+        "farm_b_counter": 0,
+        "report_value": 0
+      }
+    },
+    {
+      "name": "all-fields-at-once",
+      "clause": "4.2.1",
+      "note": "Every field set to a distinct non-default value so overlapping bit reads fail here. status 5, COP-1, VCID 42, no-RF set, no-bit-lock clear, lockout set, wait clear, retransmit set, FARM-B 2, V(R) = 0x7b. octet 0 = 5<<2|1 = 0x15; octet 1 = 42<<2 = 0xa8; octet 2 = 0x80|0x20|0x08|2<<1 = 0xac; octet 3 = 0x7b.",
+      "input": "15a8ac7b",
+      "fields": {
+        "status_field": 5,
+        "cop_in_effect": 1,
+        "virtual_channel_id": 42,
+        "no_rf_available_flag": true,
+        "no_bit_lock_flag": false,
+        "lockout_flag": true,
+        "wait_flag": false,
+        "retransmit_flag": true,
+        "farm_b_counter": 2,
+        "report_value": 123
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "shorter-than-four-octets",
+      "clause": "4.2.1",
+      "note": "The CLCW is exactly four octets and occupies the whole operational control field.",
+      "input": "010000",
+      "error": "truncated"
+    },
+    {
+      "name": "virtual-channel-id-above-six-bit-field",
+      "clause": "4.2.1",
+      "note": "64 does not fit the 6-bit VCID field. It must be refused rather than masked: a CLCW reports FARM-1 state for one named virtual channel, so truncating 64 to 0 would emit a control word a conforming receiver reads as reporting on VC 0, and the ground would act on the wrong channel's flags with nothing to signal the substitution.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 64
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "farm-b-counter-above-two-bit-field",
+      "clause": "4.2.1",
+      "note": "4 does not fit the 2-bit FARM-B counter; masking it would report a count of 0.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "farm_b_counter": 4
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "status-field-above-three-bit-field",
+      "clause": "4.2.1",
+      "note": "8 does not fit the 3-bit status field; shifting it would overwrite the version bits above it.",
+      "fields": {
+        "cop_in_effect": 1,
+        "virtual_channel_id": 0,
+        "status_field": 8
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "cop-in-effect-above-two-bit-field",
+      "clause": "4.2.1",
+      "note": "4 does not fit the 2-bit COP-in-effect field, which sits at the bottom of octet 0.",
+      "fields": {
+        "cop_in_effect": 4,
+        "virtual_channel_id": 0
+      },
+      "error": "field_out_of_range"
+    }
+  ]
+}

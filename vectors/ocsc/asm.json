@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 142.0-B-1",
+  "package": "ocsc",
+  "source": "derived from the clause 3.3.2 definition",
+  "note": "Optical coding and synchronization. Most of this package works on bit strings rather than octet strings \u2014 bit-level lengths, termination digits, sequence indicators \u2014 which the vector format does not express. What is portable is the attached sync marker.",
+  "encode": [
+    {
+      "name": "attached-sync-marker",
+      "clause": "3.3.2",
+      "note": "The optical attached sync marker is the same four octets as TM uses for a CADU: 0x1a 0xcf 0xfc 0x1d. Worth pinning in both packages precisely because they are the same value \u2014 a divergence between vectors/ocsc and vectors/tmsc would mean one of them drifted.",
+      "fields": {
+        "marker": true
+      },
+      "want": "1acffc1d"
+    }
+  ]
+}

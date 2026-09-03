@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ravisuhag/astro/internal/vectors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // load reads a fixture or fails the test.
 func load(t *testing.T, name string) *xtce.SpaceSystem {
 	t.Helper()
-	db, err := xtce.LoadFile(filepath.Join("testdata", name))
+	db, err := xtce.LoadFile(filepath.Join(vectors.Root(), "xtce", name))
 	if err != nil {
 		t.Fatalf("LoadFile(%s) = %v", name, err)
 	}
@@ -396,7 +397,7 @@ func TestSignedFalseIsDistinguishableFromAbsent(t *testing.T) {
 }
 
 func TestLoadRejectsNonSpaceSystemRoot(t *testing.T) {
-	if _, err := xtce.LoadFile(filepath.Join("testdata", "invalid-root.xml")); !errors.Is(err, xtce.ErrNotSpaceSystem) {
+	if _, err := xtce.LoadFile(filepath.Join(vectors.Root(), "xtce", "invalid-root.xml")); !errors.Is(err, xtce.ErrNotSpaceSystem) {
 		t.Fatalf("LoadFile() = %v, want ErrNotSpaceSystem", err)
 	}
 }
@@ -482,7 +483,7 @@ func TestModestNestingLoads(t *testing.T) {
 }
 
 func TestLoadFileMissing(t *testing.T) {
-	if _, err := xtce.LoadFile(filepath.Join("testdata", "does-not-exist.xml")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := xtce.LoadFile(filepath.Join(vectors.Root(), "xtce", "does-not-exist.xml")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("LoadFile() = %v, want a not-exist error", err)
 	}
 }

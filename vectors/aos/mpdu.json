@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 732.0-B-4",
+  "package": "aos",
+  "source": "hand-computed from the M_PDU header layout",
+  "note": "The 2-octet M_PDU header that opens a multiplexing-service data field. The First Header Pointer has two special values at the top of its range, so both are pinned.",
+  "encode": [
+    {
+      "name": "mpdu-header-no-packet-start",
+      "clause": "4.1.4.2.3.4",
+      "note": "The M_PDU First Header Pointer is 11 bits and 0x7ff means no packet starts in this frame. Packed big-endian into the 2-octet M_PDU header: byte 0 = (0x7ff>>8)&0x07 = 0x07, byte 1 = 0x7ff&0xff = 0xff, followed by the packet zone 0xaa.",
+      "fields": {
+        "fhp": 2047,
+        "data": "aa"
+      },
+      "want": "07ffaa"
+    },
+    {
+      "name": "mpdu-header-all-idle",
+      "clause": "4.1.4.2.3.5",
+      "note": "0x7fe, one below all-ones, means the packet zone holds only idle data. byte 0 = (0x7fe>>8)&0x07 = 0x07, byte 1 = 0x7fe&0xff = 0xfe, followed by the packet zone 0xaa.",
+      "fields": {
+        "fhp": 2046,
+        "data": "aa"
+      },
+      "want": "07feaa"
+    }
+  ]
+}
