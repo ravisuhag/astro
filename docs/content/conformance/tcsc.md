@@ -137,3 +137,15 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 | Pseudo-Randomization | TCSC-10-13 | `GeneratePNSequence()`, `Randomize()`; fill-then-randomize order in `WrapCLTU()`. |
 | CLTU | TCSC-14-20 | `WrapCLTU()`, `UnwrapCLTU()` / `UnwrapCLTUWithMode()` terminating on the first failed codeblock. |
 | Acquisition/Idle/PLOP | TCSC-21-24 | `AcquisitionSequence()`, `IdleSequence()`, `UplinkSequence()` for PLOP-1 and PLOP-2. |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tcsc) — 7 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`tcsc/bch.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tcsc/bch.json) | 7 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

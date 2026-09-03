@@ -151,3 +151,15 @@ None. Every mandatory requirement of the supported options (Reed-Solomon coding 
 | Frame synchronization | TMSC-1-4 | `DefaultASM()`, `WrapCADU()`, `UnwrapCADU()`; ASM outside the coded/randomized data space. |
 | Pseudo-randomization (255-bit) | TMSC-7, 8, 10, 11 | `GeneratePNSequence()`, `Randomize()` (self-inverse), integrated into the CADU pipeline. |
 | Reed-Solomon coding | TMSC-12-25 | GF(2^8) over 0x187, roots β^(112+j) with β = α^11, dual-basis wire representation, systematic encode, full decode pipeline with post-correction syndrome recheck, shortened codeblocks via virtual fill, interleaving depths 1, 2, 3, 4, 5, 8. |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tmsc) — 7 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`tmsc/cadu.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmsc/cadu.json) | 7 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

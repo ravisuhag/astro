@@ -150,3 +150,15 @@ and never allocate from a length field an attacker controls.
 
 - [CCSDS 301.0-B-4](https://public.ccsds.org/Pubs/301x0b4e1.pdf), Time Code Formats (Blue Book)
 - [Protocol page](/protocols/mission/tcf) | [CLI](/cli/time)
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tcf) — 14 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`tcf/timecode.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tcf/timecode.json) | 14 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

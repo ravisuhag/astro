@@ -46,7 +46,7 @@ order: 65
 | Obtained from | `https://ecss.nl/wp-content/uploads/standards/ecss-e/ECSS-E-ST-50-03C31July2008.pdf`, public, no registration required |
 | Have any exceptions been required? | **No**, the five gaps of the first pass were closed on 23/08/2026, and the idle-packet fill gap the second pass found was closed on 25/08/2026; see A3 |
 
-**A note on the version.** Plan 024 called for "ECSS-E-ST-50-03C Rev.1". No such revision is published: the active document on ecss.nl is ECSS-E-ST-50-03C dated 31 July 2008, whose own change log records the 2008 issue as editorial renumbering of the 6 November 2007 text. This audit is against that document.
+**A note on the version.** "ECSS-E-ST-50-03C Rev.1" is sometimes cited, but no such revision is published. The active document on ecss.nl is ECSS-E-ST-50-03C dated 31 July 2008, whose own change log records the 2008 issue as an editorial renumbering of the 6 November 2007 text. This audit is against that document.
 
 ---
 
@@ -377,10 +377,10 @@ any of them. Assert the octet.
 
 ### On the 24% "configurable" share
 
-Plan 024 set a threshold: if configurable rows exceed 20% of the matrix, the
-audit is a hedge and should be reported rather than shipped. This matrix is at
-24%, so the threshold is crossed and the reasoning belongs here rather than
-buried.
+This audit holds itself to a threshold: if configurable rows exceed 20% of the
+matrix, the result is a hedge and the reasoning has to be shown rather than
+shipped as a clean pass. This matrix is at 24%, so the threshold is crossed and
+the reasoning belongs here rather than buried.
 
 The threshold guards against guessing. These rows are not guesses. They fall
 into three groups, and every one names its exact configuration:
@@ -433,3 +433,15 @@ None was silently dropped.
 - Evidence is as of the working tree on 25/08/2026, which carries the
   uncommitted idle-packet fill, counter-threading, and frame-length
   enforcement changes.
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) — 20 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`tmdl/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmdl/header.json) | 20 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

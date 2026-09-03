@@ -124,3 +124,15 @@ order: 150
 | Transfer frame length | `MaxFrameLength`, default 2048 | The Version-3 maximum; clause 3.2.2 note 1 leaves the real limit to the mission's `Maximum_Frame_Length` |
 | Convolutional code rate | 1/2 | clause 3.4.3.1 |
 | Convolutional constraint length | 7 | clause 3.4.3.1 |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/pxsc) — 4 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`pxsc/convolutional.json`](https://github.com/ravisuhag/astro/blob/main/vectors/pxsc/convolutional.json) | 4 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

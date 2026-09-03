@@ -290,3 +290,15 @@ All 78 mandatory items are fully supported. Key implementations:
 | MC Functions | TM-59-60, TM-65-66 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
 | Physical Channel | TM-61, TM-67-69, TM-72 | `PhysicalChannel` with MC mux/demux, `Name`, `ChannelConfig.FrameLength` (codec-enforced), MC multiplexing scheme, and conformant OID frames (PN-filled, packet-carrying VCID, counter-stamped, deterministic SCID). CADU wrapping (ASM + randomization) handled by `tmsc` package. |
 | Management Params | TM-70-88 | TFVN enforced, SCID/VCID validated, SyncFlag, FSHFlag, OCFFlag, configurable FECF presence, complete packet delivery. |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) — 20 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`tmdl/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmdl/header.json) | 20 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.
