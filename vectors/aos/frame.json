@@ -7,7 +7,7 @@
   "encode": [
     {
       "name": "frame-with-fecf",
-      "clause": "4.1",
+      "clause": "4.1.2",
       "note": "TFVN=01, SCID=0xab, VCID=42, VCFC=0x000102, replay=0, VCFC usage=1, cycle=3. byte 0 = 01<<6 | 0xab>>2 = 0x6a; byte 1 = (0xab&0x3)<<6 | 42 = 0xea; bytes 2-4 = 00 01 02; byte 5 = 0x40 | 0x03 = 0x43. FECF is CRC-16-CCITT (poly 0x1021, init 0xffff) over the whole frame = 0x9e2c, computed with an independent implementation.",
       "config": {
         "has_fecf": true
@@ -44,7 +44,7 @@
   "decode": [
     {
       "name": "frame-with-fecf-inverse",
-      "clause": "4.1",
+      "clause": "4.1.2",
       "note": "The inverse of the frame-with-fecf encode vector. Reads back every primary header field from the same octets.",
       "config": {
         "has_fecf": true
@@ -90,8 +90,8 @@
   "reject": [
     {
       "name": "signaling-field-spare-bits-set",
-      "clause": "4.1.2.6.5",
-      "note": "The signaling field's spare bits must be zero. byte 5 = 0x73 sets bits the standard reserves; a conforming decoder refuses the frame rather than ignoring them.",
+      "clause": "4.1.2.5.4",
+      "note": "Bits 42-43 of the primary header are the signalling field's reserved spare, and clause 4.1.2.5.4.2 requires them to be zero. byte 5 = 0x73 sets them; a conforming decoder refuses the frame rather than ignoring them.",
       "input": "6aea00010273deadbeef",
       "error": "reserved_value"
     },
@@ -117,8 +117,8 @@
     },
     {
       "name": "vc-frame-count-cycle-above-four-bit-field",
-      "clause": "4.1.2.6",
-      "note": "16 does not fit the 4-bit VC frame count cycle, which shares octet 5 with the signaling flags; masking it would silently report a different cycle.",
+      "clause": "4.1.2.5.5",
+      "note": "The VC frame count cycle is bits 44-47 of the primary header, four bits inside the signalling field, so 16 does not fit. Masking it would silently report a different cycle and share octet 5 with the flags beside it.",
       "fields": {
         "scid": 1,
         "vcid": 0,
