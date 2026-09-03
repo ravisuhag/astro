@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 355.0-B-2",
+  "package": "sdls",
+  "source": "published algorithm definitions, with each frame independently reconstructed from the clause 4.2.3 authenticated-data rules",
+  "note": "SDLS protected frames. Each value is reproducible two independent ways: through an SDLS implementation, and from first principles with any standard AES-GCM or CMAC by building the authenticated data in the clause 4.2.3 order. Agreement between the two is what makes these vectors evidence. Test keys only, never real keys. The plaintext is the ASCII string 'astro sdls kat'.",
+  "encode": [
+    {
+      "name": "gcm-authenticated-encryption",
+      "clause": "4.2.3.2.2.3",
+      "note": "AES-256-GCM authenticated encryption, 96-bit IV, 128-bit MAC (clauses E1, E3, E4). The first frame carries IV counter value 1. The associated data is the frame header, then the SPI, then the IV field as zeros \u2014 clause 4.2.2.6.2 h) excludes the IV itself from the authenticated data, which is the detail an implementation is most likely to get wrong. Output is SPI 0042, then the 12-octet IV, then 14 octets of ciphertext, then the 16-octet tag.",
+      "config": {
+        "mode": "authenticated_encryption",
+        "auth_algorithm": "gmac",
+        "iv_len": 12,
+        "mac_len": 16
+      },
+      "fields": {
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800",
+        "plaintext": "617374726f2073646c73206b6174",
+        "spi": 66,
+        "iv": "000000000000000000000001"
+      },
+      "want": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557"
+    },
+    {
+      "name": "gmac-authentication-only",
+      "clause": "4.2.3",
+      "note": "The authentication-only companion of the GCM baseline: nothing is encrypted, so the data field travels in the clear and the MAC covers the whole Authentication Payload \u2014 the masked frame header, then the security header with the IV zeroed, then the data field \u2014 as associated data over an empty plaintext. Output is SPI 0042, the 12-octet IV, the 14-octet plaintext, then the 16-octet GMAC tag.",
+      "config": {
+        "mode": "authentication",
+        "auth_algorithm": "gmac",
+        "iv_len": 12,
+        "mac_len": 16
+      },
+      "fields": {
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800",
+        "plaintext": "617374726f2073646c73206b6174",
+        "spi": 66,
+        "iv": "000000000000000000000001"
+      },
+      "want": "0042000000000000000000000001617374726f2073646c73206b617401473b4b99175664d8ee702ed7ff135d"
+    },
+    {
+      "name": "cmac-authentication-only",
+      "clause": "4.2.3",
+      "note": "CMAC authentication with a 4-octet sequence number and a 128-bit MAC. Nothing is encrypted, so the data field travels in the clear and the tag covers the frame header, the SPI, the sequence number and the data field in that order. Output is SPI 0042, sequence number 00000001, the 14-octet plaintext, then the 16-octet CMAC tag.",
+      "config": {
+        "mode": "authentication",
+        "auth_algorithm": "cmac",
+        "seq_len": 4,
+        "mac_len": 16
+      },
+      "fields": {
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800",
+        "plaintext": "617374726f2073646c73206b6174",
+        "spi": 66,
+        "seq": "00000001"
+      },
+      "want": "004200000001617374726f2073646c73206b61742d2d626240a8bdda645103c30796e642"
+    }
+  ],
+  "decode": [
+    {
+      "name": "gcm-round-trip-recovers-the-plaintext",
+      "clause": "4.2.3.2.2.3",
+      "note": "Processing the pinned GCM frame must recover the SPI and the exact plaintext. A receiver that built the associated data differently would fail the tag check here rather than returning wrong data, which is the property the AAD ordering rule buys.",
+      "config": {
+        "mode": "authenticated_encryption",
+        "auth_algorithm": "gmac",
+        "iv_len": 12,
+        "mac_len": 16,
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800"
+      },
+      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557",
+      "fields": {
+        "spi": 66,
+        "plaintext": "617374726f2073646c73206b6174"
+      }
+    },
+    {
+      "name": "cmac-round-trip-recovers-the-plaintext",
+      "clause": "4.2.3",
+      "note": "Processing the pinned CMAC frame must recover the SPI and plaintext with the tag verified.",
+      "config": {
+        "mode": "authentication",
+        "auth_algorithm": "cmac",
+        "seq_len": 4,
+        "mac_len": 16,
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800"
+      },
+      "input": "004200000001617374726f2073646c73206b61742d2d626240a8bdda645103c30796e642",
+      "fields": {
+        "spi": 66,
+        "plaintext": "617374726f2073646c73206b6174"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "gcm-tag-corrupted",
+      "clause": "4.2.3.2.2.3",
+      "note": "The last octet of the GCM tag is flipped. Authentication must fail; a receiver may not return the plaintext it could otherwise decrypt.",
+      "config": {
+        "mode": "authenticated_encryption",
+        "auth_algorithm": "gmac",
+        "iv_len": 12,
+        "mac_len": 16,
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1800"
+      },
+      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714556",
+      "error": "crc_mismatch"
+    },
+    {
+      "name": "gcm-frame-header-altered",
+      "clause": "4.2.2.6.2",
+      "note": "The frame header is authenticated even though it is not part of the protected data, so altering it must fail the tag. Here the pinned frame is processed against a different header than the one it was sealed under. This is the vector that proves the header actually enters the authenticated data.",
+      "config": {
+        "mode": "authenticated_encryption",
+        "auth_algorithm": "gmac",
+        "iv_len": 12,
+        "mac_len": 16,
+        "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "frame_header": "023e0a0b1801"
+      },
+      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557",
+      "error": "crc_mismatch"
+    }
+  ]
+}

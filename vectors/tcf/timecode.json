@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 301.0-B-4",
+  "package": "tcf",
+  "source": "derived from the clause 3 P-field and T-field layouts",
+  "note": "Time code P-field and T-field wire layouts. Scope note: these vectors pin the packing only, from explicit field values. They do not cover conversion from a civil timestamp, because Level 1 CUC applies a TAI-UTC offset from a leap-second table, and pinning octets through that path would fix the table rather than the standard's layout. See COVERAGE.md.",
+  "encode": [
+    {
+      "name": "pfield-cuc-level-1-no-extension",
+      "clause": "3.2.1",
+      "note": "The P-field is one octet: bit 7 is the extension flag, bits 6-4 the time code identification, bits 3-0 format-specific detail. Extension clear, time code ID 1, detail 0 gives 0<<7 | 1<<4 | 0 = 0x10.",
+      "fields": {
+        "extension": false,
+        "time_code_id": 1,
+        "detail": 0
+      },
+      "want": "10"
+    },
+    {
+      "name": "pfield-detail-all-ones",
+      "clause": "3.2.1",
+      "note": "The same P-field with all four detail bits set: 1<<4 | 0xf = 0x1f. Pins that detail occupies the low nibble and does not bleed into the time code ID.",
+      "fields": {
+        "extension": false,
+        "time_code_id": 1,
+        "detail": 15
+      },
+      "want": "1f"
+    },
+    {
+      "name": "pfield-with-extension-flag",
+      "clause": "3.2.1",
+      "note": "Extension set, time code ID 2, detail 4: octet 0 = 1<<7 | 2<<4 | 4 = 0xa4. The extension flag means a second P-field octet follows, so the field is two octets and the second carries the 7-bit extension detail \u2014 here zero. The flag and the octet count cannot disagree: a one-octet field with the flag set is not representable.",
+      "fields": {
+        "extension": true,
+        "time_code_id": 2,
+        "detail": 4,
+        "ext_detail": 0
+      },
+      "want": "a400"
+    },
+    {
+      "name": "cuc-tfield-coarse-one-second",
+      "clause": "3.2.2",
+      "note": "CUC T-field with 4 coarse octets and no fine octets: coarse time 1 second since the epoch, big-endian, gives 00 00 00 01.",
+      "fields": {
+        "code": "cuc",
+        "coarse_time": 1,
+        "coarse_bytes": 4,
+        "fine_bytes": 0
+      },
+      "want": "00000001"
+    },
+    {
+      "name": "cuc-tfield-coarse-distinct-octets",
+      "clause": "3.2.2",
+      "note": "Coarse time 0x12345678 with 4 octets: every octet differs, so a byte-order error shows up immediately as 78563412.",
+      "fields": {
+        "code": "cuc",
+        "coarse_time": 305419896,
+        "coarse_bytes": 4,
+        "fine_bytes": 0
+      },
+      "want": "12345678"
+    },
+    {
+      "name": "cuc-tfield-with-one-fine-octet",
+      "clause": "3.2.2",
+      "note": "Coarse 1 with a single fine octet 0x80, which is one half-second at that resolution: 00 00 00 01 80. The fine octets follow the coarse ones, most significant first.",
+      "fields": {
+        "code": "cuc",
+        "coarse_time": 1,
+        "coarse_bytes": 4,
+        "fine_time": 128,
+        "fine_bytes": 1
+      },
+      "want": "0000000180"
+    },
+    {
+      "name": "cuc-tfield-coarse-maximum",
+      "clause": "3.2.2",
+      "note": "All four coarse octets set: ff ff ff ff, about 136 years of seconds. Pins the field width.",
+      "fields": {
+        "code": "cuc",
+        "coarse_time": 4294967295,
+        "coarse_bytes": 4,
+        "fine_bytes": 0
+      },
+      "want": "ffffffff"
+    },
+    {
+      "name": "cds-tfield-day-one",
+      "clause": "3.3",
+      "note": "CDS T-field with a 16-bit day segment and no sub-millisecond octets: day 1, zero milliseconds of day, giving 00 01 followed by the 4-octet millisecond count 00 00 00 00.",
+      "fields": {
+        "code": "cds",
+        "day": 1,
+        "day_bytes": 2,
+        "milliseconds": 0,
+        "subms_bytes": 0
+      },
+      "want": "000100000000"
+    },
+    {
+      "name": "cds-tfield-last-millisecond-of-the-day",
+      "clause": "3.3",
+      "note": "Day 0x1234 with 86399999 milliseconds, the last millisecond before midnight: 12 34 then 0x05265bff. A decoder that allowed 86400000 would be accepting a time that does not exist.",
+      "fields": {
+        "code": "cds",
+        "day": 4660,
+        "day_bytes": 2,
+        "milliseconds": 86399999,
+        "subms_bytes": 0
+      },
+      "want": "123405265bff"
+    },
+    {
+      "name": "cds-tfield-24-bit-day-with-submilliseconds",
+      "clause": "3.3",
+      "note": "The wide form: a 24-bit day segment and two sub-millisecond octets. Day 1, 1 millisecond, sub-millisecond 2, giving 00 00 01 then 00 00 00 01 then 00 02.",
+      "fields": {
+        "code": "cds",
+        "day": 1,
+        "day_bytes": 3,
+        "milliseconds": 1,
+        "submilliseconds": 2,
+        "subms_bytes": 2
+      },
+      "want": "000001000000010002"
+    },
+    {
+      "name": "pfield-extension-detail-bits",
+      "clause": "3.2.1",
+      "note": "The same extended P-field with all seven extension detail bits set: octet 1 = 0x7f. Bit 0 of the second octet is itself reserved by CCSDS 301.0-B-4 for a third octet that the standard never defines, so 0x7f is the largest legal value and 0xff must be refused \u2014 see the pfield-further-extension-bit-set reject vector.",
+      "fields": {
+        "extension": true,
+        "time_code_id": 2,
+        "detail": 4,
+        "ext_detail": 127
+      },
+      "want": "a47f"
+    }
+  ],
+  "reject": [
+    {
+      "name": "cuc-shorter-than-a-pfield-and-tfield",
+      "clause": "3.2",
+      "note": "A CUC needs at least a P-field octet and one T-field octet.",
+      "input": "10",
+      "error": "truncated"
+    },
+    {
+      "name": "cuc-tfield-shorter-than-the-pfield-declares",
+      "clause": "3.2.2",
+      "note": "The P-field says four coarse octets follow but only two do. A decoder must refuse rather than read past the buffer or zero-extend.",
+      "input": "1c0000",
+      "error": "truncated"
+    },
+    {
+      "name": "pfield-further-extension-bit-set",
+      "clause": "3.2.1",
+      "note": "Bit 0 of the second P-field octet is reserved for a third octet the standard does not define. A set bit must be refused rather than silently misparsing the next octet as T-field data, which would shift every time value that followed.",
+      "input": "a4ff",
+      "error": "reserved_value"
+    }
+  ]
+}

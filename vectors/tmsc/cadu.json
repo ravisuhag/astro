@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 131.0-B-5",
+  "package": "tmsc",
+  "source": "derived from the clause 9 and clause 10 definitions, using the published TM pseudo-randomizer sequence",
+  "note": "TM synchronization and channel coding. A CADU is the attached sync marker followed by the optionally pseudo-randomized transfer frame. The marker is fixed by the standard and the randomizer is XOR against a published sequence, so both are exactly checkable \u2014 and in both a symmetric error is invisible from the inside.",
+  "encode": [
+    {
+      "name": "attached-sync-marker",
+      "clause": "9",
+      "note": "The standard attached sync marker is the four octets 0x1a 0xcf 0xfc 0x1d. A receiver correlates against this to find frame boundaries in the bit stream, so it is fixed by the standard.",
+      "fields": {
+        "marker": true
+      },
+      "want": "1acffc1d"
+    },
+    {
+      "name": "cadu-without-randomization",
+      "clause": "9",
+      "note": "With randomization off a CADU is just the marker followed by the frame octets unchanged: 1acffc1d then deadbeef.",
+      "config": {
+        "randomize": false
+      },
+      "fields": {
+        "frame": "deadbeef"
+      },
+      "want": "1acffc1ddeadbeef"
+    },
+    {
+      "name": "cadu-with-randomization",
+      "clause": "10.4.2",
+      "note": "With randomization on the frame is XORed against the TM pseudo-randomizer sequence before the marker is attached. The marker itself is never randomized, because the receiver has to find it before it can derandomize anything. The first four octets of the sequence are ff 48 0e c0 (see vectors/pn/sequences.json), so deadbeef becomes de^ff ad^48 be^0e ef^c0 = 21 e5 b0 2f.",
+      "config": {
+        "randomize": true
+      },
+      "fields": {
+        "frame": "deadbeef"
+      },
+      "want": "1acffc1d21e5b02f"
+    }
+  ],
+  "decode": [
+    {
+      "name": "cadu-without-randomization-inverse",
+      "clause": "9",
+      "note": "Unwrapping strips the marker and returns the frame. A decoder must verify the marker rather than assuming it.",
+      "config": {
+        "randomize": false
+      },
+      "input": "1acffc1ddeadbeef",
+      "fields": {
+        "frame": "deadbeef"
+      }
+    },
+    {
+      "name": "cadu-with-randomization-inverse",
+      "clause": "10.4.2",
+      "note": "The randomizer is XOR and therefore its own inverse, so derandomizing recovers the frame. This is exactly why a round trip cannot validate the sequence and why the pn vectors exist.",
+      "config": {
+        "randomize": true
+      },
+      "input": "1acffc1d21e5b02f",
+      "fields": {
+        "frame": "deadbeef"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "sync-marker-corrupted",
+      "clause": "9",
+      "note": "The first octet of the marker is wrong, so this is not a CADU. A decoder must refuse rather than treat the marker octets as frame data.",
+      "config": {
+        "randomize": false
+      },
+      "input": "facffc1ddeadbeef",
+      "error": "reserved_value"
+    },
+    {
+      "name": "shorter-than-the-sync-marker",
+      "clause": "9",
+      "note": "Three octets cannot hold the four-octet marker.",
+      "config": {
+        "randomize": false
+      },
+      "input": "1acffc",
+      "error": "truncated"
+    }
+  ]
+}

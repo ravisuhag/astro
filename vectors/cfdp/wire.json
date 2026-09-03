@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 727.0-B-5",
+  "package": "cfdp",
+  "source": "the annex F worked example, plus the clause 5.4 LV and TLV layouts",
+  "note": "CFDP wire encodings: the modular checksum and the LV/TLV forms. The annex F checksum is one of the few genuinely published CCSDS test vectors, which is why it leads this file. LV and TLV are not self-describing \u2014 both open with an octet a decoder could read as either a length or a type \u2014 so which encoding is present is prior agreement and appears in each decode vector's config rather than its fields. The transaction state machines are not covered here.",
+  "encode": [
+    {
+      "name": "modular-checksum-annex-f",
+      "clause": "F",
+      "note": "The 15-octet file of annex F, octets 00 through 0e. The modular checksum sums big-endian 32-bit words with the final partial word zero-padded on the right: 0x00010203 + 0x04050607 + 0x08090a0b + 0x0c0d0e00 = 0x181c2015, modulo 2^32. The right-padding of that last word is the detail worth pinning; padding on the left would give a different sum.",
+      "fields": {
+        "file": "000102030405060708090a0b0c0d0e"
+      },
+      "want": "181c2015"
+    },
+    {
+      "name": "modular-checksum-empty-file",
+      "clause": "4.2.2.3",
+      "note": "An empty file sums nothing, so the checksum is zero. Follows from the definition.",
+      "fields": {
+        "file": ""
+      },
+      "want": "00000000"
+    },
+    {
+      "name": "lv-empty",
+      "clause": "5.4",
+      "note": "An LV is a single length octet followed by that many value octets. Empty value: just the zero length octet.",
+      "fields": {
+        "kind": "lv",
+        "value": ""
+      },
+      "want": "00"
+    },
+    {
+      "name": "lv-filename",
+      "clause": "5.4",
+      "note": "The value 'file.dat' is 8 octets, so the length octet is 0x08 followed by the ASCII. LVs carry filenames in CFDP metadata, which is why the ASCII case is the realistic one.",
+      "fields": {
+        "kind": "lv",
+        "value": "66696c652e646174"
+      },
+      "want": "0866696c652e646174"
+    },
+    {
+      "name": "lv-maximum-length",
+      "clause": "5.4",
+      "note": "The length field is one octet, so 255 is the longest value an LV can carry. Length octet 0xff followed by 255 octets of 0xaa. Pins the field width: a 256-octet value has no representation.",
+      "fields": {
+        "kind": "lv",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "want": "ffaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "tlv-message-to-user",
+      "clause": "5.4",
+      "note": "A TLV is a type octet, a length octet, then the value. Type 0x02 is a message to user; value 'hi' is two octets. Result 02 02 68 69.",
+      "fields": {
+        "kind": "tlv",
+        "type": 2,
+        "value": "6869"
+      },
+      "want": "02026869"
+    },
+    {
+      "name": "tlv-empty-value",
+      "clause": "5.4",
+      "note": "A TLV with a zero-length value is still two octets: type then a zero length. A decoder that treated a zero length as end-of-list would stop early here.",
+      "fields": {
+        "kind": "tlv",
+        "type": 2,
+        "value": ""
+      },
+      "want": "0200"
+    }
+  ],
+  "decode": [
+    {
+      "name": "lv-filename-inverse",
+      "clause": "5.4",
+      "note": "The inverse of lv-filename. A decoder must report how many octets it consumed, because LVs are concatenated in a metadata PDU and the next one starts where this ended.",
+      "input": "0866696c652e646174",
+      "fields": {
+        "value": "66696c652e646174",
+        "consumed": 9
+      },
+      "config": {
+        "kind": "lv"
+      }
+    },
+    {
+      "name": "lv-stops-at-its-declared-length",
+      "clause": "5.4",
+      "note": "The length octet says 2, so a decoder reads exactly two value octets and consumes three, leaving ff ff for whatever follows. This is what makes a sequence of LVs parseable.",
+      "input": "02aabbffff",
+      "fields": {
+        "value": "aabb",
+        "consumed": 3
+      },
+      "config": {
+        "kind": "lv"
+      }
+    },
+    {
+      "name": "tlv-message-to-user-inverse",
+      "clause": "5.4",
+      "note": "The inverse of tlv-message-to-user, including the consumed count for the same reason.",
+      "input": "02026869",
+      "fields": {
+        "type": 2,
+        "value": "6869",
+        "consumed": 4
+      },
+      "config": {
+        "kind": "tlv"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "lv-value-shorter-than-its-length-octet",
+      "clause": "5.4",
+      "note": "The length octet says 8 but only three value octets follow. A decoder must refuse rather than return a short value or read past the buffer.",
+      "input": "08aabbcc",
+      "error": "truncated",
+      "config": {
+        "kind": "lv"
+      }
+    },
+    {
+      "name": "lv-length-octet-missing",
+      "clause": "5.4",
+      "note": "No octets at all: not even the length is present.",
+      "input": "",
+      "error": "truncated",
+      "config": {
+        "kind": "lv"
+      }
+    },
+    {
+      "name": "tlv-value-shorter-than-its-length-octet",
+      "clause": "5.4",
+      "note": "Type 0x02 with a declared length of 4 but only two value octets present.",
+      "input": "02046869",
+      "error": "truncated",
+      "config": {
+        "kind": "tlv"
+      }
+    },
+    {
+      "name": "tlv-length-octet-missing",
+      "clause": "5.4",
+      "note": "A type octet with no length octet after it.",
+      "input": "02",
+      "error": "truncated",
+      "config": {
+        "kind": "tlv"
+      }
+    }
+  ]
+}

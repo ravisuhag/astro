@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "standard": "RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20",
+  "package": "sdnv",
+  "source": "RFC 5050 clause 4.1 worked examples",
+  "note": "Self-Delimiting Numeric Values. Seven value bits per octet, most significant group first; every octet but the last carries the continuation bit 0x80. The seven cases below are the worked examples RFC 5050 prints; the wide cases after them are derived from the same rule and Values are decimal strings where they exceed 2^53, per the corpus convention.",
+  "encode": [
+    {
+      "name": "zero",
+      "clause": "4.1",
+      "note": "A single octet with no continuation bit and seven zero value bits.",
+      "fields": {
+        "value": 0
+      },
+      "want": "00"
+    },
+    {
+      "name": "one",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 1 fits one octet.",
+      "fields": {
+        "value": 1
+      },
+      "want": "01"
+    },
+    {
+      "name": "largest-single-octet",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x7f is the largest value with seven bits, so still one octet and no continuation bit.",
+      "fields": {
+        "value": 127
+      },
+      "want": "7f"
+    },
+    {
+      "name": "first-two-octet-value",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x80 needs eight bits, so two octets. High group is 1 with the continuation bit set (0x81), low group is 0 (0x00).",
+      "fields": {
+        "value": 128
+      },
+      "want": "8100"
+    },
+    {
+      "name": "two-octet-value-81",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x81 = high group 1 (0x81 with continuation), low group 1 (0x01).",
+      "fields": {
+        "value": 129
+      },
+      "want": "8101"
+    },
+    {
+      "name": "three-octet-value-4234",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x4234 splits into seven-bit groups 1, 4, 0x34 -> 0x81 0x84 0x34, the first two carrying the continuation bit.",
+      "fields": {
+        "value": 16948
+      },
+      "want": "818434"
+    },
+    {
+      "name": "three-octet-value-7fff",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x7fff splits into groups 1, 0x7f, 0x7f -> 0x81 0xff 0x7f.",
+      "fields": {
+        "value": 32767
+      },
+      "want": "81ff7f"
+    },
+    {
+      "name": "largest-two-octet-value",
+      "clause": "4.1",
+      "note": "0x3fff is the largest value two octets can carry (fourteen value bits): groups 0x7f, 0x7f -> 0xff 0x7f. Derived from the seven-bits-per-octet rule and",
+      "fields": {
+        "value": 16383
+      },
+      "want": "ff7f"
+    },
+    {
+      "name": "first-three-octet-value",
+      "clause": "4.1",
+      "note": "0x4000 is one past what two octets hold, so three octets: groups 1, 0, 0 -> 0x81 0x80 0x00.",
+      "fields": {
+        "value": 16384
+      },
+      "want": "818000"
+    },
+    {
+      "name": "max-uint32",
+      "clause": "4.1",
+      "note": "2^32-1 needs 32 value bits, so five octets: groups 0x0f, 0x7f, 0x7f, 0x7f, 0x7f -> 0x8f 0xff 0xff 0xff 0x7f.",
+      "fields": {
+        "value": 4294967295
+      },
+      "want": "8fffffff7f"
+    },
+    {
+      "name": "max-uint64",
+      "clause": "4.1",
+      "note": "2^64-1 needs 64 value bits. At seven bits per octet that is ten octets, the maximum an SDNV carrying a 64-bit value can reach: groups 1 then nine groups of 0x7f -> 0x81 followed by eight 0xff and a final 0x7f. Written as a decimal string because a JSON number cannot hold it.",
+      "fields": {
+        "value": "18446744073709551615"
+      },
+      "want": "81ffffffffffffffff7f"
+    }
+  ],
+  "decode": [
+    {
+      "name": "zero-inverse",
+      "clause": "4.1",
+      "note": "One octet with no continuation bit decodes to its seven value bits and consumes exactly one octet.",
+      "input": "00",
+      "fields": {
+        "value": 0,
+        "consumed": 1
+      }
+    },
+    {
+      "name": "three-octet-value-4234-inverse",
+      "clause": "4.1",
+      "note": "The inverse of the 0x4234 worked example: three octets, the first two carrying continuation bits.",
+      "input": "818434",
+      "fields": {
+        "value": 16948,
+        "consumed": 3
+      }
+    },
+    {
+      "name": "max-uint64-inverse",
+      "clause": "4.1",
+      "note": "The inverse of max-uint64: ten octets decode to 2^64-1 and consume all ten.",
+      "input": "81ffffffffffffffff7f",
+      "fields": {
+        "value": "18446744073709551615",
+        "consumed": 10
+      }
+    },
+    {
+      "name": "stops-at-the-first-octet-without-continuation",
+      "clause": "4.1",
+      "note": "SDNVs are self-delimiting, so a decoder reads one value and reports how much it used, leaving the rest for the next field. Here 0x01 decodes to 1 having consumed one octet, with 0xff 0xff untouched.",
+      "input": "01ffff",
+      "fields": {
+        "value": 1,
+        "consumed": 1
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "ends-mid-value",
+      "clause": "4.1",
+      "note": "Every octet sets the continuation bit, so the value never terminates before the data does.",
+      "input": "8181",
+      "error": "truncated"
+    },
+    {
+      "name": "longer-than-ten-octets",
+      "clause": "4.1",
+      "note": "Eleven continuation octets run past the ten-octet maximum a 64-bit SDNV can occupy, so a decoder must refuse rather than wrap.",
+      "input": "8181818181818181818181",
+      "error": "length_mismatch"
+    }
+  ]
+}

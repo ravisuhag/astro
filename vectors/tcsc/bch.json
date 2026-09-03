@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 231.0-B-4",
+  "package": "tcsc",
+  "source": "derived from the clause 3.3 and 3.4 definitions",
+  "note": "TC synchronization and channel coding: the BCH(63,56) codeblock and the CLTU that carries it. The codeblock is 7 information octets, 7 parity bits and one filler bit, so 8 octets total. Parity is the complement of the LFSR remainder, which is why an all-zero information field does not give an all-zero parity octet \u2014 the case worth pinning first.",
+  "encode": [
+    {
+      "name": "bch-all-zero-information-field",
+      "clause": "3.3",
+      "note": "For all-zero information bits the LFSR remainder is zero, so the transmitted parity bits are its complement, 1111111. Shifted left one place with the filler bit '0' in the least significant position, the parity octet is 0xfe. An implementation that forgot the complement would write 0x00 here and every codeblock it produced would be wrong.",
+      "fields": {
+        "info": "00000000000000"
+      },
+      "want": "00000000000000fe"
+    },
+    {
+      "name": "bch-sequential-information-field",
+      "clause": "3.3",
+      "note": "Information octets 01..07 through the generator g(x) = x^7 + x^6 + x^2 + 1, remainder complemented and shifted with a zero filler bit, giving parity octet 0x70.",
+      "fields": {
+        "info": "01020304050607"
+      },
+      "want": "0102030405060770"
+    },
+    {
+      "name": "bch-all-ones-information-field",
+      "clause": "3.3",
+      "note": "All-ones information octets give parity octet 0x86. Paired with the all-zero vector this pins both extremes of the register.",
+      "fields": {
+        "info": "ffffffffffffff"
+      },
+      "want": "ffffffffffffff86"
+    },
+    {
+      "name": "cltu-start-sequence",
+      "clause": "3.4",
+      "note": "The CLTU start sequence is the two octets 0xeb 0x90. A receiver hunts for this pattern to find the start of a command, so it is fixed by the standard and not negotiable.",
+      "fields": {
+        "sequence": "start"
+      },
+      "want": "eb90"
+    },
+    {
+      "name": "cltu-tail-sequence",
+      "clause": "3.4",
+      "note": "The CLTU tail sequence is seven octets of 0xc5 followed by 0x79. It is deliberately not a valid codeblock, so a decoder recognises the end of the command rather than trying to correct it.",
+      "fields": {
+        "sequence": "tail"
+      },
+      "want": "c5c5c5c5c5c5c579"
+    }
+  ],
+  "reject": [
+    {
+      "name": "information-field-shorter-than-seven-octets",
+      "clause": "3.3",
+      "note": "The BCH(63,56) information field is exactly 56 bits, so seven octets. Six cannot be encoded.",
+      "fields": {
+        "info": "010203040506"
+      },
+      "error": "length_mismatch"
+    },
+    {
+      "name": "information-field-longer-than-seven-octets",
+      "clause": "3.3",
+      "note": "Eight octets exceed the 56-bit information field; the caller must split into codeblocks.",
+      "fields": {
+        "info": "0102030405060708"
+      },
+      "error": "length_mismatch"
+    }
+  ]
+}

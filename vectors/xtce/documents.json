@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 660.0-B-2 (XTCE)",
+  "package": "xtce",
+  "source": "hand-written XTCE documents, shared as parser inputs",
+  "note": "Eight XTCE documents: four valid and four deliberately invalid (a container cycle, a duplicate name, a wrong root element, unresolved references). They are language-neutral inputs, and they live here alongside the vectors that reference them. What a parser should produce from them is a tree rather than an octet string, which no vector kind expresses, so the expected parse results are not pinned here. A consumer can still check that the valid documents load and the invalid ones are refused.",
+  "corpus": [
+    "xtce/ccsds-header-prefixed.xml",
+    "xtce/ccsds-header.xml",
+    "xtce/invalid-container-cycle.xml",
+    "xtce/invalid-duplicate-name.xml",
+    "xtce/invalid-root.xml",
+    "xtce/invalid-unresolved-entry.xml",
+    "xtce/invalid-unresolved-type.xml",
+    "xtce/nested.xml"
+  ]
+}

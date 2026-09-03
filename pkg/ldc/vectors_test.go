@@ -14,6 +14,7 @@ package ldc_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/ravisuhag/astro/internal/vectors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,7 +85,7 @@ func runVector(t *testing.T, datPath, rzPath string, p ldc.Params) {
 }
 
 func TestVectors_AllOptions(t *testing.T) {
-	dir := filepath.Join("testdata", "121B2TestData", "AllOptions")
+	dir := filepath.Join(vectors.Root(), "ldc", "corpus", "AllOptions")
 
 	for n := uint(1); n <= 4; n++ {
 		dat := filepath.Join(dir, fmt.Sprintf("test_p256n%02d.dat", n))
@@ -116,7 +117,7 @@ func TestVectors_AllOptions(t *testing.T) {
 }
 
 func TestVectors_LowEntropyOptions(t *testing.T) {
-	dir := filepath.Join("testdata", "121B2TestData", "LowEntropyOptions")
+	dir := filepath.Join(vectors.Root(), "ldc", "corpus", "LowEntropyOptions")
 
 	for set := 1; set <= 3; set++ {
 		dat := filepath.Join(dir, fmt.Sprintf("Lowset%d_8bit.dat", set))

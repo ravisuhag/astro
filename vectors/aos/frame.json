@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 732.0-B-4",
+  "package": "aos",
+  "source": "hand-computed from the field layouts; FECFs independently recomputed with a reference CRC-16-CCITT",
+  "note": "AOS transfer frames. Each vector isolates the primary header fields and the optional error control fields so a packing error names the field rather than hiding in a whole frame. The FHEC vectors are marked unverified; their notes say exactly what is and is not established.",
+  "encode": [
+    {
+      "name": "frame-with-fecf",
+      "clause": "4.1",
+      "note": "TFVN=01, SCID=0xab, VCID=42, VCFC=0x000102, replay=0, VCFC usage=1, cycle=3. byte 0 = 01<<6 | 0xab>>2 = 0x6a; byte 1 = (0xab&0x3)<<6 | 42 = 0xea; bytes 2-4 = 00 01 02; byte 5 = 0x40 | 0x03 = 0x43. FECF is CRC-16-CCITT (poly 0x1021, init 0xffff) over the whole frame = 0x9e2c, computed with an independent implementation.",
+      "config": {
+        "has_fecf": true
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 42,
+        "vc_frame_count": 258,
+        "vcfc_usage_flag": true,
+        "vc_frame_count_cycle": 3,
+        "data": "deadbeef"
+      },
+      "want": "6aea00010243deadbeef9e2c"
+    },
+    {
+      "name": "frame-with-fhec-and-fecf",
+      "source": "unverified",
+      "note": "Same header as frame-with-fecf, with the 2-octet FHEC inserted after the primary header. The FECF 0x3934 then covers the FHEC octets too. The frame layout is established; the FHEC value it carries is subject to the open question in fhec-of-primary-header, so this vector is marked unverified with it.",
+      "config": {
+        "has_fhec": true,
+        "has_fecf": true
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 42,
+        "vc_frame_count": 258,
+        "vcfc_usage_flag": true,
+        "vc_frame_count_cycle": 3,
+        "data": "deadbeef"
+      },
+      "want": "6aea00010243ce8edeadbeef3934"
+    }
+  ],
+  "decode": [
+    {
+      "name": "frame-with-fecf-inverse",
+      "clause": "4.1",
+      "note": "The inverse of the frame-with-fecf encode vector. Reads back every primary header field from the same octets.",
+      "config": {
+        "has_fecf": true
+      },
+      "input": "6aea00010243deadbeef9e2c",
+      "fields": {
+        "tfvn": 1,
+        "scid": 171,
+        "vcid": 42,
+        "vc_frame_count": 258,
+        "replay_flag": false,
+        "vcfc_usage_flag": true,
+        "vc_frame_count_cycle": 3,
+        "data": "deadbeef"
+      }
+    },
+    {
+      "name": "frame-with-fhec-inverse",
+      "source": "unverified",
+      "note": "The inverse of frame-with-fhec-and-fecf. Pins that the FHEC octets are carried through decode unchanged and that the data field starts after them. Marked unverified for the same reason as the encode side.",
+      "config": {
+        "has_fhec": true,
+        "has_fecf": true
+      },
+      "input": "6aea00010243ce8edeadbeef3934",
+      "fields": {
+        "scid": 171,
+        "vcid": 42,
+        "fhec": "ce8e",
+        "data": "deadbeef"
+      }
+    },
+    {
+      "name": "fhec-of-primary-header",
+      "source": "unverified",
+      "note": "The RS(10,6) arithmetic is reproducible: a GF(2^4) field with polynomial x^4+x+1, generator roots alpha^6 through alpha^9 and generator coefficients [1,8,2,8,1] turns information symbols [6,10,14,10,4,3] into parity [12,14,8,14] = 0xce8e. What is NOT established is that those are the information symbols CCSDS 732.0-B-4 specifies: they are nibbles 0-3 and 10-11 of the header, which skips the 24-bit VC frame count in octets 2-4. That may be correct, since the FHEC plausibly protects only the routing and signaling fields, or it may not. Clause 4.1.2 settles it. Until then this vector records a reproducible computation, not a requirement of the standard.",
+      "input": "6aea00010243",
+      "fields": {
+        "fhec": "ce8e"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "signaling-field-spare-bits-set",
+      "clause": "4.1.2.6.5",
+      "note": "The signaling field's spare bits must be zero. byte 5 = 0x73 sets bits the standard reserves; a conforming decoder refuses the frame rather than ignoring them.",
+      "input": "6aea00010273deadbeef",
+      "error": "reserved_value"
+    },
+    {
+      "name": "header-truncated",
+      "clause": "4.1.2",
+      "note": "Two octets cannot hold the 6-octet primary header.",
+      "input": "6aea",
+      "error": "truncated"
+    },
+    {
+      "name": "vc-frame-count-above-twenty-four-bit-field",
+      "clause": "4.1.2.4",
+      "note": "2^24 does not fit the 24-bit VC frame count field. It must be refused rather than masked: a frame count is how a receiver detects gaps, so substituting 0 for an out-of-range value reads as a lost frame rather than a caller mistake.",
+      "fields": {
+        "scid": 1,
+        "vcid": 0,
+        "vc_frame_count": 16777216,
+        "data": "aa"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "vc-frame-count-cycle-above-four-bit-field",
+      "clause": "4.1.2.6",
+      "note": "16 does not fit the 4-bit VC frame count cycle, which shares octet 5 with the signaling flags; masking it would silently report a different cycle.",
+      "fields": {
+        "scid": 1,
+        "vcid": 0,
+        "vc_frame_count_cycle": 16,
+        "data": "aa"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "virtual-channel-id-above-six-bit-field",
+      "clause": "4.1.2.3",
+      "note": "64 does not fit the 6-bit VCID field; it would overflow into the bit beside it.",
+      "fields": {
+        "scid": 1,
+        "vcid": 64,
+        "data": "aa"
+      },
+      "error": "field_out_of_range"
+    }
+  ]
+}

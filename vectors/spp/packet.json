@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 133.0-B-2",
+  "package": "spp",
+  "source": "derived from the clause 4.1.3 field layout",
+  "note": "Complete Space Packets: primary header plus data field. The error control field is not defined by CCSDS 133.0-B-2 \u2014 it is a mission or PUS-style extension carried inside the packet data field, wire-compatible because the standard leaves the data field content to the mission. Where a vector uses it, the note says what the CRC covers.",
+  "encode": [
+    {
+      "name": "tm-apid-100-unsegmented-seq-5",
+      "clause": "4.1.3",
+      "note": "version 000, type 0 (TM), secondary header flag 0, APID 0x064, sequence flags '11' (unsegmented), count 5, data field 4 octets so the length field is 4-1 = 3. Bytes: 00 64 c0 05 00 03 then de ad be ef.",
+      "fields": {
+        "apid": 100,
+        "packet_type": 0,
+        "sequence_count": 5,
+        "data": "deadbeef"
+      },
+      "want": "0064c0050003deadbeef"
+    },
+    {
+      "name": "tc-apid-123-unsegmented",
+      "clause": "4.1.3",
+      "note": "A telecommand, so the type bit is set: byte 0 = 1<<4 | 0x123>>8 = 0x11, byte 1 = 0x23. One octet of data means a length field of 0. Bytes: 11 23 c0 00 00 00 then 42.",
+      "fields": {
+        "apid": 291,
+        "packet_type": 1,
+        "sequence_count": 0,
+        "data": "42"
+      },
+      "want": "1123c000000042"
+    },
+    {
+      "name": "idle-packet-apid-all-ones",
+      "clause": "4.1.3.3.4",
+      "note": "An idle packet carries APID 'all ones' (0x7ff) and fill data. Bytes 0-1 = 07 ff, two fill octets so the length field is 1. Bytes: 07 ff c0 00 00 01 then ff ff.",
+      "fields": {
+        "apid": 2047,
+        "packet_type": 0,
+        "sequence_count": 0,
+        "data": "ffff"
+      },
+      "want": "07ffc0000001ffff"
+    },
+    {
+      "name": "tm-with-error-control",
+      "clause": "4.1.3.5.3",
+      "note": "The optional error control field is the last two octets of the data field, so it counts toward the length: 4 data octets plus 2 CRC octets gives a data field of 6 and a length field of 5. The CRC-16-CCITT covers the primary header and the data field before the CRC itself, that is 00 64 c0 00 00 05 a1 b2 c3 d4, giving 0x6956.",
+      "config": {
+        "error_control": true
+      },
+      "fields": {
+        "apid": 100,
+        "packet_type": 0,
+        "sequence_count": 0,
+        "data": "a1b2c3d4"
+      },
+      "want": "0064c0000005a1b2c3d46956"
+    }
+  ],
+  "decode": [
+    {
+      "name": "tm-apid-100-inverse",
+      "clause": "4.1.3",
+      "note": "The inverse of tm-apid-100-unsegmented-seq-5. A decoder must recover the APID, the sequence count and the data field from these octets.",
+      "input": "0064c0050003deadbeef",
+      "fields": {
+        "apid": 100,
+        "packet_type": 0,
+        "sequence_count": 5,
+        "sequence_flags": 3,
+        "data": "deadbeef"
+      }
+    },
+    {
+      "name": "idle-packet-inverse",
+      "clause": "4.1.3.3.4",
+      "note": "The inverse of idle-packet-apid-all-ones. A receiver identifies an idle packet by its APID and discards it, so the APID must come back exactly.",
+      "input": "07ffc0000001ffff",
+      "fields": {
+        "apid": 2047,
+        "data": "ffff"
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "length-field-longer-than-the-octets-present",
+      "clause": "4.1.3.5.3",
+      "note": "The length field says the data field is 0x0003+1 = 4 octets, but only two follow the header. A decoder must refuse rather than read past the buffer.",
+      "input": "0064c0050003dead",
+      "error": "truncated"
+    },
+    {
+      "name": "apid-above-eleven-bit-field",
+      "clause": "4.1.3.3",
+      "note": "2048 does not fit the 11-bit APID field. Refused at construction, because no octet string can represent it.",
+      "fields": {
+        "apid": 2048,
+        "packet_type": 0,
+        "data": "42"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "sequence-count-above-fourteen-bit-field",
+      "clause": "4.1.3.4.3",
+      "note": "16384 does not fit the 14-bit sequence count; one more would overflow into the sequence flags.",
+      "fields": {
+        "apid": 100,
+        "packet_type": 0,
+        "sequence_count": 16384,
+        "data": "42"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "empty-data-field",
+      "clause": "4.1.3.5.3",
+      "note": "The length field carries the data field size minus one, so a zero-octet data field has no representation: it would need a length field of -1. A packet must carry at least one octet after the header.",
+      "fields": {
+        "apid": 100,
+        "packet_type": 0,
+        "data": ""
+      },
+      "error": "length_mismatch"
+    }
+  ]
+}

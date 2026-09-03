@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 732.1-B-3",
+  "package": "usdl",
+  "source": "hand-computed from the clause 4.1.2 and 4.1.4 field layouts",
+  "note": "USLP transfer frames. The primary header is variable length: the End of Frame Primary Header flag selects a 4-octet truncated header, otherwise the header runs to 7 octets plus the VCF count field, whose length the 3-bit VCF Count Length field gives. That variability is why each form is pinned separately \u2014 a decoder that picks the wrong header size shifts every field after it.",
+  "encode": [
+    {
+      "name": "non-truncated-with-vcf-count-and-crc16",
+      "clause": "4.1.2",
+      "note": "TFVN '1100', SCID 1234 (0x04d2), source/dest 1, VCID 42, MAP ID 5, EOFPH 0, frame length 18-1 = 17, bypass 0, protocol control 0, OCF flag 0, VCF count length 2, VCF count 258. byte 0 = 1100 | scid[15:12] = 0xc0; byte 1 = scid[11:4] = 0x4d; byte 2 = scid[3:0]|S/D|vcid[5:3] = 0x2d; byte 3 = vcid[2:0]|mapid|eofph = 0x4a; bytes 4-5 = frame length 0x0011; byte 6 = 0x02 (VCF count length 2); bytes 7-8 = VCF count 0x0102. TFDF header 0x00 is construction rule '000' with UPID 0, then the 2-octet pointer 0x0000, then the data zone deadbeef. FECF is CRC-16-CCITT over everything before it = 0x0e51, recomputed independently.",
+      "config": {
+        "fec_size": 16
+      },
+      "fields": {
+        "scid": 1234,
+        "vcid": 42,
+        "mapid": 5,
+        "source_or_dest": 1,
+        "construction_rule": 0,
+        "upid": 0,
+        "pointer": 0,
+        "vcf_count_len": 2,
+        "vcf_count": 258,
+        "data": "deadbeef"
+      },
+      "want": "c04d2d4a0011020102000000deadbeef0e51"
+    },
+    {
+      "name": "truncated-frame",
+      "clause": "4.1.2.7",
+      "note": "The End of Frame Primary Header flag makes the header 4 octets and drops the frame length, flags and VCF count entirely: a truncated frame's length is known from the channel, not the frame. SCID 0xab, VCID 1, MAP ID 2, EOFPH 1. byte 3 = vcid[2:0]<<5 | mapid<<1 | 1 = 0x25. Then the TFDF header 0xe5 (construction rule '111', UPID 5) and the data zone 112233. No FECF on this channel.",
+      "config": {
+        "fec_size": 0
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 1,
+        "mapid": 2,
+        "truncated": true,
+        "construction_rule": 7,
+        "upid": 5,
+        "data": "112233"
+      },
+      "want": "c00ab025e5112233"
+    },
+    {
+      "name": "with-ocf-and-crc16",
+      "clause": "4.1.6.2.2",
+      "note": "SCID 100, VCID 1, MAP 0, no VCF count, construction rule '111' with UPID 0, data zone 0102, OCF aabbccdd, 16-bit FECF. The OCF flag is bit 52, so byte 6 = 0x08. Total 16 octets means a frame length field of 15 (0x000f). The FECF is the last 16 bits of the frame, after the OCF, giving 0x778e. The OCF is located from the in-band flag, not from channel configuration.",
+      "config": {
+        "fec_size": 16
+      },
+      "fields": {
+        "scid": 100,
+        "vcid": 1,
+        "mapid": 0,
+        "construction_rule": 7,
+        "upid": 0,
+        "data": "0102",
+        "ocf": "aabbccdd"
+      },
+      "want": "c0064020000f08e00102aabbccdd778e"
+    },
+    {
+      "name": "oid-pn-fill-sequence-twenty-octets",
+      "clause": "4.1.4.1.10",
+      "note": "The mandatory Only Idle Data fill generator: a 32-cell Fibonacci LFSR seeded all ones. CCSDS 732.1-B-3 annex H prints the stream verbatim: FF FF FF FF 6D B6 D8 61 45 1F 11 F1 97 16 72 3C BE 7E 00 B1. Transcribed from those published digits. Cross-check: the first ten octets are identical to the oid-sequence-first-ten-octets vector in vectors/pn/sequences.json, which CCSDS 132.0-B-3 publishes independently for TM \u2014 two standards printing the same stream.",
+      "fields": {
+        "sequence": "oid",
+        "length": 20
+      },
+      "want": "ffffffff6db6d861451f11f19716723cbe7e00b1"
+    }
+  ],
+  "decode": [
+    {
+      "name": "non-truncated-inverse",
+      "clause": "4.1.2",
+      "note": "The inverse of non-truncated-with-vcf-count-and-crc16. Every variable-length-header field must come back, including the VCF count whose width the header itself declares. The TFDF header is also read back: construction rule '000' carries a 16-bit pointer (clause 4.1.4.2.4.1), which is the First Header Pointer here.",
+      "config": {
+        "fec_size": 16
+      },
+      "input": "c04d2d4a0011020102000000deadbeef0e51",
+      "fields": {
+        "scid": 1234,
+        "source_or_dest": 1,
+        "vcid": 42,
+        "mapid": 5,
+        "end_of_fph": false,
+        "frame_length": 17,
+        "vcf_count_len": 2,
+        "vcf_count": 258,
+        "data": "deadbeef",
+        "construction_rule": 0,
+        "upid": 0,
+        "pointer": 0,
+        "has_pointer": true
+      }
+    },
+    {
+      "name": "truncated-inverse",
+      "clause": "4.1.2.7",
+      "note": "The inverse of truncated-frame. The EOFPH flag must be read before anything after byte 3 is interpreted, so a decoder that reads the frame length first fails here. Construction rule '111' carries no pointer field, so the data zone starts immediately after the TFDF header octet.",
+      "config": {
+        "fec_size": 0
+      },
+      "input": "c00ab025e5112233",
+      "fields": {
+        "scid": 171,
+        "vcid": 1,
+        "mapid": 2,
+        "end_of_fph": true,
+        "data": "112233",
+        "construction_rule": 7,
+        "upid": 5,
+        "has_pointer": false
+      }
+    },
+    {
+      "name": "ocf-recovered-from-the-in-band-flag",
+      "clause": "4.1.6.2.2",
+      "note": "The inverse of with-ocf-and-crc16. The OCF is located from the OCF flag in the header, not from channel configuration.",
+      "config": {
+        "fec_size": 16
+      },
+      "input": "c0064020000f08e00102aabbccdd778e",
+      "fields": {
+        "scid": 100,
+        "vcid": 1,
+        "ocf_flag": true,
+        "ocf": "aabbccdd",
+        "data": "0102",
+        "construction_rule": 7,
+        "upid": 0,
+        "has_pointer": false
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "frame-length-field-disagrees-with-the-octets-present",
+      "clause": "4.1.2.3",
+      "note": "The frame length field says 17 (total 18 octets) but the frame is shorter. USLP carries its own length, so a decoder must cross-check it rather than trusting the buffer it was handed.",
+      "config": {
+        "fec_size": 16
+      },
+      "input": "c04d2d4a0011020102000000dead",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "header-truncated-below-four-octets",
+      "clause": "4.1.2",
+      "note": "Even the truncated header form needs four octets.",
+      "config": {
+        "fec_size": 0
+      },
+      "input": "c00a",
+      "error": "truncated"
+    },
+    {
+      "name": "source-or-dest-flag-above-one-bit-field",
+      "clause": "4.1.2.2",
+      "note": "The source-or-destination flag is one bit, so only 0 and 1 are meaningful. A wider value must be refused rather than masked, because masking 2 to 0 flips the frame's meaning from destination to source without saying so.",
+      "config": {
+        "fec_size": 0
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 1,
+        "mapid": 2,
+        "truncated": true,
+        "construction_rule": 7,
+        "upid": 5,
+        "source_or_dest": 2,
+        "data": "112233"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "map-id-above-four-bit-field",
+      "clause": "4.1.2.2",
+      "note": "16 does not fit the 4-bit MAP ID field. It must be refused rather than masked: masking would deliver the frame to a different multiplexer access point than the caller named.",
+      "config": {
+        "fec_size": 0
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 1,
+        "mapid": 16,
+        "truncated": true,
+        "construction_rule": 7,
+        "upid": 5,
+        "data": "112233"
+      },
+      "error": "field_out_of_range"
+    },
+    {
+      "name": "virtual-channel-id-above-six-bit-field",
+      "clause": "4.1.2.2",
+      "note": "64 does not fit the 6-bit VCID field. It must be refused rather than masked: masking would route the frame to a different virtual channel than the caller named.",
+      "config": {
+        "fec_size": 0
+      },
+      "fields": {
+        "scid": 171,
+        "vcid": 64,
+        "mapid": 2,
+        "truncated": true,
+        "construction_rule": 7,
+        "upid": 5,
+        "data": "112233"
+      },
+      "error": "field_out_of_range"
+    }
+  ]
+}
