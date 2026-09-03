@@ -187,3 +187,11 @@ Key implementations:
 | VC Functions | TC-26-27, TC-32-33 | `NewTCTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
 | MC Functions | TC-28-29, TC-34-35 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
 | Management Params | TC-36-48 | Physical channel name, max frame length 1024, TFVN enforced, SCID/VCID validated, segment header support, all service types. |
+
+---
+
+## Wire test vectors
+
+None. `pkg/tcdl` has no golden wire literals to extract: its test values are inputs rather than pinned expected octets.
+
+See [how this is verified](/docs/reference/verification) for what the corpus covers and what it does not.

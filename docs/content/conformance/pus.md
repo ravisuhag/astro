@@ -238,3 +238,15 @@ standard leaves it to the mission:
 Widths the standard fixes, and this implementation therefore treats as
 constants rather than profile fields: TC source ID, TM message type counter,
 and TM destination ID, all 16 bits (Figures 7-7 and 7-9).
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/pus) — 10 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`pus/tc-header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/pus/tc-header.json) | 10 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

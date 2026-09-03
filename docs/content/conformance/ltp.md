@@ -134,3 +134,15 @@ behavior, so no claim is made against the profile itself, see A1.5.
 | Trailer extensions per segment | 15 | 4-bit count, clause 3.1.4 |
 | Assembled block size | `MaxBlockSize`, default 64 MiB | Implementation choice; RFC 5326 states no ceiling, but a segment offset is an SDNV reaching 2^64 and would otherwise size an allocation |
 | Cancel reason codes accepted | 0 to 5 | clause 3.2.4; 6 to 255 reserved |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/ltp) — 9 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`ltp/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ltp/header.json) | 9 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

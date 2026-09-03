@@ -134,3 +134,11 @@ order: 100
 | Pseudo packet identifier | 0 to 63 | 6-bit field, clause 3.2.3.3.2 b) |
 | Variable-length SPDU data | 0 to 15 octets | 4-bit length field, clause 3.2.4.2.2 |
 | Reassembled packet | `MaxPacketSize`, default 64 KiB | Implementation choice; the standard sets no ceiling |
+
+---
+
+## Wire test vectors
+
+None. `pkg/pxdl` has no extractable octet-string goldens; its pinned values are structural assertions about bit positions rather than whole-field encodings.
+
+See [how this is verified](/docs/reference/verification) for what the corpus covers and what it does not.

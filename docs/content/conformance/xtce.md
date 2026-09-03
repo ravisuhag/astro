@@ -224,3 +224,15 @@ This matrix is the contract for scope. Anything moving out of Unsupported or
 Opaque lands with its model structs, a fixture exercising it, and a change to
 its row here, in the same commit. A status that drifts from the code is worse
 than a gap that is written down.
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/xtce) — 8 published corpus files. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`xtce/documents.json`](https://github.com/ravisuhag/astro/blob/main/vectors/xtce/documents.json) | 8 corpus files |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

@@ -135,3 +135,15 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
   packet 0xE0).
 - Protocol ID names follow the SANA Encapsulation Protocol ID registry
   (1 = LTP, 2 = IPE, 6 = extension, 7 = mission-specific).
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/epp) — 16 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`epp/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/epp/header.json) | 16 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

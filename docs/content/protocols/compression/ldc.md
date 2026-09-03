@@ -206,7 +206,7 @@ resolution or predictor is probably wrong.
 ## Test vectors
 
 The official CCSDS 121.0-B-2 vector set, as mirrored in libaec's
-`data/121B2TestData`, is vendored in `pkg/ldc/testdata/` and run in full: all
+`data/121B2TestData`, is vendored in `vectors/ldc/corpus/` and run in full: all
 72 AllOptions and LowEntropyOptions vectors, covering resolutions 1 through
 32, each required to encode byte-identically and decode back to the exact
 samples. The ExtendedParameters set is excluded. Its streams use

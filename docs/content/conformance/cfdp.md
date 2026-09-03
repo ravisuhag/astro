@@ -195,3 +195,15 @@ every content table is encoded and decoded.
 The message type numbering has a gap inside the proxy range: `0x0A` is the
 Originating Transaction ID, common to every operation rather than belonging to
 proxy, so proxy runs `0x00`-`0x09` and resumes at `0x0B`.
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/cfdp) — 14 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`cfdp/wire.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cfdp/wire.json) | 14 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

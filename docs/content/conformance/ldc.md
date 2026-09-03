@@ -54,7 +54,7 @@ test vectors published by the SLS Data Compression working group (as mirrored
 in libaec's `data/121B2TestData`). All 72 AllOptions and LowEntropyOptions
 vectors (36 in each set, covering resolutions 1 through 32) encode
 byte-identically and decode back to the exact samples; they are vendored in
-`pkg/ldc/testdata/` and every one runs as `TestVectors_*` in
+`vectors/ldc/corpus/` and every one runs as `TestVectors_*` in
 `vectors_test.go`. The ExtendedParameters set is excluded for the reason given
 in section A2.3.
 
@@ -212,3 +212,15 @@ Annex A of the Green Book names a fuller vector set at
 `cwe.ccsds.org/sls/docs/sls-dc/BB121B3TestData`. That location requires a
 CCSDS login and returned HTTP 403, so it has not been run against this
 implementation. Anyone with access is encouraged to.
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/ldc) — 107 published corpus files. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`ldc/corpus.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ldc/corpus.json) | 107 corpus files |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

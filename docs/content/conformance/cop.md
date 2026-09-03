@@ -158,3 +158,15 @@ The event/action tables of CCSDS 232.1-B-2 are followed as closely as practical 
 | Transmit paths | COP-28-30 | AD sliding window, BC via initiate directives, BD expedited. |
 | FARM-1 | COP-31-39 | Positive/negative windows, buffer-driven Wait, spec-compliant BC decoding, FARM-B on all Type-B frames. |
 | CLCW | COP-40 | Bit-exact codec. |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/cop) — 15 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`cop/clcw.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cop/clcw.json) | 15 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

@@ -137,3 +137,15 @@ order: 160
 | `Recover` requires a frame length | The slicer's zero fill is indistinguishable from frame data once in the stream. Frame length is a managed parameter, so a real receiver has it. With it, `Recover` locks frame synchronization: after each frame the next marker is checked at the one expected offset (clause 3.14.1), falling back to a bit-by-bit hunt, and a raised sequence indicator, only on mismatch. |
 | Quality indicator without a decoder | clause 3.14.2 marks a frame invalid when it is recovered from an incorrectly decoded codeword. With no SCPPM decoder here, `Recover` uses the attached CRC-32 of clause 3.6 as the per-block correctness signal and maps failing blocks onto the frames whose bits they carry, sync marker included. |
 | Streaming conditioning | `Condition` is a batch call: its input is one complete transmission, and the zero fill of clause 3.4.2.1.1 lands in its final block. `Conditioner` implements the clause 3.2 NOTE's streaming encoding: partial blocks carry between `Push` calls, and fill is inserted only at explicit `Close`. |
+
+---
+
+## Wire test vectors
+
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/ocsc) — 1 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+
+| File | |
+|---|---|
+| [`ocsc/asm.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ocsc/asm.json) | 1 vectors |
+
+These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

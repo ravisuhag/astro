@@ -277,3 +277,11 @@ against the configuration and a disagreement is `ErrVectorLengthMismatch`.
 |---|---|---|
 | Remembered history | 16 cycles | clause 5.3.2.2 bounds C_t by min(t,15) - R_t, so nothing older can ever be needed. Not a restriction, just the working set. |
 | Counter codeword leading zeros | 10 | A-2 is at most 65533, whose minimal width is 16, so more than ten leading zeros cannot be legal. Without the bound a corrupt stream could spin. |
+
+---
+
+## Wire test vectors
+
+None. `pkg/rhc` has no extractable octet-string goldens; its pinned values are mask positions rather than encoded streams.
+
+See [how this is verified](/docs/reference/verification) for what the corpus covers and what it does not.
