@@ -2,8 +2,8 @@
   "schema_version": 1,
   "standard": "RFC 5050",
   "package": "sdnv",
-  "source": "RFC 5050 clause 4.1 worked examples",
-  "note": "Self-Delimiting Numeric Values, RFC 5050 clause 4.1, adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20. Seven value bits per octet, most significant group first; every octet but the last carries the continuation bit 0x80. The seven cases below are the worked examples RFC 5050 prints; the wide cases after them are derived from the same rule and Values are decimal strings where they exceed 2^53, per the corpus convention.",
+  "source": "RFC 5050 clause 4.1: its four worked examples, plus values derived from the same rule",
+  "note": "Self-Delimiting Numeric Values, RFC 5050 clause 4.1, adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20. Seven value bits per octet, most significant group first; every octet but the last carries the continuation bit 0x80. Clause 4.1 prints four worked examples -- 0xabc, 0x1234, 0x4234 and 0x7f -- and those four are transcribed here. Every other value is derived from the same rule and says so. Values are decimal strings where they exceed 2^53, per the corpus convention.",
   "encode": [
     {
       "name": "zero",
@@ -17,7 +17,7 @@
     {
       "name": "one",
       "clause": "4.1",
-      "note": "RFC 5050 clause 4.1 worked example: 1 fits one octet.",
+      "note": "1 fits one octet: no continuation bit, value in the low seven bits. Derived from the seven-bits-per-octet rule.",
       "fields": {
         "value": 1
       },
@@ -35,7 +35,7 @@
     {
       "name": "first-two-octet-value",
       "clause": "4.1",
-      "note": "RFC 5050 clause 4.1 worked example: 0x80 needs eight bits, so two octets. High group is 1 with the continuation bit set (0x81), low group is 0 (0x00).",
+      "note": "0x80 needs eight value bits, so two octets. High group is 1 with the continuation bit set (0x81), low group is 0 (0x00). Derived from the rule; the RFC does not print this value.",
       "fields": {
         "value": 128
       },
@@ -44,7 +44,7 @@
     {
       "name": "two-octet-value-81",
       "clause": "4.1",
-      "note": "RFC 5050 clause 4.1 worked example: 0x81 = high group 1 (0x81 with continuation), low group 1 (0x01).",
+      "note": "0x81 = high group 1 (0x81 with continuation), low group 1 (0x01). Derived from the rule, and paired with 0x80 so an off-by-one in the split shows up.",
       "fields": {
         "value": 129
       },
@@ -62,7 +62,7 @@
     {
       "name": "three-octet-value-7fff",
       "clause": "4.1",
-      "note": "RFC 5050 clause 4.1 worked example: 0x7fff splits into groups 1, 0x7f, 0x7f -> 0x81 0xff 0x7f.",
+      "note": "0x7fff splits into groups 1, 0x7f, 0x7f -> 0x81 0xff 0x7f. Derived from the rule; three octets because fifteen value bits do not fit in fourteen.",
       "fields": {
         "value": 32767
       },
@@ -103,6 +103,24 @@
         "value": "18446744073709551615"
       },
       "want": "81ffffffffffffffff7f"
+    },
+    {
+      "name": "published-example-abc",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0xabc is printed as {1 00 10101} {0 0111100} = 10010101 00111100, that is 0x95 0x3c. Transcribed from the RFC.",
+      "fields": {
+        "value": 2748
+      },
+      "want": "953c"
+    },
+    {
+      "name": "published-example-1234",
+      "clause": "4.1",
+      "note": "RFC 5050 clause 4.1 worked example: 0x1234 is printed as {1 0 100100} {0 0110100} = 10100100 00110100, that is 0xa4 0x34. Transcribed from the RFC.",
+      "fields": {
+        "value": 4660
+      },
+      "want": "a434"
     }
   ],
   "decode": [

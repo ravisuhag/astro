@@ -22,7 +22,7 @@ evidence of conformance.
 | `pus` | ECSS-E-ST-70-41C (PUS-C) | 10 | — |
 | `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 4 | — |
 | `sdls` | CCSDS 355.0-B-2 | 7 | — |
-| `sdnv` | RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20 | 17 | — |
+| `sdnv` | RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20 | 19 | — |
 | `sle` | ITU-T X.690 (BER), CCSDS 913.1-B-2 (SLE ISP1 TML) | 23 | — |
 | `spp` | CCSDS 133.0-B-2 | 28 | — |
 | `tcf` | CCSDS 301.0-B-4 | 14 | — |
@@ -31,9 +31,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 12 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **257** | **115** |
+| **Total** | | **259** | **115** |
 
-257 vectors and 115 referenced corpus files across 23 packages.
+259 vectors and 115 referenced corpus files across 23 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
