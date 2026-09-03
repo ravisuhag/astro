@@ -3,7 +3,7 @@
   "standard": "CCSDS 355.0-B-2",
   "package": "sdls",
   "source": "published algorithm definitions, with each frame independently reconstructed from the clause 4.2.3 authenticated-data rules",
-  "note": "SDLS protected frames. Each value is reproducible two independent ways: through an SDLS implementation, and from first principles with any standard AES-GCM or CMAC by building the authenticated data in the clause 4.2.3 order. Agreement between the two is what makes these vectors evidence. Test keys only, never real keys. The plaintext is the ASCII string 'astro sdls kat'.",
+  "note": "SDLS protected frames. Each value is reproducible two independent ways: through an SDLS implementation, and from first principles with any standard AES-GCM or CMAC by building the authenticated data in the clause 4.2.3 order. Agreement between the two is what makes these vectors evidence. Test keys only, never real keys. The plaintext is the ASCII string 'sdls test data'.",
   "encode": [
     {
       "name": "gcm-authenticated-encryption",
@@ -18,11 +18,11 @@
       "fields": {
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800",
-        "plaintext": "617374726f2073646c73206b6174",
+        "plaintext": "73646c7320746573742064617461",
         "spi": 66,
         "iv": "000000000000000000000001"
       },
-      "want": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557"
+      "want": "004200000000000000000000000166b2d38f6480556d7a0e355898c75ab7f359eb9d8039dc28980bd6a80a42"
     },
     {
       "name": "gmac-authentication-only",
@@ -37,11 +37,11 @@
       "fields": {
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800",
-        "plaintext": "617374726f2073646c73206b6174",
+        "plaintext": "73646c7320746573742064617461",
         "spi": 66,
         "iv": "000000000000000000000001"
       },
-      "want": "0042000000000000000000000001617374726f2073646c73206b617401473b4b99175664d8ee702ed7ff135d"
+      "want": "004200000000000000000000000173646c732074657374206461746136b09b79bb0e586891a78fac5e78bd9b"
     },
     {
       "name": "cmac-authentication-only",
@@ -56,11 +56,11 @@
       "fields": {
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800",
-        "plaintext": "617374726f2073646c73206b6174",
+        "plaintext": "73646c7320746573742064617461",
         "spi": 66,
         "seq": "00000001"
       },
-      "want": "004200000001617374726f2073646c73206b61742d2d626240a8bdda645103c30796e642"
+      "want": "00420000000173646c73207465737420646174611fc5a92e3216b29d5021829c59b5b226"
     }
   ],
   "decode": [
@@ -76,10 +76,10 @@
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800"
       },
-      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557",
+      "input": "004200000000000000000000000166b2d38f6480556d7a0e355898c75ab7f359eb9d8039dc28980bd6a80a42",
       "fields": {
         "spi": 66,
-        "plaintext": "617374726f2073646c73206b6174"
+        "plaintext": "73646c7320746573742064617461"
       }
     },
     {
@@ -94,10 +94,10 @@
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800"
       },
-      "input": "004200000001617374726f2073646c73206b61742d2d626240a8bdda645103c30796e642",
+      "input": "00420000000173646c73207465737420646174611fc5a92e3216b29d5021829c59b5b226",
       "fields": {
         "spi": 66,
-        "plaintext": "617374726f2073646c73206b6174"
+        "plaintext": "73646c7320746573742064617461"
       }
     }
   ],
@@ -114,7 +114,7 @@
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1800"
       },
-      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714556",
+      "input": "004200000000000000000000000166b2d38f6480556d7a0e355898c75ab7f359eb9d8039dc28980bd6a80a43",
       "error": "crc_mismatch"
     },
     {
@@ -129,7 +129,7 @@
         "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
         "frame_header": "023e0a0b1801"
       },
-      "input": "004200000000000000000000000174a5cb8e2bd4437a625d71528dd22a780a5a36b2578da5be98c21c714557",
+      "input": "004200000000000000000000000166b2d38f6480556d7a0e355898c75ab7f359eb9d8039dc28980bd6a80a42",
       "error": "crc_mismatch"
     }
   ]
