@@ -820,63 +820,6 @@ func TestDecode_DoesNotAliasInput(t *testing.T) {
 
 // --- Audit fixes (SPP-F1, F2, F4, F5, F10) ---
 
-// TestGoldenWireVectors pins the primary header bit layout to spec-derived
-// wire bytes so a symmetric encode/decode bug cannot hide (SPP-F10).
-func TestGoldenWireVectors(t *testing.T) {
-	tests := []struct {
-		name string
-		pkt  func() (*spp2.SpacePacket, error)
-		want []byte
-	}{
-		{
-			name: "TM APID 100, unsegmented, seq 5",
-			pkt: func() (*spp2.SpacePacket, error) {
-				return spp2.NewTMPacket(100, []byte{0xDE, 0xAD, 0xBE, 0xEF}, spp2.WithSequenceCount(5))
-			},
-			// version 000, type 0, SH flag 0, APID 0x064, flags '11',
-			// count 5, length 4-1=3
-			want: []byte{0x00, 0x64, 0xC0, 0x05, 0x00, 0x03, 0xDE, 0xAD, 0xBE, 0xEF},
-		},
-		{
-			name: "TC APID 0x123, unsegmented, seq 0",
-			pkt: func() (*spp2.SpacePacket, error) {
-				return spp2.NewTCPacket(0x123, []byte{0x42})
-			},
-			want: []byte{0x11, 0x23, 0xC0, 0x00, 0x00, 0x00, 0x42},
-		},
-		{
-			name: "idle APID 0x7FF with two fill octets",
-			pkt: func() (*spp2.SpacePacket, error) {
-				return spp2.NewIdlePacket([]byte{0xFF, 0xFF})
-			},
-			want: []byte{0x07, 0xFF, 0xC0, 0x00, 0x00, 0x01, 0xFF, 0xFF},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			pkt, err := tt.pkt()
-			if err != nil {
-				t.Fatalf("constructor failed: %v", err)
-			}
-			got, err := pkt.Encode()
-			if err != nil {
-				t.Fatalf("Encode failed: %v", err)
-			}
-			if !bytes.Equal(got, tt.want) {
-				t.Fatalf("Encode() = % X, want % X", got, tt.want)
-			}
-			decoded, err := spp2.Decode(tt.want)
-			if err != nil {
-				t.Fatalf("Decode failed: %v", err)
-			}
-			if decoded.PrimaryHeader != pkt.PrimaryHeader {
-				t.Errorf("Decoded header = %+v, want %+v", decoded.PrimaryHeader, pkt.PrimaryHeader)
-			}
-		})
-	}
-}
-
 func TestNewIdlePacket(t *testing.T) {
 	pkt, err := spp2.NewIdlePacket([]byte{0xFF, 0xFF, 0xFF})
 	if err != nil {

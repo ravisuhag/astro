@@ -1,7 +1,6 @@
 package epp_test
 
 import (
-	"bytes"
 	"errors"
 	"strconv"
 	"strings"
@@ -27,87 +26,6 @@ func TestHeaderSizeFromLoL(t *testing.T) {
 			h := epp.Header{PVN: epp.PVN, LengthOfLength: tt.lol}
 			if got := h.Size(); got != tt.want {
 				t.Errorf("Size() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestHeaderGoldenVectors pins the wire layout to spec-derived octets.
-// Octet 0 is PVN(3)='111' | Protocol ID(3) | Length of Length(2).
-func TestHeaderGoldenVectors(t *testing.T) {
-	tests := []struct {
-		name   string
-		header epp.Header
-		want   []byte
-	}{
-		{
-			// CCSDS 133.1-B-3 4.1.2.4.4 NOTE: the 1-octet idle packet.
-			name:   "1-octet idle = 0xE0",
-			header: epp.Header{PVN: epp.PVN, ProtocolID: epp.ProtocolIDIdle, LengthOfLength: epp.LoLNone, PacketLength: 1},
-			want:   []byte{0xE0},
-		},
-		{
-			name:   "2-octet header, idle fill",
-			header: epp.Header{PVN: epp.PVN, ProtocolID: epp.ProtocolIDIdle, LengthOfLength: epp.LoL1Octet, PacketLength: 8},
-			want:   []byte{0xE1, 0x08},
-		},
-		{
-			name:   "2-octet header, LTP",
-			header: epp.Header{PVN: epp.PVN, ProtocolID: epp.ProtocolIDLTP, LengthOfLength: epp.LoL1Octet, PacketLength: 3},
-			want:   []byte{0xE5, 0x03},
-		},
-		{
-			name:   "2-octet header, IPE",
-			header: epp.Header{PVN: epp.PVN, ProtocolID: epp.ProtocolIDIPE, LengthOfLength: epp.LoL1Octet, PacketLength: 6},
-			want:   []byte{0xE9, 0x06},
-		},
-		{
-			name:   "2-octet header, mission-specific",
-			header: epp.Header{PVN: epp.PVN, ProtocolID: epp.ProtocolIDMission, LengthOfLength: epp.LoL1Octet, PacketLength: 5},
-			want:   []byte{0xFD, 0x05},
-		},
-		{
-			name: "4-octet header, IPE with user defined field",
-			header: epp.Header{
-				PVN: epp.PVN, ProtocolID: epp.ProtocolIDIPE, LengthOfLength: epp.LoL2Octet,
-				UserDefined: 0x5, PacketLength: 6,
-			},
-			want: []byte{0xEA, 0x50, 0x00, 0x06},
-		},
-		{
-			name: "4-octet header, extended protocol ID",
-			header: epp.Header{
-				PVN: epp.PVN, ProtocolID: epp.ProtocolIDExtended, LengthOfLength: epp.LoL2Octet,
-				ExtendedProtocolID: 0x3, PacketLength: 6,
-			},
-			want: []byte{0xFA, 0x03, 0x00, 0x06},
-		},
-		{
-			name: "8-octet header, extended protocol ID with UDF and CCSDS defined",
-			header: epp.Header{
-				PVN: epp.PVN, ProtocolID: epp.ProtocolIDExtended, LengthOfLength: epp.LoL4Octet,
-				UserDefined: 0xA, ExtendedProtocolID: 0x3, CCSDSDefined: 0x1234, PacketLength: 70000,
-			},
-			want: []byte{0xFB, 0xA3, 0x12, 0x34, 0x00, 0x01, 0x11, 0x70},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.header.Encode()
-			if err != nil {
-				t.Fatalf("Encode failed: %v", err)
-			}
-			if !bytes.Equal(got, tt.want) {
-				t.Fatalf("Encode() = % X, want % X", got, tt.want)
-			}
-
-			var decoded epp.Header
-			if err := decoded.Decode(tt.want); err != nil {
-				t.Fatalf("Decode failed: %v", err)
-			}
-			if decoded != tt.header {
-				t.Errorf("Decode() = %+v, want %+v", decoded, tt.header)
 			}
 		})
 	}

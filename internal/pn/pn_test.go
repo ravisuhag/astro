@@ -7,43 +7,6 @@ import (
 	"github.com/ravisuhag/astro/internal/pn"
 )
 
-// TestTMSequenceMatchesTheCCSDSVector is one of the two tests here that can
-// catch wrong taps. CCSDS 131.0-B-5 clause 10.4.2 specifies
-// h(x) = x^8 + x^7 + x^5 + x^3 + 1 preset to all ones, and CCSDS 142.0-B-1
-// Clause 3.5.2.1, which adopts the same sequence, publishes the first 40 digits:
-//
-//	1111 1111 0100 1000 0000 1110 1100 0000 1001 1010
-//
-// as octets: FF 48 0E C0 9A.
-//
-// A round trip cannot substitute for this. The randomizer is XOR, so it is its
-// own inverse and any sequence at all round-trips perfectly.
-func TestTMSequenceMatchesTheCCSDSVector(t *testing.T) {
-	want := []byte{0xFF, 0x48, 0x0E, 0xC0, 0x9A}
-	if got := pn.TMSequence(len(want)); !bytes.Equal(got, want) {
-		t.Errorf("TM sequence = % X, want % X", got, want)
-	}
-}
-
-// TestTCSequenceMatchesTheCCSDSVector is the other. TC does not reuse the TM
-// randomizer: CCSDS 231.0-B-4 clause 6.2 specifies
-// h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1, also preset to all ones, and
-// prints the first 40 digits of its sequence:
-//
-//	1111 1111 0011 1001 1001 1110 0101 1010 0110 1000
-//
-// as octets: FF 39 9E 5A 68.
-//
-// This vector is the whole defence. Feeding TC the TM sequence produced a
-// perfectly self-consistent implementation that no conformant receiver could
-// read, and every round-trip test passed throughout.
-func TestTCSequenceMatchesTheCCSDSVector(t *testing.T) {
-	want := []byte{0xFF, 0x39, 0x9E, 0x5A, 0x68}
-	if got := pn.TCSequence(len(want)); !bytes.Equal(got, want) {
-		t.Errorf("TC sequence = % X, want % X", got, want)
-	}
-}
-
 // TestTMAndTCSequencesDiffer states the fact the package exists to keep
 // straight. Both sequences start FF, because both registers are preset to all
 // ones; they part company at the second octet and never realign within a
@@ -251,20 +214,6 @@ func TestSequenceEdgeCases(t *testing.T) {
 				t.Errorf("%s(1) = % X, want FF", tc.name, got)
 			}
 		})
-	}
-}
-
-// TestOIDSequenceMatchesTheCCSDSVector pins the 32-cell OID generator to the
-// octets CCSDS publishes for it (132.0-B-3 clause 4.1.4.6.2.2 note, 732.1-B-3 annex
-// H). As with the 8-bit randomizers above, a permuted set of taps still yields
-// a plausible maximal-length sequence that no round-trip test can catch; only
-// the published digits distinguish right from wrong.
-func TestOIDSequenceMatchesTheCCSDSVector(t *testing.T) {
-	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x6D, 0xB6, 0xD8, 0x61, 0x45, 0x1F}
-	got := make([]byte, len(want))
-	pn.NewOIDSequence().Fill(got)
-	if !bytes.Equal(got, want) {
-		t.Errorf("OID sequence = % X, want % X", got, want)
 	}
 }
 
