@@ -42,6 +42,9 @@ vectors/
 ├── spp/
 │   ├── header.json
 │   └── packet.json
+├── cop/
+│   ├── clcw.json      encode, decode and reject
+│   └── farm1.json     sequence vectors against a state machine
 └── ldc/
     └── corpus/        published CCSDS files, referenced not transcribed
 ```
@@ -60,7 +63,7 @@ One file per concern, named after the structure it covers.
     {
       "name": "frame-with-fecf",
       "clause": "4.1",
-      "note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea",
+      "note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea.",
       "fields": { "scid": 171, "vcid": 42, "data": "deadbeef" },
       "want": "6aea...9e2c"
     }
@@ -83,9 +86,11 @@ decoder must expose, so "unlisted" is always a choice, never an unknown.
 construction). An APID of 2048 does not fit an 11-bit field in any
 language, so construction rules belong here too.
 
-**`sequence`** — a scripted run against a state machine. Defined by the
-schema; no file carries one yet. Time inside a sequence is an explicit
-step, never a real clock.
+**`sequence`** — a scripted run against a state machine: a starting
+state, then steps that each name a call and assert the octets it emits,
+the state it leaves behind, or the error it must raise. The only kind
+that can pin ordering. Time is an explicit step, never a real clock.
+`cop/farm1.json` is the worked example.
 
 A vector that is exactly invertible appears in both `encode` and `decode`
 rather than getting a third kind.
@@ -116,8 +121,8 @@ guess which values travel on the wire.
 implementation.**
 
 Each vector carries its derivation in a required `note`: the field
-arithmetic, the polynomial, the clause that fixes the value. A vector
-without one does not load.
+arithmetic, the polynomial, the clause that fixes the value. A note that
+is missing, or that stops mid-sentence, makes the file invalid.
 
 Writing the derivation down is what makes the vector evidence rather than
 a record. A value copied from an implementation's output only proves the
@@ -134,21 +139,32 @@ corpus, it carries `"source": "unverified"` and no `clause`. That marks it
 honestly: an implementation agreeing with it has matched this corpus, not
 the standard. `COVERAGE.md` lists them.
 
-## Running them
+## Validating the corpus
 
-```bash
-make vectors
+[`schema.json`](schema.json) describes the file format, and any JSON
+Schema validator checks a file against it:
+
+```
+check-jsonschema --schemafile schema.json */*.json
 ```
 
-validates every fixture against the schema rules: a required derivation,
-lowercase hex, an error name from the vocabulary, unique vector names, and
-that every referenced corpus file exists.
+Four rules the schema cannot express, which a consumer's own loader
+should enforce:
+
+- vector names are unique across every kind within a file;
+- every path in `corpus` resolves to a file that exists;
+- a `reject` names an error from the vocabulary and carries exactly one
+  of `input` or `fields`;
+- `buffer_too_small` appears only on a vector that declares the
+  `encode_into` capability.
+
+[`CONTRACT.md`](CONTRACT.md) states each of these in full.
 
 ## Adding a vector
 
 1. Find the clause that defines the layout. Open it.
 2. Derive the octets by hand. Write the arithmetic into `note`.
 3. Add the entry and cite the clause.
-4. Run `make vectors`.
+4. Validate the file.
 
 If steps 1 and 2 are not possible, mark it unverified rather than guessing.

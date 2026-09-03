@@ -1,6 +1,6 @@
 # Consumer contract
 
-What an implementation must do to consume `vectors/`, in enough detail
+What an implementation must do to consume ``, in enough detail
 that it needs nothing else. If a question about these fixtures can only be
 answered by reading some implementation's source, this document is
 incomplete and that is a bug in it.
@@ -32,17 +32,33 @@ are transmitted left to right as written. This is what every CCSDS wire
 diagram assumes and no vector departs from it. A field spanning a byte
 boundary continues into the next octet's high bits.
 
+**Bit numbering follows CCSDS: bit 0 is the most significant bit.** So
+"bit 0" means mask `0x80`, and bit 7 means `0x01` — the opposite of the
+numbering most languages use for shifts. Wherever a clause reference in
+this document names a bit position, it is this numbering.
+
 **Scalar results** are octet strings too, at the value's natural width,
 big-endian. A CRC-16 of 0x29b1 is `"29b1"`; a CRC-32 is eight hex
 digits. There is no separate numeric-result form.
 
 **Integers** are JSON numbers up to 2^53. Anything wider is a decimal
-string, because a JSON number cannot hold it without loss — `pkg/sdnv`
-has a 2^64-1 case. A consumer should accept both forms for any integer
+string, because a JSON number cannot hold it without loss —
+`sdnv/sdnv.json` has a 2^64-1 case. A consumer should accept both forms for any integer
 field rather than switching on width.
 
 **Field names** are `snake_case` and name the field the standard names,
 not any implementation's identifier.
+
+**Citations are two parts.** `clause` is a clause number or annex letter
+and nothing else — `"4.1.3.4.2.2"`, `"F"`. The document it belongs to is
+the file's `standard`, unless the vector carries its own `doc`:
+
+```json
+{ "clause": "8.3.2", "doc": "ITU-T X.690" }
+```
+
+Keeping the document out of the clause string is what lets a consumer
+check a citation mechanically instead of reading it.
 
 **A hex string of only decimal digits is ambiguous, and the field
 dictionary is what resolves it.** `"112233"` is valid hex *and* a valid
@@ -63,6 +79,38 @@ octet is exchanged. Keeping it separate means a consumer never has to
 guess which values are transmitted and which are prior agreement.
 
 A vector with no `config` needs no agreement beyond the standard.
+
+**A key absent from a `config` that is present means the same as absent
+config: the feature is off.** No error control field, no randomization,
+no insert zone, zero spare octets. Only a key that appears turns
+something on, so a consumer never has to distinguish "not mentioned"
+from "mentioned as false".
+
+## Omitted fields
+
+On `encode` and on a `reject` that carries `fields`, **a field the vector
+does not list takes the default below**. Vectors leave fields out so that
+each one isolates the field it names; the rest still have to come from
+somewhere, and it must be this table rather than any implementation's
+constructor.
+
+**The default is zero**, with four exceptions:
+
+| package | field | default | why |
+|---|---|---|---|
+| `spp` | `sequence_flags` | 3 | `'11'`, unsegmented — a standalone packet is not a segment |
+| `epp` | `pvn` | 7 | `'111'`, the only value CCSDS 133.1-B-3 defines |
+| `tmdl` | `segment_length_id` | 3 | `'11'`, required whenever the sync flag is clear (4.1.2.7.5) |
+| `cop` | `cop_in_effect` | 1 | `'01'`, COP-1 |
+
+Each exception is a value the standard fixes or all but fixes, which is
+why leaving it out reads as natural. That is exactly what makes an
+unwritten default dangerous: `spp/packet.json` omits
+`sequence_flags` and still expects `c0` on the wire, and a consumer that
+assumed zero would produce `00` and blame its own encoder.
+
+For `decode`, the vector lists what it pins and nothing is defaulted —
+see below.
 
 ## Match semantics
 
@@ -85,13 +133,44 @@ author's choice, never an unknown.
 
 A `reject` with `input` is bad octets refused at decode. A `reject` with
 `fields` is bad values refused at construction — an APID of 2048 does not
-fit an 11-bit field in any language, so that rule is the standard's, not
-Go's, and it belongs in the corpus.
+fit an 11-bit field in any language, so that rule is the standard's
+rather than any implementation's, and it belongs in the corpus.
 
-`sequence` is defined by the schema. No file carries one yet. Time inside a sequence is a step (`{"call": "tick"}`),
-never a real clock. An implementation that reads a real clock inside a
-protocol layer cannot be tested by a sequence vector at all, so keeping
-time injectable is a precondition for this form.
+A `reject` with `input` may also carry **`at_octet`**: the offset of the
+first octet a conforming decoder cannot get past. Where it is present,
+refusing earlier or later is refusing for the wrong reason, and a
+consumer that can report a failure offset should check it. It is
+optional because for many malformed inputs more than one octet could
+fairly be blamed; it appears only where the layout fixes the answer.
+
+### `sequence`
+
+A `sequence` scripts a run against a state machine, and it is the only
+kind that can assert anything about ordering or time.
+
+`init` sets the starting state. Each entry in `steps` names a `call`,
+optionally with `fields` as its input, and asserts any of:
+
+| key | asserts |
+|---|---|
+| `want` | the octets the step emits |
+| `want_state` | state that must hold after the step, compared like `fields`: exactly the keys listed, nothing else |
+| `error` | the step must fail, with this error |
+
+Two rules make the form usable:
+
+**Call names come from the standard, not from an API.** `receive_ad`,
+`receive_unlock`, `report` are the events the state table names. A call
+name a standard does not use is one implementation's design leaking into
+the corpus.
+
+**Time is a step, never a clock** — `{"call": "tick"}` advances it. An
+implementation that reads a real clock inside a protocol layer cannot be
+tested by a sequence vector at all, so injectable time is a precondition
+for this form rather than a nicety.
+
+Every state a `want_state` may name is in the state dictionary for its
+package, the same way `fields` has a field dictionary.
 
 ## Error vocabulary
 
@@ -148,7 +227,7 @@ octet string, `uint` a number or decimal string, `bool` a JSON boolean.
 
 ### `aos` — CCSDS 732.0-B-4
 
-`vectors/aos/frame.json`, `vectors/aos/mpdu.json`
+`aos/frame.json`, `aos/mpdu.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -171,7 +250,7 @@ A decoder must expose every primary header field above plus `data`, and
 
 ### `spp` — CCSDS 133.0-B-2
 
-`vectors/spp/header.json`, `vectors/spp/packet.json`
+`spp/header.json`, `spp/packet.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -193,7 +272,7 @@ primary header and everything in the data field before the CRC itself.
 
 ### `epp` — CCSDS 133.1-B-3
 
-`vectors/epp/header.json`
+`epp/header.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -216,7 +295,7 @@ data. Both have the high bit set and are easy to confuse.
 
 ### `tmdl` — CCSDS 132.0-B-3
 
-`vectors/tmdl/header.json`
+`tmdl/header.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -242,7 +321,7 @@ means only idle data.
 
 ### `usdl` — CCSDS 732.1-B-3
 
-`vectors/usdl/frame.json`
+`usdl/frame.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -277,10 +356,10 @@ after the TFDF header octet.
 
 ### `crc`
 
-`vectors/crc/crc16.json` — CRC-16-CCITT, generator 0x1021, preset all
+`crc/crc16.json` — CRC-16-CCITT, generator 0x1021, preset all
 ones, MSB first, no reflection, no final inversion.
 
-`vectors/crc/crc32.json` — Proximity-1 CRC-32, generator 0x00a00805,
+`crc/crc32.json` — Proximity-1 CRC-32, generator 0x00a00805,
 **zero** preset, MSB first, no reflection, no final inversion.
 
 | field | type | meaning |
@@ -292,7 +371,7 @@ CRC-32.
 
 ### `sdnv` — RFC 5050 clause 4.1
 
-`vectors/sdnv/sdnv.json`
+`sdnv/sdnv.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -308,7 +387,7 @@ Maximum encoding is 10 octets for a 64-bit value. Longer than that is
 
 ### `pn` — CCSDS 131.0-B-5, 231.0-B-4, 132.0-B-3
 
-`vectors/pn/sequences.json`
+`pn/sequences.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -320,17 +399,38 @@ interchangeable:
 
 - `tm` — h(x) = x^8 + x^7 + x^5 + x^3 + 1
 - `tc` — h(x) = x^8 + x^6 + x^4 + x^3 + x^2 + x + 1
-- `oid` — the 32-cell generator for Only Idle Data frames
+- `oid` — h(x) = x^32 + x^31 + x^30 + x^10 + 1, the 32-cell generator for
+  Only Idle Data frames
+
+**The polynomial alone does not determine the octets.** Which end of the
+register outputs, and which way it shifts, come from the figure each
+standard draws, and every orientation still produces a maximal-length
+sequence — so a wrong one looks perfectly healthy. All three generators
+here use the same arrangement:
+
+> Preset every cell to one. Each step, output the least significant
+> cell, then shift right, feeding back the XOR of the cells at the
+> exponents of h(x) *below* the leading term. For `tm` that is cells 7,
+> 5, 3 and 0.
+
+Reading the taps the other way round gives `ff1aaf6652` where `tm` must
+give `ff480ec09a`. Both are maximal-length, both round-trip, and only
+the pinned octets tell them apart.
 
 Both `tm` and `tc` open with `ff` because both registers preset to all
-ones; they diverge at the second octet. Astro once shipped TC using the
-TM taps, and every round-trip test passed, because the randomizer is XOR
-and therefore its own inverse. **A round trip cannot validate this
-package.** Only these published octets can.
+ones; they diverge at the second octet. An implementation that reaches
+for the TM taps when it means TC passes every round-trip test it has,
+because the randomizer is XOR and therefore its own inverse. **A round
+trip cannot validate this package.** Only these published octets can.
+
+`ff 48 0e c0 9a` is how the published CCSDS randomizer sequence opens.
+That is the check worth making: the octets are printed in the standard,
+so they settle the arrangement above without reference to any
+implementation.
 
 ### `cmac` — RFC 4493, NIST SP 800-38B
 
-`vectors/cmac/aes.json`
+`cmac/aes.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -345,7 +445,7 @@ Test keys only. Never real keys.
 
 ### `tcsc` — CCSDS 231.0-B-4
 
-`vectors/tcsc/bch.json`
+`tcsc/bch.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -361,7 +461,7 @@ vector in the file.
 
 ### `tmsc` — CCSDS 131.0-B-5
 
-`vectors/tmsc/cadu.json`
+`tmsc/cadu.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -373,12 +473,12 @@ Config: `randomize` (bool).
 A CADU is the 4-octet attached sync marker `1acffc1d` followed by the
 optionally pseudo-randomized frame. **The marker is never randomized** —
 a receiver must find it before it can derandomize anything. The
-randomizer XORs against the TM sequence in `vectors/pn/sequences.json`,
+randomizer XORs against the TM sequence in `pn/sequences.json`,
 and because XOR is its own inverse a round trip proves nothing here.
 
 ### `pxsc` — CCSDS 211.2-B-3, code per CCSDS 131.0
 
-`vectors/pxsc/convolutional.json`
+`pxsc/convolutional.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -393,7 +493,7 @@ distinction is checkable.
 
 ### `sdls` — CCSDS 355.0-B-2
 
-`vectors/sdls/protected-frame.json`
+`sdls/protected-frame.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -422,7 +522,7 @@ Agreement between the two is what makes these vectors evidence.
 
 ### `tcf` — CCSDS 301.0-B-4
 
-`vectors/tcf/timecode.json`
+`tcf/timecode.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -432,31 +532,35 @@ Agreement between the two is what makes these vectors evidence.
 | `day`, `day_bytes`, `milliseconds`, `submilliseconds`, `subms_bytes` | uint | CDS T-field |
 
 **Scope limit, deliberate.** These vectors pin the P-field and T-field
-*packing* from explicit field values. They do **not** go through the
-`time.Time` conversion path, because Level 1 CUC adds the TAI-UTC offset
-in effect at the given instant, and a vector derived that way would pin
-a particular leap-second table rather than the standard's layout. Treat
-leap-second handling as outside the corpus.
+*packing* from explicit field values. They do **not** start from a civil
+timestamp, because Level 1 CUC adds the TAI-UTC offset in effect at the
+given instant, and a vector derived that way would pin a particular
+leap-second table rather than the standard's layout. Treat leap-second
+handling as outside the corpus.
 
 The extension flag and the octet count cannot disagree: a set flag means
-a second P-field octet follows. Bit 0 of that second octet is reserved
-for a third octet the standard never defines, so `0x7f` is the largest
-legal extension detail and `0xff` must be refused.
+a second P-field octet follows. Bit 0 of that second octet — **bit 0 is
+the most significant bit, mask `0x80`**, per the CCSDS numbering this
+document uses throughout — is reserved for a third octet the standard
+never defines. So `0x7f` is the largest legal extension detail and `0xff`
+must be refused. Read bit 0 as the least significant bit instead and the
+largest legal value becomes `0xfe`, which is wrong by one shift and
+passes every round trip.
 
 ### `ocsc` — CCSDS 142.0-B-1
 
-`vectors/ocsc/asm.json` — the sync marker only.
+`ocsc/asm.json` — the sync marker only.
 
 Most of this package works on **bit strings**, not octet strings:
 bit-level lengths, termination digits, sequence indicators. The vector
-format cannot express those and they stay as Go tests. The marker is the
-same `1acffc1d` as TM, and a Go test cross-checks the two vector files
-against each other so a drift in either is caught here rather than by a
-receiver.
+format cannot express those, so they are out of scope here. The marker
+is the same `1acffc1d` as TM, in `tmsc/cadu.json`; a consumer that
+implements both should check the two agree, so a drift in either is
+caught before a receiver finds it.
 
-### `cop` — CCSDS 232.0-B-4
+### `cop` — CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1)
 
-`vectors/cop/clcw.json`
+`cop/clcw.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -478,15 +582,82 @@ must refuse to invent an operational control field when a channel
 declares one but no source is supplied — a receiver cannot tell invented
 zeros from a real report.
 
-**Two range rules are not yet asserted.** An out-of-range VCID or FARM-B
-counter must be refused rather than truncated, because a truncated value
-produces a control word reporting on a different virtual channel than
-intended. [`COVERAGE.md`](COVERAGE.md) carries the vectors that would pin
-this.
+**Out-of-range values are refused, not truncated.** A truncated VCID or
+FARM-B counter produces a control word reporting on a different virtual
+channel than intended, so both are pinned as reject vectors, alongside
+the status field and COP-in-effect.
+
+#### FOP-1 retransmission rules — `cop/fop1.json`
+
+`sequence` vectors for the sending half, CCSDS 232.1-B-2 clause 5.1.10.
+These are the vectors that exercise time.
+
+| state | type | standard's variable |
+|---|---|---|
+| `state` | string | `active` or `initial` — S1 and S6 of clause 5.1.2 |
+| `v_s` | uint | Transmitter_Frame_Sequence_Number V(S), clause 5.1.3 |
+| `transmission_count` | uint | clause 5.1.10.4 |
+| `sent_queue_length` | uint | frames on the Sent_Queue, clause 5.1.7 |
+| `alert` | bool | an Alert notification was raised |
+| `suspended` | bool | the AD service was suspended, clause 5.1.11 |
+
+| call | fields | meaning |
+|---|---|---|
+| `tick` | — | the timer expires, clause 5.1.10.5 b) |
+| `receive_clcw` | `report_value` | a CLCW arrives carrying V(R) |
+
+Config: `transmission_limit` (clause 5.1.10.2), `timeout_type`
+(clause 5.1.10.3) and `vcid`.
+
+**Scope limit, deliberate.** The full FOP-1 state table 5-1 is six states
+against about twenty-five events, and it is not covered. What clause
+5.1.10 states in prose is covered. The distinction matters: prose can be
+quoted, and a table cell cannot be read out of a flattened rendering
+without guessing which column it belongs to.
+
+#### FARM-1 state machine — `cop/farm1.json`
+
+`sequence` vectors run the receiving half of COP-1, CCSDS 232.1-B-2
+clause 6. The CLCW octets they expect follow the layout above; what
+these add is *when* the machine reports which one.
+
+State, named in `init` and in `want_state`:
+
+| state | type | standard's variable |
+|---|---|---|
+| `state` | string | `open`, `wait` or `lockout` — S1, S2, S3 of clause 6.1.2 |
+| `v_r` | uint | Receiver_Frame_Sequence_Number V(R), 8 bits, clause 6.1.7 |
+| `lockout_flag` | bool | set exactly while the state is `lockout`, clause 6.1.3 |
+| `wait_flag` | bool | set exactly while the state is `wait`, clause 6.1.4 |
+| `retransmit_flag` | bool | clause 6.1.5 |
+| `farm_b_counter` | uint | clause 6.1.6; the CLCW carries only its two low bits |
+
+Calls, one per event of table 6-1:
+
+| call | fields | event |
+|---|---|---|
+| `receive_ad` | `n_s` | E1, E3, E4, E5 — the branch depends on where N(S) falls |
+| `receive_bd` | — | E6 |
+| `receive_unlock` | — | E7 |
+| `receive_set_v_r` | `v_r_star` | E8 |
+| `buffer_release` | — | E10 |
+| `report` | — | E11; `want` is the CLCW octets |
+
+Config: `sliding_window_width` (W) and `vcid`. Clause 6.1.8.3 fixes
+PW = NW = W/2, so W is the only width a vector states.
+
+**All sequence arithmetic is modulo 256** — the note to clause 6.2.1.
+V(R) advancing from 255 goes to 0, and the window comparisons wrap with
+it.
+
+**Wait state is not exercised.** Reaching it needs a buffer-availability
+signal, and clause 6.3.2.3 makes that scheme optional for an
+implementation. A vector requiring it would pin a choice rather than the
+standard, so `wait_flag` is defined here and left untested.
 
 ### `cfdp` — CCSDS 727.0-B-5
 
-`vectors/cfdp/wire.json`
+`cfdp/wire.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -510,7 +681,7 @@ TLV as an LV.
 
 ### `ltp` — CCSDS 734.1-B-1 / RFC 5326
 
-`vectors/ltp/header.json`
+`ltp/header.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -526,7 +697,7 @@ SDNV octets, which shifts everything after it.
 
 ### `pus` — ECSS-E-ST-70-41C
 
-`vectors/pus/tc-header.json`
+`pus/tc-header.json`
 
 | field | type | standard's field |
 |---|---|---|
@@ -545,7 +716,7 @@ refused rather than misparsed.
 
 ### `sle` — ITU-T X.690 and CCSDS 913.1-B-2
 
-`vectors/sle/ber.json`
+`sle/ber.json`
 
 | field | type | meaning |
 |---|---|---|
@@ -566,12 +737,13 @@ zero** or the 0x80 would read as −128; −1 is one octet but 255 is two.
 A TML **context** message body is fixed at 12 octets (clause 3.3.2.2.4),
 opening with `ISP1`; a **heartbeat** carries no body at all. Both are reject vectors.
 
-The operation encodings are absent: they need their own vectors once the
-GET-PARAMETER structured values are typed (see ROADMAP).
+The operation encodings are absent: they need their own vectors, and the
+blocker is that several GET-PARAMETER alternatives have no published
+values to test a typed shape against.
 
 ### `bp` — CCSDS 734.2-B-1 / RFC 5050
 
-`vectors/bp/admin-record.json` — deliberately narrow.
+`bp/admin-record.json` — deliberately narrow.
 
 | field | type | meaning |
 |---|---|---|
@@ -579,10 +751,26 @@ GET-PARAMETER structured values are typed (see ROADMAP).
 | `flags` | uint | low nibble of octet 0 |
 
 Most of BP's encoding is SDNVs, pinned more thoroughly in
-`vectors/sdnv/sdnv.json`; duplicating them here would add no coverage and
+`sdnv/sdnv.json`; duplicating them here would add no coverage and
 a second place to drift. Endpoint identifiers are URI strings, not octet
 fields. No decode vectors: the real decoder needs a complete record body
 whose layout depends on the type, which is beyond what this file scopes.
+
+## Constants shared across files
+
+Some values appear in more than one package because more than one
+standard uses them. They are written out in each place rather than
+cross-referenced, so each file stands alone — but they must agree, and a
+consumer should check that they do. Drift here is a real defect: it
+means one of the two packages has silently stopped interoperating.
+
+| Value | Appears in | Why it is shared |
+|---|---|---|
+| `1acffc1d` | `tmsc/cadu.json:attached-sync-marker`, `ocsc/asm.json:attached-sync-marker` | CCSDS 142.0-B-1 adopts the TM attached sync marker of CCSDS 131.0-B-5 unchanged |
+| `ffffffff6db6d861451f` | `pn/sequences.json:oid-sequence-first-ten-octets` | the first ten octets of the OID fill sequence, which `usdl/frame.json:oid-pn-fill-sequence-twenty-octets` extends to twenty |
+
+Checking these is two comparisons and it catches an edit that fixes one
+file and forgets the other.
 
 ## Deliberate absences
 
