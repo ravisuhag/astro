@@ -375,7 +375,13 @@ func TestNewTMTransferFrame_SecondaryHeaderRoundTrip(t *testing.T) {
 
 func TestFrameEncoding(t *testing.T) {
 	data := []byte("Telemetry Data")
-	frame, _ := tmdl.NewTMTransferFrame(1285, 3, data, nil, nil)
+	// 1285 does not fit the 10-bit spacecraft identifier; 261 is the value it
+	// used to be silently truncated to, and is a valid identifier in its own
+	// right. The refusal is asserted by TestNewTMTransferFrameRejectsAnOutOfRangeSCID.
+	frame, err := tmdl.NewTMTransferFrame(261, 3, data, nil, nil)
+	if err != nil {
+		t.Fatalf("NewTMTransferFrame failed: %v", err)
+	}
 	encodedFrame, err := frame.Encode()
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
@@ -1006,5 +1012,23 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	if !bytes.Equal(reencoded, patched) {
 		t.Errorf("Re-encoded frame differs from the received one:\n got % X\nwant % X",
 			reencoded, patched)
+	}
+}
+
+// TestNewTMTransferFrameRejectsAnOutOfRangeSCID pins the refusal rather than
+// the truncation. The spacecraft identifier is 10 bits, so 1285 has no
+// representation; masking it to 261 would address the frame to a different
+// spacecraft than the caller named, with nothing on the wire to show it.
+func TestNewTMTransferFrameRejectsAnOutOfRangeSCID(t *testing.T) {
+	if _, err := tmdl.NewTMTransferFrame(1285, 3, []byte("x"), nil, nil); err == nil {
+		t.Error("NewTMTransferFrame accepted a spacecraft identifier above the 10-bit maximum")
+	}
+}
+
+// TestNewTMTransferFrameRejectsAnOutOfRangeVCID is the same rule for the
+// 3-bit virtual channel identifier.
+func TestNewTMTransferFrameRejectsAnOutOfRangeVCID(t *testing.T) {
+	if _, err := tmdl.NewTMTransferFrame(261, 8, []byte("x"), nil, nil); err == nil {
+		t.Error("NewTMTransferFrame accepted a virtual channel identifier above the 3-bit maximum")
 	}
 }
