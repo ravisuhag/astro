@@ -1,4 +1,4 @@
-.PHONY: build test race lint vet cover bench fuzz-smoke
+.PHONY: build test race lint vet cover bench fuzz-smoke vectors
 
 build:
 	go build ./...
@@ -15,6 +15,15 @@ cover:
 
 vet:
 	go vet ./...
+
+# The wire test vector corpus under vectors/. This runs the strict loader
+# over every fixture, so a vector that breaks the format, names an error
+# outside the vocabulary, or omits its derivation fails here rather than
+# in whichever package happens to load it. It also prints how many
+# vectors are marked go-behaviour-unverified, which is a number that
+# should go down over time, and how many the Go harness had to skip.
+vectors:
+	go test ./internal/vectors/ -run 'TestEveryCommittedVectorLoads|TestLoaderRejects|TestLoaderAccepts' -v
 
 # The paths a ground station runs at frame rate: packets, frames, the coding
 # layers underneath them, and the compressors.
