@@ -5,107 +5,205 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ravisuhag/astro/internal/vectors"
 	"github.com/ravisuhag/astro/pkg/aos"
 	"github.com/ravisuhag/astro/pkg/spp"
 )
 
-// Golden wire vectors, hand-computed from the CCSDS 732.0-B-4 field
-// layouts.
+// The wire vectors for this package live in vectors/aos/. They are the
+// reference; this file only wires them to the Go API. See
+// vectors/README.md for the format and the honesty rule behind it.
 //
-// Header: TFVN=01, SCID=0xAB, VCID=42, VCFC=0x000102, replay=0,
-// VCFC usage=1, cycle=3.
-//
-//	byte 0 = 01<<6 | 0xAB>>2        = 0x6A
-//	byte 1 = (0xAB&0x3)<<6 | 42     = 0xEA
-//	bytes 2-4 = 00 01 02
-//	byte 5 = 0x40 | 0x03            = 0x43
-//
-// FECF is CRC-16-CCITT (poly 0x1021, init 0xFFFF) over the whole frame,
-// computed with an independent implementation.
-func TestGoldenVector_FrameWithFECF(t *testing.T) {
-	want, _ := hex.DecodeString("6aea00010243deadbeef9e2c")
+// What stays here as Go tests: the stateful services and the independent
+// re-derivations. A vector cannot express a multiplexing service filling
+// a partial frame, and the FHEC corruption test needs an independent CRC
+// to re-seal the frame it corrupts.
 
-	frame, err := aos.NewTransferFrame(0xAB, 42, []byte{0xDE, 0xAD, 0xBE, 0xEF},
-		aos.WithVCFrameCount(0x000102),
-		aos.WithVCFCUsage(3),
-		aos.WithFECF(),
-	)
+// frameConfig turns a vector's config object into a ChannelConfig.
+func frameConfig(config vectors.Fields) (aos.ChannelConfig, error) {
+	var c aos.ChannelConfig
+	fhec, err := config.BoolOr("has_fhec", false)
 	if err != nil {
-		t.Fatalf("NewTransferFrame() error = %v", err)
+		return c, err
 	}
-	got, err := frame.Encode()
+	fecf, err := config.BoolOr("has_fecf", false)
 	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
+		return c, err
 	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("wire mismatch:\n got %x\nwant %x", got, want)
+	ocf, err := config.BoolOr("has_ocf", false)
+	if err != nil {
+		return c, err
+	}
+	izl, err := config.UintOr("insert_zone_len", 0)
+	if err != nil {
+		return c, err
+	}
+	c.HasFHEC, c.HasFECF, c.HasOCF, c.InsertZoneLen = fhec, fecf, ocf, int(izl)
+	return c, nil
+}
+
+// buildFrame constructs a TransferFrame from a vector's fields and the
+// channel agreement in its config.
+func buildFrame(f, config vectors.Fields) (*aos.TransferFrame, error) {
+	scid, err := f.Uint("scid")
+	if err != nil {
+		return nil, err
+	}
+	vcid, err := f.Uint("vcid")
+	if err != nil {
+		return nil, err
+	}
+	data, err := f.HexOr("data", nil)
+	if err != nil {
+		return nil, err
 	}
 
-	decoded, err := aos.DecodeTransferFrame(want, 0, false, true)
-	if err != nil {
-		t.Fatalf("DecodeTransferFrame() error = %v", err)
+	var opts []aos.FrameOption
+	if f.Has("vc_frame_count") {
+		n, err := f.Uint("vc_frame_count")
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, aos.WithVCFrameCount(uint32(n)))
 	}
-	if decoded.Header.SCID != 0xAB || decoded.Header.VCID != 42 ||
-		decoded.Header.VCFrameCount != 0x000102 ||
-		!decoded.Header.VCFCUsageFlag || decoded.Header.VCFrameCountCycle != 3 {
-		t.Errorf("decoded header mismatch: %+v", decoded.Header)
+	if f.Has("vc_frame_count_cycle") {
+		// WithVCFCUsage sets the usage flag and the cycle together, which
+		// is why vcfc_usage_flag is not a separate option here.
+		cycle, err := f.Uint("vc_frame_count_cycle")
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, aos.WithVCFCUsage(uint8(cycle)))
+	}
+	if ok, err := f.BoolOr("replay_flag", false); err != nil {
+		return nil, err
+	} else if ok {
+		opts = append(opts, aos.WithReplayFlag())
+	}
+	// FECF and FHEC presence is channel agreement, so it arrives in
+	// config rather than fields.
+	if on, err := config.BoolOr("has_fecf", false); err != nil {
+		return nil, err
+	} else if on {
+		opts = append(opts, aos.WithFECF())
+	}
+	if on, err := config.BoolOr("has_fhec", false); err != nil {
+		return nil, err
+	} else if on {
+		opts = append(opts, aos.WithFHEC())
+	}
+	if ocf, err := config.HexOr("ocf", nil); err != nil {
+		return nil, err
+	} else if ocf != nil {
+		opts = append(opts, aos.WithOCF(ocf))
+	}
+
+	return aos.NewTransferFrame(uint8(scid), uint8(vcid), data, opts...)
+}
+
+func TestFrameVectors(t *testing.T) {
+	vectors.RunFile(t, "aos/frame.json", vectors.Impl{
+		EncodeFn: func(f, config vectors.Fields) ([]byte, error) {
+			frame, err := buildFrame(f, config)
+			if err != nil {
+				return nil, err
+			}
+			return frame.Encode()
+		},
+
+		ConstructFn: func(f, config vectors.Fields) error {
+			frame, err := buildFrame(f, config)
+			if err != nil {
+				return err
+			}
+			// Range rules are enforced on the way out, so a reject has to
+			// reach Encode rather than stopping at the constructor.
+			_, err = frame.Encode()
+			return err
+		},
+
+		DecodeFn: func(input []byte, config vectors.Fields) (vectors.Fields, error) {
+			c, err := frameConfig(config)
+			if err != nil {
+				return nil, err
+			}
+			// The fhec-of-primary-header vector pins ComputeFHEC on its
+			// own, without a surrounding frame.
+			if len(input) == aos.PrimaryHeaderSize && !c.HasFECF {
+				fhec, err := aos.ComputeFHEC(input)
+				if err != nil {
+					return nil, err
+				}
+				return vectors.Fields{"fhec": fhec}, nil
+			}
+
+			frame, err := aos.DecodeFrame(input, c)
+			if err != nil {
+				return nil, err
+			}
+			h := frame.Header
+			return vectors.Fields{
+				"tfvn":                 h.TFVN,
+				"scid":                 h.SCID,
+				"vcid":                 h.VCID,
+				"vc_frame_count":       h.VCFrameCount,
+				"replay_flag":          h.ReplayFlag,
+				"vcfc_usage_flag":      h.VCFCUsageFlag,
+				"vc_frame_count_cycle": h.VCFrameCountCycle,
+				"fhec":                 frame.FHEC,
+				"data":                 frame.DataField,
+			}, nil
+		},
+	})
+}
+
+func TestMPDUVectors(t *testing.T) {
+	vectors.RunFile(t, "aos/mpdu.json", vectors.Impl{
+		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {
+			fhp, err := f.Uint("fhp")
+			if err != nil {
+				return nil, err
+			}
+			data, err := f.HexOr("data", nil)
+			if err != nil {
+				return nil, err
+			}
+			return aos.PackMPDUDataField(uint16(fhp), data)
+		},
+	})
+}
+
+// TestMPDUSpecialFHPConstants keeps the named constants pinned. The
+// vectors above prove the encoding; this proves the package exports the
+// right names for the two special values (clause 4.1.4.2.3.4-5).
+func TestMPDUSpecialFHPConstants(t *testing.T) {
+	if aos.FHPNoPacketStart != 0x07FF {
+		t.Errorf("FHPNoPacketStart = 0x%04X, want 0x07FF ('all ones')", aos.FHPNoPacketStart)
+	}
+	if aos.FHPAllIdle != 0x07FE {
+		t.Errorf("FHPAllIdle = 0x%04X, want 0x07FE ('all ones minus one')", aos.FHPAllIdle)
 	}
 }
 
-// The FHEC check symbols for header 6A EA 00 01 02 43 were computed with
-// an independent GF(2^4) RS(10,6) implementation (field poly x^4+x+1,
-// generator roots α^6..α^9): info symbols [6,10,14,10,4,3] give parity
-// [12,14,8,14] = 0xCE8E. The FECF then covers the FHEC octets too.
-func TestGoldenVector_FrameWithFHEC(t *testing.T) {
-	hdr, _ := hex.DecodeString("6aea00010243")
-	fhec, err := aos.ComputeFHEC(hdr)
-	if err != nil {
-		t.Fatalf("ComputeFHEC() error = %v", err)
-	}
-	if hex.EncodeToString(fhec) != "ce8e" {
-		t.Fatalf("FHEC = %x, want ce8e", fhec)
-	}
-
-	want, _ := hex.DecodeString("6aea00010243ce8edeadbeef3934")
-	frame, err := aos.NewTransferFrame(0xAB, 42, []byte{0xDE, 0xAD, 0xBE, 0xEF},
-		aos.WithVCFrameCount(0x000102),
-		aos.WithVCFCUsage(3),
-		aos.WithFHEC(),
-		aos.WithFECF(),
-	)
-	if err != nil {
-		t.Fatalf("NewTransferFrame() error = %v", err)
-	}
-	got, err := frame.Encode()
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("wire mismatch:\n got %x\nwant %x", got, want)
-	}
-
+// TestFHECDetectsHeaderCorruption is not a vector: it corrupts a frame and
+// re-seals the FECF with an independent CRC, so only the FHEC can trip.
+// Expressing that needs a computation, not a fixture.
+func TestFHECDetectsHeaderCorruption(t *testing.T) {
+	good, _ := hex.DecodeString("6aea00010243ce8edeadbeef3934")
 	config := aos.ChannelConfig{HasFHEC: true, HasFECF: true}
-	decoded, err := aos.DecodeFrame(want, config)
-	if err != nil {
-		t.Fatalf("DecodeFrame() error = %v", err)
-	}
-	if !bytes.Equal(decoded.FHEC, fhec) {
-		t.Errorf("decoded FHEC = %x, want %x", decoded.FHEC, fhec)
-	}
-	if !bytes.Equal(decoded.DataField, []byte{0xDE, 0xAD, 0xBE, 0xEF}) {
-		t.Errorf("decoded data field = %x", decoded.DataField)
+
+	if _, err := aos.DecodeFrame(good, config); err != nil {
+		t.Fatalf("the good frame must decode: %v", err)
 	}
 
-	// A corrupted protected header octet must be caught by the FHEC.
-	// Corrupt the VCID bits and refresh the FECF so only the FHEC trips.
-	bad := append([]byte{}, want...)
-	bad[1] ^= 0x01
-	badFrame := append([]byte{}, bad[:len(bad)-2]...)
-	sum := crcCCITT(badFrame)
+	bad := append([]byte{}, good...)
+	bad[1] ^= 0x01 // flip a VCID bit inside the protected header
+	sum := crcCCITT(bad[:len(bad)-2])
 	bad[len(bad)-2] = byte(sum >> 8)
 	bad[len(bad)-1] = byte(sum)
+
 	if _, err := aos.DecodeFrame(bad, config); err != aos.ErrFHECMismatch {
-		t.Errorf("expected ErrFHECMismatch, got %v", err)
+		t.Errorf("corrupted protected header: got %v, want ErrFHECMismatch", err)
 	}
 }
 
@@ -114,7 +212,7 @@ func crcCCITT(data []byte) uint16 {
 	crc := uint16(0xFFFF)
 	for _, b := range data {
 		crc ^= uint16(b) << 8
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			if crc&0x8000 != 0 {
 				crc = crc<<1 ^ 0x1021
 			} else {
@@ -125,35 +223,9 @@ func crcCCITT(data []byte) uint16 {
 	return crc
 }
 
-// M_PDU golden vector: FHP special values sit at the top of the 11-bit
-// range (clause 4.1.4.2.3.4-5): 0x7FF = no packet starts, 0x7FE = only idle.
-func TestGoldenVector_MPDUSpecialFHPValues(t *testing.T) {
-	if aos.FHPNoPacketStart != 0x07FF {
-		t.Errorf("FHPNoPacketStart = 0x%04X, want 0x07FF ('all ones')", aos.FHPNoPacketStart)
-	}
-	if aos.FHPAllIdle != 0x07FE {
-		t.Errorf("FHPAllIdle = 0x%04X, want 0x07FE ('all ones minus one')", aos.FHPAllIdle)
-	}
-	df, err := aos.PackMPDUDataField(aos.FHPNoPacketStart, []byte{0xAA})
-	if err != nil {
-		t.Fatalf("PackMPDUDataField() error = %v", err)
-	}
-	if df[0] != 0x07 || df[1] != 0xFF {
-		t.Errorf("encoded M_PDU header = %02X %02X, want 07 FF", df[0], df[1])
-	}
-}
-
-// Signaling-field reserved spares (bits 42-43) must be zero on decode.
-func TestDecode_RejectsSignalingSpares(t *testing.T) {
-	raw, _ := hex.DecodeString("6aea00010273deadbeef") // byte 5 = 0x73: spare bit set
-	var hdr aos.PrimaryHeader
-	if err := hdr.Decode(raw); err != aos.ErrInvalidSignalingSpare {
-		t.Errorf("expected ErrInvalidSignalingSpare, got %v", err)
-	}
-}
-
 // A flushed partial M_PDU packet zone is completed with a real SPP idle
-// packet (APID 0x7FF), and the receive side discards it by APID.
+// packet (APID 0x7FF), and the receive side discards it by APID. Stateful:
+// send, flush, then read back through a fresh receiver.
 func TestMultiplexingService_FlushFillsWithIdlePacket(t *testing.T) {
 	config := aos.ChannelConfig{FrameLength: 64, HasFECF: true}
 	vc := aos.NewVirtualChannel(1, 100)

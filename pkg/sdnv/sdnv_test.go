@@ -9,44 +9,6 @@ import (
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
 
-func TestKnownVectors(t *testing.T) {
-	// The worked examples from RFC 5050 clause 4.1, which RFC 5326 clause 1.6 item 20
-	// adopts by reference.
-	tests := []struct {
-		value   uint64
-		encoded []byte
-	}{
-		{0, []byte{0x00}},
-		{1, []byte{0x01}},
-		{0x7F, []byte{0x7F}},
-		{0x80, []byte{0x81, 0x00}},
-		{0x81, []byte{0x81, 0x01}},
-		{0x4234, []byte{0x81, 0x84, 0x34}},
-		{0x7FFF, []byte{0x81, 0xFF, 0x7F}},
-	}
-
-	for _, tt := range tests {
-		got := sdnv.Encode(tt.value)
-		if !bytes.Equal(got, tt.encoded) {
-			t.Errorf("Encode(%#x) = %x, want %x", tt.value, got, tt.encoded)
-		}
-		if n := sdnv.EncodedSize(tt.value); n != len(tt.encoded) {
-			t.Errorf("EncodedSize(%#x) = %d, want %d", tt.value, n, len(tt.encoded))
-		}
-
-		v, consumed, err := sdnv.Decode(tt.encoded)
-		if err != nil {
-			t.Fatalf("Decode(%x): %v", tt.encoded, err)
-		}
-		if v != tt.value {
-			t.Errorf("Decode(%x) = %#x, want %#x", tt.encoded, v, tt.value)
-		}
-		if consumed != len(tt.encoded) {
-			t.Errorf("Decode(%x) consumed %d, want %d", tt.encoded, consumed, len(tt.encoded))
-		}
-	}
-}
-
 func TestContinuationBits(t *testing.T) {
 	// Every octet but the last must have its top bit set.
 	encoded := sdnv.Encode(0x4234)
