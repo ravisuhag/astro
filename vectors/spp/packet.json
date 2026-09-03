@@ -86,8 +86,9 @@
     {
       "name": "length-field-longer-than-the-octets-present",
       "clause": "4.1.3.5.3",
-      "note": "The length field says the data field is 0x0003+1 = 4 octets, but only two follow the header. A decoder must refuse rather than read past the buffer.",
+      "note": "The length field says the data field is 0x0003+1 = 4 octets, but only two follow the header. A decoder must refuse rather than read past the buffer. A decoder must not get past octet 8: the length field promises 4 data octets from offset 6; only 2 are present.",
       "input": "0064c0050003dead",
+      "at_octet": 8,
       "error": "truncated"
     },
     {

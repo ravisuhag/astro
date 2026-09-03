@@ -122,42 +122,46 @@
     {
       "name": "lv-value-shorter-than-its-length-octet",
       "clause": "5.4",
-      "note": "The length octet says 8 but only three value octets follow. A decoder must refuse rather than return a short value or read past the buffer.",
+      "note": "The length octet says 8 but only three value octets follow. A decoder must refuse rather than return a short value or read past the buffer. A decoder must not get past octet 4: the length octet promises 8 value octets; 3 are present.",
       "input": "08aabbcc",
-      "error": "truncated",
       "config": {
         "kind": "lv"
-      }
+      },
+      "at_octet": 4,
+      "error": "truncated"
     },
     {
       "name": "lv-length-octet-missing",
       "clause": "5.4",
-      "note": "No octets at all: not even the length is present.",
+      "note": "No octets at all: not even the length is present. A decoder must not get past octet 0: no octets at all.",
       "input": "",
-      "error": "truncated",
       "config": {
         "kind": "lv"
-      }
+      },
+      "at_octet": 0,
+      "error": "truncated"
     },
     {
       "name": "tlv-value-shorter-than-its-length-octet",
       "clause": "5.4",
-      "note": "Type 0x02 with a declared length of 4 but only two value octets present.",
+      "note": "Type 0x02 with a declared length of 4 but only two value octets present. A decoder must not get past octet 4: the length octet promises 4 value octets; 2 are present.",
       "input": "02046869",
-      "error": "truncated",
       "config": {
         "kind": "tlv"
-      }
+      },
+      "at_octet": 4,
+      "error": "truncated"
     },
     {
       "name": "tlv-length-octet-missing",
       "clause": "5.4",
-      "note": "A type octet with no length octet after it.",
+      "note": "A type octet with no length octet after it. A decoder must not get past octet 1: the type octet reads; the length octet is absent.",
       "input": "02",
-      "error": "truncated",
       "config": {
         "kind": "tlv"
-      }
+      },
+      "at_octet": 1,
+      "error": "truncated"
     }
   ]
 }

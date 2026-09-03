@@ -145,8 +145,9 @@
     {
       "name": "cuc-shorter-than-a-pfield-and-tfield",
       "clause": "3.2",
-      "note": "A CUC needs at least a P-field octet and one T-field octet.",
+      "note": "A CUC needs at least a P-field octet and one T-field octet. A decoder must not get past octet 1: the P-field reads; no T-field octet follows.",
       "input": "10",
+      "at_octet": 1,
       "error": "truncated"
     },
     {

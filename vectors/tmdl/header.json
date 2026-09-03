@@ -182,8 +182,9 @@
     {
       "name": "header-truncated-to-five-octets",
       "clause": "4.1.2",
-      "note": "The TM primary header is always exactly six octets.",
+      "note": "The TM primary header is always exactly six octets. A decoder must not get past octet 5: the primary header is 6 octets; the input stops after 5.",
       "input": "2ab0000018",
+      "at_octet": 5,
       "error": "truncated"
     },
     {

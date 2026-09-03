@@ -79,11 +79,12 @@
     {
       "name": "shorter-than-the-sync-marker",
       "clause": "9",
-      "note": "Three octets cannot hold the four-octet marker.",
+      "note": "Three octets cannot hold the four-octet marker. A decoder must not get past octet 3: the sync marker is 4 octets; the input stops after 3.",
       "config": {
         "randomize": false
       },
       "input": "1acffc",
+      "at_octet": 3,
       "error": "truncated"
     }
   ]
