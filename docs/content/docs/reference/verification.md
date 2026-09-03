@@ -18,7 +18,7 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 | | |
 |---|---|
 | Test functions | 1559 |
-| Wire test vectors | 235, across 21 packages |
+| Wire test vectors | 246, across 23 packages |
 | Fuzz targets | 58 |
 | Benchmarks | 33 |
 | Numbered PICS items | 500 |
@@ -36,7 +36,7 @@ and agreement between two independent implementations is the only thing
 that catches a clause misread the same way twice.
 
 Every vector carries the clause it comes from and the arithmetic that
-produced it. A vector without a derivation does not load. Three of the 235
+produced it. A vector without a derivation does not load. Three of the 246
 are marked `unverified` instead, which says plainly that agreeing with them
 proves an implementation matches the corpus rather than the standard.
 [`COVERAGE.md`](https://github.com/ravisuhag/astro/blob/main/vectors/COVERAGE.md)
