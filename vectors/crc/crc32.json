@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "standard": "CCSDS 211.2-B-3 annex C (Proximity-1 CRC-32)",
+  "standard": "CCSDS 211.2-B-3",
   "package": "crc",
   "source": "derived from the annex C generator, preset and bit order",
   "note": "The Proximity-1 CRC-32: generator 0x00a00805, zero preset, most-significant bit first, no reflection and no final inversion. The zero preset is what makes the empty and all-zero cases zero, and it is why a correct codeword has a zero syndrome.",
@@ -26,7 +26,7 @@
     {
       "name": "single-zero-octet-stays-zero",
       "clause": "C",
-      "note": "A zero octet against a zero register produces no feedback at any of the eight steps, so the register stays zero. This is the case that distinguishes a zero preset from an all-ones one.",
+      "note": "A zero octet against a zero register produces no feedback at any of the eight steps, so the register stays zero. This is the case that distinguishes a zero preset from an all-ones one: it shares its expected octets with empty-input-is-zero deliberately, because an implementation that presets to all ones fails this one and passes neither.",
       "fields": {
         "data": "00"
       },

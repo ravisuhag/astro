@@ -24,7 +24,18 @@
   "$defs": {
     "hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$" },
     "name": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
-    "clause": { "type": "string", "minLength": 1 },
+    "clause": {
+      "description": "Clause number within `doc`, or within the file's `standard` when `doc` is absent. A number or annex letter only, never a document name.",
+      "type": "string", "minLength": 1, "pattern": "^[0-9A-Z][0-9A-Za-z.\\-]*$"
+    },
+    "doc": {
+      "description": "The document `clause` refers to, when it is not the file's `standard`.",
+      "type": "string", "minLength": 3
+    },
+    "derivation": {
+      "description": "How the value was derived. A note that stops mid-sentence is not a derivation, so it must end in . ! or ?",
+      "type": "string", "minLength": 10, "pattern": "[.!?]\\s*$"
+    },
     "errorName": {
       "enum": [
         "truncated", "length_mismatch", "crc_mismatch", "field_out_of_range",
@@ -55,8 +66,9 @@
       "properties": {
         "name": { "$ref": "#/$defs/name" },
         "clause": { "$ref": "#/$defs/clause" },
+        "doc": { "$ref": "#/$defs/doc" },
         "source": { "type": "string" },
-        "note": { "type": "string", "minLength": 10 },
+        "note": { "$ref": "#/$defs/derivation" },
         "requires": { "$ref": "#/$defs/requires" },
         "config": { "$ref": "#/$defs/config" },
         "fields": { "$ref": "#/$defs/fields" },
@@ -70,8 +82,9 @@
       "properties": {
         "name": { "$ref": "#/$defs/name" },
         "clause": { "$ref": "#/$defs/clause" },
+        "doc": { "$ref": "#/$defs/doc" },
         "source": { "type": "string" },
-        "note": { "type": "string", "minLength": 10 },
+        "note": { "$ref": "#/$defs/derivation" },
         "requires": { "$ref": "#/$defs/requires" },
         "config": { "$ref": "#/$defs/config" },
         "input": { "$ref": "#/$defs/hex" },
@@ -89,6 +102,7 @@
       "properties": {
         "name": { "$ref": "#/$defs/name" },
         "clause": { "$ref": "#/$defs/clause" },
+        "doc": { "$ref": "#/$defs/doc" },
         "source": { "type": "string" },
         "note": { "type": "string" },
         "requires": { "$ref": "#/$defs/requires" },
@@ -96,6 +110,10 @@
         "input": { "$ref": "#/$defs/hex" },
         "fields": { "$ref": "#/$defs/fields" },
         "buffer_len": { "type": "integer", "minimum": 0 },
+        "at_octet": {
+          "description": "Offset of the first octet a conforming decoder cannot get past. Optional; where present, refusing earlier or later is refusing for the wrong reason.",
+          "type": "integer", "minimum": 0
+        },
         "error": { "$ref": "#/$defs/errorName" }
       }
     },
@@ -106,8 +124,9 @@
       "properties": {
         "name": { "$ref": "#/$defs/name" },
         "clause": { "$ref": "#/$defs/clause" },
+        "doc": { "$ref": "#/$defs/doc" },
         "source": { "type": "string" },
-        "note": { "type": "string", "minLength": 10 },
+        "note": { "$ref": "#/$defs/derivation" },
         "config": { "$ref": "#/$defs/config" },
         "init": { "type": "object" },
         "steps": {

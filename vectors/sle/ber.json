@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
-  "standard": "ITU-T X.690 (BER), CCSDS 913.1-B-2 (SLE ISP1 TML)",
+  "standard": "ITU-T X.690",
   "package": "sle",
   "source": "derived from X.690 clause 8 and the ISP1 figure 3-3 layout",
   "note": "The BER primitives and the ISP1 transport mapping layer framing that SLE is built on. These are the foundation the operation encodings sit on, so they are pinned first: a wrong INTEGER length or length-form boundary corrupts every operation above it. The association state machine and the operation encodings are not covered here.",
   "encode": [
     {
       "name": "integer-zero",
-      "clause": "X.690 8.3",
+      "clause": "8.3",
+      "doc": "ITU-T X.690",
       "note": "BER INTEGER zero: tag 0x02, length 1, content 0x00. Zero still takes a content octet; a zero-length INTEGER is not valid BER.",
       "fields": {
         "kind": "integer",
@@ -17,7 +18,8 @@
     },
     {
       "name": "integer-one",
-      "clause": "X.690 8.3",
+      "clause": "8.3",
+      "doc": "ITU-T X.690",
       "note": "INTEGER 1 in one content octet.",
       "fields": {
         "kind": "integer",
@@ -27,7 +29,8 @@
     },
     {
       "name": "integer-127-fits-one-octet",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "127 is the largest value one content octet holds, because BER INTEGER is two's-complement and a leading 0x80 would read as negative. Content 0x7f.",
       "fields": {
         "kind": "integer",
@@ -37,7 +40,8 @@
     },
     {
       "name": "integer-128-needs-a-leading-zero",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "128 needs two content octets: 0x00 0x80. Without the leading zero the 0x80 would decode as -128. This is the single most common BER INTEGER mistake, so it is pinned next to its 127 neighbour.",
       "fields": {
         "kind": "integer",
@@ -47,7 +51,8 @@
     },
     {
       "name": "integer-minus-one",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "-1 is 0xff in one octet. Paired with integer-255 below, which is 0x00 0xff, this pins the sign handling in both directions.",
       "fields": {
         "kind": "integer",
@@ -57,7 +62,8 @@
     },
     {
       "name": "integer-255-needs-a-leading-zero",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "255 is 0x00 0xff in two octets, distinct from -1 which is 0xff in one.",
       "fields": {
         "kind": "integer",
@@ -67,7 +73,8 @@
     },
     {
       "name": "integer-minus-128-fits-one-octet",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "-128 fits one octet as 0x80, since two's-complement reaches -128 in eight bits. An encoder using a non-minimal length would write 0xff 0x80 here.",
       "fields": {
         "kind": "integer",
@@ -77,7 +84,8 @@
     },
     {
       "name": "integer-minus-129-needs-two-octets",
-      "clause": "X.690 8.3.2",
+      "clause": "8.3.2",
+      "doc": "ITU-T X.690",
       "note": "-129 is one past what one octet holds, giving 0xff 0x7f.",
       "fields": {
         "kind": "integer",
@@ -87,7 +95,8 @@
     },
     {
       "name": "octet-string-empty",
-      "clause": "X.690 8.7",
+      "clause": "8.7",
+      "doc": "ITU-T X.690",
       "note": "An empty OCTET STRING: tag 0x04, length 0, no content.",
       "fields": {
         "kind": "octet_string",
@@ -97,17 +106,19 @@
     },
     {
       "name": "octet-string-ascii",
-      "clause": "X.690 8.7",
-      "note": "The ASCII 'astro' as an OCTET STRING: tag 0x04, length 5, then the octets.",
+      "clause": "8.7",
+      "doc": "ITU-T X.690",
+      "note": "The ASCII 'hello' as an OCTET STRING: tag 0x04, length 5, then the octets.",
       "fields": {
         "kind": "octet_string",
-        "value": "617374726f"
+        "value": "68656c6c6f"
       },
-      "want": "0405617374726f"
+      "want": "040568656c6c6f"
     },
     {
       "name": "null",
-      "clause": "X.690 8.8",
+      "clause": "8.8",
+      "doc": "ITU-T X.690",
       "note": "NULL is tag 0x05 with a zero length and no content.",
       "fields": {
         "kind": "null"
@@ -116,7 +127,8 @@
     },
     {
       "name": "sequence-empty",
-      "clause": "X.690 8.9",
+      "clause": "8.9",
+      "doc": "ITU-T X.690",
       "note": "An empty SEQUENCE: constructed tag 0x30, length 0.",
       "fields": {
         "kind": "sequence",
@@ -126,7 +138,8 @@
     },
     {
       "name": "sequence-containing-an-integer",
-      "clause": "X.690 8.9",
+      "clause": "8.9",
+      "doc": "ITU-T X.690",
       "note": "A SEQUENCE wrapping INTEGER 1: tag 0x30, length 3, then 02 01 01. The length counts the encoded element, not the value.",
       "fields": {
         "kind": "sequence",
@@ -136,7 +149,8 @@
     },
     {
       "name": "length-127-short-form",
-      "clause": "X.690 8.1.3.4",
+      "clause": "8.1.3.4",
+      "doc": "ITU-T X.690",
       "note": "Lengths up to 127 use the short form: a single octet holding the length. 127 is 0x7f, the largest short form.",
       "fields": {
         "kind": "length",
@@ -146,7 +160,8 @@
     },
     {
       "name": "length-128-long-form",
-      "clause": "X.690 8.1.3.5",
+      "clause": "8.1.3.5",
+      "doc": "ITU-T X.690",
       "note": "128 needs the long form: 0x81 says one length octet follows, then 0x80. The 0x80 bit of the first octet is what distinguishes the two forms.",
       "fields": {
         "kind": "length",
@@ -156,7 +171,8 @@
     },
     {
       "name": "length-65535-two-octet-long-form",
-      "clause": "X.690 8.1.3.5",
+      "clause": "8.1.3.5",
+      "doc": "ITU-T X.690",
       "note": "65535 needs two length octets: 0x82 then 0xff 0xff.",
       "fields": {
         "kind": "length",
@@ -166,7 +182,8 @@
     },
     {
       "name": "tml-heartbeat",
-      "clause": "913.1-B-2 3.3",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
       "note": "An ISP1 TML heartbeat: message type 3, three reserved zero octets, a four-octet body length of zero, and no body. Eight octets total. The three reserved octets must be zero and a receiver that skipped them would read the length four octets early.",
       "fields": {
         "kind": "tml",
@@ -177,7 +194,8 @@
     },
     {
       "name": "tml-pdu-message",
-      "clause": "913.1-B-2 3.3",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
       "note": "A TML message carrying an SLE PDU: type 1, reserved zeros, body length 3, then the body 02 01 ff (a BER INTEGER -1). The body length is big-endian across four octets.",
       "fields": {
         "kind": "tml",
@@ -188,7 +206,8 @@
     },
     {
       "name": "tml-context-message",
-      "clause": "913.1-B-2 3.3",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
       "note": "A context message body is fixed at 12 octets by clause 3.3.2.2.4, unlike a PDU body which is variable. It opens with the protocol identification 'ISP1' (49 53 50 31), then the version, then the heartbeat interval and dead factor as big-endian integers (clause 3.3.2.2.6). Here version 1, interval 30 seconds, dead factor 3.",
       "fields": {
         "kind": "tml",
@@ -201,27 +220,32 @@
   "reject": [
     {
       "name": "tml-shorter-than-the-eight-octet-header",
-      "clause": "913.1-B-2 3.3",
-      "note": "A TML message is at least eight octets: type, three reserved, and a four-octet length.",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
+      "note": "A TML message is at least eight octets: type, three reserved, and a four-octet length. A decoder must not get past octet 4: the TML header is 8 octets; the input stops after 4.",
       "config": {
         "kind": "tml"
       },
       "input": "03000000",
+      "at_octet": 4,
       "error": "truncated"
     },
     {
       "name": "tml-body-shorter-than-its-declared-length",
-      "clause": "913.1-B-2 3.3",
-      "note": "The length field says four body octets but only two follow. A decoder must refuse rather than return a short body.",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
+      "note": "The length field says four body octets but only two follow. A decoder must refuse rather than return a short body. A decoder must not get past octet 10: the length field promises 4 body octets; 2 are present.",
       "config": {
         "kind": "tml"
       },
       "input": "0100000000000004dead",
+      "at_octet": 10,
       "error": "truncated"
     },
     {
       "name": "tml-context-body-not-twelve-octets",
-      "clause": "913.1-B-2 3.3.2.2.4",
+      "clause": "3.3.2.2.4",
+      "doc": "CCSDS 913.1-B-2",
       "note": "A context message body is exactly 12 octets. Four is refused at construction rather than sent, because a peer reads the body by position and cannot tell a short one from data.",
       "fields": {
         "kind": "tml",
@@ -232,7 +256,8 @@
     },
     {
       "name": "tml-heartbeat-with-a-body",
-      "clause": "913.1-B-2 3.3",
+      "clause": "3.3",
+      "doc": "CCSDS 913.1-B-2",
       "note": "A heartbeat carries no body at all. Anything in it is refused, since a peer expecting an empty body would treat the octets as the start of the next message.",
       "fields": {
         "kind": "tml",

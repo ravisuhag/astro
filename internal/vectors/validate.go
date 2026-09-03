@@ -61,8 +61,25 @@ func (f *File) validate() error {
 		seen[name] = kind
 	}
 	checkNote := func(kind, name, note string) {
-		if len(strings.TrimSpace(note)) < minNote {
+		note = strings.TrimSpace(note)
+		if len(note) < minNote {
 			add("%s %q: note is required and must say how the value was derived", kind, name)
+			return
+		}
+		// A derivation that stops mid-sentence is not a derivation. One
+		// shipped that way and the truncation went unnoticed, because
+		// nothing but a reader was looking at the prose.
+		if !strings.ContainsAny(note[len(note)-1:], ".!?") {
+			add("%s %q: note stops mid-sentence — it ends %q", kind, name, lastWords(note, 6))
+		}
+	}
+	// A citation is a clause number and, where it is not the file's own
+	// standard, the document that clause belongs to. Keeping the document
+	// out of the clause string is what makes a citation checkable.
+	checkClause := func(kind, name, clause string) {
+		if clause != "" && !clauseRE.MatchString(clause) {
+			add("%s %q: clause %q must be a clause number or annex letter; "+
+				"put the document in \"doc\"", kind, name, clause)
 		}
 	}
 	checkCaps := func(kind, name string, reqs []string) {
@@ -83,6 +100,7 @@ func (f *File) validate() error {
 	for _, v := range f.Encode {
 		claim("encode", v.Name)
 		checkNote("encode", v.Name, v.Note)
+		checkClause("encode", v.Name, v.Clause)
 		checkCaps("encode", v.Name, v.Requires)
 		checkFieldNames("encode", v.Name, "field", v.Fields)
 		checkFieldNames("encode", v.Name, "config", v.Config)
@@ -97,6 +115,7 @@ func (f *File) validate() error {
 	for _, v := range f.Decode {
 		claim("decode", v.Name)
 		checkNote("decode", v.Name, v.Note)
+		checkClause("decode", v.Name, v.Clause)
 		checkCaps("decode", v.Name, v.Requires)
 		checkFieldNames("decode", v.Name, "field", v.Fields)
 		checkFieldNames("decode", v.Name, "config", v.Config)
@@ -110,6 +129,7 @@ func (f *File) validate() error {
 
 	for _, v := range f.Reject {
 		claim("reject", v.Name)
+		checkClause("reject", v.Name, v.Clause)
 		checkCaps("reject", v.Name, v.Requires)
 		checkFieldNames("reject", v.Name, "field", v.Fields)
 		checkFieldNames("reject", v.Name, "config", v.Config)
@@ -133,10 +153,21 @@ func (f *File) validate() error {
 		if v.Error == "buffer_too_small" && !hasCap(v.Requires, "encode_into") {
 			add("reject %q: buffer_too_small is only reachable with requires: [\"encode_into\"]", v.Name)
 		}
+		// at_octet points into the input, so it needs one and must land in it.
+		if v.AtOctet != nil {
+			switch {
+			case !hasInput:
+				add("reject %q: at_octet says where a decoder must stop, so it needs input", v.Name)
+			case *v.AtOctet > len(*v.Input)/2:
+				add("reject %q: at_octet is %d but the input is only %d octets",
+					v.Name, *v.AtOctet, len(*v.Input)/2)
+			}
+		}
 	}
 
 	for _, v := range f.Sequence {
 		claim("sequence", v.Name)
+		checkClause("sequence", v.Name, v.Clause)
 		checkNote("sequence", v.Name, v.Note)
 		checkFieldNames("sequence", v.Name, "config", v.Config)
 		if len(v.Steps) == 0 {
@@ -157,6 +188,7 @@ func (f *File) validate() error {
 				add("%s: a step either produces bytes or fails, not both", where)
 			}
 			checkFieldNames(where, "", "field", s.Fields)
+			checkFieldNames(where, "", "state", s.WantState)
 		}
 	}
 
@@ -164,6 +196,17 @@ func (f *File) validate() error {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// lastWords returns the tail of s, so a truncated note names itself in
+// the failure rather than making the reader open the file.
+func lastWords(s string, n int) string {
+	w := strings.Fields(s)
+	if len(w) > n {
+		w = w[len(w)-n:]
+		return "..." + strings.Join(w, " ")
+	}
+	return strings.Join(w, " ")
 }
 
 func hasCap(reqs []string, want string) bool {

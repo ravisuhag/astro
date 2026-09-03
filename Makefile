@@ -23,7 +23,7 @@ vet:
 # vectors are marked go-behaviour-unverified, which is a number that
 # should go down over time, and how many the Go harness had to skip.
 vectors:
-	go test ./internal/vectors/ -run 'TestEveryCommittedVectorLoads|TestLoaderRejects|TestLoaderAccepts' -v
+	go test ./internal/vectors/ -run 'TestEveryCommittedVectorLoads|TestLoaderRejects|TestLoaderAccepts|TestCoverageTableMatchesTheCorpus|TestSharedConstantsAgree' -v
 
 # The paths a ground station runs at frame rate: packets, frames, the coding
 # layers underneath them, and the compressors.
