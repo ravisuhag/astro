@@ -24,8 +24,8 @@
     },
     {
       "name": "frame-with-fhec-and-fecf",
-      "source": "unverified",
-      "note": "Same header as frame-with-fecf, with the 2-octet FHEC inserted after the primary header. The FECF 0x3934 then covers the FHEC octets too. The frame layout is established; the FHEC value it carries is subject to the open question in fhec-of-primary-header, so this vector is marked unverified with it.",
+      "note": "Frame with both header and frame error control. The FHEC occupies bits 48-63 of the primary header, per clause 4.1.2.6.1, and the FECF follows the data field. The FHEC value ce8e is the RS(10,6) check over the header, derived below.",
+      "clause": "4.1.2.6",
       "config": {
         "has_fhec": true,
         "has_fecf": true
@@ -63,8 +63,8 @@
     },
     {
       "name": "frame-with-fhec-inverse",
-      "source": "unverified",
-      "note": "The inverse of frame-with-fhec-and-fecf. Pins that the FHEC octets are carried through decode unchanged and that the data field starts after them. Marked unverified for the same reason as the encode side.",
+      "note": "The inverse of the FHEC frame: the two FHEC octets are read back and the data field starts after them, so a decoder that treats the primary header as a fixed six octets when the channel carries an FHEC reads the check symbols as data.",
+      "clause": "4.1.2.6",
       "config": {
         "has_fhec": true,
         "has_fecf": true
@@ -79,8 +79,8 @@
     },
     {
       "name": "fhec-of-primary-header",
-      "source": "unverified",
-      "note": "The RS(10,6) arithmetic is reproducible: a GF(2^4) field with polynomial x^4+x+1, generator roots alpha^6 through alpha^9 and generator coefficients [1,8,2,8,1] turns information symbols [6,10,14,10,4,3] into parity [12,14,8,14] = 0xce8e. What is NOT established is that those are the information symbols CCSDS 732.0-B-4 specifies: they are nibbles 0-3 and 10-11 of the header, which skips the 24-bit VC frame count in octets 2-4. That may be correct, since the FHEC plausibly protects only the routing and signaling fields, or it may not. Clause 4.1.2 settles it. Until then this vector records a reproducible computation, not a requirement of the standard.",
+      "note": "The RS(10,6) frame header error control over the primary header 6aea00010243. Clause 4.1.2.6.5 c) gives the field generator F(x) = x^4 + x + 1 over GF(2), and d) the code generator g(x) = x^4 + a^3 x^3 + a x^2 + a^3 x + 1 over GF(2^4). The bit-to-symbol mapping in f) makes the six information symbols header bits 0-15 and 40-47, which for this header are the nibbles 6, a, e, a, 4, 3 -- the 24-bit VC frame count in bits 16-39 is deliberately not protected. Systematic encoding gives check symbols c, e, 8, e, so the field is ce8e.",
+      "clause": "4.1.2.6.5",
       "input": "6aea00010243",
       "fields": {
         "fhec": "ce8e"
@@ -98,8 +98,9 @@
     {
       "name": "header-truncated",
       "clause": "4.1.2",
-      "note": "Two octets cannot hold the 6-octet primary header.",
+      "note": "Two octets cannot hold the 6-octet primary header. A decoder must not get past octet 2: the primary header is 6 octets; the input stops after 2.",
       "input": "6aea",
+      "at_octet": 2,
       "error": "truncated"
     },
     {
