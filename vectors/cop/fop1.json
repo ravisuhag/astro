@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 232.1-B-2",
+  "package": "cop",
+  "source": "derived from the clause 5.1.10 transmission count and retransmission rules",
+  "note": "FOP-1, the sending half of COP-1, scoped to the retransmission rules of clause 5.1.10. These are the vectors that exercise time: the timer is a step, never a clock, so a frame's fate under repeated timeouts is checkable without waiting. Scope limit, deliberate: the full FOP-1 state table 5-1 is six states against about twenty-five events, and it is not covered here. What clause 5.1.10.4 and 5.1.10.5 state in prose is covered, because prose can be quoted and a table cell read out of a flattened rendering cannot.",
+  "sequence": [
+    {
+      "name": "fop1-retransmits-on-timeout-until-the-limit-then-alerts",
+      "clause": "5.1.10.5",
+      "note": "Clause 5.1.10.4 sets the transmission count to 1 when the AD service is initiated and increments it on each retransmission of the first frame on the sent queue. Clause 5.1.10.5 b) says that when the timer expires FOP-1 checks whether the count has reached the limit: if it has not, it increments and retransmits; if it has, and the timeout type is 0, it raises an Alert. Clause 5.1.2 makes an Alert put the machine in the Initial state. With a limit of 3, two timeouts retransmit and the third gives up.",
+      "config": { "transmission_limit": 3, "timeout_type": 0, "vcid": 0 },
+      "init": { "state": "active", "v_s": 1, "transmission_count": 1, "sent_queue_length": 1 },
+      "steps": [
+        { "call": "tick",
+          "want_state": { "state": "active", "transmission_count": 2, "sent_queue_length": 1 } },
+        { "call": "tick",
+          "want_state": { "state": "active", "transmission_count": 3, "sent_queue_length": 1 } },
+        { "call": "tick",
+          "want_state": { "state": "initial", "alert": true } }
+      ]
+    },
+    {
+      "name": "fop1-suspends-instead-of-alerting-when-the-timeout-type-is-one",
+      "clause": "5.1.10.5",
+      "note": "The same run with timeout type 1. Clause 5.1.10.5 b) 2) says that on reaching the limit FOP-1 suspends the AD service rather than raising an Alert, so it may be resumed later. Clause 5.1.2 says the Initial state is also used while the service is suspended, and clause 5.1.11 has the suspend state record which state it was suspended from. The pair of runs is the point: the same three timeouts end in an alert or a suspension purely on the value of a managed parameter, and an implementation that hard-codes either behaviour passes one run and fails the other.",
+      "config": { "transmission_limit": 3, "timeout_type": 1, "vcid": 0 },
+      "init": { "state": "active", "v_s": 1, "transmission_count": 1, "sent_queue_length": 1 },
+      "steps": [
+        { "call": "tick", "want_state": { "state": "active", "transmission_count": 2 } },
+        { "call": "tick", "want_state": { "state": "active", "transmission_count": 3 } },
+        { "call": "tick",
+          "want_state": { "state": "initial", "alert": false, "suspended": true } }
+      ]
+    },
+    {
+      "name": "fop1-resets-the-transmission-count-when-a-frame-is-acknowledged",
+      "clause": "5.1.10.4",
+      "note": "Clause 5.1.10.4: whenever one or more frames are acknowledged and so removed from the sent queue, the transmission count is reset to 1. The count belongs to the sent queue rather than to any one frame, which is what keeps a healthy link from being declared failed. Here a timeout has already pushed the count to 2 when a CLCW arrives reporting V(R) = 1, acknowledging the frame with N(S) = 0; the queue empties and the count returns to 1, so the next frame gets a full allowance of retransmissions.",
+      "config": { "transmission_limit": 3, "timeout_type": 0, "vcid": 0 },
+      "init": { "state": "active", "v_s": 1, "transmission_count": 1, "sent_queue_length": 1 },
+      "steps": [
+        { "call": "tick",
+          "want_state": { "transmission_count": 2, "sent_queue_length": 1 } },
+        { "call": "receive_clcw", "fields": { "report_value": 1 },
+          "want_state": { "state": "active", "transmission_count": 1, "sent_queue_length": 0 } }
+      ]
+    },
+    {
+      "name": "fop1-with-a-transmission-limit-of-one-never-retransmits",
+      "clause": "5.1.10.2",
+      "note": "Clause 5.1.10.2: a transmission limit of 1 means no retransmission is tried and each frame is transmitted exactly once. The count starts at 1, which has already reached the limit, so the very first timeout takes the give-up branch rather than retransmitting. An implementation that compares the count with the limit after incrementing instead of before sends one frame more than the mission allowed.",
+      "config": { "transmission_limit": 1, "timeout_type": 0, "vcid": 0 },
+      "init": { "state": "active", "v_s": 1, "transmission_count": 1, "sent_queue_length": 1 },
+      "steps": [
+        { "call": "tick",
+          "want_state": { "state": "initial", "alert": true, "transmission_count": 1 } }
+      ]
+    }
+  ]
+}

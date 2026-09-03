@@ -182,8 +182,9 @@
     {
       "name": "shorter-than-four-octets",
       "clause": "4.2.1",
-      "note": "The CLCW is exactly four octets and occupies the whole operational control field.",
+      "note": "The CLCW is exactly four octets and occupies the whole operational control field. A decoder must not get past octet 3: the CLCW is 4 octets; the input stops after 3.",
       "input": "010000",
+      "at_octet": 3,
       "error": "truncated"
     },
     {
