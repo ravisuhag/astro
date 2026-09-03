@@ -252,12 +252,15 @@ func WithSequenceNumber(n uint8) FrameOption {
 
 // NewTCTransferFrame creates a new TC Transfer Frame.
 // The frame length is automatically computed. CRC is auto-calculated.
+// A VCID wider than the 6-bit field is stored as given and refused on
+// encode rather than masked: masking would route the frame to a different
+// virtual channel than the caller named.
 func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
 	frame := &TCTransferFrame{
 		Header: PrimaryHeader{
 			VersionNumber:    0,
-			SpacecraftID:     scid & 0x03FF,
-			VirtualChannelID: vcid & 0x3F,
+			SpacecraftID:     scid,
+			VirtualChannelID: vcid,
 		},
 		DataField: data,
 	}

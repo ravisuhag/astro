@@ -279,8 +279,14 @@ func WithFHEC() FrameOption {
 }
 
 // WithVCFrameCount sets the VC frame count.
+//
+// A count wider than the 24-bit field is stored as given and refused by
+// Encode with ErrInvalidVCFrameCount. Masking it here would substitute a
+// different count silently — a value of 2^24 would go out as 0 — and a
+// frame count is how a receiver detects gaps, so a substituted one reads
+// as a lost frame rather than a caller mistake.
 func WithVCFrameCount(count uint32) FrameOption {
-	return func(f *TransferFrame) { f.Header.VCFrameCount = count & MaxVCFrameCount }
+	return func(f *TransferFrame) { f.Header.VCFrameCount = count }
 }
 
 // WithReplayFlag sets the Replay Flag.
@@ -289,10 +295,14 @@ func WithReplayFlag() FrameOption {
 }
 
 // WithVCFCUsage enables the VC Frame Count Usage Flag and sets the cycle.
+//
+// A cycle wider than the 4-bit field is stored as given and refused by
+// Encode with ErrInvalidVCFrameCountCycle, for the same reason as
+// WithVCFrameCount.
 func WithVCFCUsage(cycle uint8) FrameOption {
 	return func(f *TransferFrame) {
 		f.Header.VCFCUsageFlag = true
-		f.Header.VCFrameCountCycle = cycle & 0x0F
+		f.Header.VCFrameCountCycle = cycle
 	}
 }
 
@@ -301,12 +311,15 @@ func WithVCFCUsage(cycle uint8) FrameOption {
 // data is the Transfer Frame Data Field as it will appear on the wire,
 // including any M_PDU or B_PDU header when applicable. Use the Pack helpers
 // (PackMPDUDataField, PackBPDUDataField) to build a data field with header.
+// A VCID wider than the 6-bit field is stored as given and refused by
+// Encode with ErrInvalidVCID. Masking it here would route the frame to a
+// different virtual channel than the caller named, silently.
 func NewTransferFrame(scid, vcid uint8, data []byte, opts ...FrameOption) (*TransferFrame, error) {
 	frame := &TransferFrame{
 		Header: PrimaryHeader{
 			TFVN: TFVN,
 			SCID: scid,
-			VCID: vcid & 0x3F,
+			VCID: vcid,
 		},
 		DataField: data,
 	}

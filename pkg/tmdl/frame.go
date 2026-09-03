@@ -254,6 +254,9 @@ type TMTransferFrame struct {
 }
 
 // NewTMTransferFrame initializes a new TM Transfer Frame.
+// A VCID wider than the 3-bit field is stored as given and refused on
+// encode rather than masked: masking would route the frame to a different
+// virtual channel than the caller named.
 func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
 	if len(data) > 65535 {
 		return nil, ErrDataTooLarge
@@ -271,10 +274,10 @@ func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderDat
 
 	frame := &TMTransferFrame{
 		Header: PrimaryHeader{
-			VersionNumber:    0b00,          // Default CCSDS TM version
-			SpacecraftID:     scid & 0x03FF, // Mask to 10 bits
-			VirtualChannelID: vcid & 0x07,   // Mask to 3 bits
-			OCFFlag:          len(ocf) > 0,  // Set OCF flag if present
+			VersionNumber:    0b00, // Default CCSDS TM version
+			SpacecraftID:     scid,
+			VirtualChannelID: vcid,
+			OCFFlag:          len(ocf) > 0, // Set OCF flag if present
 			FSHFlag:          len(secondaryHeaderData) > 0,
 			MCFrameCount:     0, // To be set dynamically
 			VCFrameCount:     0, // To be set dynamically

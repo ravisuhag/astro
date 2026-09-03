@@ -12,6 +12,28 @@ var (
 	// ErrInvalidCLCWVersion indicates the CLCW version is not 0.
 	ErrInvalidCLCWVersion = errors.New("invalid CLCW: version must be 00")
 
+	// ErrInvalidCLCWVCID indicates a virtual channel identifier that does not
+	// fit the 6-bit field of CCSDS 232.0-B-4 clause 4.2.1.
+	//
+	// It is refused rather than masked because a CLCW reports FARM-1 state for
+	// one virtual channel. Truncating 64 to 0 would emit a control word that a
+	// conforming receiver reads as reporting on VC 0, so the ground would act
+	// on the wrong channel's lockout, wait and retransmit flags with nothing
+	// to signal the substitution.
+	ErrInvalidCLCWVCID = errors.New("invalid CLCW: virtual channel identifier does not fit the 6-bit field")
+
+	// ErrInvalidCLCWFARMBCounter indicates a FARM-B counter that does not fit
+	// the 2-bit field of CCSDS 232.0-B-4 clause 4.2.1.
+	ErrInvalidCLCWFARMBCounter = errors.New("invalid CLCW: FARM-B counter does not fit the 2-bit field")
+
+	// ErrInvalidCLCWStatusField indicates a status field that does not fit the
+	// 3-bit field of CCSDS 232.0-B-4 clause 4.2.1.
+	ErrInvalidCLCWStatusField = errors.New("invalid CLCW: status field does not fit the 3-bit field")
+
+	// ErrInvalidCLCWCOPInEffect indicates a COP-in-effect value that does not
+	// fit the 2-bit field of CCSDS 232.0-B-4 clause 4.2.1.
+	ErrInvalidCLCWCOPInEffect = errors.New("invalid CLCW: COP in effect does not fit the 2-bit field")
+
 	// ErrFOPLockout indicates FOP-1 received a CLCW with the Lockout flag set.
 	ErrFOPLockout = errors.New("FOP-1: lockout detected, ground must issue unlock")
 

@@ -101,6 +101,24 @@ func (c *CLCW) Validate() error {
 	if c.Version != 0 {
 		return ErrInvalidCLCWVersion
 	}
+	// Every remaining field is narrower than the type that holds it, so a
+	// caller can hand over a value that will not fit. Encode packs by
+	// shifting, which would silently substitute a different value: a VCID of
+	// 64 becomes 0, and 100 becomes 36. A CLCW reports FARM-1 state for one
+	// named virtual channel, so a substituted identifier makes the ground act
+	// on the wrong channel. Refuse instead.
+	if c.StatusField > 0x07 {
+		return ErrInvalidCLCWStatusField
+	}
+	if c.COPInEffect > 0x03 {
+		return ErrInvalidCLCWCOPInEffect
+	}
+	if c.VirtualChannelID > 0x3F {
+		return ErrInvalidCLCWVCID
+	}
+	if c.FARMBCounter > 0x03 {
+		return ErrInvalidCLCWFARMBCounter
+	}
 	return nil
 }
 

@@ -461,8 +461,13 @@ func WithPointer(p uint16) FrameOption {
 }
 
 // WithSourceOrDest sets the source-or-destination flag.
+//
+// The field is one bit, so only 0 and 1 are meaningful. A wider value is
+// stored as given and refused by Encode rather than masked, because
+// masking 2 to 0 would flip the frame's meaning from destination to
+// source without saying so.
 func WithSourceOrDest(flag uint8) FrameOption {
-	return func(f *TransferFrame) { f.Header.SourceOrDest = flag & 0x01 }
+	return func(f *TransferFrame) { f.Header.SourceOrDest = flag }
 }
 
 // WithBypassSeqCtrl marks the frame as expedited (bypass flag set).
@@ -488,13 +493,16 @@ func WithVCFCount(countLen uint8, count uint64) FrameOption {
 // frame length field is computed from the frame contents, the OCF flag
 // from OCF presence, and the FECF (present by default) from the encoded
 // frame.
+// A MAPID wider than the 4-bit field is stored as given and refused on
+// encode rather than masked: masking would deliver the frame to a
+// different multiplexer access point than the caller named.
 func NewTransferFrame(scid uint16, vcid, mapid uint8, data []byte, opts ...FrameOption) (*TransferFrame, error) {
 	frame := &TransferFrame{
 		Header: PrimaryHeader{
 			TFVN:  TFVN,
 			SCID:  scid,
-			VCID:  vcid & 0x3F,
-			MAPID: mapid & 0x0F,
+			VCID:  vcid,
+			MAPID: mapid,
 		},
 		DataField: data,
 		HasFECF:   true,
@@ -538,8 +546,8 @@ func NewTruncatedFrame(scid uint16, vcid, mapid uint8, data []byte, opts ...Fram
 		Header: PrimaryHeader{
 			TFVN:     TFVN,
 			SCID:     scid,
-			VCID:     vcid & 0x3F,
-			MAPID:    mapid & 0x0F,
+			VCID:     vcid,
+			MAPID:    mapid,
 			EndOfFPH: true,
 		},
 		DataFieldHeader: DataFieldHeader{
