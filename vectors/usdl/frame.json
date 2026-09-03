@@ -151,11 +151,12 @@
     {
       "name": "header-truncated-below-four-octets",
       "clause": "4.1.2",
-      "note": "Even the truncated header form needs four octets.",
+      "note": "Even the truncated header form needs four octets. A decoder must not get past octet 2: even a truncated primary header is 4 octets; the input stops after 2.",
       "config": {
         "fec_size": 0
       },
       "input": "c00a",
+      "at_octet": 2,
       "error": "truncated"
     },
     {

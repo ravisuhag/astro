@@ -167,15 +167,17 @@
     {
       "name": "header-shorter-than-its-length-of-length-requires",
       "clause": "4.1.2",
-      "note": "octet 0 = 0xfb declares LoL '11', an 8-octet header, but only two octets follow.",
+      "note": "octet 0 = 0xfb declares LoL '11', an 8-octet header, but only two octets follow. A decoder must not get past octet 2: length of length '11' needs an 8-octet header; the input stops after 2.",
       "input": "fba3",
+      "at_octet": 2,
       "error": "truncated"
     },
     {
       "name": "header-empty",
       "clause": "4.1.2",
-      "note": "No octets at all.",
+      "note": "No octets at all. A decoder must not get past octet 0: no octets at all.",
       "input": "",
+      "at_octet": 0,
       "error": "truncated"
     }
   ]
