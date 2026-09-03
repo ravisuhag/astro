@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 232.1-B-2",
+  "package": "cop",
+  "source": "derived from the clause 6 FARM-1 variables, actions and state table 6-1",
+  "note": "FARM-1, the receiving half of COP-1, as a state machine. Each run starts from an explicit state and steps through the events of table 6-1, checking the variables after each one and the CLCW the machine reports. The CLCW octets follow the clause 4.2.1 layout pinned in clcw.json, so these vectors add when the machine emits a report rather than what a report looks like. Sliding window widths follow clause 6.1.8.3: PW = NW = W/2. All sequence-number arithmetic is modulo 256, per the note in clause 6.2.1. Wait state is not exercised: reaching it needs a buffer-availability signal, which clause 6.3.2.3 makes optional for an implementation, so a vector requiring it would test a choice rather than the standard.",
+  "sequence": [
+    {
+      "name": "farm1-accepts-in-sequence-and-asks-for-retransmission",
+      "clause": "6.3",
+      "note": "Events E1 and E3 in state Open. A frame with N(S) = V(R) is accepted, V(R) advances and the retransmit flag clears. A frame inside the positive window but ahead of V(R) is discarded and sets the retransmit flag, which is the negative acknowledgement clause 6.1.5 describes; V(R) does not move, so the sender knows exactly where to resume. With W = 4, PW = 2, so the positive window ahead of V(R) = 1 is the single value 2.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "open", "v_r": 0 },
+      "steps": [
+        { "call": "receive_ad", "fields": { "n_s": 0 },
+          "want_state": { "state": "open", "v_r": 1, "retransmit_flag": false } },
+        { "call": "report", "want": "01000001" },
+        { "call": "receive_ad", "fields": { "n_s": 2 },
+          "want_state": { "state": "open", "v_r": 1, "retransmit_flag": true } },
+        { "call": "report", "want": "01000801" },
+        { "call": "receive_ad", "fields": { "n_s": 1 },
+          "want_state": { "state": "open", "v_r": 2, "retransmit_flag": false } },
+        { "call": "report", "want": "01000002" }
+      ]
+    },
+    {
+      "name": "farm1-discards-the-negative-window-without-a-flag",
+      "clause": "6.3",
+      "note": "Event E4 against event E3, the pair most easily collapsed into one branch. A frame below V(R) but inside the negative window is a duplicate the sender already has acknowledged, so it is discarded silently and no flag moves. A frame above V(R) inside the positive window is a gap, so it sets the retransmit flag. Both discard the frame; only one reports anything. With V(R) = 5 and W = 4, the negative window is 3 and 4, and the positive window ahead of V(R) is 6.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "open", "v_r": 5 },
+      "steps": [
+        { "call": "receive_ad", "fields": { "n_s": 4 },
+          "want_state": { "state": "open", "v_r": 5, "retransmit_flag": false } },
+        { "call": "report", "want": "01000005" },
+        { "call": "receive_ad", "fields": { "n_s": 6 },
+          "want_state": { "state": "open", "v_r": 5, "retransmit_flag": true } },
+        { "call": "report", "want": "01000805" }
+      ]
+    },
+    {
+      "name": "farm1-locks-out-outside-the-window-and-unlock-recovers",
+      "clause": "6.3",
+      "note": "Events E5 then E7. A frame outside the sliding window means the two ends have lost track of each other, so FARM-1 discards it and enters Lockout, which clause 6.1.2 calls a safe state: no further AD frame is accepted, including the one that would have been in sequence. Only an Unlock control command leaves it. Unlock also increments the FARM-B counter, per event E7, so the report after it carries 1 in the counter field.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "open", "v_r": 0 },
+      "steps": [
+        { "call": "receive_ad", "fields": { "n_s": 100 },
+          "want_state": { "state": "lockout", "v_r": 0, "lockout_flag": true } },
+        { "call": "report", "want": "01002000" },
+        { "call": "receive_ad", "fields": { "n_s": 0 },
+          "want_state": { "state": "lockout", "v_r": 0 } },
+        { "call": "report", "want": "01002000" },
+        { "call": "receive_unlock",
+          "want_state": { "state": "open", "v_r": 0, "lockout_flag": false, "farm_b_counter": 1 } },
+        { "call": "report", "want": "01000200" }
+      ]
+    },
+    {
+      "name": "farm1-refuses-set-vr-while-locked-out-but-still-counts-it",
+      "clause": "6.3.2.2",
+      "note": "Event E8 in Lockout, which clause 6.3.2.2 singles out: the Set V(R) command is not executed because FARM-1 must be unlocked first, but it was a legal and executable command, so the FARM-B counter still records its arrival. V(R) is unchanged and the state stays Lockout. After an Unlock the same command takes effect. The counter reaches 3 across the three control frames, and clause 6.1.6 puts its two least significant bits in the report.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "lockout", "v_r": 0, "lockout_flag": true },
+      "steps": [
+        { "call": "receive_set_v_r", "fields": { "v_r_star": 9 },
+          "want_state": { "state": "lockout", "v_r": 0, "farm_b_counter": 1 } },
+        { "call": "report", "want": "01002200" },
+        { "call": "receive_unlock",
+          "want_state": { "state": "open", "lockout_flag": false, "farm_b_counter": 2 } },
+        { "call": "report", "want": "01000400" },
+        { "call": "receive_set_v_r", "fields": { "v_r_star": 9 },
+          "want_state": { "state": "open", "v_r": 9, "farm_b_counter": 3 } },
+        { "call": "report", "want": "01000609" }
+      ]
+    },
+    {
+      "name": "farm1-accepts-bd-frames-in-every-state",
+      "clause": "6.3",
+      "note": "Event E6. A Type-BD frame bypasses the sequence control entirely, so it is accepted in Lockout as readily as in Open, leaves V(R) untouched, and only increments the FARM-B counter. An implementation that gates BD frames on the lockout flag passes every round trip and silently drops expedited traffic exactly when an operator most needs it.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "lockout", "v_r": 3, "lockout_flag": true },
+      "steps": [
+        { "call": "receive_bd",
+          "want_state": { "state": "lockout", "v_r": 3, "farm_b_counter": 1 } },
+        { "call": "report", "want": "01002203" }
+      ]
+    },
+    {
+      "name": "farm1-wraps-the-sequence-number-at-256",
+      "clause": "6.2.1",
+      "note": "The note to clause 6.2.1: V(R), N(S), PW and NW are all eight-bit and every comparison is modulo 256. Accepting frame 255 advances V(R) to 0 rather than to 256, so the report carries 00. An implementation that widens V(R) to a native integer passes every other vector here and then rejects the next frame after a wrap.",
+      "config": { "sliding_window_width": 4, "vcid": 0 },
+      "init": { "state": "open", "v_r": 255 },
+      "steps": [
+        { "call": "receive_ad", "fields": { "n_s": 255 },
+          "want_state": { "state": "open", "v_r": 0, "retransmit_flag": false } },
+        { "call": "report", "want": "01000000" }
+      ]
+    }
+  ]
+}
