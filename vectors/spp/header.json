@@ -56,7 +56,7 @@
     {
       "name": "packet-type-tm",
       "clause": "4.1.3.2",
-      "note": "The packet type bit is bit 4 of byte 0 and is 0 for telemetry. With APID 0x123: byte 0 = 000<<5 | 0<<4 | 0<<3 | 0x123>>8 = 0x01, byte 1 = 0x23.",
+      "note": "The packet type is bit 3 of the primary header (clause 4.1.3.3.2.1), which is mask 0x10 of byte 0 and is 0 for telemetry. With APID 0x123: byte 0 = 000<<5 | 0<<4 | 0<<3 | 0x123>>8 = 0x01, byte 1 = 0x23.",
       "fields": {
         "apid": 291,
         "packet_type": 0,
@@ -69,7 +69,7 @@
     {
       "name": "packet-type-tc",
       "clause": "4.1.3.2",
-      "note": "The same APID with the type bit set for telecommand: byte 0 = 0<<5 | 1<<4 | 0<<3 | 0x123>>8 = 0x11. Only bit 4 differs from packet-type-tm, which is the point of the pair.",
+      "note": "The same APID with the type bit set for telecommand: byte 0 = 0<<5 | 1<<4 | 0<<3 | 0x123>>8 = 0x11. Only bit 3, mask 0x10, differs from packet-type-tm, which is the point of the pair.",
       "fields": {
         "apid": 291,
         "packet_type": 1,
@@ -82,7 +82,7 @@
     {
       "name": "secondary-header-flag-clear",
       "clause": "4.1.3.3.2",
-      "note": "The secondary header flag is bit 3 of byte 0. Clear with APID 100: byte 0 = 0x00, against 0x08 for the set case. The sequence count and length carry non-zero values so this vector's octets differ from every other case in this file.",
+      "note": "The secondary header flag is bit 4 of the primary header (clause 4.1.3.3.3.1), which is mask 0x08 of byte 0. Clear with APID 100: byte 0 = 0x00, against 0x08 for the set case. The sequence count and length carry non-zero values so this vector's octets differ from every other case in this file.",
       "fields": {
         "apid": 100,
         "secondary_header_flag": 0,
@@ -95,7 +95,7 @@
     {
       "name": "secondary-header-flag-set",
       "clause": "4.1.3.3.2",
-      "note": "The same header with the flag set: byte 0 = 1<<3 | 0x064>>8 = 0x08. Only bit 3 differs from secondary-header-flag-clear.",
+      "note": "The same header with the flag set: byte 0 = 1<<3 | 0x064>>8 = 0x08. Only bit 4, mask 0x08, differs from secondary-header-flag-clear.",
       "fields": {
         "apid": 100,
         "secondary_header_flag": 1,

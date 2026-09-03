@@ -39,7 +39,7 @@
     {
       "name": "no-rf-available-flag",
       "clause": "4.2.1",
-      "note": "The no-RF-available flag is bit 7 of octet 2, the highest of the five status flags. Set alone: octet 2 = 0x80. It says the spacecraft receiver has no carrier at all.",
+      "note": "The no-RF-available flag is bit 16 of the CLCW (clause 4.2.1.8.2), the first of the five flags and the top bit of octet 2. Set alone: octet 2 = 0x80. It says the spacecraft receiver has no carrier at all.",
       "fields": {
         "cop_in_effect": 1,
         "virtual_channel_id": 0,
@@ -50,7 +50,7 @@
     {
       "name": "no-bit-lock-flag",
       "clause": "4.2.1",
-      "note": "The no-bit-lock flag is bit 6 of octet 2: 0x40. Carrier present but the receiver cannot recover the bit clock.",
+      "note": "The no-bit-lock flag is bit 17 of the CLCW, the second flag in octet 2: 0x40. Carrier present but the receiver cannot recover the bit clock.",
       "fields": {
         "cop_in_effect": 1,
         "virtual_channel_id": 0,
@@ -61,7 +61,7 @@
     {
       "name": "lockout-flag",
       "clause": "4.2.1",
-      "note": "The lockout flag is bit 5 of octet 2: 0x20. FARM-1 has locked out and will discard type-A frames until the sender recovers it, so a ground system that misreads this bit will keep transmitting into a channel that is ignoring it.",
+      "note": "The lockout flag is bit 18 of the CLCW, the third flag in octet 2: 0x20. FARM-1 has locked out and will discard type-A frames until the sender recovers it, so a ground system that misreads this bit will keep transmitting into a channel that is ignoring it.",
       "fields": {
         "cop_in_effect": 1,
         "virtual_channel_id": 0,
@@ -72,7 +72,7 @@
     {
       "name": "wait-flag",
       "clause": "4.2.1",
-      "note": "The wait flag is bit 4 of octet 2: 0x10. The spacecraft cannot accept more data for now.",
+      "note": "The wait flag is bit 19 of the CLCW, the fourth flag in octet 2: 0x10. The spacecraft cannot accept more data for now.",
       "fields": {
         "cop_in_effect": 1,
         "virtual_channel_id": 0,
@@ -83,7 +83,7 @@
     {
       "name": "retransmit-flag",
       "clause": "4.2.1",
-      "note": "The retransmit flag is bit 3 of octet 2: 0x08. FARM-1 is asking for a retransmission, which is what drives FOP-1 to go back.",
+      "note": "The retransmit flag is bit 20 of the CLCW, the last of the five flags in octet 2: 0x08. FARM-1 is asking for a retransmission, which is what drives FOP-1 to go back.",
       "fields": {
         "cop_in_effect": 1,
         "virtual_channel_id": 0,
