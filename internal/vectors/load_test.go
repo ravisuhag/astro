@@ -1,6 +1,10 @@
 package vectors
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -17,7 +21,7 @@ const good = `{
     {
       "name": "frame-with-fecf",
       "clause": "4.1",
-      "note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea",
+      "note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea.",
       "fields": { "scid": 171, "vcid": 42, "data": "deadbeef" },
       "want": "6aea00010243deadbeef9e2c"
     }
@@ -26,7 +30,7 @@ const good = `{
     {
       "name": "frame-with-fecf-inverse",
       "clause": "4.1",
-      "note": "the inverse of the encode vector above",
+      "note": "the inverse of the encode vector above.",
       "input": "6aea00010243deadbeef9e2c",
       "fields": { "scid": 171, "vcid": 42, "data": "deadbeef" }
     }
@@ -63,15 +67,33 @@ func TestLoaderRejects(t *testing.T) {
 	}{
 		{
 			name:    "note stripped",
-			old:     `"note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea",`,
+			old:     `"note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea.",`,
 			new:     ``,
 			wantMsg: "note is required",
 		},
 		{
 			name:    "note too short to be a derivation",
-			old:     `"note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea"`,
-			new:     `"note": "todo"`,
+			old:     `"note": "byte 0 = 01<<6 | 0xAB>>2 = 0x6a; byte 1 = (0xAB&0x3)<<6 | 42 = 0xea."`,
+			new:     `"note": "todo."`,
 			wantMsg: "note is required",
+		},
+		{
+			name:    "note stops mid-sentence",
+			old:     `| 42 = 0xea."`,
+			new:     `| 42 = 0xea, and then"`,
+			wantMsg: "stops mid-sentence",
+		},
+		{
+			name:    "clause carries a document name",
+			old:     `"clause": "4.1",` + "\n" + `      "note": "byte 0 = 01<<6`,
+			new:     `"clause": "CCSDS 732.0-B-4 4.1",` + "\n" + `      "note": "byte 0 = 01<<6`,
+			wantMsg: "put the document in",
+		},
+		{
+			name:    "at_octet past the end of the input",
+			old:     `"input": "6aea", "error": "truncated" }`,
+			new:     `"input": "6aea", "at_octet": 9, "error": "truncated" }`,
+			wantMsg: "at_octet is 9",
 		},
 		{
 			name:    "unknown top-level key",
@@ -195,6 +217,101 @@ func TestEveryCommittedVectorLoads(t *testing.T) {
 		len(files), vectors, unverified)
 }
 
+// TestSharedConstantsAgree enforces the invariants CONTRACT.md lists
+// under "Constants shared across files". Each value is written out in
+// more than one package so every file stands alone; an edit that fixes
+// one and forgets the other is the failure this catches.
+func TestSharedConstantsAgree(t *testing.T) {
+	files, err := LoadAll()
+	if err != nil {
+		t.Fatalf("a committed vector file does not load: %v", err)
+	}
+	want := map[string]string{} // "pkg/vector" -> want octets
+	for _, f := range files {
+		for _, v := range f.Encode {
+			want[f.Package+"/"+v.Name] = v.Want
+		}
+	}
+	get := func(key string) string {
+		v, ok := want[key]
+		if !ok {
+			t.Fatalf("CONTRACT.md names %q as a shared constant, but no such encode vector exists", key)
+		}
+		return v
+	}
+
+	// The optical sync marker is the TM one, adopted unchanged.
+	if a, b := get("tmsc/attached-sync-marker"), get("ocsc/attached-sync-marker"); a != b {
+		t.Errorf("attached sync marker has drifted: tmsc has %s, ocsc has %s", a, b)
+	}
+
+	// The USLP OID fill is the same generator as the OID randomizer, so the
+	// shorter vector must be a prefix of the longer one.
+	short, long := get("pn/oid-sequence-first-ten-octets"), get("usdl/oid-pn-fill-sequence-twenty-octets")
+	if !strings.HasPrefix(long, short) {
+		t.Errorf("OID sequence has drifted: usdl has %s, which does not open with pn's %s", long, short)
+	}
+}
+
+// TestCoverageTableMatchesTheCorpus keeps COVERAGE.md honest. Its table
+// was hand-maintained and drifted eleven vectors behind the files across
+// four packages, which is invisible to a reader and misleads anyone
+// sizing up the corpus before trusting it.
+func TestCoverageTableMatchesTheCorpus(t *testing.T) {
+	files, err := LoadAll()
+	if err != nil {
+		t.Fatalf("a committed vector file does not load: %v", err)
+	}
+	actual := map[string]int{}
+	total := 0
+	for _, f := range files {
+		n := len(f.Encode) + len(f.Decode) + len(f.Reject) + len(f.Sequence)
+		actual[f.Package] += n
+		total += n
+	}
+
+	raw, err := os.ReadFile(filepath.Join(Root(), "COVERAGE.md"))
+	if err != nil {
+		t.Fatalf("COVERAGE.md: %v", err)
+	}
+
+	// | `spp` | CCSDS 133.0-B-2 | 28 | — |
+	row := regexp.MustCompile("(?m)^\\| `([a-z0-9]+)` \\| [^|]*\\| *(\\d+|—) *\\|")
+	claimed := map[string]int{}
+	for _, m := range row.FindAllStringSubmatch(string(raw), -1) {
+		if m[2] == "—" {
+			claimed[m[1]] = 0
+			continue
+		}
+		n, _ := strconv.Atoi(m[2])
+		claimed[m[1]] = n
+	}
+
+	for pkg, want := range actual {
+		got, listed := claimed[pkg]
+		if !listed {
+			t.Errorf("COVERAGE.md has no row for %q, which holds %d vectors", pkg, want)
+			continue
+		}
+		if got != want {
+			t.Errorf("COVERAGE.md says %q has %d vectors, the files hold %d", pkg, got, want)
+		}
+	}
+	for pkg := range claimed {
+		if _, ok := actual[pkg]; !ok {
+			t.Errorf("COVERAGE.md lists %q, which has no vector file", pkg)
+		}
+	}
+
+	sum := regexp.MustCompile(`\| \*\*Total\*\* \| \| \*\*(\d+)\*\* \|`).FindSubmatch(raw)
+	if sum == nil {
+		t.Fatal("COVERAGE.md has no total row")
+	}
+	if n, _ := strconv.Atoi(string(sum[1])); n != total {
+		t.Errorf("COVERAGE.md totals %d vectors, the files hold %d", n, total)
+	}
+}
+
 func TestFieldsAccessors(t *testing.T) {
 	f, err := Parse([]byte(good), "example.json")
 	if err != nil {
@@ -225,7 +342,7 @@ func TestWideIntegersSurviveTheRoundTrip(t *testing.T) {
 	  "source": "RFC 5050 clause 4.1",
 	  "encode": [{
 	    "name": "max-uint64", "clause": "4.1",
-	    "note": "the widest value an SDNV can carry, ten octets",
+	    "note": "the widest value an SDNV can carry, ten octets.",
 	    "fields": { "value": "18446744073709551615" },
 	    "want": "81ffffffffffffffff7f"
 	  }]

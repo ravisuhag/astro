@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
-  "standard": "RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256)",
+  "standard": "RFC 4493",
   "package": "cmac",
   "source": "RFC 4493 section 4 and the NIST SP 800-38B example set",
   "note": "CMAC as SDLS uses it for frame authentication. CCSDS 355.0-B-2 clause E2a requires a 256-bit key, which is why the AES-256 cases matter here and the AES-128 ones are carried as the more widely published cross-check. All values are transcribed from the published example sets; they are not recomputed here, because the published sets are the authority. Test keys only, never real keys.",
   "encode": [
     {
       "name": "aes128-empty-message",
-      "clause": "RFC 4493 section 4",
+      "clause": "4",
+      "doc": "RFC 4493",
       "note": "Example 1 of RFC 4493 section 4: key 2b7e151628aed2a6abf7158809cf4f3c, empty message, MAC bb1d6929e95937287fa37d129b756746. This is the case that exercises the subkey path with no full block.",
       "fields": {
         "key": "2b7e151628aed2a6abf7158809cf4f3c",
@@ -17,7 +18,8 @@
     },
     {
       "name": "aes128-one-block",
-      "clause": "RFC 4493 section 4",
+      "clause": "4",
+      "doc": "RFC 4493",
       "note": "Example 2 of RFC 4493 section 4: the first 16 octets of the standard message, exactly one block, no padding.",
       "fields": {
         "key": "2b7e151628aed2a6abf7158809cf4f3c",
@@ -27,7 +29,8 @@
     },
     {
       "name": "aes128-partial-final-block",
-      "clause": "RFC 4493 section 4",
+      "clause": "4",
+      "doc": "RFC 4493",
       "note": "Example 3 of RFC 4493 section 4: 40 octets, so two full blocks and a partial third that takes the padding-and-K2 path.",
       "fields": {
         "key": "2b7e151628aed2a6abf7158809cf4f3c",
@@ -37,7 +40,8 @@
     },
     {
       "name": "aes128-four-blocks",
-      "clause": "RFC 4493 section 4",
+      "clause": "4",
+      "doc": "RFC 4493",
       "note": "Example 4 of RFC 4493 section 4: 64 octets, four full blocks, so the final block takes the K1 path with no padding.",
       "fields": {
         "key": "2b7e151628aed2a6abf7158809cf4f3c",
@@ -47,7 +51,7 @@
     },
     {
       "name": "aes256-empty-message",
-      "clause": "NIST SP 800-38B example set",
+      "doc": "NIST SP 800-38B",
       "note": "Mlen 0. The case CCSDS 355.0-B-2 clause E2a cares about most, since SDLS mandates a 256-bit key. Empty message takes the padding-and-K2 path. Transcribed from the published NIST example set.",
       "fields": {
         "key": "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
@@ -57,7 +61,7 @@
     },
     {
       "name": "aes256-one-block",
-      "clause": "NIST SP 800-38B example set",
+      "doc": "NIST SP 800-38B",
       "note": "Mlen 16: exactly one block, K1 path, no padding. Transcribed from the published NIST example set.",
       "fields": {
         "key": "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
@@ -67,7 +71,7 @@
     },
     {
       "name": "aes256-partial-final-block",
-      "clause": "NIST SP 800-38B example set",
+      "doc": "NIST SP 800-38B",
       "note": "Mlen 20: one full block and a 4-octet remainder, so the final block is padded and uses K2. Transcribed from the published NIST example set.",
       "fields": {
         "key": "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",
@@ -77,7 +81,7 @@
     },
     {
       "name": "aes256-four-blocks",
-      "clause": "NIST SP 800-38B example set",
+      "doc": "NIST SP 800-38B",
       "note": "Mlen 64: four full blocks, K1 path. Transcribed from the published NIST example set.",
       "fields": {
         "key": "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4",

@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "standard": "CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0",
+  "standard": "CCSDS 211.2-B-3",
   "package": "pxsc",
-  "source": "independent vectors from the libfec / gr-satellites realization of the CCSDS 171/133 code",
+  "source": "independent vectors from a widely deployed realization of the CCSDS 171/133 code",
   "note": "The rate-1/2 constraint-length-7 convolutional code. These vectors pin the code to the convention deployed CCSDS receivers use: newest bit shifted into the register's least significant bit, taps 0x4f and 0x6d, and the G2 output inverted. That last detail is the whole point. A reciprocal, mirror-image encoder decodes its own output perfectly and no one else's \u2014 it emits 0x86b9 for the 0x80 input instead of 0xba49. No round-trip test can tell the two apart; only these octets can.",
   "encode": [
     {
       "name": "single-one-in-the-least-significant-bit",
-      "clause": "131.0 convolutional code",
+      "doc": "CCSDS 131.0",
       "note": "Input 0x01: a single set bit in the last position. Output 0x5556. The long run of alternating bits before it comes from the inverted G2 output against an all-zero register, so this vector catches a missing inversion immediately.",
       "fields": {
         "data": "01"
@@ -16,7 +16,7 @@
     },
     {
       "name": "single-one-in-the-most-significant-bit",
-      "clause": "131.0 convolutional code",
+      "doc": "CCSDS 131.0",
       "note": "Input 0x80: a single set bit in the first position, giving 0xba49. This is the vector that distinguishes the standard convention from a mirror-image encoder, which produces 0x86b9 here instead.",
       "fields": {
         "data": "80"
@@ -25,7 +25,7 @@
     },
     {
       "name": "two-octets",
-      "clause": "131.0 convolutional code",
+      "doc": "CCSDS 131.0",
       "note": "Input a5 3c exercises the register across an octet boundary, where the state carried between input bytes matters. Output b4 80 e3 bc.",
       "fields": {
         "data": "a53c"
@@ -34,7 +34,7 @@
     },
     {
       "name": "ccsds-ascii-string",
-      "clause": "131.0 convolutional code",
+      "doc": "CCSDS 131.0",
       "note": "Input is the ASCII string 'CCSDS' (43 43 53 44 53), long enough that the 7-bit register fills completely and every tap combination is exercised. Output 6e 9f 23 2f 20 93 53 19 aa 23.",
       "fields": {
         "data": "4343534453"

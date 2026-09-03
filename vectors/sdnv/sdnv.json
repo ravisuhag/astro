@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "standard": "RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20",
+  "standard": "RFC 5050",
   "package": "sdnv",
   "source": "RFC 5050 clause 4.1 worked examples",
-  "note": "Self-Delimiting Numeric Values. Seven value bits per octet, most significant group first; every octet but the last carries the continuation bit 0x80. The seven cases below are the worked examples RFC 5050 prints; the wide cases after them are derived from the same rule and Values are decimal strings where they exceed 2^53, per the corpus convention.",
+  "note": "Self-Delimiting Numeric Values, RFC 5050 clause 4.1, adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20. Seven value bits per octet, most significant group first; every octet but the last carries the continuation bit 0x80. The seven cases below are the worked examples RFC 5050 prints; the wide cases after them are derived from the same rule and Values are decimal strings where they exceed 2^53, per the corpus convention.",
   "encode": [
     {
       "name": "zero",
@@ -71,7 +71,7 @@
     {
       "name": "largest-two-octet-value",
       "clause": "4.1",
-      "note": "0x3fff is the largest value two octets can carry (fourteen value bits): groups 0x7f, 0x7f -> 0xff 0x7f. Derived from the seven-bits-per-octet rule and",
+      "note": "0x3fff is the largest value two octets can carry (fourteen value bits): groups 0x7f, 0x7f -> 0xff 0x7f. Derived from the seven-bits-per-octet rule and the continuation bit: each octet gives up its high bit, so two octets leave fourteen for the value and 0x4000 needs a third.",
       "fields": {
         "value": 16383
       },
@@ -151,8 +151,9 @@
     {
       "name": "ends-mid-value",
       "clause": "4.1",
-      "note": "Every octet sets the continuation bit, so the value never terminates before the data does.",
+      "note": "Every octet sets the continuation bit, so the value never terminates before the data does. A decoder must not get past octet 2: every octet sets the continuation bit and the input ends.",
       "input": "8181",
+      "at_octet": 2,
       "error": "truncated"
     },
     {

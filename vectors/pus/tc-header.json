@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "standard": "ECSS-E-ST-70-41C (PUS-C)",
+  "standard": "ECSS-E-ST-70-41C",
   "package": "pus",
   "source": "derived from the clause 7.4.4.1 figure 7-9 layout",
-  "note": "PUS-C telecommand secondary headers. Octet 0 carries the 4-bit PUS version (2 for PUS-C) and the 4-bit acknowledgement flags; then the service type, the subtype, a 16-bit source ID, and mission-declared spare padding. The wire format is NOT self-describing: the spare width is a per-application-process declaration, so a decoder must already hold the mission profile. That is why the profile appears in each vector's config rather than its fields. The service state machines is not yet covered.",
+  "note": "The PUS-C telecommand secondary header. PUS version 2 is PUS-C; the field layout changed between versions, so a version mismatch must be refused rather than misparsed. PUS-C telecommand secondary headers. Octet 0 carries the 4-bit PUS version (2 for PUS-C) and the 4-bit acknowledgement flags; then the service type, the subtype, a 16-bit source ID, and mission-declared spare padding. The wire format is NOT self-describing: the spare width is a per-application-process declaration, so a decoder must already hold the mission profile. That is why the profile appears in each vector's config rather than its fields. The service state machines is not yet covered.",
   "encode": [
     {
       "name": "tc-service-17-subtype-1-connection-test",

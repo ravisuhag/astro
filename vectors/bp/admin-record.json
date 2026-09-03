@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "standard": "CCSDS 734.2-B-1 / RFC 5050",
+  "standard": "RFC 5050",
   "package": "bp",
-  "source": "derived from the clause 4.3 administrative record layout",
-  "note": "Bundle Protocol wire layer, narrowly scoped. Most of BP's encoding is built from SDNVs, pinned independently and more thoroughly in vectors/sdnv/sdnv.json; duplicating them here would add no coverage and a second place to drift. Endpoint identifiers are URI strings rather than octet fields. What is left and worth pinning is the administrative record's type and flags octet, where the two share one octet. There are no decode vectors: a full record needs a body whose layout depends on the record type, which is beyond what this file scopes. Bundle reassembly, fragmentation and custody transfer are not covered.",
+  "source": "derived from the clause 6.1 administrative record layout",
+  "note": "Bundle Protocol administrative records, narrowly scoped to the type octet. RFC 5050 clause 6.1 defines every administrative record as a four-bit record type code followed by four bits of record flags. CCSDS 734.2-B-1 adopts RFC 5050, so the clause numbers here are the RFC's. Figure 8 defines type 0001 as a bundle status report and 0010 as a custody signal, with all other values reserved; figure 9 defines flag 0001 as the fragment flag.",
   "encode": [
     {
       "name": "admin-record-status-report-type-octet",
-      "clause": "4.3",
+      "clause": "6.1",
       "note": "The administrative record opens with one octet: the record type in the high nibble, flags in the low nibble. A status report with no flags is type 1<<4 = 0x10.",
       "fields": {
         "record_type": 1,
@@ -17,7 +17,7 @@
     },
     {
       "name": "admin-record-custody-signal-type-octet",
-      "clause": "4.3",
+      "clause": "6.1",
       "note": "A custody signal is type 2: 2<<4 = 0x20. Paired with the status report vector, this pins that the type occupies the high nibble and not the low one.",
       "fields": {
         "record_type": 2,
@@ -27,7 +27,7 @@
     },
     {
       "name": "admin-record-fragment-flag",
-      "clause": "4.3",
+      "clause": "6.1",
       "note": "A status report for a fragment sets the fragment flag in the low nibble: 1<<4 | 1 = 0x11. Type and flags share the octet, so a decoder reading the whole octet as a type fails here.",
       "fields": {
         "record_type": 1,
@@ -40,14 +40,14 @@
   "reject": [
     {
       "name": "admin-record-type-not-defined",
-      "clause": "4.3",
+      "clause": "6.1",
       "note": "Record type 0xf (from octet 0xf0) is not a defined administrative record type. A decoder must refuse rather than process the body under an unknown record layout.",
       "input": "f00000",
       "error": "reserved_value"
     },
     {
       "name": "admin-record-empty",
-      "clause": "4.3",
+      "clause": "6.1",
       "note": "No octets at all: not even the type and flags octet is present.",
       "input": "",
       "error": "truncated"

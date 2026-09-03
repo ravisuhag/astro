@@ -47,6 +47,7 @@ type File struct {
 type Encode struct {
 	Name     string   `json:"name"`
 	Clause   string   `json:"clause,omitempty"`
+	Doc      string   `json:"doc,omitempty"`
 	Source   string   `json:"source,omitempty"`
 	Note     string   `json:"note"`
 	Requires []string `json:"requires,omitempty"`
@@ -61,6 +62,7 @@ type Encode struct {
 type Decode struct {
 	Name     string   `json:"name"`
 	Clause   string   `json:"clause,omitempty"`
+	Doc      string   `json:"doc,omitempty"`
 	Source   string   `json:"source,omitempty"`
 	Note     string   `json:"note"`
 	Requires []string `json:"requires,omitempty"`
@@ -75,6 +77,7 @@ type Decode struct {
 type Reject struct {
 	Name      string   `json:"name"`
 	Clause    string   `json:"clause,omitempty"`
+	Doc       string   `json:"doc,omitempty"`
 	Source    string   `json:"source,omitempty"`
 	Note      string   `json:"note,omitempty"`
 	Requires  []string `json:"requires,omitempty"`
@@ -82,15 +85,18 @@ type Reject struct {
 	Input     *string  `json:"input,omitempty"`
 	Fields    Fields   `json:"fields,omitempty"`
 	BufferLen *int     `json:"buffer_len,omitempty"`
+	AtOctet   *int     `json:"at_octet,omitempty"`
 	Error     string   `json:"error"`
 }
 
-// Sequence is a scripted run against a state machine. The schema defines
-// it and no file carries one yet. The loader validates it so a fixture
-// cannot be added that the runners would later reject.
+// Sequence is a scripted run against a state machine: a starting state,
+// then a list of steps, each checking the octets emitted and the state
+// left behind. It is the only kind that can assert anything about time
+// or ordering.
 type Sequence struct {
 	Name   string `json:"name"`
 	Clause string `json:"clause,omitempty"`
+	Doc    string `json:"doc,omitempty"`
 	Source string `json:"source,omitempty"`
 	Note   string `json:"note"`
 	Config Fields `json:"config,omitempty"`
@@ -112,6 +118,7 @@ var (
 	nameRE   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	fieldRE  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	callRE   = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	clauseRE = regexp.MustCompile(`^[0-9A-Z][0-9A-Za-z.\-]*$`)
 	pkgRE    = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
 	minNote  = 10
 	capNames = map[string]bool{"encode_into": true}

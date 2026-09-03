@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "standard": "CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT)",
+  "standard": "CCSDS 132.0-B-3",
   "package": "crc",
   "source": "published check value, plus derivations from the generator and preset",
   "note": "CRC-16-CCITT as CCSDS uses it for frame and packet error control: generator 0x1021, preset all ones, most-significant bit first, no reflection and no final inversion. A scalar result is written as hex at its natural width, big-endian, which is also the order the field takes on the wire.",
