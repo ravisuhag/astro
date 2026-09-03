@@ -402,6 +402,14 @@ interchangeable:
 - `oid` — h(x) = x^32 + x^31 + x^30 + x^10 + 1, the 32-cell generator for
   Only Idle Data frames
 
+CCSDS 732.1-B-3 clause 4.1.4.1.10 prints the OID generator as
+D^0 + D^1 + D^2 + D^22 + D^32, which is the reciprocal of the form above.
+The two describe the same register read from opposite ends: the standard
+states the Fibonacci form, and the form here is the one that works with
+the arrangement described below. Either produces the same octets; mixing
+a polynomial from one convention with a register from the other does
+not.
+
 **The polynomial alone does not determine the octets.** Which end of the
 register outputs, and which way it shifts, come from the figure each
 standard draws, and every orientation still produces a maximal-length

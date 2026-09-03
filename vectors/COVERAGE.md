@@ -165,23 +165,41 @@ routinely more permissive than the standard they implement — accepting an
 out-of-range identifier rather than refusing it. A rejection rule can be
 corroborated by reading the clause and in almost no other way.
 
-**The citations are audited structurally, not semantically.** Every
-vector names a clause. 239 of the 249 citations have been checked against
-the document they name, at the revision they name, and every one exists
-as a real heading. The ten not checked are ECSS-E-ST-70-41C, which is not
+**The citations are audited.** Every vector names a clause. Each cited
+clause has been read against what its vectors claim, across 20 documents
+covering all but the ten ECSS-E-ST-70-41C citations, which are not
 freely available.
 
-That check says the citation points somewhere real. It does not say the
-clause means what the `note` claims. The clauses read in full so far are
-the ones a defect was found in or that settled a value:
+Nineteen citations pointed at the wrong clause and are corrected. The
+values were right in every case; it was the pointers that were wrong,
+which is precisely what a check for "does this clause exist" cannot
+catch, because the wrong clause exists too.
 
-| Document | Clauses read | What it settled |
-|---|---|---|
-| RFC 5050 | 4.1, 6.1 | the SDNV rule; the administrative record layout |
-| RFC 5326 | 3.1, 3.1.2 | the segment header; the segment type codes |
-| CCSDS 732.0-B-4 | 4.1.2.6, 4.1.2.6.5 | the frame header error control, which had been unverified |
-| CCSDS 232.1-B-2 | 5.1.2, 5.1.10, 6.1-6.3 | the FOP-1 and FARM-1 rules the `sequence` vectors run |
+Two limits worth knowing for anyone repeating this. Bit diagrams do not
+survive PDF text extraction -- the TC start sequence extracts as a
+pattern reading FF00 where the rendered page plainly shows EB90 -- so
+figures must be read as images. And a clause number matched in a table of
+contents looks identical to one matched in the body.
 
-Reading the rest in full is the remaining work. Three citation errors
-have been found and fixed this way, which is the argument for finishing
-it.
+What the reading corrected:
+
+| Package | Was | Is | Why |
+|---|---|---|---|
+| `bp` | 4.3 | 6.1 | RFC 5050 4.3 is Block Processing Control Flags |
+| `ltp` | 3.2 | 3.1 | RFC 5326 3.2 is Segment Content, not the header |
+| `ltp` | type 12 as a report segment | type 8 | RFC 5326 3.1.2 makes 12 a cancel segment |
+| `tcf` | 3.2.1 on five P-field vectors | 3.2.2 | 3.2.1 is the T-field |
+| `tcf` | 3.2.2 on five T-field vectors | 3.2.1 | 3.2.2 is the P-field |
+| `tcf` | 3.3 on three CDS vectors | 3.3.1 | 3.3 is the whole CDS section |
+| `tcsc` | 3.4 on both CLTU vectors | 5.2.2, 5.2.4 | 3.4 is Fill Data |
+| `aos` | 4.1.2.6.5, 4.1.2.6 | 4.1.2.5.4, 4.1.2.5.5 | the signalling field, not the error control code |
+| `aos` | 4.1 on two frame vectors | 4.1.2 | 4.1 is the whole PDU section |
+
+Separately, ten notes across `cop`, `spp` and `tcf` numbered bits from
+the least significant end while every cited standard numbers from the
+most significant. And six `sdnv` notes claimed RFC 5050 printed values it
+does not; the reading found two genuine published examples the corpus was
+missing, which are now vectors.
+
+What remains unread is ECSS-E-ST-70-41C, behind registration, covering
+the ten `pus` citations.
