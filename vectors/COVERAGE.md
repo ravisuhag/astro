@@ -17,6 +17,7 @@ evidence of conformance.
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
 | `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 13 | — |
+| `csts` | CCSDS 921.1-B-2 (specification framework) | 10 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `keywrap` | RFC 3394 (AES Key Wrap) | 6 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
@@ -39,9 +40,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **390** | **138** |
+| **Total** | | **400** | **138** |
 
-378 vectors and 126 referenced corpus files across 30 packages.
+400 vectors and 138 referenced corpus files across 32 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -128,6 +129,14 @@ corpus.
 pinned; the operation encodings above them are not. Several
 GET-PARAMETER alternatives have no published vectors to test a typed
 shape against, which is the blocker.
+
+**The CSTS vectors are derived, not published.** CCSDS 921.1-B-2 is an
+abstract specification with an ASN.1 annex and prints no octets at all,
+so there is nothing to transcribe. Each `csts` vector carries its
+derivation from annex F octet by octet in its note, which is the most a
+reader can be given: it lets the derivation be checked against the
+module rather than against this package. What they pin hardest is the
+implicit tagging, where a mistake round-trips perfectly against itself.
 
 ## Values not established against a standard
 

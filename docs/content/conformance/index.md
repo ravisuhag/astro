@@ -45,6 +45,7 @@ what has never been tested against another implementation.
 | [Proximity-1 Coding and Sync](/conformance/pxsc) | `pkg/pxsc` | [4](https://github.com/ravisuhag/astro/tree/main/vectors/pxsc) | [Protocol](/protocols/coding/pxsc) |
 | [Optical Coding and Sync](/conformance/ocsc) | `pkg/ocsc` | [1](https://github.com/ravisuhag/astro/tree/main/vectors/ocsc) | [Protocol](/protocols/coding/ocsc) |
 | [Space Link Extension](/conformance/sle) | `pkg/sle` | [23](https://github.com/ravisuhag/astro/tree/main/vectors/sle) | [Protocol](/protocols/ground/sle) |
+| [Cross Support Transfer Service](/conformance/csts) | `pkg/csts` | [10](https://github.com/ravisuhag/astro/tree/main/vectors/csts) | [Protocol](/protocols/ground/csts) |
 | [Lossless Data Compression](/conformance/ldc) | `pkg/ldc` | [107 files](https://github.com/ravisuhag/astro/tree/main/vectors/ldc) | [Protocol](/protocols/compression/ldc) |
 | [Housekeeping Compression](/conformance/rhc) | `pkg/rhc` | — | [Protocol](/protocols/compression/rhc) |
 | [Time Code Formats](/conformance/tcf) | `pkg/tcf` | [14](https://github.com/ravisuhag/astro/tree/main/vectors/tcf) | [Protocol](/protocols/mission/tcf) |
