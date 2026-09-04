@@ -7,9 +7,10 @@ order: 220
 
 ## Conformance Statement for `pkg/adm`, CCSDS 504.0-B-2
 
-Two of the three messages are implemented: the Attitude Parameter Message of
-section 3 and the Attitude Ephemeris Message of section 4. The Attitude
-Comprehensive Message of section 5 is not.
+All three messages are implemented: the Attitude Parameter Message of
+section 3, the Attitude Ephemeris Message of section 4 and the Attitude
+Comprehensive Message of section 5, each in both the key-value notation of
+section 6 and the XML form of section 7.
 
 ---
 
@@ -68,6 +69,44 @@ Comprehensive Message of section 5 is not.
 | Data line width per attitude type | Table 4-4 | M | Y: every line checked; `ErrAttitudeLineFields` |
 | Positional data lines, space separated | 4.2 | M | Y |
 
+### ACM, section 5
+
+The ACM's six sections hold something over a hundred keywords, so this lists
+them by section rather than one row apiece. The full tables are in
+`pkg/adm/acm_keywords.go`, in the order the Blue Book prints them, which is
+also the order clauses 5.3.3.5 and 5.3.4.1 require them to arrive in.
+
+| Feature | Reference | Status | Support |
+|---|---|:-:|---|
+| Header keywords | Table 5-2 | M/O | Y: the same six as the APM's table 3-1 |
+| Metadata section, one only | 5.3.3.4 | M | Y |
+| Metadata keywords | Table 5-3 | M/O | Y: `OBJECT_NAME`, `TIME_SYSTEM` and `EPOCH_TZERO` are mandatory |
+| Section order | Table 5-1, 5.3.1.2 | M | Y: a section out of order is refused |
+| Keyword order within a section | 5.3.3.5, 5.3.4.1 | M | Y: a keyword out of its table's order is refused |
+| Attitude state sections | Table 5-4, 5.3.5.4 | O | Y: any number |
+| `ATT_TYPE` and `RATE_TYPE` element counts | Annex B4 | M | Y: `QUATERNION` 4, `EULER_ANGLES` 3, `DCM` 9; `ANGVEL` 3, `Q_DOT` 4, `EULER_RATE` 3, `GYRO_BIAS` 3, `NONE` 0 |
+| `NUMBER_STATES` agrees with the types | Table 5-4 | M | Y: a disagreement is refused, not resolved either way |
+| Attitude data line width | Table 5-4 | M | Y: one time tag plus `NUMBER_STATES` values |
+| `EULER_ROT_SEQ` when the type is Euler angles | Table 5-4 | C | Y |
+| Physical characteristics section, one only | 5.3.6.3 | O | Y |
+| `CP_REF_FRAME` present if `CP` is | Table 5-5 | C | Y |
+| Covariance sections | Table 5-6, 5.3.7.3 | O | Y: any number |
+| `COV_TYPE` matrix dimensions | Annex B6 | M | Y: all six values |
+| Covariance line is the main diagonal | 5.3.7.6 | M | Y: one time tag plus the dimension |
+| Covariance time ordered increasing | 5.3.7.5 | M | Y: the attitude section has no such rule and is not held to one |
+| Manoeuvre sections | Table 5-7, 5.3.8.4 | O | Y: any number |
+| `MAN_END_TIME` or `MAN_DURATION`, not both | Table 5-7 | C | Y |
+| `TARGET_MOM_FRAME` present if `TARGET_MOMENTUM` is | Table 5-7 | C | Y |
+| Vector component counts | Tables 5-5, 5-7 | M | Y: `CP` and `TARGET_MOMENTUM` three, `TARGET_ATTITUDE` four |
+| Attitude determination section, one only | 5.3.9.2 | O | Y |
+| `AD_METHOD` estimator types | Annex B5 | O | Y: all six of `EKF`, `TRIAD`, `QUEST`, `BATCH`, `Q_METHOD`, `FILTER_SMOOTHER` |
+| Sensor sub-blocks, delimited and unique | 5.3.9.5, 5.3.9.6, Table 5-8 | O | Y: `SENSOR_START` to `SENSOR_STOP` inside the section and nowhere else; numbers must be unique |
+| `SENSOR_NOISE_STDDEV` matches `NUMBER_SENSOR_NOISE_COVARIANCE` | Table 5-8 | O | Y |
+| User-defined section, one only, at least one parameter | 5.3.10.4, Table 5-9 | O | Y |
+| Relative or absolute time tags | 5.3.4.3 | M | Y: `DataRow.TimeTag` resolves either against `EPOCH_TZERO` |
+| No duplicate time tags in a block | 5.3.4.4 | M | Y |
+| One time tag kind per block | 5.3.4.5 | M | Y |
+
 ### XML form, section 7
 
 | Feature | Reference | Status | Support |
@@ -78,17 +117,29 @@ Comprehensive Message of section 5 is not.
 | `quaternionState` wrapping frames, `quaternion` and `quaternionDot` | 7.5.11, 7.5.12 | M | Y |
 | `eulerAngleState`, `angularVelocity`, `spin`, `inertia`, `maneuverParameters` | 7.5.11 | O | Y |
 | `attitudeState` with the type's own inner element | 7.6.11, Table 7-5 | M | Y: all nine; a disagreement between type and element is refused |
-| Units as attributes | 7.4 | O | Y |
+| Units as attributes | 7.4, 7.7.10–7.7.12 | O | Y |
+| ACM root, one segment, one metadata section | 7.7.1–7.7.7 | M | Y |
+| ACM section tags and data line tags | Table 7-7 | M | Y: `att`, `phys`, `cov`, `man`, `ad`, `user` and their `attLine`, `covLine` |
+| ACM data lines as `xsd:string` | 7.7.13.3 | M | Y: kept as rows, split by the reader, as the clause intends |
+| `sensorData` elements inside `ad` | 7.7.14 | O | Y: shown by example rather than stated; one outside the attitude determination block is refused |
 
 ---
 
 ## A3 EXCEPTIONS AND UNSUPPORTED FEATURES
 
-**The ACM is not implemented.** Section 5's Attitude Comprehensive Message is
-roughly three times the size of sections 3 and 4 together, arrived with this
-2024 issue of the standard, and has thin adoption next to the APM and the AEM.
-The same reasoning applied to the ODM's OCM. A message naming
-`CCSDS_ACM_VERS` is refused rather than half-read.
+**An ACM's keywords are not typed.** Its sections are held as ordered keyword
+lists with typed accessors for the keywords that change how the data must be
+read. There are something over a hundred of them across six sections, most
+optional, so there would be little to parse a value into and no way for a
+caller to see an unfamiliar keyword if it were dropped. `Get` reaches anything;
+the values are carried as text. That is the same choice `pkg/odm` makes for
+the OCM.
+
+**An ACM covariance carries only its diagonal.** Clause 5.3.7.6 puts the main
+diagonal on the line and nothing else, and clause 5.3.7.7 sends anyone who
+needs the off-diagonal terms to a user-defined block. That is a limit of the
+format, not of this package: `CovarianceCount` reports the dimension, and there
+is no matrix to rebuild.
 
 **No attitude mathematics.** Nothing normalises a quaternion, converts between
 representations, composes rotations, or interpolates. `INTERPOLATION_METHOD`
@@ -121,25 +172,31 @@ without this package.
 
 | Limit | Value | Source |
 |---|---|---|
-| Line length | 254 characters | Clause 6.4 |
+| Line length, APM and AEM | 254 characters | Clause 6.6.1 |
+| Line length, ACM | unbounded | Clause 6.6.2 exempts the ACM outright, the same split CCSDS 502.0-B-3 makes for the OCM |
 | Digits in a non-integer value | 16 | Clause 6.5 |
 | Maneuvers per APM | bounded by the input | No ceiling imposed |
 | Records per AEM block | bounded by the input | Read into memory rather than streamed |
-| Attitude types | 9 | Table 4-4 |
+| Attitude types, AEM | 9 | Table 4-4 |
+| Attitude and rate types, ACM | 3 and 5 | Annex B4 |
+| Covariance types, ACM | 6 | Annex B6 |
+| Data sections per ACM | bounded by the input | No ceiling on the repeating sections; the rest are limited to one by the standard |
+| Sensor blocks per ACM | bounded by the input | Clause 5.3.9.5 asks for as many as there are sensors |
 
 ---
 
 ## Wire test vectors
 
-The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/adm) — 3 decode vectors and 3 corpus files.
+The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/adm) — 8 decode vectors and 8 corpus files.
 
 | File | |
 |---|---|
-| [`adm/attitude.json`](https://github.com/ravisuhag/astro/blob/main/vectors/adm/attitude.json) | 3 vectors |
-| `adm/apm-*.kvn`, `adm/aem-*.kvn` | the annex G examples as readable files |
+| [`adm/attitude.json`](https://github.com/ravisuhag/astro/blob/main/vectors/adm/attitude.json) | 8 vectors |
+| `adm/apm-*.kvn`, `adm/aem-*.kvn`, `adm/acm-*.kvn` | the annex G examples as readable files |
+| `adm/acm-xml.xml` | the ACM of figure G-12 in the XML form of section 7 |
 
 All are **published text rather than derived values**: annex G of the Blue Book prints them.
 
-The vectors assert the shape — which blocks an APM carried, the frames a rotation goes between, and for an AEM the attitude type together with the line width it implies. The numbers are floats, which a vector field cannot hold, and are checked in `pkg/adm` against the same published text.
+The vectors assert the shape — which blocks an APM carried, the frames a rotation goes between, and for an AEM the attitude type together with the line width it implies. For an ACM the shape is self-checking, and the vectors carry every part of it: the types, the `NUMBER_STATES` the producer declared, and the row width all three have to agree on. The numbers are floats, which a vector field cannot hold, and are checked in `pkg/adm` against the same published text.
 
 See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how to consume these, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

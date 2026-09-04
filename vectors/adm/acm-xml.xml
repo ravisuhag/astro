@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<acm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation="https://sanaregistry.org/r/ndmxml_unqualified/ndmxml-4.0.0-master-4.0.xsd"
+     id="CCSDS_ACM_VERS" version="2.0">
+  <header>
+    <CREATION_DATE>1998-11-06T09:23:57</CREATION_DATE>
+    <ORIGINATOR>JAXA</ORIGINATOR>
+    <MESSAGE_ID>A7015Z4</MESSAGE_ID>
+  </header>
+  <body>
+    <segment>
+      <metadata>
+        <OBJECT_NAME>EUROBIRD-4A</OBJECT_NAME>
+        <INTERNATIONAL_DESIGNATOR>2000-052A</INTERNATIONAL_DESIGNATOR>
+        <TIME_SYSTEM>UTC</TIME_SYSTEM>
+        <EPOCH_TZERO>1998-12-18T14:28:15.1172</EPOCH_TZERO>
+      </metadata>
+      <data>
+        <att>
+          <REF_FRAME_A>J2000</REF_FRAME_A>
+          <REF_FRAME_B>SC_BODY</REF_FRAME_B>
+          <NUMBER_STATES>4</NUMBER_STATES>
+          <ATT_TYPE>QUATERNION</ATT_TYPE>
+          <attLine>0.0 0.73566 -0.50547 0.41390 0.180707</attLine>
+          <attLine>0.25 0.73529 -0.50531 0.41375 0.181158</attLine>
+          <attLine>0.50 0.73492 -0.50515 0.41441 0.181610</attLine>
+        </att>
+      </data>
+    </segment>
+  </body>
+</acm>

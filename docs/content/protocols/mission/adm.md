@@ -21,20 +21,15 @@ frames the rotation goes between.
 |---|---|
 | **APM** | One attitude at one epoch, with optional angular velocity, spin, inertia and planned manoeuvres. |
 | **AEM** | A table of attitudes over a span, with the interpolation to use between them. |
-| **ACM** | Everything at once. Not implemented. |
+| **ACM** | Everything at once: attitude histories, physical properties, covariance, manoeuvres, and how the attitude was determined. |
 
 ## Scope
 
-**Implemented.** The APM and the AEM, in key-value notation.
+**Implemented.** All three messages, in key-value notation.
 
-**Not implemented: the ACM.** Section 5 is roughly three times the size of
-sections 3 and 4 together, it arrived with this 2024 issue, and adoption is
-thin next to the other two. That is the same call this project made about the
-ODM's OCM.
-
-**Also implemented: the XML form** of section 7. `EncodeXML` sits beside
-`Encode`, and `DecodeXMLAPM` and `DecodeXMLAEM` beside their key-value
-counterparts.
+**Also implemented: the XML form** of section 7, for all three. `EncodeXML`
+sits beside `Encode`, and `DecodeXMLAPM`, `DecodeXMLAEM` and `DecodeXMLACM`
+beside their key-value counterparts.
 
 **Deliberately absent: attitude mathematics.** Nothing here normalises a
 quaternion, converts one to Euler angles, composes two rotations, or
@@ -108,6 +103,89 @@ The six data blocks *are* delimited, each with its own pair — `QUAT_START` and
 `QUAT_STOP`, `EULER_START` and `EULER_STOP`, and so on. A block closed by
 another block's stop keyword is refused.
 
+## The ACM
+
+An ACM is a header, one metadata section, and any number of data sections in
+the order table 5-1 fixes. Every section is delimited, the same shape the
+ODM's OCM has.
+
+```
+CCSDS_ACM_VERS = 2.0
+CREATION_DATE  = ...
+ORIGINATOR     = ...
+
+META_START  ... META_STOP    one, mandatory
+ATT_START   ... ATT_STOP     any number
+PHYS_START  ... PHYS_STOP    at most one
+COV_START   ... COV_STOP     any number
+MAN_START   ... MAN_STOP     any number
+AD_START    ... AD_STOP      at most one
+USER_START  ... USER_STOP    at most one
+```
+
+| Piece | Go | Notes |
+|---|---|---|
+| Metadata | `ACM.Metadata` | 20 keywords. `OBJECT_NAME`, `TIME_SYSTEM` and `EPOCH_TZERO` are mandatory. |
+| Attitude | `ACM.Attitudes` | Keywords, then positional rows. `ATT_TYPE` and `RATE_TYPE` name the columns. |
+| Physical | `ACM.Physical` | Mass, centre of pressure, inertia tensor. |
+| Covariance | `ACM.Covariances` | `COV_TYPE` gives the matrix size; only the diagonal is on the wire. |
+| Manoeuvre | `ACM.Maneuvers` | Purpose, start time, actuator, and a target for each purpose. |
+| Attitude determination | `ACM.AttitudeDetermination` | The estimator and its sensors. |
+| User-defined | `ACM.UserDefined` | `USER_DEFINED_x`. |
+
+The sections are held as ordered keyword lists with typed accessors, not as
+struct fields — the same choice `pkg/odm` makes for the OCM, and for the same
+reason.
+
+## An ACM row's width is checkable; an OCM row's is not
+
+Both messages have positional rows whose columns come from a keyword. The
+difference is where the keyword's values are written down.
+
+| | ACM | OCM |
+|---|---|---|
+| Attitude / trajectory | `ATT_TYPE`, annex B4 | `TRAJ_TYPE`, SANA registry |
+| Covariance | `COV_TYPE`, annex B6 | `COV_TYPE`, SANA registry |
+| Declared count | `NUMBER_STATES`, mandatory | none |
+
+Annex B4 prints the component count of every attitude and rate type:
+
+| `ATT_TYPE` | Components | | `RATE_TYPE` | Components |
+|---|--:|---|---|--:|
+| `QUATERNION` | 4 | | `ANGVEL` | 3 |
+| `EULER_ANGLES` | 3 | | `Q_DOT` | 4 |
+| `DCM` | 9 | | `EULER_RATE` | 3 |
+| | | | `GYRO_BIAS` | 3 |
+| | | | `NONE` | 0 |
+
+So a block says how wide its rows are twice: once through its types, and once
+through `NUMBER_STATES`. This package checks that the two agree, and that the
+rows match. A message where they disagree is one where a producer and a
+consumer would read different columns, so it is refused rather than resolved
+either way.
+
+## An ACM covariance row is only the diagonal
+
+Clause 5.3.7.6 puts the main diagonal on the line and nothing else, so a 6×6
+`ANGLE_GYROBIAS` covariance is six numbers after the time tag. An OCM
+covariance of the same size writes twenty-one — the whole lower triangle.
+
+Clause 5.3.7.7 says the off-diagonal terms, if anyone needs them, go in a
+user-defined block. That is a real limit of the format rather than of this
+package: an ACM cannot carry a full attitude covariance in its covariance
+section.
+
+## An ACM time tag may be a date or a number
+
+Clause 5.3.4.3 lets a time tag be an absolute time or a signed count of SI
+seconds from `EPOCH_TZERO`, exactly as the OCM does. Every example in annex G
+uses relative tags. `DataRow.TimeTag` resolves either, and `IsRelative` says
+which arrived.
+
+Clause 5.3.4.5 makes a block pick one and keep it. Clause 5.3.7.5 additionally
+requires a covariance history to run forward in time — and says nothing of the
+sort about attitude histories, so this package does not impose it there.
+
 ## The XML form nests further than the orbit messages
 
 An APM quaternion is not four keywords in a row. Clause 7.5.11 puts the frames
@@ -130,6 +208,18 @@ So the choice the key-value form expresses as a line width becomes a choice of
 element name. A file whose `ATTITUDE_TYPE` and inner element disagree is
 refused — it is the XML form of a line of the wrong width.
 
+### The ACM keeps its rows
+
+The ACM is the exception. Clause 7.7.13.3 gives `<attLine>` and `<covLine>` the
+type `xsd:string`: the schema does not look inside them, and the recipient
+still splits the line and reads its columns by `ATT_TYPE`, `RATE_TYPE` or
+`COV_TYPE`. Its sections become the block elements `<att>`, `<phys>`, `<cov>`,
+`<man>`, `<ad>` and `<user>` of table 7-7.
+
+The sensor sub-blocks nested inside the attitude determination section become
+`<sensorData>` elements. Clause 7.7.14 shows that rather than stating it — it
+is the one part of the ACM mapping the standard leaves to an example.
+
 The ADM also names a **different schema** from the ODM: `ndmxml-4.0.0` where
 the orbit messages give `3.0.0`. The numbers track each standard's own schema
 issue, not the NDM/XML document.
@@ -148,6 +238,18 @@ for _, block := range ephemeris.Blocks {
     width, _ := block.Metadata.Type.Fields()
     fmt.Println(block.Metadata.Type, "gives", width, "values per line")
 }
+
+comprehensive, err := adm.DecodeACM(data)
+tzero, _ := comprehensive.EpochTZero()
+for _, block := range comprehensive.Attitudes {
+    states, _ := block.StateCount()
+    fmt.Println(block.AttitudeType(), "with", block.RateType(), "is", states, "states")
+    for _, row := range block.Rows {
+        // A time tag may be a date or seconds from T-zero. This resolves both.
+        at, _ := row.TimeTag(tzero)
+        fmt.Println(at, row.Fields[1:])
+    }
+}
 ```
 
 ### Errors
@@ -162,6 +264,12 @@ for _, block := range ephemeris.Blocks {
 | `ErrEulerRotSeqMissing` | A Euler type with no `EULER_ROT_SEQ`. |
 | `ErrInterpolationDegreeMissing` | `INTERPOLATION_METHOD` without `INTERPOLATION_DEGREE`. |
 | `ErrIncompleteNutation` | Some but not all of a spin block's nutation keywords. |
+| `ErrStateCountMismatch` | An ACM attitude block whose `NUMBER_STATES` disagrees with its `ATT_TYPE` and `RATE_TYPE`. |
+| `ErrCovarianceLineFields` | An ACM covariance row that is not the diagonal its `COV_TYPE` implies. |
+| `ErrSectionsOutOfOrder` | ACM sections in an order other than table 5-1's. |
+| `ErrKeywordsOutOfOrder` | An ACM keyword out of its table's order. |
+| `ErrMissingFrame` | A `CP` with no `CP_REF_FRAME`, or a `TARGET_MOMENTUM` with no `TARGET_MOM_FRAME`. |
+| `ErrMixedTimeTags` | An ACM block mixing relative and absolute time tags. |
 
 ## Reference
 
