@@ -32,7 +32,9 @@ sections 3 and 4 together, it arrived with this 2024 issue, and adoption is
 thin next to the other two. That is the same call this project made about the
 ODM's OCM.
 
-**Not yet implemented.** The XML form of section 7.
+**Also implemented: the XML form** of section 7. `EncodeXML` sits beside
+`Encode`, and `DecodeXMLAPM` and `DecodeXMLAEM` beside their key-value
+counterparts.
 
 **Deliberately absent: attitude mathematics.** Nothing here normalises a
 quaternion, converts one to Euler angles, composes two rotations, or
@@ -105,6 +107,32 @@ block.
 The six data blocks *are* delimited, each with its own pair — `QUAT_START` and
 `QUAT_STOP`, `EULER_START` and `EULER_STOP`, and so on. A block closed by
 another block's stop keyword is refused.
+
+## The XML form nests further than the orbit messages
+
+An APM quaternion is not four keywords in a row. Clause 7.5.11 puts the frames
+and the components in a `<quaternionState>`, the components themselves in a
+`<quaternion>` inside that, and the optional derivatives in a sibling
+`<quaternionDot>`.
+
+The AEM goes further. Table 7-5 gives each of the nine attitude types its own
+element inside `<attitudeState>`:
+
+| `ATTITUDE_TYPE` | Element |
+|---|---|
+| `QUATERNION` | `quaternionEphemeris` |
+| `QUATERNION/DERIVATIVE` | `quaternionDerivative` |
+| `QUATERNION/ANGVEL` | `quaternionAngVel` |
+| `EULER_ANGLE` | `eulerAngle` |
+| `SPIN/NUTATION_MOM` | `spinNutationMom` |
+
+So the choice the key-value form expresses as a line width becomes a choice of
+element name. A file whose `ATTITUDE_TYPE` and inner element disagree is
+refused — it is the XML form of a line of the wrong width.
+
+The ADM also names a **different schema** from the ODM: `ndmxml-4.0.0` where
+the orbit messages give `3.0.0`. The numbers track each standard's own schema
+issue, not the NDM/XML document.
 
 ## Using the package
 

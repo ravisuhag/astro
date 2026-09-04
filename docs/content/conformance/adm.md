@@ -68,6 +68,18 @@ Comprehensive Message of section 5 is not.
 | Data line width per attitude type | Table 4-4 | M | Y: every line checked; `ErrAttitudeLineFields` |
 | Positional data lines, space separated | 4.2 | M | Y |
 
+### XML form, section 7
+
+| Feature | Reference | Status | Support |
+|---|---|:-:|---|
+| Root element with id and version attributes | 7.4.2.8–7.4.2.10 | M | Y: version 2.0 |
+| Schema instance namespace, exactly as given | 7.4.2.3 | M | Y |
+| Master schema for the ADM | 7.4.2.5 | O | Y: `ndmxml-4.0.0-master-4.0.xsd`, not the ODM's 3.0.0 |
+| `quaternionState` wrapping frames, `quaternion` and `quaternionDot` | 7.5.11, 7.5.12 | M | Y |
+| `eulerAngleState`, `angularVelocity`, `spin`, `inertia`, `maneuverParameters` | 7.5.11 | O | Y |
+| `attitudeState` with the type's own inner element | 7.6.11, Table 7-5 | M | Y: all nine; a disagreement between type and element is refused |
+| Units as attributes | 7.4 | O | Y |
+
 ---
 
 ## A3 EXCEPTIONS AND UNSUPPORTED FEATURES
@@ -77,9 +89,6 @@ roughly three times the size of sections 3 and 4 together, arrived with this
 2024 issue of the standard, and has thin adoption next to the APM and the AEM.
 The same reasoning applied to the ODM's OCM. A message naming
 `CCSDS_ACM_VERS` is refused rather than half-read.
-
-**The XML form is not implemented.** Section 7 defines it and CCSDS 505.0-B-3
-specifies the container.
 
 **No attitude mathematics.** Nothing normalises a quaternion, converts between
 representations, composes rotations, or interpolates. `INTERPOLATION_METHOD`

@@ -92,13 +92,20 @@ not implemented.
 | Timetag formats | 4.3.9 | M | Y: both ASCII time codes, via `pkg/tcf` |
 | Comment placement | 4.5 | O | Y: header, metadata section, data section |
 
+### XML form, section 5
+
+| Feature | Reference | Status | Support |
+|---|---|:-:|---|
+| Root element with id and version attributes | 5 | M | Y |
+| Master schema for the TDM | 5 | O | Y: `ndmxml-2.0.0-master-2.0.xsd` |
+| NDM namespace declared | 505.0-B-3 clause 4.3.4 | M | Y: the TDM's own example declares it |
+| One `observation` element per record | 5 | M | Y |
+| A timetag and exactly one observable per observation | 3.4.3 | M | Y: `ErrMalformedRecord` for two or none |
+| Metadata as a flat element list | 5 | M | Y |
+
 ---
 
 ## A3 EXCEPTIONS AND UNSUPPORTED FEATURES
-
-**The XML form is not implemented.** Section 5 defines it and CCSDS 505.0-B-3
-specifies the container. Clause 3.1.1 offers both forms, so a partner sending
-XML cannot be read today.
 
 **Streaming is not supported.** Clause 3.1.5 says a TDM may be exchanged as a
 real-time stream or as a file. `Decode` takes a complete message. A stream

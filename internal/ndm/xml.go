@@ -26,10 +26,35 @@ import (
 // protocol, and clause 4.3.3 says so in a note because people change it.
 const XMLNamespaceInstance = "http://www.w3.org/2001/XMLSchema-instance"
 
-// XMLSchemaLocation is the master schema an instantiation may be validated
-// against (clause 4.3.6). It goes in the xsi:noNamespaceSchemaLocation
-// attribute.
-const XMLSchemaLocation = "https://sanaregistry.org/r/ndmxml_unqualified/ndmxml-3.0.0-master-3.0.xsd"
+// XMLNamespace is the NDM/XML namespace clause 4.3.4 says "must next be
+// coded, exactly as shown".
+//
+// The documents disagree about whether it appears. The TDM's worked example in
+// section 5 declares it and the ODM's figure G-5 does not, while clause 4.3.4
+// of the XML standard says it must. It is written here: an unqualified
+// instantiation is unharmed by a namespace declaration it never uses, and
+// clause 4.3.5 makes the prefix a matter of whether the elements are qualified
+// rather than of whether the declaration is present.
+const XMLNamespace = "urn:ccsds:schema:ndmxml"
+
+// XMLSchemaBase is where the unqualified schema set lives (clause 4.3.6). The
+// file name goes after it, and it is not the same file for every message.
+const XMLSchemaBase = "https://sanaregistry.org/r/ndmxml_unqualified/"
+
+// Master schema file names, one per navigation standard.
+//
+// These are not interchangeable, and the numbers do not track the NDM/XML
+// document. Each standard names the schema issue it was written against:
+// CCSDS 502.0-B-3 gives 3.0, CCSDS 504.0-B-2 gives 4.0, and both
+// CCSDS 503.0-B-2 and CCSDS 508.0-B-1 give 2.0. Writing one message's
+// location into another's instantiation produces a file that validates against
+// the wrong schema, or fails to validate at all.
+const (
+	XMLSchemaODM = "ndmxml-3.0.0-master-3.0.xsd"
+	XMLSchemaADM = "ndmxml-4.0.0-master-4.0.xsd"
+	XMLSchemaTDM = "ndmxml-2.0.0-master-2.0.xsd"
+	XMLSchemaCDM = "ndmxml-2.0.0-master-2.0.xsd"
+)
 
 // Element is one element of a message: either a leaf carrying a value or a
 // block carrying children. A block is a wrapper the key-value form has no
@@ -147,6 +172,10 @@ type XMLMessage struct {
 	// value. Together they are the root element's id and version attributes.
 	ID      string
 	Version string
+	// Schema is the master schema file name, one of the XMLSchema constants.
+	// It goes after XMLSchemaBase in the xsi:noNamespaceSchemaLocation
+	// attribute.
+	Schema string
 
 	Header []Element
 	// Relative holds the CDM's relative metadata and data, which clause 3.4.2
@@ -157,7 +186,7 @@ type XMLMessage struct {
 
 // EncodeXML writes the message.
 func (m *XMLMessage) EncodeXML() ([]byte, error) {
-	if m.Root == "" || m.ID == "" || m.Version == "" {
+	if m.Root == "" || m.ID == "" || m.Version == "" || m.Schema == "" {
 		return nil, ErrMissingHeaderField
 	}
 
@@ -165,7 +194,8 @@ func (m *XMLMessage) EncodeXML() ([]byte, error) {
 	b.WriteString(xml.Header)
 
 	fmt.Fprintf(&b, "<%s xmlns:xsi=%q\n", m.Root, XMLNamespaceInstance)
-	fmt.Fprintf(&b, "     xsi:noNamespaceSchemaLocation=%q\n", XMLSchemaLocation)
+	fmt.Fprintf(&b, "     xmlns:ndm=%q\n", XMLNamespace)
+	fmt.Fprintf(&b, "     xsi:noNamespaceSchemaLocation=%q\n", XMLSchemaBase+m.Schema)
 	fmt.Fprintf(&b, "     id=%q version=%q>\n", m.ID, m.Version)
 
 	writeElements(&b, "  ", []Element{{Name: "header", Children: present(m.Header)}})
@@ -251,12 +281,24 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 			m.ID = attr.Value
 		case "version":
 			m.Version = attr.Value
+		case "noNamespaceSchemaLocation":
+			// Kept so that a decoded message re-encodes with the schema it
+			// arrived under. Each standard names its own, and substituting
+			// one for another produces a file that validates against the
+			// wrong schema.
+			m.Schema = strings.TrimPrefix(attr.Value, XMLSchemaBase)
 		}
 	}
 	if m.ID == "" || m.Version == "" {
 		// Clause 4.3.8 and 4.3.9 make both attributes mandatory, and without
 		// the id there is nothing to say which message this is.
 		return nil, ErrNoVersionLine
+	}
+	if m.Schema == "" {
+		// Clause 4.3.6 makes the schema location optional — it is there to
+		// validate against, not to read the message. A caller that re-encodes
+		// needs one, so the default is the message type's own.
+		m.Schema = defaultSchema(root)
 	}
 
 	children, err := readChildren(d)
@@ -279,6 +321,22 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 		return nil, ErrMalformedXML
 	}
 	return m, nil
+}
+
+// defaultSchema returns the master schema a message type names, for an
+// instantiation that carried no location attribute.
+func defaultSchema(root string) string {
+	switch root {
+	case "opm", "omm", "oem", "ocm":
+		return XMLSchemaODM
+	case "apm", "aem", "acm":
+		return XMLSchemaADM
+	case "tdm":
+		return XMLSchemaTDM
+	case "cdm":
+		return XMLSchemaCDM
+	}
+	return XMLSchemaODM
 }
 
 // readBody sorts a body's children into the relative section and the segments.

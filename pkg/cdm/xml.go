@@ -138,9 +138,13 @@ func (m *CDM) EncodeXML() ([]byte, error) {
 	}
 
 	message := &ndm.XMLMessage{
-		Root:     xmlRoot,
-		ID:       "CCSDS_CDM_VERS",
-		Version:  m.Header.Version,
+		Root:    xmlRoot,
+		ID:      "CCSDS_CDM_VERS",
+		Version: m.Header.Version,
+		// Not the ODM's schema. CCSDS 508.0-B-1 names issue 2.0, and writing
+		// another message's location here produces a file that validates
+		// against the wrong schema, or fails to validate at all.
+		Schema:   ndm.XMLSchemaCDM,
 		Header:   m.xmlHeader(),
 		Relative: nestSection(m.Relative, xmlRelativeBlocks),
 	}
