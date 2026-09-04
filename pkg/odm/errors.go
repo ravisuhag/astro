@@ -101,3 +101,36 @@ var (
 	// [1,1] to [6,6] row by row.
 	ErrCovarianceValueCount = errors.New("odm: a covariance matrix must hold 21 lower triangular values")
 )
+
+// Sentinel errors from the Orbit Mean-Elements Message (section 4).
+var (
+	// ErrNotAnOMM indicates a file whose first keyword is not CCSDS_OMM_VERS.
+	ErrNotAnOMM = errors.New("odm: file is not an Orbit Mean-Elements Message")
+
+	// ErrSizeKeywordMissing indicates an OMM with neither SEMI_MAJOR_AXIS nor
+	// MEAN_MOTION. Table 4-3 offers them as alternatives and makes the pair
+	// mandatory, because without one of them the orbit has no size.
+	ErrSizeKeywordMissing = errors.New("odm: give either SEMI_MAJOR_AXIS or MEAN_MOTION")
+
+	// ErrBothSizeKeywords indicates both SEMI_MAJOR_AXIS and MEAN_MOTION.
+	// They are alternatives, and a message carrying both has not said which
+	// one the receiver should believe.
+	ErrBothSizeKeywords = errors.New("odm: give SEMI_MAJOR_AXIS or MEAN_MOTION, not both")
+
+	// ErrBothDragKeywords indicates both BSTAR and BTERM, or both
+	// MEAN_MOTION_DDOT and AGOM. Each pair shares one slot in table 4-3 and
+	// which name applies is decided by MEAN_ELEMENT_THEORY.
+	ErrBothDragKeywords = errors.New("odm: BSTAR and BTERM, and MEAN_MOTION_DDOT and AGOM, are alternatives")
+
+	// ErrTLEConventions indicates a TLE-based OMM breaking one of the four
+	// conventions clause 4.2.4.6 fixes: EARTH as the center, TEME as the
+	// frame, UTC as the time system, and MEAN_MOTION rather than
+	// SEMI_MAJOR_AXIS.
+	ErrTLEConventions = errors.New("odm: a TLE-based OMM must use EARTH, TEME, UTC and MEAN_MOTION")
+
+	// ErrTEMEWithoutTLE indicates the TEME reference frame on an OMM that is
+	// not TLE-based. Clause 4.2.4.9 allows TEME "only for OMMs based on NORAD
+	// Two Line Element sets, and in no other circumstances", because the frame
+	// is not well defined by any international convention.
+	ErrTEMEWithoutTLE = errors.New("odm: TEME may be used only for a TLE-based OMM")
+)

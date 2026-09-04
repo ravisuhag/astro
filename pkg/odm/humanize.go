@@ -220,3 +220,86 @@ func optionalTime(t *time.Time) string {
 	}
 	return t.Format("2006-01-02T15:04:05.999")
 }
+
+// Humanize returns a human-readable summary of the message.
+func (m *OMM) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "CCSDS Orbit Mean-Elements Message %s\n", m.Header.Version)
+	fmt.Fprintf(&sb, "  Originator ...... %s\n", m.Header.Originator)
+	fmt.Fprintf(&sb, "  Created ......... %s UTC\n", m.Header.CreationDate.Format("2006-01-02T15:04:05"))
+	fmt.Fprintf(&sb, "  Object .......... %s (%s)\n", m.Metadata.ObjectName, m.Metadata.ObjectID)
+	fmt.Fprintf(&sb, "  Center .......... %s\n", m.Metadata.CenterName)
+	fmt.Fprintf(&sb, "  Frame ........... %s, time system %s\n", m.Metadata.RefFrame, m.Metadata.TimeSystem)
+
+	theory := m.Metadata.MeanElementTheory
+	if m.Metadata.IsTLEBased() {
+		// Worth saying: it decides how the state must be propagated and which
+		// of the paired TLE keywords apply.
+		theory += " (TLE-based)"
+	}
+	fmt.Fprintf(&sb, "  Theory .......... %s\n", theory)
+
+	sb.WriteString(m.Data.Elements.Humanize())
+	if s := m.Data.Spacecraft; s != nil {
+		sb.WriteString(s.Humanize())
+	}
+	if t := m.Data.TLE; t != nil {
+		sb.WriteString(t.Humanize())
+	}
+	if c := m.Data.Covariance; c != nil {
+		sb.WriteString(c.Humanize())
+	}
+	for _, u := range m.Data.UserDefined {
+		fmt.Fprintf(&sb, "    %s = %s\n", u.Name, u.Value)
+	}
+	return sb.String()
+}
+
+// Humanize returns a human-readable summary of the mean elements.
+//
+// The size of the orbit is printed under whichever keyword the message used,
+// with its own units, because a mean motion in revolutions per day and a
+// semi-major axis in kilometres are not interchangeable to a reader.
+func (e MeanElements) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "  Epoch ........... %s\n", e.Epoch.Format("2006-01-02T15:04:05.999999999"))
+	if e.UsesMeanMotion {
+		fmt.Fprintf(&sb, "  Mean motion ..... %.8f rev/day\n", e.MeanMotion)
+	} else {
+		fmt.Fprintf(&sb, "  Semi-major axis . %.4f km\n", e.SemiMajorAxis)
+	}
+	fmt.Fprintf(&sb, "  Eccentricity .... %.9f\n", e.Eccentricity)
+	fmt.Fprintf(&sb, "  Inclination ..... %.6f deg\n", e.Inclination)
+	fmt.Fprintf(&sb, "  RA of asc node .. %.6f deg\n", e.RAOfAscNode)
+	fmt.Fprintf(&sb, "  Arg of pericenter %.6f deg\n", e.ArgOfPericenter)
+	fmt.Fprintf(&sb, "  Mean anomaly .... %.6f deg\n", e.MeanAnomaly)
+	if e.GM != 0 {
+		fmt.Fprintf(&sb, "  GM .............. %.4f km**3/s**2\n", e.GM)
+	}
+	return sb.String()
+}
+
+// Humanize returns a human-readable summary of the TLE parameters.
+func (t TLEParameters) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "  NORAD catalog ... %d, element set %d, rev %d\n",
+		t.NoradCatID, t.ElementSetNo, t.RevAtEpoch)
+	fmt.Fprintf(&sb, "  Classification .. %s, ephemeris type %d\n",
+		t.ClassificationType, t.EphemerisType)
+
+	if t.UsesBTerm {
+		fmt.Fprintf(&sb, "  Ballistic coeff . BTERM %.6g m**2/kg\n", t.BTerm)
+	} else {
+		fmt.Fprintf(&sb, "  Drag term ....... BSTAR %.6g 1/[Earth radii]\n", t.BStar)
+	}
+	fmt.Fprintf(&sb, "  Mean motion dot . %.10g rev/day**2\n", t.MeanMotionDot)
+	if t.UsesAgom {
+		fmt.Fprintf(&sb, "  Solar rad coeff . AGOM %.6g m**2/kg\n", t.Agom)
+	} else {
+		fmt.Fprintf(&sb, "  Mean motion ddot  %.10g rev/day**3\n", t.MeanMotionDDot)
+	}
+	return sb.String()
+}

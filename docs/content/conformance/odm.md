@@ -9,8 +9,9 @@ order: 210
 
 CCSDS 502.0-B-3 annex A ships an Implementation Conformance Statement
 proforma. This fills in the Orbit Parameter Message requirements list of
-A2.5.1 and the Orbit Ephemeris Message list of A2.5.3. The lists for the OMM
-and the OCM are not filled in, because those messages are not implemented.
+A2.5.1, the Orbit Mean Elements Message list of A2.5.2, and the Orbit
+Ephemeris Message list of A2.5.3. The list for the OCM is not filled in,
+because that message is not implemented.
 
 ---
 
@@ -29,7 +30,7 @@ and the OCM are not filled in, because those messages are not implemented.
 | Implementation Name | astro/pkg/odm |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library reading and writing the Orbit Parameter Message and the Orbit Ephemeris Message in 'keyword = value' notation. The OMM and OCM are not implemented, nor is the XML form of any message. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
+| Other Information | Go library reading and writing the Orbit Parameter Message, the Orbit Mean-Elements Message and the Orbit Ephemeris Message in 'keyword = value' notation. The OCM is not implemented, nor is the XML form of any message. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
 
 ## A2.3 IDENTIFICATION OF SUPPLIER
 
@@ -110,6 +111,36 @@ conditional.
 
 ---
 
+## A2.5.2 Orbit Mean Elements Message Requirements List
+
+The three paired slots of table 4-3 are the part of this list worth reading.
+Each accepts two keyword names, which name applies is decided by
+`MEAN_ELEMENT_THEORY`, and the two halves carry different units.
+
+| Item | Feature | Keyword | Status | Support |
+|--:|---|---|:-:|---|
+| — | OMM Header | `CCSDS_OMM_VERS`, `COMMENT`, `CLASSIFICATION`, `CREATION_DATE`, `ORIGINATOR`, `MESSAGE_ID` | M/O | Y: same table as the OPM's 3-1 |
+| — | Metadata | `OBJECT_NAME`, `OBJECT_ID`, `CENTER_NAME`, `REF_FRAME`, `TIME_SYSTEM` | M | Y |
+| — | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y |
+| — | Mean element theory | `MEAN_ELEMENT_THEORY` | M | Y: also decides which paired keywords apply |
+| — | Epoch | `EPOCH` | M | Y |
+| — | Orbit size | `SEMI_MAJOR_AXIS` or `MEAN_MOTION` | M | Y: which arrived is recorded; both is refused |
+| — | Eccentricity, inclination, RAAN, argument of pericenter, mean anomaly | `ECCENTRICITY` … `MEAN_ANOMALY` | M | Y |
+| — | Gravitational coefficient | `GM` | O | Y: optional here, unlike the OPM |
+| — | Spacecraft parameters | `MASS` … `DRAG_COEFF` | O | Y: same block as table 3-3 |
+| — | TLE block | `EPHEMERIS_TYPE`, `CLASSIFICATION_TYPE`, `NORAD_CAT_ID`, `ELEMENT_SET_NO`, `REV_AT_EPOCH` | O | Y: defaults of 0 and "U" applied per clause 4.2.4.7 |
+| — | Drag term | `BSTAR` or `BTERM` | C | Y: which arrived is recorded; both is refused |
+| — | First derivative of mean motion | `MEAN_MOTION_DOT` | C | Y |
+| — | Second derivative or solar radiation | `MEAN_MOTION_DDOT` or `AGOM` | C | Y: which arrived is recorded; both is refused |
+| — | Covariance matrix | `COV_REF_FRAME`, `CX_X` … `CZ_DOT_Z_DOT` | O | Y: 21 named keywords, unlike the OEM's positional rows |
+| — | User-defined parameters | `USER_DEFINED_x` | O | Y |
+
+The four conventions clause 4.2.4.6 fixes for a TLE-based OMM — `EARTH`,
+`TEME`, `UTC` and `MEAN_MOTION` — are enforced, and clause 4.2.4.9's converse
+rule that `TEME` may be used for nothing else is enforced too.
+
+---
+
 ## A2.5.3 Orbit Ephemeris Message Requirements List
 
 | Item | Feature | Keyword | Status | Support |
@@ -148,19 +179,18 @@ conditional.
 
 ---
 
-## A2.5.2 and A2.5.4
+## A2.5.4
 
 | Requirements list | Support |
 |---|---|
-| A2.5.2 Orbit Mean Elements Message | N: not implemented |
 | A2.5.4 Orbit Comprehensive Message | N: not implemented |
 
 ---
 
 ## A2.6 EXCEPTIONS AND UNSUPPORTED FEATURES
 
-**Only the OPM and the OEM are implemented, and only in key-value notation.**
-The OMM and the OCM are not, and neither is the XML form described in section 8
+**Only the OPM, the OMM and the OEM are implemented, and only in key-value
+notation.** The OCM is not, and neither is the XML form described in section 8
 of the Blue Book and specified by CCSDS 505.0-B-3. Clause 1.1 leaves the choice
 of notation to the exchanging parties, so a partner who sends XML cannot be
 read today.
@@ -190,6 +220,13 @@ value is carried through unchanged and the caller decides.
 Outer Space Affairs designator index. Checking them would mean shipping a copy
 of a registry that changes without this package, and the tables recommend
 rather than require those sources.
+
+**The TLE derivative scaling is not applied.** Note 2 under clause 4.2.4.7
+says that if `MEAN_MOTION_DOT` and `MEAN_MOTION_DDOT` came from a TLE, or are
+intended to be used as one, they must be divided by 2 and 6 respectively to
+match the SGP Taylor series terms. Nothing in a message records whether that
+has been done, so this package carries the values as written and leaves the
+question to the interface control document.
 
 **Nothing is validated against physics.** Clause 1.2 puts orbit accuracy
 outside the standard. A message whose eccentricity exceeds one, or whose
@@ -225,12 +262,12 @@ spelling does not.
 
 ## Wire test vectors
 
-The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 5 decode vectors and 5 corpus files.
+The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 6 decode vectors and 6 corpus files.
 
 | File | |
 |---|---|
-| [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 5 vectors |
-| `odm/opm-*.kvn`, `odm/oem-*.kvn` | the annex G examples as readable files |
+| [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 6 vectors |
+| `odm/opm-*.kvn`, `odm/omm-*.kvn`, `odm/oem-*.kvn` | the annex G examples as readable files |
 
 Both are **published text rather than derived values**: annex G of the Blue Book prints them, so a second working group wrote them.
 

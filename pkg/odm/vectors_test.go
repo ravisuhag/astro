@@ -46,6 +46,12 @@ func decodeVector(input []byte, config vectors.Fields) (vectors.Fields, error) {
 			return nil, err
 		}
 		return oemFields(m), nil
+	case "omm":
+		m, err := odm.DecodeOMM(input)
+		if err != nil {
+			return nil, err
+		}
+		return ommFields(m), nil
 	}
 	return nil, errUnknownVectorStructure
 }
@@ -106,4 +112,37 @@ func opmFields(m *odm.OPM) vectors.Fields {
 		"header_comment_count":   uint64(len(m.Header.Comments)),
 		"metadata_comment_count": uint64(len(m.Metadata.Comments)),
 	}
+}
+
+// ommFields reports the parts of a decoded mean-elements message a vector can
+// compare.
+//
+// Which of each paired keyword arrived is recorded, because that choice
+// changes what the numbers mean: a mean motion is not a semi-major axis, and
+// BTERM is not BSTAR.
+func ommFields(m *odm.OMM) vectors.Fields {
+	f := vectors.Fields{
+		"version":             m.Header.Version,
+		"originator":          m.Header.Originator,
+		"message_id":          m.Header.MessageID,
+		"creation_date":       m.Header.CreationDate.Format("2006-01-02T15:04:05Z"),
+		"object_name":         m.Metadata.ObjectName,
+		"object_id":           m.Metadata.ObjectID,
+		"center_name":         m.Metadata.CenterName,
+		"ref_frame":           m.Metadata.RefFrame,
+		"time_system":         m.Metadata.TimeSystem,
+		"mean_element_theory": m.Metadata.MeanElementTheory,
+		"tle_based":           m.Metadata.IsTLEBased(),
+		"epoch":               m.Data.Elements.Epoch.Format("2006-01-02T15:04:05.999999999Z"),
+		"uses_mean_motion":    m.Data.Elements.UsesMeanMotion,
+		"has_covariance":      m.Data.Covariance != nil,
+	}
+	if t := m.Data.TLE; t != nil {
+		f["uses_bterm"] = t.UsesBTerm
+		f["uses_agom"] = t.UsesAgom
+		f["norad_cat_id"] = uint64(t.NoradCatID)
+		f["element_set_no"] = uint64(t.ElementSetNo)
+		f["rev_at_epoch"] = uint64(t.RevAtEpoch)
+	}
+	return f
 }

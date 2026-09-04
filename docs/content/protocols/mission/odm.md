@@ -36,12 +36,10 @@ choice to the two parties exchanging the file.
 
 ## Scope
 
-**Implemented.** The OPM and the OEM, in key-value notation. Reading, writing,
-and the structural rules the standard states.
+**Implemented.** The OPM, the OMM and the OEM, in key-value notation. Reading,
+writing, and the structural rules the standard states.
 
-**Not yet implemented.** The OMM and the OCM, and the XML form of all four. The
-shared line syntax and header live in `internal/ndm`, so the remaining messages
-are keyword tables rather than new machinery.
+**Not yet implemented.** The OCM, and the XML form of all four.
 
 **Deliberately absent: orbital mechanics.** Nothing here propagates a state
 vector, converts between reference frames, or turns mean elements into a
@@ -105,6 +103,56 @@ row by row (clause 3.2.4.10). `Covariance.Matrix` is the full symmetric 6×6:
 the upper triangle is filled in on decode, because a covariance matrix is
 symmetric by definition and a caller indexing `Matrix[1][2]` should not get a
 zero.
+
+## Three OMM keyword slots take two names each
+
+Table 4-3 gives three pairs of alternatives, and which name applies is decided
+by `MEAN_ELEMENT_THEORY`:
+
+| Slot | SGP / SGP4 | SGP4-XP | Units differ? |
+|---|---|---|---|
+| Orbit size | `MEAN_MOTION` | `MEAN_MOTION` | rev/day vs km for `SEMI_MAJOR_AXIS` |
+| Drag | `BSTAR` | `BTERM` | 1/[Earth radii] vs m²/kg |
+| Second derivative | `MEAN_MOTION_DDOT` | `AGOM` | rev/day³ vs m²/kg |
+
+They are not two spellings of one number. `BSTAR` is an SGP4 drag term and
+`BTERM` is a ballistic coefficient CD·A/m; `MEAN_MOTION_DDOT` is a rate and
+`AGOM` is a solar radiation coefficient. Reading one as the other gives a
+plausible number with the wrong meaning and the wrong units.
+
+`MeanElements.UsesMeanMotion`, `TLEParameters.UsesBTerm` and
+`TLEParameters.UsesAgom` record which arrived, and a message giving both halves
+of a pair is refused rather than silently resolved.
+
+## A TLE-based OMM has four fixed conventions
+
+Clause 4.2.4.6 requires all of these when the mean element theory is one of the
+SGP family:
+
+- `CENTER_NAME` is `EARTH`
+- `REF_FRAME` is `TEME`
+- `TIME_SYSTEM` is `UTC`
+- `MEAN_MOTION` is used, not `SEMI_MAJOR_AXIS`
+
+An SGP4 propagator assumes all four. Get one wrong and the message is accepted
+and mispropagated, so this package refuses it.
+
+The rule runs the other way too. Clause 4.2.4.9 allows `TEME` "only for OMMs
+based on NORAD Two Line Element sets, and in no other circumstances", because
+no international convention pins the frame down. `TEME` on a `DSST` message is
+refused for that reason.
+
+There is one more trap the standard mentions and this package cannot check.
+Note 2 under clause 4.2.4.7 says that if `MEAN_MOTION_DOT` and
+`MEAN_MOTION_DDOT` came from a TLE, or are meant to be used as one, they must
+be divided by 2 and 6 to match the SGP Taylor series terms. Nothing in the
+message says whether that has been done.
+
+## An OMM cannot describe a manoeuvre
+
+Clause 4.2.4.8 says so outright: send several OMMs at different epochs instead.
+The OPM's `MAN_*` keywords are simply not in table 4-3, so they come back as
+`ErrUnknownKeyword` here.
 
 ## A second metadata group is a fence
 
@@ -219,6 +267,16 @@ fmt.Println(message.Humanize())
 out, err := message.Encode()
 ```
 
+Mean elements:
+
+```go
+elements, err := odm.DecodeOMM(data)
+if elements.Metadata.IsTLEBased() {
+    // Clause 4.2.4.6 guarantees EARTH, TEME, UTC and MEAN_MOTION here.
+    fmt.Println(elements.Data.Elements.MeanMotion, "rev/day")
+}
+```
+
 An ephemeris, keeping the blocks apart:
 
 ```go
@@ -258,6 +316,16 @@ OEM-specific:
 | `ErrTimeSystemChanged` | Two metadata groups naming different time systems, which clause 5.2.4.5 forbids. |
 | `ErrCovarianceOutOfOrder` | Covariance epochs that do not increase (clause 5.2.5.7). |
 | `ErrCovarianceValueCount` | A matrix that is not 21 lower triangular values. |
+
+OMM-specific:
+
+| Error | Means |
+|---|---|
+| `ErrSizeKeywordMissing` | Neither `SEMI_MAJOR_AXIS` nor `MEAN_MOTION`. Table 4-3 makes the pair mandatory. |
+| `ErrBothSizeKeywords` | Both of them, which does not say which the receiver should believe. |
+| `ErrBothDragKeywords` | Both `BSTAR` and `BTERM`, or both `MEAN_MOTION_DDOT` and `AGOM`. |
+| `ErrTLEConventions` | A TLE-based message breaking one of the four conventions of clause 4.2.4.6. |
+| `ErrTEMEWithoutTLE` | `TEME` on a message that is not TLE-based (clause 4.2.4.9). |
 
 Line syntax errors come from `internal/ndm` and carry the line number.
 

@@ -3,13 +3,14 @@
   "standard": "CCSDS 502.0-B-3",
   "package": "odm",
   "source": "CCSDS 502.0-B-3 annex G",
-  "note": "Orbit Data Messages. These are ASCII files rather than octet strings, so the two worked examples annex G prints are shipped as readable .kvn files under corpus and also carried here as decode vectors, hex-encoded because that is the only form the schema has for an input. A consumer can use either. What the decode vectors assert is the text and integer content: the version, the originator, the object identifiers, the frames, the epoch and the number of maneuvers. The numeric state vector is not asserted here, because a vector field has no float accessor and pinning floats as formatted strings would test this package's chosen number formatting rather than the standard. Those values are checked in pkg/odm against the same published text. The OPM and the OEM are covered; the OMM and OCM are not implemented yet. The OEM vectors carry the record and block counts as well, because an OEM's shape \u2014 how many metadata groups, how many rows, whether a row has acceleration, how many covariance matrices \u2014 is the part of it a consumer has to get right before any number matters.",
+  "note": "Orbit Data Messages. These are ASCII files rather than octet strings, so the two worked examples annex G prints are shipped as readable .kvn files under corpus and also carried here as decode vectors, hex-encoded because that is the only form the schema has for an input. A consumer can use either. What the decode vectors assert is the text and integer content: the version, the originator, the object identifiers, the frames, the epoch and the number of maneuvers. The numeric state vector is not asserted here, because a vector field has no float accessor and pinning floats as formatted strings would test this package's chosen number formatting rather than the standard. Those values are checked in pkg/odm against the same published text. The OPM, the OEM and the OMM are covered; the OCM is not implemented yet. The OEM vectors carry the record and block counts as well, because an OEM's shape \u2014 how many metadata groups, how many rows, whether a row has acceleration, how many covariance matrices \u2014 is the part of it a consumer has to get right before any number matters.",
   "corpus": [
     "odm/opm-simple.kvn",
     "odm/opm-maneuvers.kvn",
     "odm/oem-two-blocks.kvn",
     "odm/oem-acceleration.kvn",
-    "odm/oem-covariance.kvn"
+    "odm/oem-covariance.kvn",
+    "odm/omm-tle.kvn"
   ],
   "decode": [
     {
@@ -141,6 +142,36 @@
         "interpolation_degree": 0,
         "span_start": "2019-12-28T21:29:07.267Z",
         "span_stop": "2019-12-30T01:28:02.267Z"
+      }
+    },
+    {
+      "name": "omm-tle-based",
+      "clause": "G4",
+      "note": "Figure G-7, a TLE-based OMM. Three keyword slots in table 4-3 accept two names each and which one applies is decided by MEAN_ELEMENT_THEORY, so the vector records which arrived: MEAN_MOTION rather than SEMI_MAJOR_AXIS, BSTAR rather than BTERM, MEAN_MOTION_DDOT rather than AGOM. Its creation date is in the ordinal form on a leap year, and its element set number carries a leading zero that clause 7.5.4 allows.",
+      "config": {
+        "structure": "omm"
+      },
+      "input": "43435344535f4f4d4d5f56455253203d20332e300a4352454154494f4e5f44415445203d20323032302d3036355431363a30303a30300a4f524947494e41544f5220202020203d204e4f41410a4d4553534147455f494420202020203d204f4d4d203230323031333731393138350a0a4f424a4543545f4e414d45202020203d20474f455320390a4f424a4543545f49442020202020203d20313939352d303235410a43454e5445525f4e414d45202020203d2045415254480a5245465f4652414d452020202020203d2054454d450a54494d455f53595354454d202020203d205554430a4d45414e5f454c454d454e545f5448454f5259203d205347502f534750340a0a45504f4348202020202020202020202020203d20323032302d3036345431303a33343a34312e343236340a4d45414e5f4d4f54494f4e202020202020203d20312e30303237333237320a454343454e545249434954592020202020203d20302e303030353031330a494e434c494e4154494f4e202020202020203d202020332e303533390a52415f4f465f4153435f4e4f4445202020203d2038312e373933390a4152475f4f465f5045524943454e544552203d203234392e323336330a4d45414e5f414e4f4d414c592020202020203d203135302e313630320a474d202020202020202020202020202020203d203339383630302e380a455048454d455249535f54595045202020203d20300a434c415353494649434154494f4e5f54595045203d20550a4e4f5241445f4341545f49442020202020203d2032333538310a454c454d454e545f5345545f4e4f202020203d20303932350a5245565f41545f45504f43482020202020203d20343331360a4253544152202020202020202020202020203d20302e303030310a4d45414e5f4d4f54494f4e5f444f542020203d202d302e30303030303131330a4d45414e5f4d4f54494f4e5f44444f54203d20302e300a",
+      "fields": {
+        "version": "3.0",
+        "originator": "NOAA",
+        "message_id": "OMM 202013719185",
+        "creation_date": "2020-03-05T16:00:00Z",
+        "object_name": "GOES 9",
+        "object_id": "1995-025A",
+        "center_name": "EARTH",
+        "ref_frame": "TEME",
+        "time_system": "UTC",
+        "mean_element_theory": "SGP/SGP4",
+        "tle_based": true,
+        "epoch": "2020-03-04T10:34:41.4264Z",
+        "uses_mean_motion": true,
+        "uses_bterm": false,
+        "uses_agom": false,
+        "norad_cat_id": 23581,
+        "element_set_no": 925,
+        "rev_at_epoch": 4316,
+        "has_covariance": false
       }
     }
   ]

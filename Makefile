@@ -70,6 +70,7 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzSkip -fuzztime $(FUZZTIME) ./internal/cbor/
 	go test -run '^$$' -fuzz FuzzDecodeOPM -fuzztime $(FUZZTIME) ./pkg/odm/
 	go test -run '^$$' -fuzz FuzzDecodeOEM -fuzztime $(FUZZTIME) ./pkg/odm/
+	go test -run '^$$' -fuzz FuzzDecodeOMM -fuzztime $(FUZZTIME) ./pkg/odm/
 	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzReassembler -fuzztime $(FUZZTIME) ./pkg/pxdl/
