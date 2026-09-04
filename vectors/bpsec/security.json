@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "standard": "RFC 9172",
+  "package": "bpsec",
+  "source": "RFC 9173 appendix A",
+  "note": "Bundle Protocol Security, with the default security contexts of RFC 9173. Like the pkg/bp corpus, most of these octets are published rather than derived: RFC 9173 appendix A prints four worked examples, each with its keys, its intermediate canonical forms and the resulting blocks in hex. Those carry \"doc\": \"RFC 9173\". Vectors whose input bundle is assembled from pieces the appendix prints separately say so in their own note. Every vector names the structure its octets are in its config, because the octets do not announce it: an IPPT and an AAD are both bare CBOR sequences, and a BIB and a BCB differ only by a type code. Test keys only, never real keys \u2014 every key here is one the RFC published.",
+  "encode": [
+    {
+      "name": "ippt-payload-no-additional-scope",
+      "clause": "A.1.3.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.1.3.1 prints this IPPT beside the signature it produces. Scope flags 0x00, so it is the flags byte followed by the payload block's block-type-specific data with the CBOR byte string head it carries on the wire. The head is included: RFC 9172 clause 4 requires a canonical field to bring its own CBOR encoding.",
+      "config": {
+        "structure": "ippt"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 0,
+        "target": 1,
+        "security_type": 11,
+        "security_number": 2,
+        "security_flags": 0
+      },
+      "want": "005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+    },
+    {
+      "name": "ippt-payload-full-scope",
+      "clause": "A.4.3.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.4.3.1, with every scope flag set. The order is fixed by clause 3.7: scope flags, primary block, target header, security header, then the target. The two headers are the three-field form 010100 for the payload and 0b0300 for the BIB, each field a bare CBOR unsigned integer with no array around it.",
+      "config": {
+        "structure": "ippt"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 7,
+        "target": 1,
+        "security_type": 11,
+        "security_number": 3,
+        "security_flags": 0
+      },
+      "want": "0788070000820282010282028202018202820201820018281a000f42400101000b03005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+    },
+    {
+      "name": "ippt-primary-block-target",
+      "clause": "A.3.3.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.3.3.1, the only published IPPT whose target is the primary block. It is the case that frames the target differently from every other: 00 581c 8807 wraps the whole 28-octet primary block in a byte string head that appears nowhere in the bundle. Note that the same block goes in raw when the primary block flag pulls it in as context rather than as the target.",
+      "config": {
+        "structure": "ippt"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085070200004319012c85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 0,
+        "target": 0,
+        "security_type": 11,
+        "security_number": 3,
+        "security_flags": 0
+      },
+      "want": "00581c88070000820282010282028202018202820201820018281a000f4240"
+    },
+    {
+      "name": "ippt-bundle-age-block-target",
+      "clause": "A.3.3.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.3.3.1, the second target of the same BIB. The Bundle Age block holds 300 milliseconds, whose block-type-specific data is the four octets 4319012c, and scope flags of 0x00 leave nothing else in the IPPT.",
+      "config": {
+        "structure": "ippt"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085070200004319012c85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 0,
+        "target": 2,
+        "security_type": 11,
+        "security_number": 3,
+        "security_flags": 0
+      },
+      "want": "004319012c"
+    },
+    {
+      "name": "aad-payload-no-additional-scope",
+      "clause": "A.2.3.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.2.3.1 prints the AAD as h'00'. That is not an absent AAD: it is the scope flags byte on its own, which clause 4.7.2 step 1 requires whether or not the BCB carries the flags as a parameter.",
+      "config": {
+        "structure": "aad"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 0,
+        "target": 1,
+        "security_type": 12,
+        "security_number": 2,
+        "security_flags": 1
+      },
+      "want": "00"
+    },
+    {
+      "name": "aad-payload-full-scope",
+      "clause": "A.4.4.1",
+      "doc": "RFC 9173",
+      "note": "Appendix A.4.4.1, the payload AAD. The security header appended is the BCB's own \u2014 0c0201, type 12, block number 2, replicate-in-every-fragment set \u2014 not the BIB's, despite what the prose of clause 4.7.2 step 4 says.",
+      "config": {
+        "structure": "aad"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 7,
+        "target": 1,
+        "security_type": 12,
+        "security_number": 2,
+        "security_flags": 1
+      },
+      "want": "0788070000820282010282028202018202820201820018281a000f42400101000c0201"
+    },
+    {
+      "name": "aad-bib-target-full-scope",
+      "clause": "A.4.4.1",
+      "doc": "RFC 9173",
+      "source": "RFC 9173 appendix A.4.4.1, against a bundle assembled from the pieces appendix A.4 prints separately",
+      "note": "Appendix A.4.4.1, the AAD for the second target of the same BCB: the BIB itself. The target header is now 0b0300 and the security header is still 0c0201. The input bundle is the state between adding the BIB and adding the BCB, which the appendix does not print whole; it is the primary block of A.4.1.1, the BIB of A.4.3.3 and the payload block of A.4.1.2, in that order.",
+      "config": {
+        "structure": "aad"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f4240850b030000584681010101820282020182820106820307818182015830f75fe4c37f76f046165855bd5ff72fbfd4e3a64b4695c40e2b787da005ae819f0a2e30a2e8b325527de8aefb52e73d7185010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "scope": 7,
+        "target": 3,
+        "security_type": 12,
+        "security_number": 2,
+        "security_flags": 1
+      },
+      "want": "0788070000820282010282028202018202820201820018281a000f42400b03000c0201"
+    },
+    {
+      "name": "bib-hmac-sha512-payload",
+      "clause": "A.1.3.3",
+      "doc": "RFC 9173",
+      "note": "Appendix A.1: a BIB over the payload with HMAC 512/512 and no additional scope. The key is 16 octets while the hash is 64, which clause 3.5 says must not happen and which the appendix does anyway; HMAC accepts any key length, so the published signature is reproducible and the clause is what gives way.",
+      "config": {
+        "structure": "bib"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 2,
+        "block_flags": 0,
+        "source_node": 2,
+        "source_service": 1,
+        "variant": 7,
+        "scope": 0,
+        "key": "1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b",
+        "target": 1
+      },
+      "want": "850b0200005856810101018202820201828201078203008181820158403bdc69b3a34a2b5d3a8554368bd1e808f606219d2a10a846eae3886ae4ecc83c4ee550fdfb1cc636b904e2f1a73e303dcd4b6ccece003e95e8164dcc89a156e1"
+    },
+    {
+      "name": "bib-hmac-sha384-payload-full-scope",
+      "clause": "A.4.3.3",
+      "doc": "RFC 9173",
+      "note": "Appendix A.4: the same payload signed with HMAC 384/384 and every scope flag set, so the primary block and both block headers are inside the hash.",
+      "config": {
+        "structure": "bib"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 3,
+        "block_flags": 0,
+        "source_node": 2,
+        "source_service": 1,
+        "variant": 6,
+        "scope": 7,
+        "key": "1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b",
+        "target": 1
+      },
+      "want": "850b030000584681010101820282020182820106820307818182015830f75fe4c37f76f046165855bd5ff72fbfd4e3a64b4695c40e2b787da005ae819f0a2e30a2e8b325527de8aefb52e73d71"
+    },
+    {
+      "name": "bib-hmac-sha256-two-targets",
+      "clause": "A.3.3.2",
+      "doc": "RFC 9173",
+      "note": "Appendix A.3: one BIB covering two targets, the primary block and a Bundle Age block, added by a waypoint at ipn:3.0 rather than by the bundle source. The two security results follow the order of the two targets, which is the only thing that pairs them.",
+      "config": {
+        "structure": "bib"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085070200004319012c85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 3,
+        "block_flags": 0,
+        "source_node": 3,
+        "source_service": 0,
+        "variant": 5,
+        "scope": 0,
+        "key": "1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b",
+        "target": 0,
+        "target_2": 2
+      },
+      "want": "850b030000585c8200020101820282030082820105820300828182015820cac6ce8e4c5dae57988b757e49a6dd1431dc04763541b2845098265bc817241b81820158203ed614c0d97f49b3633627779aa18a338d212bf3c92b97759d9739cd50725596"
+    },
+    {
+      "name": "bcb-aes128-payload-wrapped-key",
+      "clause": "A.2.3.3",
+      "doc": "RFC 9173",
+      "note": "Appendix A.2: a BCB over the payload with A128GCM, carrying its content encryption key wrapped under a key encryption key. Reproducing this block means reproducing the AES key wrap of RFC 3394 as well, since the wrapped key sits inside the security context parameters.",
+      "config": {
+        "structure": "bcb"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 2,
+        "block_flags": 1,
+        "source_node": 2,
+        "source_service": 1,
+        "variant": 1,
+        "scope": 0,
+        "key": "71776572747975696f70617364666768",
+        "kek": "6162636465666768696a6b6c6d6e6f70",
+        "iv": "5477656c7665313231323132",
+        "target": 1
+      },
+      "want": "850c02010058508101020182028202018482014c5477656c76653132313231328202018203581869c411276fecddc4780df42c8a2af89296fabf34d7fae7008204008181820150efa4b5ac0108e3816c5606479801bc04"
+    },
+    {
+      "name": "bcb-aes128-payload",
+      "clause": "A.3.4.3",
+      "doc": "RFC 9173",
+      "note": "Appendix A.3: the same encryption without the wrapped key parameter, so the BCB carries three parameters rather than four and the receiver is expected to know the key already.",
+      "config": {
+        "structure": "bcb"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f424085070200004319012c85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 4,
+        "block_flags": 1,
+        "source_node": 2,
+        "source_service": 1,
+        "variant": 1,
+        "scope": 0,
+        "key": "71776572747975696f70617364666768",
+        "iv": "5477656c7665313231323132",
+        "target": 1
+      },
+      "want": "850c04010058348101020182028202018382014c5477656c76653132313231328202018204008181820150efa4b5ac0108e3816c5606479801bc04"
+    },
+    {
+      "name": "bcb-aes256-two-targets-full-scope",
+      "clause": "A.4.4.3",
+      "doc": "RFC 9173",
+      "source": "RFC 9173 appendix A.4.4.3, against a bundle assembled from the pieces appendix A.4 prints separately",
+      "note": "Appendix A.4: a BCB encrypting both the payload and the BIB that protects it, with A256GCM and every scope flag set. The targets are listed BIB first, so the BIB's authentication tag is the first security result. The input bundle is the state between adding the BIB and adding the BCB, which the appendix does not print whole.",
+      "config": {
+        "structure": "bcb"
+      },
+      "fields": {
+        "bundle": "9f88070000820282010282028202018202820201820018281a000f4240850b030000584681010101820282020182820106820307818182015830f75fe4c37f76f046165855bd5ff72fbfd4e3a64b4695c40e2b787da005ae819f0a2e30a2e8b325527de8aefb52e73d7185010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+        "block_number": 2,
+        "block_flags": 1,
+        "source_node": 2,
+        "source_service": 1,
+        "variant": 3,
+        "scope": 7,
+        "key": "71776572747975696f7061736466676871776572747975696f70617364666768",
+        "iv": "5477656c7665313231323132",
+        "target": 3,
+        "target_2": 1
+      },
+      "want": "850c0201005849820301020182028202018382014c5477656c76653132313231328202038204078281820150220ffc45c8a901999ecc60991dd78b2981820150d2c51cb2481792dae8b21d848cede99b"
+    }
+  ]
+}

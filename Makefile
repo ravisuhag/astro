@@ -65,6 +65,9 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzReceiverHandle -fuzztime $(FUZZTIME) ./pkg/ltp/
 	go test -run '^$$' -fuzz FuzzDecodeBundle -fuzztime $(FUZZTIME) ./pkg/bp/
 	go test -run '^$$' -fuzz FuzzDecodeStatusReport -fuzztime $(FUZZTIME) ./pkg/bp/
+	go test -run '^$$' -fuzz FuzzDecodeASB -fuzztime $(FUZZTIME) ./pkg/bpsec/
+	go test -run '^$$' -fuzz FuzzProcessSecurityBlock -fuzztime $(FUZZTIME) ./pkg/bpsec/
+	go test -run '^$$' -fuzz FuzzSkip -fuzztime $(FUZZTIME) ./internal/cbor/
 	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzReassembler -fuzztime $(FUZZTIME) ./pkg/pxdl/
