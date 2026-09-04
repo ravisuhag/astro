@@ -18,7 +18,7 @@ evidence of conformance.
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `keywrap` | RFC 3394 (AES Key Wrap) | 6 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
-| `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 14 | — |
+| `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 19 | — |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
 | `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 4 | — |
 | `pus` | ECSS-E-ST-70-41C (PUS-C) | 13 | — |
@@ -34,9 +34,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **362** | **115** |
+| **Total** | | **367** | **115** |
 
-362 vectors and 115 referenced corpus files across 26 packages.
+367 vectors and 115 referenced corpus files across 26 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -188,9 +188,10 @@ files hold them:
 | `crc/interop.json` | Yamcs 5.13.5 | 4 |
 | `pxsc/interop.json` | Yamcs 5.13.5 | 2 |
 | `pn/interop.json` | Yamcs 5.13.5 | 1 |
+| `ltp/interop.json` | ION-DTN, off the wire | 5 |
 | `pxsc/convolutional.json` | a deployed CCSDS 171/133 realization | 4 |
 
-That is 56 vectors across ten packages, and it covers the layers where a
+That is 61 vectors across eleven packages, and it covers the layers where a
 shared misreading is likeliest — the places where a mistake produces an
 implementation that agrees with itself perfectly:
 
@@ -225,10 +226,24 @@ strongest check available on that layer.
 
 Everywhere else the derivation risk stands.
 
-**Four layers cannot be corroborated from outside at all, and the reason
-is structural.** `cop`, `epp`, `ocsc` and `sdls` rest on clause
-derivation alone, and no amount of effort changes that cheaply. `ltp`
-would join `bp` if ION were ever built, since ION implements both.
+**Three layers cannot be corroborated from outside at all, and the reason
+is structural.** `cop`, `epp` and `sdls` rest on clause derivation alone.
+`ocsc` is a fourth in practice, though for a different reason: most of it
+is bit-string work an octet format cannot express, so there is nothing to
+compare even if an implementation were reachable.
+
+`ltp` used to be on this list and came off it the hard way. ION exposes
+no callable codec — its serializers are static functions reaching into an
+SDR database — so the octets came from building ION in a container,
+driving it with ltpdriver over a UDP link service, and recording what
+arrived at the far end. 8359 segments, of which five are kept as
+representatives of the four types that transmission produced. astro
+decodes each and re-encodes it identically.
+
+That is worth stating plainly for anyone attempting the same on the
+remaining three: it is not a library call, it is a running system, and it
+took a Docker image, three config files and a listener. It is possible.
+It is just not cheap.
 
 `bp` used to be the sixth, and no longer is — twice over.
 
@@ -258,13 +273,19 @@ picking the version people actually deploy, which is the general lesson:
 a live standard has a published record around it, and a dead one does
 not.
 
-What makes the difference is not effort but shape. dtn7-go exposes a
-bundle as a value with a marshal method, spacepackets does the same for
-packets and frames, and Yamcs — a whole mission control system — turns
-out to expose its BCH generator, randomizer and CRC calculators as
-plain classes callable without a server. Each capture was a short
-program. The remaining layers expose no such surface, and that, not
-difficulty, is the whole gap.
+What usually makes the difference is shape rather than effort. dtn7-go
+exposes a bundle as a value with a marshal method, spacepackets does the
+same for packets and frames, and Yamcs — a whole mission control system —
+turns out to expose its BCH generator, randomizer and CRC calculators as
+plain classes callable without a server. Each of those captures was a
+short program.
+
+ION is the counter-example that shows the shape is not the whole story.
+It exposes nothing callable, and its octets were still obtainable by
+running it and watching the link. So the remaining three are not
+impossible, only expensive: `cop`, `epp` and `sdls` would each need a
+peer implementation configured to exchange with a test harness, and the
+managed parameters agreed on both sides before a single octet matches.
 
 Corroboration works where an implementation exposes a *codec*: a
 function from field values to octets, callable in isolation. Where the

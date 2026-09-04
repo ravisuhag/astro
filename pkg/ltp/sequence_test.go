@@ -269,3 +269,36 @@ func (l *link) state() vectors.Fields {
 		"block_identical":         bytes.Equal(l.receiver.RedPart(), l.block[:len(l.receiver.RedPart())]),
 	}
 }
+
+// TestSegmentInteropVectors runs segments captured off the wire from ION-DTN,
+// NASA/JPL's reference implementation.
+//
+// This is a different kind of evidence from every other interop file in the
+// corpus. The others called a library function; ION exposes no such surface —
+// its serializers are static functions reaching into an SDR database — so the
+// octets came from building ION in a container, driving it with ltpdriver over
+// a UDP link service, and recording what arrived at the far end's port.
+//
+// `ltp` had no independent check before this. A shared misreading of the
+// segment layout was possible and is not any more.
+func TestSegmentInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "ltp/interop.json", vectors.Impl{
+		DecodeFn: func(input []byte, _ vectors.Fields) (vectors.Fields, error) {
+			seg, err := ltp.DecodeSegment(input)
+			if err != nil {
+				return nil, err
+			}
+			f := vectors.Fields{
+				"segment_type":   uint64(seg.Header.Type),
+				"engine_id":      seg.Header.SessionID.EngineID,
+				"session_number": seg.Header.SessionID.SessionNumber,
+			}
+			if seg.Data != nil {
+				f["client_service_id"] = seg.Data.ClientServiceID
+				f["offset"] = seg.Data.Offset
+				f["data_length"] = uint64(len(seg.Data.Data))
+			}
+			return f, nil
+		},
+	})
+}

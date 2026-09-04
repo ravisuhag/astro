@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 734.1-B-1",
+  "package": "ltp",
+  "source": "captured from ION-DTN, NASA/JPL's reference implementation, off the wire",
+  "note": "LTP segments taken from a running ION node. ION was built in a Linux container, configured with a UDP link service, and driven with ltpdriver; a listener on the far end's port recorded 8359 datagrams, each one a segment exactly as ION put it on the wire. These five are representatives of the four segment types that transmission produced. That is a different kind of evidence from the rest of this corpus. Every other interop file here called a library function; ION exposes no such surface — its serializers are static functions reaching into an SDR database — so the only way to get its octets is to run the system and watch the link. astro decodes all five and re-encodes each to the identical octets. The capture setup is not committed: it is a container image, three ION config files and a C listener, and the octets are the evidence rather than the scaffolding that produced them.",
+  "decode": [
+    {
+      "name": "interop-red-data-at-offset-zero",
+      "clause": "3.2.1",
+      "doc": "RFC 5326",
+      "note": "The first segment of the block, carrying the ASCII \"test...\" that ltpdriver sends. Header is one octet of version and segment type, then the engine ID and session number as SDNVs, then a single octet holding both extension counts in its two nibbles. The data fields follow: client service ID, offset, length, then the payload.",
+      "config": { "structure": "segment" },
+      "input": "00010100010017746573742e2e2e00000000000000000000000000000000",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 1,
+        "session_number": 1,
+        "client_service_id": 1,
+        "offset": 0,
+        "data_length": 23
+      }
+    },
+    {
+      "name": "interop-red-data-at-a-later-offset",
+      "clause": "3.2.1",
+      "doc": "RFC 5326",
+      "note": "The next segment, at offset 23. Paired with the one above it fixes the offset as a field that advances by the previous segment's length rather than by a segment count.",
+      "config": { "structure": "segment" },
+      "input": "000101000117170000000000000000000000000000000000000000000000",
+      "fields": {
+        "segment_type": 0,
+        "engine_id": 1,
+        "session_number": 1,
+        "client_service_id": 1,
+        "offset": 23,
+        "data_length": 23
+      }
+    },
+    {
+      "name": "interop-red-data-checkpoint-and-end-of-red-part",
+      "clause": "3.2.1",
+      "doc": "RFC 5326",
+      "note": "Segment type 2: red data that is both a checkpoint and the end of the red part, but not the end of the block. It carries the checkpoint and report serial numbers the plain data segments do not, and its offset 59941 needs a three-octet SDNV — so this vector pins the variable-width encoding and the conditional fields at once. ION chose the serial numbers at random, which clause 3.2.1 requires for security, so their values carry no meaning beyond being what this session used.",
+      "config": { "structure": "segment" },
+      "input": "020101000183d42513f77b0000000000000000000000000000000000000000",
+      "fields": {
+        "segment_type": 2,
+        "engine_id": 1,
+        "session_number": 1,
+        "client_service_id": 1,
+        "offset": 59941,
+        "data_length": 19
+      }
+    },
+    {
+      "name": "interop-green-data",
+      "clause": "3.2.1",
+      "doc": "RFC 5326",
+      "note": "Segment type 4: green data, which is sent once and never retransmitted. It comes after the red part in the same session and the same block, which is the arrangement that makes the red and green distinction useful — reliable and unreliable data travelling together under one session.",
+      "config": { "structure": "segment" },
+      "input": "040101000183d438170000000000000000000000000000000000000000000000",
+      "fields": {
+        "segment_type": 4,
+        "engine_id": 1,
+        "session_number": 1,
+        "client_service_id": 1,
+        "offset": 59960,
+        "data_length": 23
+      }
+    },
+    {
+      "name": "interop-green-data-end-of-block",
+      "clause": "3.2.1",
+      "doc": "RFC 5326",
+      "note": "Segment type 7: green data closing the block. Note it is 7 and not 5 or 6 — clause 3.1.2 leaves those undefined, so the green codes are not contiguous with the red ones, and an implementation numbering them sequentially would emit 5 here and be refused.",
+      "config": { "structure": "segment" },
+      "input": "070101000183d44f110000000000000000000000000000000000",
+      "fields": {
+        "segment_type": 7,
+        "engine_id": 1,
+        "session_number": 1,
+        "client_service_id": 1,
+        "offset": 59983,
+        "data_length": 17
+      }
+    }
+  ]
+}
