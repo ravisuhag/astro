@@ -5,7 +5,7 @@ description: The conventions and the page set a new protocol package needs.
 order: 2
 ---
 
-Several standards are still open, see [the protocol index](/protocols#not-implemented-yet). Open an issue to discuss the approach before you start.
+Every standard astro has scoped now has a package. A new protocol therefore starts with a case for why it belongs in astro at all — [the scope note](/protocols#out-of-scope) says what is deliberately left out and why. Open an issue to discuss the approach before you start.
 
 Read [contributing](/docs/contribute) first, especially the rule about never coding from memory.
 

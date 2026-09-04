@@ -63,4 +63,4 @@ This is the most valuable issue you can file. Include the standard and issue num
 
 ## Adding a protocol
 
-Several standards are still open. See [adding a protocol](/docs/contribute/adding-a-protocol) for the required page set and the conventions to follow, and the [protocol index](/protocols#not-implemented-yet) for what is unclaimed.
+Every standard astro has scoped now has a package, so there is no unclaimed list to pick from. A new protocol starts with a case for why it belongs — see [the scope note](/protocols#out-of-scope) for what astro deliberately leaves out. Open an issue to make that case before you write code. See [adding a protocol](/docs/contribute/adding-a-protocol) for the required page set and the conventions to follow.
