@@ -214,3 +214,127 @@ func FuzzDecodeXMLOPM(f *testing.F) {
 		}
 	})
 }
+
+// The OCM is the largest surface in the package and the one with the least
+// typing behind it. Its risks are its own: eight kinds of delimited section
+// that can nest, repeat or never close; time tags that may be a date or a
+// signed number and must not mix within a block; and row widths that come from
+// a keyword rather than from the format.
+func FuzzDecodeOCM(f *testing.F) {
+	f.Add(ocmSimple)
+	f.Add(ocmCharacteristics)
+	f.Add(ocmCovariances)
+	f.Add(ocmManeuvers)
+	f.Add("")
+	f.Add("CCSDS_OCM_VERS = 3.0\n")
+
+	// Delimiters out of place: a section that never closes, one closed by
+	// another's delimiter, two of a section that may appear once, and a data
+	// row with nothing to belong to.
+	const header = "CCSDS_OCM_VERS = 3.0\nCREATION_DATE = 2022-11-06T09:23:57\nORIGINATOR = X\n"
+	const meta = "META_START\nEPOCH_TZERO = 2022-12-18T14:28:15.1172\nMETA_STOP\n"
+	f.Add(header + meta + "TRAJ_START\n")
+	f.Add(header + meta + "TRAJ_START\nCOV_STOP\n")
+	f.Add(header + meta + "PHYS_START\nPHYS_STOP\nPHYS_START\nPHYS_STOP\n")
+	f.Add(header + meta + "0.0 1.0 2.0\n")
+
+	// Time tags of both kinds in one block, and a relative one with no
+	// EPOCH_TZERO to resolve it against.
+	f.Add(header + meta + "TRAJ_START\n0.0 1.0\n2022-12-18T14:28:15Z 2.0\nTRAJ_STOP\n")
+	f.Add(header + "META_START\nMETA_STOP\nTRAJ_START\n0.0 1.0\nTRAJ_STOP\n")
+
+	f.Fuzz(func(t *testing.T, data string) {
+		m, err := odm.DecodeOCM([]byte(data))
+		if err != nil {
+			return
+		}
+
+		if m.Humanize() == "" {
+			t.Fatal("Humanize returned nothing for a message that decoded")
+		}
+		encoded, err := m.Encode()
+		if err != nil {
+			t.Fatalf("a message that decoded failed to encode: %v", err)
+		}
+
+		again, err := odm.DecodeOCM(encoded)
+		if err != nil {
+			t.Fatalf("re-decoding our own output failed: %v\n%s", err, encoded)
+		}
+
+		// The section shape must survive, since it is what says how to read
+		// every number in the file.
+		if len(again.Trajectories) != len(m.Trajectories) ||
+			len(again.Covariances) != len(m.Covariances) ||
+			len(again.Maneuvers) != len(m.Maneuvers) {
+			t.Fatal("the section counts changed on round trip")
+		}
+		if (again.Physical == nil) != (m.Physical == nil) ||
+			(again.Perturbations == nil) != (m.Perturbations == nil) ||
+			(again.OrbitDetermination == nil) != (m.OrbitDetermination == nil) {
+			t.Fatal("a section appeared or vanished on round trip")
+		}
+		if len(again.UserDefined) != len(m.UserDefined) {
+			t.Fatal("the user-defined parameter count changed on round trip")
+		}
+
+		for i := range m.Trajectories {
+			for j, row := range m.Trajectories[i].Rows {
+				if strings.Join(again.Trajectories[i].Rows[j].Fields, " ") !=
+					strings.Join(row.Fields, " ") {
+					t.Fatalf("trajectory %d row %d changed on round trip", i, j)
+				}
+			}
+		}
+	})
+}
+
+// The OCM's XML form has the same eight sections behind a different parser,
+// and one thing the key-value form does not: a units attribute that is put
+// back onto the value on the way out, so a crossing between the forms has to
+// survive whatever an attacker puts in it.
+func FuzzDecodeXMLOCM(f *testing.F) {
+	f.Add(ocmXML)
+	f.Add("")
+	f.Add("<ocm/>")
+	f.Add(`<ocm id="CCSDS_OCM_VERS" version="3.0"><header/><body/></ocm>`)
+	f.Add(`<ocm id="CCSDS_OCM_VERS" version="3.0"><header/><body><segment><metadata/><data/></segment></body></ocm>`)
+
+	// Blocks out of order, repeated, and holding a row element that belongs to
+	// another section.
+	f.Add(strings.Replace(ocmXML, "<traj>", "<pert/><traj>", 1))
+	f.Add(strings.Replace(ocmXML, "</pert>", "</pert><pert/>", 1))
+	f.Add(strings.Replace(ocmXML, "<trajLine>", "<covLine>", 1))
+
+	f.Fuzz(func(t *testing.T, data string) {
+		m, err := odm.DecodeXMLOCM([]byte(data))
+		if err != nil {
+			return
+		}
+
+		encoded, err := m.EncodeXML()
+		if err != nil {
+			t.Fatalf("a message that decoded failed to encode: %v", err)
+		}
+		again, err := odm.DecodeXMLOCM(encoded)
+		if err != nil {
+			t.Fatalf("re-decoding our own XML failed: %v\n%s", err, encoded)
+		}
+		if len(again.Trajectories) != len(m.Trajectories) {
+			t.Fatal("the trajectory count changed on an XML round trip")
+		}
+
+		// And the two forms must still agree after a crossing.
+		kvn, err := m.Encode()
+		if err != nil {
+			t.Fatalf("a message that decoded from XML failed to encode as KVN: %v", err)
+		}
+		crossed, err := odm.DecodeOCM(kvn)
+		if err != nil {
+			t.Fatalf("the key-value form written from XML does not read back: %v\n%s", err, kvn)
+		}
+		if crossed.TimeSystem() != m.TimeSystem() {
+			t.Fatal("the time system changed crossing the forms")
+		}
+	})
+}
