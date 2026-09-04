@@ -127,6 +127,11 @@ func (d *opmDecoder) run(s *ndm.Scanner) error {
 // assign routes one keyword to its block.
 func (d *opmDecoder) assign(keyword, value string) error {
 	if name, ok := strings.CutPrefix(keyword, userDefinedPrefix); ok {
+		// A bare USER_DEFINED_ names no parameter, and the XML form has no
+		// way to write one, so neither form accepts it.
+		if name == "" {
+			return ndm.ErrEmptyKeyword
+		}
 		d.enter(blockUserDefined)
 		d.message.Data.UserDefined = append(d.message.Data.UserDefined,
 			UserDefined{Name: name, Value: value})
