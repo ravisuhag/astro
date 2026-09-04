@@ -252,43 +252,36 @@ func (mc *MasterChannel) VCFrameGap() int {
 
 // PhysicalChannel represents a single USLP physical communication link.
 type PhysicalChannel struct {
-	Name           string
-	config         ChannelConfig
-	mux            *sdl.MCMultiplexer[*TransferFrame]
-	masterChannels map[uint16]*MasterChannel
+	Name     string
+	config   ChannelConfig
+	channels *sdl.MasterChannelSet[*TransferFrame, *MasterChannel]
 }
 
 // NewPhysicalChannel creates a physical channel with the given configuration.
 func NewPhysicalChannel(name string, config ChannelConfig) *PhysicalChannel {
 	return &PhysicalChannel{
-		Name:           name,
-		config:         config,
-		mux:            sdl.NewMCMultiplexer[*TransferFrame](),
-		masterChannels: make(map[uint16]*MasterChannel),
+		Name:     name,
+		config:   config,
+		channels: sdl.NewMasterChannelSet[*TransferFrame, *MasterChannel](),
 	}
 }
 
 // AddMasterChannel registers a Master Channel with a priority weight.
 func (pc *PhysicalChannel) AddMasterChannel(mc *MasterChannel, priority int) {
-	pc.masterChannels[mc.SCID()] = mc
-	pc.mux.Add(mc, priority)
+	pc.channels.Add(mc, priority)
 }
 
 // GetNextFrame selects the next frame for transmission.
 func (pc *PhysicalChannel) GetNextFrame() (*TransferFrame, error) {
-	return pc.mux.Next()
+	return pc.channels.Next()
 }
 
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel.
 func (pc *PhysicalChannel) AddFrame(frame *TransferFrame) error {
-	mc, ok := pc.masterChannels[frame.Header.SCID]
-	if !ok {
-		return ErrMasterChannelNotFound
-	}
-	return mc.AddFrame(frame)
+	return pc.channels.Route(frame.Header.SCID, frame)
 }
 
 // HasPendingFrames checks if any Master Channel has pending frames.
 func (pc *PhysicalChannel) HasPendingFrames() bool {
-	return pc.mux.HasPending()
+	return pc.channels.HasPending()
 }

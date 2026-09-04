@@ -179,33 +179,30 @@ func (mc *MasterChannel) HasPendingFrames() bool {
 // PhysicalChannel represents a single AOS physical communication link
 // that carries one or more Master Channels.
 type PhysicalChannel struct {
-	Name           string
-	config         ChannelConfig
-	mux            *sdl.MCMultiplexer[*TransferFrame]
-	masterChannels map[uint16]*MasterChannel
-	idleCounter    *FrameCounter
+	Name        string
+	config      ChannelConfig
+	channels    *sdl.MasterChannelSet[*TransferFrame, *MasterChannel]
+	idleCounter *FrameCounter
 }
 
 // NewPhysicalChannel creates a physical channel with the given configuration.
 func NewPhysicalChannel(name string, config ChannelConfig) *PhysicalChannel {
 	return &PhysicalChannel{
-		Name:           name,
-		config:         config,
-		mux:            sdl.NewMCMultiplexer[*TransferFrame](),
-		masterChannels: make(map[uint16]*MasterChannel),
-		idleCounter:    NewFrameCounter(),
+		Name:        name,
+		config:      config,
+		channels:    sdl.NewMasterChannelSet[*TransferFrame, *MasterChannel](),
+		idleCounter: NewFrameCounter(),
 	}
 }
 
 // AddMasterChannel registers a Master Channel with a priority weight.
 func (pc *PhysicalChannel) AddMasterChannel(mc *MasterChannel, priority int) {
-	pc.masterChannels[mc.SCID()] = mc
-	pc.mux.Add(mc, priority)
+	pc.channels.Add(mc, priority)
 }
 
 // GetNextFrame selects the next frame for transmission.
 func (pc *PhysicalChannel) GetNextFrame() (*TransferFrame, error) {
-	return pc.mux.Next()
+	return pc.channels.Next()
 }
 
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
@@ -221,10 +218,14 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 	if pc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
+	// The lowest registered SCID, so the fill is the same on every run.
+	// Ranging the registry would take whichever channel Go's map iteration
+	// yielded, and a physical channel carrying two spacecraft would stamp its
+	// idle frames inconsistently. pkg/tmdl already chose the lowest; this now
+	// comes from the same place, so the two cannot drift apart again.
 	var scid uint8
-	for _, mc := range pc.masterChannels {
+	if mc, ok := pc.channels.Lowest(); ok {
 		scid = mc.scidByte()
-		break
 	}
 	idle, err := NewIdleFrame(scid, pc.config)
 	if err != nil {
@@ -238,19 +239,15 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TransferFrame, error) {
 
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel.
 func (pc *PhysicalChannel) AddFrame(frame *TransferFrame) error {
-	mc, ok := pc.masterChannels[scidKey(frame.Header.SCID)]
-	if !ok {
-		return ErrMasterChannelNotFound
-	}
-	return mc.AddFrame(frame)
+	return pc.channels.Route(scidKey(frame.Header.SCID), frame)
 }
 
 // HasPendingFrames checks if any Master Channel has pending frames.
 func (pc *PhysicalChannel) HasPendingFrames() bool {
-	return pc.mux.HasPending()
+	return pc.channels.HasPending()
 }
 
 // Len returns the number of registered Master Channels.
 func (pc *PhysicalChannel) Len() int {
-	return pc.mux.Len()
+	return pc.channels.Len()
 }
