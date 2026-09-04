@@ -38,6 +38,19 @@ func benchHousekeeping(cycles, octets int) [][]byte {
 	return out
 }
 
+// CompressCycle allocates 13 times and DecompressCycle 7, one per Vector
+// operation: XOR, OR, Clone, Reverse, Not, Extract and ShiftLeft each return a
+// new vector, with Extract the largest share.
+//
+// That has been measured and left alone deliberately. Removing it means
+// threading scratch buffers through about fifteen call sites, in a package
+// whose Vector doc says plainly that it chose clarity over density and would
+// not pack bits even though it could. POCKET+ compresses housekeeping, and at
+// roughly 6.7us and 4.7 KB a cycle, even a thousand cycles a second is 0.6% of
+// one core and 4.5 MB/s of churn — a rate no spacecraft produces.
+//
+// Worth revisiting only if a ground system replays stored passes fast enough
+// to care, and parallelising across frames is the cheaper answer even then.
 func BenchmarkCompressCycle(b *testing.B) {
 	const octets = 64
 	vectors := benchHousekeeping(64, octets)
