@@ -124,3 +124,68 @@ func optionalTime(t *time.Time) string {
 	}
 	return t.Format("2006-01-02T15:04:05.999")
 }
+
+// Humanize returns a human-readable summary of the message.
+//
+// An ACM can hold six sections and a couple of hundred keywords, so the
+// sections are counted and characterised rather than printed. What a reader
+// wants at a glance is which sections arrived, what each block's rows mean,
+// and the epoch the relative time tags are measured from — without which a row
+// beginning "0.25" says nothing at all.
+func (m *ACM) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "CCSDS Attitude Comprehensive Message %s\n", m.Header.Version)
+	fmt.Fprintf(&sb, "  Originator ...... %s\n", m.Header.Originator)
+	fmt.Fprintf(&sb, "  Created ......... %s UTC\n", m.Header.CreationDate.Format("2006-01-02T15:04:05"))
+	if m.Header.MessageID != "" {
+		fmt.Fprintf(&sb, "  Message ID ...... %s\n", m.Header.MessageID)
+	}
+	if m.Header.Classification != "" {
+		fmt.Fprintf(&sb, "  Classification .. %s\n", m.Header.Classification)
+	}
+
+	if name := m.ObjectName(); name != "" {
+		fmt.Fprintf(&sb, "  Object .......... %s\n", name)
+	}
+	fmt.Fprintf(&sb, "  Time system ..... %s\n", m.TimeSystem())
+	if tzero, ok := m.EpochTZero(); ok {
+		fmt.Fprintf(&sb, "  Epoch T-zero .... %s\n", tzero.Format("2006-01-02T15:04:05.999999999"))
+	}
+
+	for i, section := range m.Attitudes {
+		from, to := section.Frames()
+		fmt.Fprintf(&sb, "  Attitude %d ...... %d state(s), %s", i+1, len(section.Rows), section.AttitudeType())
+		if rate := section.RateType(); rate != "NONE" {
+			fmt.Fprintf(&sb, " with %s", rate)
+		}
+		fmt.Fprintf(&sb, ", %s to %s\n", from, to)
+	}
+	for i, section := range m.Covariances {
+		fmt.Fprintf(&sb, "  Covariance %d .... %d diagonal(s), %s in %s\n",
+			i+1, len(section.Rows), section.CovarianceType(),
+			section.GetOr("COV_REF_FRAME", "an unnamed frame"))
+	}
+	for i, section := range m.Maneuvers {
+		fmt.Fprintf(&sb, "  Maneuver %d ...... %s at %s s, %s\n", i+1,
+			section.GetOr("MAN_PURPOSE", "unstated purpose"),
+			section.GetOr("MAN_BEGIN_TIME", "?"),
+			section.GetOr("ACTUATOR_USED", "an unnamed actuator"))
+	}
+	if m.Physical != nil {
+		fmt.Fprintf(&sb, "  Physical ........ %d keyword(s)\n", len(m.Physical.Fields))
+	}
+	if ad := m.AttitudeDetermination; ad != nil {
+		fmt.Fprintf(&sb, "  Attitude det. ... %s from %s, %d sensor(s)\n",
+			ad.GetOr("AD_METHOD", "an unnamed method"),
+			ad.GetOr("ATTITUDE_SOURCE", "an unnamed source"), len(ad.Sensors))
+	}
+
+	if len(m.UserDefined) > 0 {
+		fmt.Fprintf(&sb, "  User-defined .... %d parameter(s)\n", len(m.UserDefined))
+		for _, u := range m.UserDefined {
+			fmt.Fprintf(&sb, "    %s = %s\n", u.Name, u.Value)
+		}
+	}
+	return sb.String()
+}
