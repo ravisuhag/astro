@@ -5,7 +5,7 @@
 
 Astro is a Go library and CLI implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards, the protocols NASA, ESA, JAXA and other agencies use to talk to spacecraft.
 
-24 standards, from channel coding up to mission operations. `pkg/` takes no dependencies outside the Go standard library.
+25 standards, from channel coding up to mission operations. `pkg/` takes no dependencies outside the Go standard library.
 
 **[Documentation](https://astro.ravisuhag.com)** | [Protocols](https://astro.ravisuhag.com/protocols) | [CLI](https://astro.ravisuhag.com/cli) | [Conformance](https://astro.ravisuhag.com/conformance)
 
