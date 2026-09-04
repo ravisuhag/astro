@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "standard": "RFC 3394",
+  "package": "keywrap",
+  "source": "RFC 3394 section 4",
+  "note": "AES Key Wrap, as the BPSec default security contexts use it to carry a symmetric key inside a security block (RFC 9173 clauses 3.3.2 and 4.3.3). All six cases are transcribed from RFC 3394 section 4, which prints the key encryption key, the key data and the resulting ciphertext for every legal combination of the two sizes. The section also prints each intermediate step; those are not carried here, because agreeing on the output means agreeing on all of them. The wrap direction is what these vectors run: unwrap is checked in the package's own tests by feeding each ciphertext back and requiring the original key data, which is the property that matters and which the octets here already fix. Test keys only, never real keys.",
+  "encode": [
+    {
+      "name": "wrap-128-bit-key-with-128-bit-kek",
+      "clause": "4.1",
+      "note": "Section 4.1. Two 64-bit blocks of key data, so six rounds of two AES operations, and three blocks out.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f",
+        "key_data": "00112233445566778899aabbccddeeff"
+      },
+      "want": "1fa68b0a8112b447aef34bd8fb5a7b829d3e862371d2cfe5"
+    },
+    {
+      "name": "wrap-128-bit-key-with-192-bit-kek",
+      "clause": "4.2",
+      "note": "Section 4.2. The same key data under a longer key encryption key, which changes every output block.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f1011121314151617",
+        "key_data": "00112233445566778899aabbccddeeff"
+      },
+      "want": "96778b25ae6ca435f92b5b97c050aed2468ab8a17ad84e5d"
+    },
+    {
+      "name": "wrap-128-bit-key-with-256-bit-kek",
+      "clause": "4.3",
+      "note": "Section 4.3. This is the case BPSec reaches most often, since RFC 9173 clause 4.3.2 defaults to A256GCM.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "key_data": "00112233445566778899aabbccddeeff"
+      },
+      "want": "64e8c3f9ce0f5ba263e9777905818a2a93c8191e7d6e8ae7"
+    },
+    {
+      "name": "wrap-192-bit-key-with-192-bit-kek",
+      "clause": "4.4",
+      "note": "Section 4.4. Three blocks of key data rather than two, so the round counter runs to 18 and the output is four blocks.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f1011121314151617",
+        "key_data": "00112233445566778899aabbccddeeff0001020304050607"
+      },
+      "want": "031d33264e15d33268f24ec260743edce1c6c7ddee725a936ba814915c6762d2"
+    },
+    {
+      "name": "wrap-192-bit-key-with-256-bit-kek",
+      "clause": "4.5",
+      "note": "Section 4.5. Three blocks of key data under the longest key encryption key.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "key_data": "00112233445566778899aabbccddeeff0001020304050607"
+      },
+      "want": "a8f9bc1612c68b3ff6e6f4fbe30e71e4769c8b80a32cb8958cd5d17d6b254da1"
+    },
+    {
+      "name": "wrap-256-bit-key-with-256-bit-kek",
+      "clause": "4.6",
+      "note": "Section 4.6. Four blocks of key data, five out. This is the shape BPSec produces when it wraps an A256GCM content encryption key.",
+      "fields": {
+        "kek": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "key_data": "00112233445566778899aabbccddeeff000102030405060708090a0b0c0d0e0f"
+      },
+      "want": "28c9f404c4b810f4cbccb35cfb87f8263f5786e2d80ed326cbc7f0e71a99f43bfb988b9b7a02dd21"
+    }
+  ]
+}
