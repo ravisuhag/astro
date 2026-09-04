@@ -1,219 +1,266 @@
-// Package bp implements the Bundle Protocol version 6
-// per RFC 5050, profiled for space missions by CCSDS 734.2-B-1.
-//
-// Bundle Protocol is the network layer of Delay-Tolerant Networking. It moves
-// application data units (bundles) hop by hop across links that are never
-// all up at once, storing them at intermediate nodes rather than holding an
-// end-to-end session open.
-//
-// # Version 6, not version 7
-//
-// CCSDS 734.2-B-1 profiles RFC 5050, which is Bundle Protocol version 6. It is
-// NOT BPv7 (RFC 9171): BPv7 encodes bundles in CBOR and is wire-incompatible.
-// This package implements what CCSDS specifies. BPv7 would be a separate
-// package.
-//
-// The CCSDS profile adds two things on top of RFC 5050: the IPN naming scheme
-// with Compressed Bundle Header Encoding (RFC 6260), and a mandatory Extended
-// Class of Service block (annex C).
-//
-// A bundle is a primary block followed by one or more canonical blocks, the
-// last of which is normally the payload:
-//
-//	[ primary block │ extension blocks... │ payload block ]
-//
-// Nearly every field is a Self-Delimiting Numeric Value, so this package
-// builds on pkg/sdnv.
 package bp
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
 
-// Version is the bundle protocol version this package implements, per
-// RFC 5050 clause 4.5.1.
-const Version = 6
+// SchemeCode is the integer standing in for a URI scheme name on the wire.
+// Codes come from the "Bundle Protocol URI Scheme Types" registry
+// (RFC 9171 clause 9.6). The registry is open; this package handles the two
+// schemes RFC 9171 defines and refuses the rest rather than guessing at a
+// scheme-specific part it cannot parse.
+type SchemeCode uint64
 
-// IPNScheme is the naming scheme CCSDS 734.2-B-1 clause 3.2.1 requires, defined by
-// RFC 6260 clause 2.1.
-const IPNScheme = "ipn"
+const (
+	// SchemeDTN is the "dtn" scheme: endpoints named by text strings.
+	SchemeDTN SchemeCode = 1
+	// SchemeIPN is the "ipn" scheme: endpoints named by numbers.
+	SchemeIPN SchemeCode = 2
+)
 
-// DTNScheme is the scheme of the null endpoint "dtn:none".
-const DTNScheme = "dtn"
+// maxIPNComponent bounds the allocator identifier and the node number. Both
+// must fit in 32 bits so the two-element encoding can pack them into one
+// 64-bit Fully Qualified Node Number (RFC 9758 clause 6.3).
+const maxIPNComponent = 1 << 32
 
-// EndpointID names a bundle endpoint: a scheme and a scheme-specific part.
+// EID identifies a bundle endpoint (RFC 9171 clause 4.2.5.1). On the wire it
+// is a two-item CBOR array: a scheme code, then a scheme-specific part whose
+// shape the scheme decides.
 //
-// On the wire an endpoint is a pair of offsets into the primary block's
-// dictionary, which is how the same scheme string is shared between the
-// destination, source, report-to and custodian without repeating it.
-type EndpointID struct {
-	Scheme string
-	SSP    string
-}
-
-// NullEndpoint is "dtn:none", the endpoint that names nobody. RFC 5050 clause 4.4
-// uses it for a bundle with no identifiable source.
-var NullEndpoint = EndpointID{Scheme: DTNScheme, SSP: "none"}
-
-// IsNull reports whether this is the null endpoint.
-func (e EndpointID) IsNull() bool {
-	return e.Scheme == DTNScheme && e.SSP == "none"
-}
-
-// String renders the endpoint as a URI.
-func (e EndpointID) String() string {
-	if e.Scheme == "" && e.SSP == "" {
-		return "dtn:none"
-	}
-	return e.Scheme + ":" + e.SSP
-}
-
-// IPNEndpoint builds an endpoint in the IPN scheme that CCSDS mandates.
+// Which fields matter depends on Scheme. For SchemeDTN only DTNSSP is read;
+// for SchemeIPN only Allocator, Node and Service are.
 //
-// The scheme-specific part is a node number and a service number separated by
-// a period, per CCSDS 734.2-B-1 clause 3.2.1. Node numbers run 1 to 2^64-1 and are
-// assigned by SANA; service numbers run 0 to 2^64-1.
-func IPNEndpoint(node, service uint64) EndpointID {
-	return EndpointID{
-		Scheme: IPNScheme,
-		SSP:    strconv.FormatUint(node, 10) + "." + strconv.FormatUint(service, 10),
-	}
+// The ipn scheme carries an allocator identifier because RFC 9758 added one.
+// RFC 9171 on its own has no such field, but the two agree on the wire: the
+// two-element encoding packs allocator and node into one number, and when the
+// allocator is zero — the Default Allocator — the octets are exactly what
+// RFC 9171 clause 4.2.5.1.2 specifies. So an EID with Allocator zero is
+// readable by an implementation that never heard of RFC 9758.
+type EID struct {
+	Scheme SchemeCode
+
+	// DTNSSP is the scheme-specific part of a dtn-scheme EID. The value
+	// "none" is the null endpoint, which encodes as a number rather than a
+	// string (RFC 9171 clause 4.2.5.1.1).
+	DTNSSP string
+
+	// Allocator is the ipn allocator identifier (RFC 9758 clause 3.2). Zero is
+	// the Default Allocator and the common case.
+	Allocator uint64
+	// Node is the ipn node number (RFC 9758 clause 3.3).
+	Node uint64
+	// Service is the ipn service number. Zero may identify a node's
+	// administrative endpoint (RFC 9171 clause 4.2.5.1.2).
+	Service uint64
 }
 
-// IPNParts splits an IPN endpoint into its node and service numbers.
-func (e EndpointID) IPNParts() (node, service uint64, err error) {
-	if e.Scheme != IPNScheme {
-		return 0, 0, ErrInvalidEndpointID
-	}
-	dot := strings.IndexByte(e.SSP, '.')
-	if dot < 0 {
-		return 0, 0, ErrInvalidEndpointID
-	}
-	node, err = strconv.ParseUint(e.SSP[:dot], 10, 64)
-	if err != nil {
-		return 0, 0, ErrInvalidEndpointID
-	}
-	service, err = strconv.ParseUint(e.SSP[dot+1:], 10, 64)
-	if err != nil {
-		return 0, 0, ErrInvalidEndpointID
-	}
-	// Clause 3.2.1: a node number is at least 1.
-	if node == 0 {
-		return 0, 0, ErrInvalidEndpointID
-	}
-	return node, service, nil
+// dtnNoneSSP is the scheme-specific part naming the null endpoint.
+const dtnNoneSSP = "none"
+
+// NullEID returns the null endpoint, dtn:none. It has no members, and a bundle
+// uses it as the source when the sender stays anonymous
+// (RFC 9171 clause 4.2.5.1.1).
+func NullEID() EID {
+	return EID{Scheme: SchemeDTN, DTNSSP: dtnNoneSSP}
 }
 
-// ParseEndpointID parses a URI of the form "scheme:ssp".
-func ParseEndpointID(uri string) (EndpointID, error) {
-	colon := strings.IndexByte(uri, ':')
-	if colon <= 0 || colon == len(uri)-1 {
-		return EndpointID{}, ErrInvalidEndpointID
-	}
-	return EndpointID{Scheme: uri[:colon], SSP: uri[colon+1:]}, nil
+// DTN returns a dtn-scheme EID with the given scheme-specific part.
+func DTN(ssp string) EID {
+	return EID{Scheme: SchemeDTN, DTNSSP: ssp}
 }
 
-// cbheParts returns the (node, service) pair RFC 6260 clause 2.1 assigns this
-// endpoint in a CBHE-encoded primary block: an ipn endpoint contributes its
-// node and service numbers, and the null endpoint dtn:none travels as (0, 0).
-// ok is false when the endpoint fits neither form, which makes the whole
-// bundle ineligible for CBHE.
-func (e EndpointID) cbheParts() (node, service uint64, ok bool) {
-	if e.IsNull() {
-		return 0, 0, true
-	}
-	node, service, err := e.IPNParts()
-	if err != nil {
-		return 0, 0, false
-	}
-	return node, service, true
+// IPN returns an ipn-scheme EID under the Default Allocator, which is what
+// almost every deployment uses. Its encoding is byte-identical to the one
+// RFC 9171 clause 4.2.5.1.2 defines.
+func IPN(node, service uint64) EID {
+	return EID{Scheme: SchemeIPN, Node: node, Service: service}
 }
 
-// cbheEndpoint rebuilds an endpoint from a CBHE (node, service) pair, per
-// RFC 6260 clause 2.2: (0, 0) is the null endpoint, and node 0 with a nonzero
-// service number names nothing.
-func cbheEndpoint(node, service uint64) (EndpointID, error) {
-	if node == 0 {
-		if service != 0 {
-			return EndpointID{}, ErrInvalidEndpointID
+// IPNWithAllocator returns an ipn-scheme EID under a named allocator
+// (RFC 9758 clause 3.2).
+func IPNWithAllocator(allocator, node, service uint64) EID {
+	return EID{Scheme: SchemeIPN, Allocator: allocator, Node: node, Service: service}
+}
+
+// IsNull reports whether this EID names the null endpoint. Three spellings do:
+// dtn:none, ipn:0.0 and ipn:0.0.0 (RFC 9758 clause 5.2).
+func (e EID) IsNull() bool {
+	switch e.Scheme {
+	case SchemeDTN:
+		return e.DTNSSP == dtnNoneSSP
+	case SchemeIPN:
+		return e.Allocator == 0 && e.Node == 0 && e.Service == 0
+	}
+	return false
+}
+
+// Validate reports whether the EID can be encoded.
+func (e EID) Validate() error {
+	switch e.Scheme {
+	case SchemeDTN:
+		return nil
+	case SchemeIPN:
+		if e.Allocator >= maxIPNComponent {
+			return ErrIPNComponentTooLarge
 		}
-		return NullEndpoint, nil
+		if e.Node >= maxIPNComponent {
+			return ErrIPNComponentTooLarge
+		}
+		return nil
+	default:
+		return ErrUnknownURIScheme
 	}
-	return IPNEndpoint(node, service), nil
 }
 
-// dictionary builds the primary block's dictionary and the offsets into it.
+// String renders the EID in its URI text form.
+func (e EID) String() string {
+	switch e.Scheme {
+	case SchemeDTN:
+		return "dtn:" + e.DTNSSP
+	case SchemeIPN:
+		// The three-number form appears only when an allocator is named;
+		// RFC 9758 clause 4.1 keeps the two-number spelling otherwise.
+		var b strings.Builder
+		b.WriteString("ipn:")
+		if e.Allocator != 0 {
+			b.WriteString(strconv.FormatUint(e.Allocator, 10))
+			b.WriteByte('.')
+		}
+		b.WriteString(strconv.FormatUint(e.Node, 10))
+		b.WriteByte('.')
+		b.WriteString(strconv.FormatUint(e.Service, 10))
+		return b.String()
+	}
+	return "unknown-scheme:" + strconv.FormatUint(uint64(e.Scheme), 10)
+}
+
+// appendEID writes an EID as the two-item array of RFC 9171 clause 4.2.5.1.
 //
-// RFC 5050 clause 4.4: the dictionary is a byte array of null-terminated strings,
-// and each endpoint is a pair of offsets naming its scheme and its
-// scheme-specific part. Identical strings are stored once, which is the whole
-// point of the arrangement.
-type dictionary struct {
-	buf     []byte
-	offsets map[string]uint64
-}
-
-func newDictionary() *dictionary {
-	return &dictionary{offsets: make(map[string]uint64)}
-}
-
-// intern adds a string if it is not already present and returns its offset.
-func (d *dictionary) intern(s string) uint64 {
-	if offset, ok := d.offsets[s]; ok {
-		return offset
+// ipn EIDs go out in the two-element scheme-specific form. RFC 9758
+// clause 6.1.1 makes that the backwards-compatible one: with the Default
+// Allocator it is the same octets RFC 9171 asks for, so bundles this package
+// writes are readable by implementations that predate RFC 9758.
+func appendEID(dst []byte, e EID) ([]byte, error) {
+	if err := e.Validate(); err != nil {
+		return nil, err
 	}
-	offset := uint64(len(d.buf))
-	d.offsets[s] = offset
-	d.buf = append(d.buf, s...)
-	d.buf = append(d.buf, 0)
-	return offset
+
+	dst = appendArrayHeader(dst, 2)
+	dst = appendUint(dst, uint64(e.Scheme))
+
+	switch e.Scheme {
+	case SchemeDTN:
+		if e.DTNSSP == dtnNoneSSP {
+			// The null endpoint is the one dtn SSP that is a number.
+			return appendUint(dst, 0), nil
+		}
+		return appendTextString(dst, e.DTNSSP), nil
+
+	case SchemeIPN:
+		dst = appendArrayHeader(dst, 2)
+		dst = appendUint(dst, e.Allocator<<32|e.Node) // the Fully Qualified Node Number
+		return appendUint(dst, e.Service), nil
+	}
+
+	return nil, ErrUnknownURIScheme
 }
 
-// add interns both halves of an endpoint and returns their offsets.
-func (d *dictionary) add(e EndpointID) (scheme, ssp uint64) {
-	return d.intern(e.Scheme), d.intern(e.SSP)
-}
-
-// lookupString reads the null-terminated string at an offset.
-func lookupString(dict []byte, offset uint64) (string, error) {
-	if offset > uint64(len(dict)) {
-		return "", ErrDictionaryOffset
-	}
-	rest := dict[offset:]
-	end := 0
-	for end < len(rest) && rest[end] != 0 {
-		end++
-	}
-	if end == len(rest) {
-		// No terminator: the dictionary is malformed.
-		return "", ErrDictionaryOffset
-	}
-	return string(rest[:end]), nil
-}
-
-// lookupEndpoint reads an endpoint from a pair of dictionary offsets.
-func lookupEndpoint(dict []byte, schemeOffset, sspOffset uint64) (EndpointID, error) {
-	scheme, err := lookupString(dict, schemeOffset)
+// eid reads an EID.
+func (d *decoder) eid() (EID, error) {
+	n, indefinite, err := d.arrayHeader()
 	if err != nil {
-		return EndpointID{}, err
+		return EID{}, err
 	}
-	ssp, err := lookupString(dict, sspOffset)
+	if indefinite || n != 2 {
+		return EID{}, ErrMalformedEID
+	}
+
+	scheme, err := d.uint()
 	if err != nil {
-		return EndpointID{}, err
+		return EID{}, err
 	}
-	return EndpointID{Scheme: scheme, SSP: ssp}, nil
+
+	switch SchemeCode(scheme) {
+	case SchemeDTN:
+		return d.dtnSSP()
+	case SchemeIPN:
+		return d.ipnSSP()
+	default:
+		return EID{}, ErrUnknownURIScheme
+	}
 }
 
-// Humanize returns a human-readable description of the endpoint.
-func (e EndpointID) Humanize() string {
-	if e.Scheme != IPNScheme {
-		return e.String()
-	}
-	node, service, err := e.IPNParts()
+// dtnSSP reads the scheme-specific part of a dtn EID. It is a text string,
+// except for the null endpoint, which is the number zero
+// (RFC 9171 clause 4.2.5.1.1).
+func (d *decoder) dtnSSP() (EID, error) {
+	head, err := d.peek()
 	if err != nil {
-		return e.String()
+		return EID{}, err
 	}
-	return fmt.Sprintf("%s (node %d, service %d)", e.String(), node, service)
+
+	if head>>5 == majorUint {
+		v, err := d.uint()
+		if err != nil {
+			return EID{}, err
+		}
+		if v != 0 {
+			return EID{}, ErrMalformedEID
+		}
+		return NullEID(), nil
+	}
+
+	ssp, err := d.textString()
+	if err != nil {
+		return EID{}, err
+	}
+	return DTN(ssp), nil
+}
+
+// ipnSSP reads the scheme-specific part of an ipn EID, in either the two- or
+// three-element form, following the decoding rule of RFC 9758 clause 6.2.
+func (d *decoder) ipnSSP() (EID, error) {
+	n, indefinite, err := d.arrayHeader()
+	if err != nil {
+		return EID{}, err
+	}
+	if indefinite || (n != 2 && n != 3) {
+		return EID{}, ErrMalformedEID
+	}
+
+	first, err := d.uint()
+	if err != nil {
+		return EID{}, err
+	}
+	second, err := d.uint()
+	if err != nil {
+		return EID{}, err
+	}
+
+	if n == 2 {
+		// The first item is a Fully Qualified Node Number: the allocator in
+		// the high 32 bits, the node number in the low 32.
+		//
+		// RFC 9758 clause 6.2 prints this mask as "2^(32-1)", which would keep
+		// 31 bits. That is a slip in the pseudocode: clause 3.3.1 defines the
+		// node number as the low 32 bits, and clause 6.1.1's worked example
+		// (ipn:977000.100.1 packing to 0x000EE86800000064) only comes out
+		// right with a 32-bit mask. This uses 32 bits.
+		return EID{
+			Scheme:    SchemeIPN,
+			Allocator: first >> 32,
+			Node:      first & 0xFFFFFFFF,
+			Service:   second,
+		}, nil
+	}
+
+	third, err := d.uint()
+	if err != nil {
+		return EID{}, err
+	}
+	if first >= maxIPNComponent || second >= maxIPNComponent {
+		return EID{}, ErrIPNComponentTooLarge
+	}
+	return EID{Scheme: SchemeIPN, Allocator: first, Node: second, Service: third}, nil
 }

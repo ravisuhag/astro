@@ -256,13 +256,12 @@ func TestLTPDecodeRejectsRubbish(t *testing.T) {
 // BP: a bundle round trips through the CLI decoder.
 func TestBPDecodeBundle(t *testing.T) {
 	primary := &bp.PrimaryBlock{
-		Flags:             bp.BundleFlags(0).WithPriority(bp.PriorityNormal) | bp.FlagSingleton,
-		Destination:       bp.IPNEndpoint(2, 1),
-		Source:            bp.IPNEndpoint(1, 1),
-		ReportTo:          bp.IPNEndpoint(1, 0),
-		Custodian:         bp.NullEndpoint,
-		CreationTimestamp: bp.CreationTimestamp{Time: 800000000, SequenceNumber: 42},
-		Lifetime:          3600,
+		CRCType:     bp.CRC32C,
+		Destination: bp.IPN(2, 1),
+		Source:      bp.IPN(1, 1),
+		ReportTo:    bp.IPN(1, 0),
+		Timestamp:   bp.CreationTimestamp{Time: 800_000_000_000, Sequence: 42},
+		Lifetime:    3_600_000,
 	}
 
 	bundle, err := bp.NewBundle(primary, []byte("telemetry"))
@@ -281,8 +280,8 @@ func TestBPDecodeBundle(t *testing.T) {
 	}
 
 	described := decodePDUJSON(t, out)
-	if described.Kind != "BPv6 Bundle" {
-		t.Errorf("kind = %q, want BPv6 Bundle", described.Kind)
+	if described.Kind != "BPv7 Bundle" {
+		t.Errorf("kind = %q, want BPv7 Bundle", described.Kind)
 	}
 	if described.Octets != len(encoded) {
 		t.Errorf("octets = %d, want %d", described.Octets, len(encoded))

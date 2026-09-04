@@ -1,292 +1,206 @@
 package bp
 
-import "fmt"
-
-// Bundle is a complete Bundle Protocol data unit: a primary block followed by
-// one or more canonical blocks, per RFC 5050 clause 4.1.
+// Bundle is a complete Bundle Protocol version 7 data unit
+// (RFC 9171 clause 4.1).
 //
-// The last block must carry the last-block flag, and exactly one block must be
-// the payload.
+// On the wire it is a CBOR indefinite-length array closed by a break stop
+// code: the primary block, then one or more canonical blocks, the last of
+// which is the payload.
+//
+// That the array is indefinite-length is worth stating plainly, because the
+// CDDL grammar in RFC 9171 appendix B writes it as though it were definite.
+// Clause 4.1 requires the indefinite form, and the appendix says the prose
+// wins wherever the two disagree. An implementation that followed the grammar
+// would emit bundles no conforming node accepts, while reading its own output
+// back perfectly.
 type Bundle struct {
 	Primary *PrimaryBlock
-	Blocks  []*CanonicalBlock
+	// Blocks holds every block after the primary one, in wire order. The last
+	// entry is the payload block.
+	Blocks []*CanonicalBlock
 }
 
-// NewBundle builds a bundle carrying one payload.
-func NewBundle(primary *PrimaryBlock, payload []byte, options ...BundleOption) (*Bundle, error) {
+// NewBundle builds a bundle from a primary block, a payload, and any extension
+// blocks. The payload block is created here and placed last, where clause 4.1
+// requires it.
+func NewBundle(primary *PrimaryBlock, payload []byte, extensions ...*CanonicalBlock) (*Bundle, error) {
 	b := &Bundle{Primary: primary}
-	for _, opt := range options {
-		if err := opt(b); err != nil {
-			return nil, err
-		}
-	}
-
-	// The payload always goes last, and carries the last-block flag.
-	b.Blocks = append(b.Blocks, &CanonicalBlock{
-		Type:  BlockTypePayload,
-		Flags: BlockLast,
-		Data:  payload,
-	})
-
+	b.Blocks = append(b.Blocks, extensions...)
+	b.Blocks = append(b.Blocks, NewPayloadBlock(payload))
 	if err := b.Validate(); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-// BundleOption configures a bundle at construction.
-type BundleOption func(*Bundle) error
+// PayloadBlock returns the payload block, which is always the last one.
+func (b *Bundle) PayloadBlock() *CanonicalBlock {
+	if len(b.Blocks) == 0 {
+		return nil
+	}
+	return b.Blocks[len(b.Blocks)-1]
+}
 
-// WithECOS attaches an Extended Class of Service block.
+// Payload returns the application data the bundle carries.
+func (b *Bundle) Payload() []byte {
+	p := b.PayloadBlock()
+	if p == nil {
+		return nil
+	}
+	return p.Data
+}
+
+// blockOfType returns the first block of the given type, or nil.
+func (b *Bundle) blockOfType(t BlockType) *CanonicalBlock {
+	for _, blk := range b.Blocks {
+		if blk.Type == t {
+			return blk
+		}
+	}
+	return nil
+}
+
+// Validate checks every rule RFC 9171 states about a bundle as a whole, and is
+// what Encode calls before writing one.
 //
-// CCSDS 734.2-B-1 annex C, C3.1.1 requires the ECOS block to precede the
-// payload, and C3.1.2 allows at most one per bundle.
-func WithECOS(e ECOS) BundleOption {
-	return func(b *Bundle) error {
-		for _, existing := range b.Blocks {
-			if existing.Type == BlockTypeECOS {
-				return ErrInvalidECOS
-			}
-		}
-		block, err := e.Block()
-		if err != nil {
-			return err
-		}
-		b.Blocks = append(b.Blocks, block)
-		return nil
-	}
-}
-
-// WithBlock attaches an extension block ahead of the payload.
-func WithBlock(block *CanonicalBlock) BundleOption {
-	return func(b *Bundle) error {
-		if block == nil {
-			return ErrDataTooShort
-		}
-		// The payload owns the last-block flag.
-		block.Flags &^= BlockLast
-		b.Blocks = append(b.Blocks, block)
-		return nil
-	}
-}
-
-// Payload returns the payload block's data.
-func (b *Bundle) Payload() ([]byte, error) {
-	block, err := b.PayloadBlock()
-	if err != nil {
-		return nil, err
-	}
-	return block.Data, nil
-}
-
-// PayloadBlock returns the payload block.
-func (b *Bundle) PayloadBlock() (*CanonicalBlock, error) {
-	for _, block := range b.Blocks {
-		if block.Type == BlockTypePayload {
-			return block, nil
-		}
-	}
-	return nil, ErrMissingPayload
-}
-
-// ECOS returns the Extended Class of Service block if the bundle carries one.
-func (b *Bundle) ECOS() (*ECOS, bool) {
-	for _, block := range b.Blocks {
-		if block.Type == BlockTypeECOS {
-			e, err := DecodeECOS(block.Data)
-			if err != nil {
-				return nil, false
-			}
-			return e, true
-		}
-	}
-	return nil, false
-}
-
-// Validate checks the bundle's structure against clause 4.1 and clause 4.5.2.
+// It is stricter than what Decode enforces, on purpose. Decode checks only the
+// rules that must hold for a bundle to be unambiguous — one payload block,
+// last, block numbers unique — because a node has to be able to read and
+// forward what it is given. Validate additionally checks rules binding the
+// node *creating* a bundle, chiefly clause 4.4.2's requirement that a bundle
+// with an unknown creation time carry a Bundle Age block.
+//
+// The split is not theoretical. The example bundle in RFC 9173 appendix A.1
+// has a creation time of zero and no Bundle Age block, so it does not satisfy
+// clause 4.4.2 — the same document adds the block in appendix A.3 and explains
+// why. A decoder that refused it would reject a bundle a standards-track RFC
+// prints as an example, and the implementations that copied it.
 func (b *Bundle) Validate() error {
+	if err := b.validateStructure(); err != nil {
+		return err
+	}
+
+	// Clause 4.4.2: a bundle created by a node with no clock has no usable
+	// creation time, so its age is the only way to tell when it expires. Such
+	// a bundle must carry a Bundle Age block.
+	if b.Primary.Timestamp.Time == DTNTimeUnknown && b.blockOfType(BlockTypeBundleAge) == nil {
+		return ErrMissingBundleAgeBlock
+	}
+	return nil
+}
+
+// validateStructure checks the rules a bundle must satisfy to be read at all.
+func (b *Bundle) validateStructure() error {
 	if b.Primary == nil {
-		return ErrDataTooShort
+		return ErrNoPrimaryBlock
 	}
 	if err := b.Primary.Validate(); err != nil {
 		return err
 	}
 	if len(b.Blocks) == 0 {
-		return ErrMissingPayload
+		return ErrNoPayloadBlock
 	}
 
-	payloads := 0
-	ecosBlocks := 0
-	payloadIndex := -1
-	ecosIndex := -1
+	seenNumbers := make(map[uint64]bool, len(b.Blocks))
+	counts := make(map[BlockType]int, len(b.Blocks))
 
-	for i, block := range b.Blocks {
-		if err := block.Validate(); err != nil {
+	for i, blk := range b.Blocks {
+		if err := blk.Validate(); err != nil {
 			return err
 		}
-		switch block.Type {
-		case BlockTypePayload:
-			payloads++
-			payloadIndex = i
-		case BlockTypeECOS:
-			ecosBlocks++
-			ecosIndex = i
-
-			// CCSDS annex C, C2 b) and c): the ECOS block replicates into
-			// every fragment and carries no EID references. Enforced here,
-			// not just in the construction helper, so a decoded bundle is
-			// held to the same rules.
-			if !block.Flags.Has(BlockReplicate) || block.Flags.Has(BlockHasEIDRefs) {
-				return ErrInvalidECOS
-			}
-			e, err := DecodeECOS(block.Data)
-			if err != nil {
-				return err
-			}
-			// C3.1.4: ordinal 255 is reserved for custody signals, which
-			// travel as administrative records.
-			if e.Ordinal == ECOSCustodySignalOrdinal && !b.Primary.IsAdminRecord() {
-				return ErrInvalidECOS
-			}
+		// Clause 4.1: a block number identifies a block within its bundle, so
+		// two blocks cannot share one. BPSec blocks reference targets by
+		// number, and a duplicate makes that reference ambiguous.
+		if seenNumbers[blk.Number] {
+			return ErrDuplicateBlockNumber
 		}
-		// Only the final block may claim to be last.
-		if block.IsLast() && i != len(b.Blocks)-1 {
-			return ErrNoLastBlock
+		seenNumbers[blk.Number] = true
+		counts[blk.Type]++
+
+		// Clause 4.1: exactly one payload block, and it comes last.
+		if blk.Type == BlockTypePayload && i != len(b.Blocks)-1 {
+			return ErrPayloadBlockNotLast
 		}
 	}
 
-	if payloads == 0 {
-		return ErrMissingPayload
-	}
-	if payloads > 1 {
-		return ErrMultiplePayloads
-	}
-	if !b.Blocks[len(b.Blocks)-1].IsLast() {
-		return ErrNoLastBlock
+	if counts[BlockTypePayload] != 1 {
+		return ErrPayloadBlockCount
 	}
 
-	// CCSDS annex C, C3.1.2 and C3.1.1.
-	if ecosBlocks > 1 {
-		return ErrInvalidECOS
+	// Clauses 4.4.1, 4.4.2 and 4.4.3 each allow at most one of their block.
+	for _, t := range []BlockType{BlockTypePreviousNode, BlockTypeBundleAge, BlockTypeHopCount} {
+		if counts[t] > 1 {
+			return ErrDuplicateExtensionBlock
+		}
 	}
-	if ecosIndex >= 0 && payloadIndex >= 0 && ecosIndex > payloadIndex {
-		return ErrInvalidECOS
-	}
+
 	return nil
 }
 
-// Encode serializes the whole bundle.
+// Encode writes the bundle.
+//
+// Every checksum is computed here, from the fields as they stand now. A block
+// mutated after it was built goes out with a checksum that matches the change,
+// never a stale one replayed from construction time.
 func (b *Bundle) Encode() ([]byte, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
 	}
 
-	out, err := b.Primary.Encode()
+	out := appendIndefiniteArrayHeader(nil)
+
+	var err error
+	if out, err = appendPrimaryBlock(out, b.Primary); err != nil {
+		return nil, err
+	}
+	for _, blk := range b.Blocks {
+		if out, err = appendCanonicalBlock(out, blk); err != nil {
+			return nil, err
+		}
+	}
+	return appendBreak(out), nil
+}
+
+// Decode reads one bundle. It returns an error rather than a partial bundle
+// for any input it cannot fully account for.
+func Decode(data []byte) (*Bundle, error) {
+	d := newDecoder(data)
+
+	_, indefinite, err := d.arrayHeader()
 	if err != nil {
 		return nil, err
 	}
-	for _, block := range b.Blocks {
-		encoded, err := block.Encode()
+	if !indefinite {
+		// Clause 4.1 requires the indefinite-length form. A definite-length
+		// array is the mistake the appendix B grammar invites.
+		return nil, ErrDefiniteLengthBundle
+	}
+
+	primary, err := d.primaryBlock()
+	if err != nil {
+		return nil, err
+	}
+	b := &Bundle{Primary: primary}
+
+	for !d.atBreak() {
+		if d.atEnd() {
+			return nil, ErrTruncated
+		}
+		blk, err := d.canonicalBlock()
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, encoded...)
+		b.Blocks = append(b.Blocks, blk)
 	}
-	return out, nil
-}
-
-// DecodeOptions tunes bundle decoding.
-type DecodeOptions struct {
-	// MaxBlockLength caps a single block's body. Zero selects
-	// DefaultMaxBlockLength.
-	MaxBlockLength uint64
-	// MaxBlocks caps how many blocks one bundle may carry. Zero selects
-	// DefaultMaxBlocks.
-	MaxBlocks int
-}
-
-// DefaultMaxBlocks bounds the block count when DecodeOptions leaves MaxBlocks
-// at zero.
-const DefaultMaxBlocks = 64
-
-// DecodeBundle parses a complete bundle. Data continuing past the last block
-// is an error: a codec that silently drops octets hides corruption. Use
-// DecodeBundleN when bundles arrive back to back in one buffer.
-func DecodeBundle(data []byte) (*Bundle, error) {
-	return DecodeBundleWithOptions(data, DecodeOptions{})
-}
-
-// DecodeBundleWithOptions parses a complete bundle under explicit limits,
-// rejecting trailing data like DecodeBundle.
-func DecodeBundleWithOptions(data []byte, opts DecodeOptions) (*Bundle, error) {
-	b, n, err := DecodeBundleN(data, opts)
-	if err != nil {
+	if err := d.readBreak(); err != nil {
 		return nil, err
 	}
-	if n < len(data) {
+	if !d.atEnd() {
 		return nil, ErrTrailingBytes
 	}
+
+	if err := b.validateStructure(); err != nil {
+		return nil, err
+	}
 	return b, nil
-}
-
-// DecodeBundleN parses one bundle from the front of data, returning the
-// bundle and the octets consumed. Trailing data is left for the caller,
-// which is what a stream of concatenated bundles needs.
-func DecodeBundleN(data []byte, opts DecodeOptions) (*Bundle, int, error) {
-	if opts.MaxBlocks <= 0 {
-		opts.MaxBlocks = DefaultMaxBlocks
-	}
-
-	primary, offset, err := DecodePrimaryBlock(data)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	b := &Bundle{Primary: primary}
-	for offset < len(data) {
-		if len(b.Blocks) >= opts.MaxBlocks {
-			return nil, 0, ErrBlockTooLarge
-		}
-		block, n, err := DecodeCanonicalBlock(data[offset:], opts.MaxBlockLength)
-		if err != nil {
-			return nil, 0, err
-		}
-		b.Blocks = append(b.Blocks, block)
-		offset += n
-
-		// Clause 4.5.2: the last-block flag ends the bundle.
-		if block.IsLast() {
-			break
-		}
-	}
-
-	if err := b.Validate(); err != nil {
-		return nil, 0, err
-	}
-	return b, offset, nil
-}
-
-// Humanize returns a human-readable summary of the whole bundle.
-func (b *Bundle) Humanize() string {
-	if b.Primary == nil {
-		return "Bundle (empty)"
-	}
-	out := b.Primary.Humanize()
-	for _, block := range b.Blocks {
-		out += "\n" + block.Humanize()
-	}
-	if e, ok := b.ECOS(); ok {
-		out += "\n" + e.Humanize()
-	}
-	return out
-}
-
-// String renders a one-line description.
-func (b *Bundle) String() string {
-	if b.Primary == nil {
-		return "bundle (empty)"
-	}
-	return fmt.Sprintf("bundle %s -> %s, created %d.%d",
-		b.Primary.Source, b.Primary.Destination,
-		b.Primary.CreationTimestamp.Time, b.Primary.CreationTimestamp.SequenceNumber)
 }

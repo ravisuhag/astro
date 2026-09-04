@@ -189,6 +189,7 @@ your own error type.
 | `unsupported_version` | a version or protocol identifier this implementation does not carry |
 | `trailing_data` | octets remain after the structure the length field described |
 | `buffer_too_small` | a caller-supplied output buffer is too short |
+| `malformed_encoding` | the octets parse as the underlying encoding but are not the form the standard requires of it |
 
 The list is fixed. Extending it requires every consumer to agree on what
 the new name means, so it is a deliberate change rather than an
@@ -749,20 +750,52 @@ The operation encodings are absent: they need their own vectors, and the
 blocker is that several GET-PARAMETER alternatives have no published
 values to test a typed shape against.
 
-### `bp` — CCSDS 734.2-B-1 / RFC 5050
+### `bp` — RFC 9171, with the `ipn` scheme per RFC 9758
 
-`bp/admin-record.json` — deliberately narrow.
+`bp/bundle.json` — Bundle Protocol version 7. Version 6 (RFC 5050) is a
+different wire format and none of this applies to it.
 
-| field | type | meaning |
-|---|---|---|
-| `record_type` | uint | high nibble of octet 0 |
-| `flags` | uint | low nibble of octet 0 |
+Four of these vectors are **published octets, not derived values**.
+RFC 9173 appendix A prints worked example bundles beside their hex and
+says they can inform interoperability suites, so the primary block, the
+payload block, the Bundle Age block and the whole-bundle vector carry
+`"doc": "RFC 9173"`. A vector without that is derived from the clause
+layout in the usual way.
 
-Most of BP's encoding is SDNVs, pinned more thoroughly in
-`sdnv/sdnv.json`; duplicating them here would add no coverage and
-a second place to drift. Endpoint identifiers are URI strings, not octet
-fields. No decode vectors: the real decoder needs a complete record body
-whose layout depends on the type, which is beyond what this file scopes.
+**Which structure a vector holds comes from `config`, not the octets.**
+A bare CBOR array does not announce whether it is a bundle, a primary
+block, a canonical block, an endpoint ID or a status report, so
+`config.structure` names it. This is the same reasoning recorded for
+LV and TLV in `pus`: where the encoding is not self-describing, the
+choice is agreement between the two ends and belongs in `config`.
+
+| `config.structure` | Octets are |
+|---|---|
+| `bundle` | a complete bundle, indefinite array to break |
+| `primary_block` | one primary block |
+| `canonical_block` | one canonical block, payload or extension |
+| `eid` | one endpoint ID |
+| `status_report` | one administrative record holding a status report |
+
+Field names follow the clause. A primary-block vector names
+`destination_node` and `destination_service` rather than a single
+endpoint string, because the `ipn` scheme-specific part is a pair of
+integers on the wire.
+
+Two traps these vectors exist to catch, both invisible to a round trip:
+
+- **`whole-bundle-indefinite-array`.** The bundle array is
+  indefinite-length, opening `0x9f` and closing `0xff`. RFC 9171
+  appendix B's CDDL grammar reads as though it were definite; clause 4.1
+  governs, and the appendix says so. An implementation following the
+  grammar reads its own output back perfectly and interoperates with
+  nothing.
+- **`bundle-age-block-300ms`.** The block-type-specific field is a byte
+  string whose contents are themselves CBOR — two layers. The 300 ms age
+  is `0x43` wrapping `0x19012c`, not a bare `0x19012c`.
+
+Not covered: fragmentation and reassembly, which need a sequence of
+calls across several bundles that no vector form expresses.
 
 ## Constants shared across files
 

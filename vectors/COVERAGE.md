@@ -9,7 +9,7 @@ evidence of conformance.
 | Package | Standard | Vectors | Corpus files |
 |---|---|--:|--:|
 | `aos` | CCSDS 732.0-B-4 | 12 | — |
-| `bp` | CCSDS 734.2-B-1 / RFC 5050 | 5 | — |
+| `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 18 | — |
 | `cfdp` | CCSDS 727.0-B-5 | 14 | — |
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
@@ -31,9 +31,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 12 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **259** | **115** |
+| **Total** | | **272** | **115** |
 
-259 vectors and 115 referenced corpus files across 23 packages.
+272 vectors and 115 referenced corpus files across 23 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -142,9 +142,24 @@ risk is gone — the CCSDS 121.0 data set, the annex F checksum, the RFC
 5050 SDNV examples, the RFC 4493 and NIST CMAC sets, the published
 randomizer sequences. Everywhere else it stands.
 
-**Six layers cannot be corroborated from outside at all, and the reason
-is structural.** `bp`, `cop`, `epp`, `ltp`, `ocsc` and `sdls` rest on
-clause derivation alone, and no amount of effort changes that cheaply.
+**Five layers cannot be corroborated from outside at all, and the reason
+is structural.** `cop`, `epp`, `ltp`, `ocsc` and `sdls` rest on clause
+derivation alone, and no amount of effort changes that cheaply.
+
+`bp` used to be the sixth, and no longer is. Replacing Bundle Protocol
+version 6 with version 7 brought RFC 9173 appendix A into reach: it
+prints four worked example bundles in CBOR diagram notation beside their
+hex, and says plainly they can inform unit and interoperability test
+suites. Four `bp` vectors — the primary block, the payload block, the
+Bundle Age block and a whole bundle — are those published octets. A
+second working group wrote them, which is exactly the corroboration the
+rest of this section is about not having.
+
+Worth noting how it came about. The corroboration was not the reason for
+the change; the reason was that nothing runs version 6. It came free with
+picking the version people actually deploy, which is the general lesson:
+a live standard has a published record around it, and a dead one does
+not.
 
 Corroboration works where an implementation exposes a *codec*: a
 function from field values to octets, callable in isolation. Where the
@@ -154,7 +169,7 @@ parameters, a server component that reads a stream -- there is nothing
 to call. Their state lives across a session rather than in a return
 value.
 
-That is why these six are the gap and the others are not, and why
+That is why these five are the gap and the others are not, and why
 closing it means standing up a running system rather than installing a
 library. Anyone attempting it should know that before starting.
 
@@ -173,7 +188,9 @@ freely available.
 Nineteen citations pointed at the wrong clause and are corrected. The
 values were right in every case; it was the pointers that were wrong,
 which is precisely what a check for "does this clause exist" cannot
-catch, because the wrong clause exists too.
+catch, because the wrong clause exists too. One of the nineteen, an
+RFC 5050 citation in `bp`, has since gone with the version 6 vectors it
+belonged to; the table below lists the eighteen that remain.
 
 Two limits worth knowing for anyone repeating this. Bit diagrams do not
 survive PDF text extraction -- the TC start sequence extracts as a
@@ -185,7 +202,6 @@ What the reading corrected:
 
 | Package | Was | Is | Why |
 |---|---|---|---|
-| `bp` | 4.3 | 6.1 | RFC 5050 4.3 is Block Processing Control Flags |
 | `ltp` | 3.2 | 3.1 | RFC 5326 3.2 is Segment Content, not the header |
 | `ltp` | type 12 as a report segment | type 8 | RFC 5326 3.1.2 makes 12 a cancel segment |
 | `tcf` | 3.2.1 on five P-field vectors | 3.2.2 | 3.2.1 is the T-field |

@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "standard": "RFC 9171",
+  "package": "bp",
+  "source": "RFC 9173 appendix A, except where a vector says otherwise",
+  "note": "Bundle Protocol version 7. Unusually for this corpus, most of these octets are published rather than derived: RFC 9173 appendix A prints four worked example bundles in CBOR diagnostic notation beside their hex, and says outright that they can inform unit and interoperability test suites. Those vectors carry \"doc\": \"RFC 9173\" and are outside corroboration — a second working group wrote the bytes. Anything derived from the clause layout says so in its own source. Version 6 (RFC 5050) is a different wire format and nothing here applies to it. Every vector carries a config key naming which structure its octets are: a bundle, a primary block, a canonical block, an endpoint ID or a status report. That is agreement, not something the octets announce — a bare CBOR array does not say which of them it is.",
+  "encode": [
+    {
+      "name": "primary-block-ipn-no-crc",
+      "clause": "4.3.1",
+      "doc": "RFC 9173",
+      "note": "The primary block of the example bundle in RFC 9173 appendix A.1.1.1: no flags, no CRC, ipn endpoints, an unknown creation time with sequence 40, and a lifetime of 1000000 ms. Eight items, because the bundle is neither a fragment nor checksummed. The endpoints are the two-element ipn form, which with the default allocator is byte-identical to what RFC 9171 clause 4.2.5.1.2 specifies.",
+      "config": {
+        "structure": "primary_block"
+      },
+      "fields": {
+        "flags": 0,
+        "crc_type": 0,
+        "destination_node": 1,
+        "destination_service": 2,
+        "source_node": 2,
+        "source_service": 1,
+        "report_to_node": 2,
+        "report_to_service": 1,
+        "creation_time": 0,
+        "sequence_number": 40,
+        "lifetime": 1000000
+      },
+      "want": "88070000820282010282028202018202820201820018281a000f4240"
+    },
+    {
+      "name": "payload-block",
+      "clause": "4.3.2",
+      "doc": "RFC 9173",
+      "note": "The payload block of RFC 9173 appendix A.1.1.2. Five items, because there is no CRC. Block type 1 and block number 1, both fixed by clause 4.1. The appendix is explicit that the payload is the raw octets in a byte string, not a CBOR text string wrapped inside one.",
+      "config": {
+        "structure": "canonical_block"
+      },
+      "fields": {
+        "block_type": 1,
+        "block_number": 1,
+        "flags": 0,
+        "crc_type": 0,
+        "data": "526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+      },
+      "want": "85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+    },
+    {
+      "name": "bundle-age-block-300ms",
+      "clause": "4.4.2",
+      "doc": "RFC 9173",
+      "note": "The Bundle Age block of RFC 9173 appendix A.3.1.2, carrying 300 ms. This is the vector that pins the double wrapping: the block-type-specific field is a three-octet byte string 0x43, and the CBOR integer 0x19012c sits inside it. An implementation that put the integer directly in the block would produce 0x8507020000190 12c and be wrong by two octets.",
+      "config": {
+        "structure": "canonical_block"
+      },
+      "fields": {
+        "block_type": 7,
+        "block_number": 2,
+        "flags": 0,
+        "crc_type": 0,
+        "age_milliseconds": 300
+      },
+      "want": "85070200004319012c"
+    },
+    {
+      "name": "whole-bundle-indefinite-array",
+      "clause": "4.1",
+      "doc": "RFC 9173",
+      "note": "The complete bundle of RFC 9173 appendix A.1.1.3: the primary block above, then the payload block, wrapped in a CBOR indefinite-length array and closed by a break stop code. It opens 0x9f and ends 0xff. This settles a contradiction inside RFC 9171 itself — the CDDL grammar in appendix B writes the bundle as \"[primary-block, *extension-block, payload-block]\", which reads as a definite-length array, while clause 4.1 requires the indefinite form. The appendix says the prose wins where they disagree, and these published octets agree with the prose. An implementation that followed the grammar would emit 0x82... and read its own output back without complaint.",
+      "config": {
+        "structure": "bundle"
+      },
+      "fields": {
+        "flags": 0,
+        "crc_type": 0,
+        "destination_node": 1,
+        "destination_service": 2,
+        "source_node": 2,
+        "source_service": 1,
+        "report_to_node": 2,
+        "report_to_service": 1,
+        "creation_time": 0,
+        "sequence_number": 40,
+        "lifetime": 1000000,
+        "payload": "526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+      },
+      "want": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff"
+    },
+    {
+      "name": "eid-ipn-default-allocator",
+      "clause": "4.2.5.1.2",
+      "note": "ipn:1.2 as a two-item array: scheme code 2, then the scheme-specific part. Derived from the clause layout, and corroborated by its appearance inside the RFC 9173 primary block above.",
+      "config": {
+        "structure": "eid"
+      },
+      "fields": {
+        "scheme": 2,
+        "allocator": 0,
+        "node": 1,
+        "service": 2
+      },
+      "want": "8202820102"
+    },
+    {
+      "name": "eid-ipn-with-allocator",
+      "clause": "6.1.1",
+      "doc": "RFC 9758",
+      "note": "ipn:977000.100.1 in the two-element form of RFC 9758 clause 6.1.1. The first element is a Fully Qualified Node Number packing the allocator identifier 977000 into the high 32 bits and the node number 100 into the low 32, giving 0x000ee86800000064. With allocator 0 this reduces to the plain node number, which is why the vector above and this one share an encoder.",
+      "config": {
+        "structure": "eid"
+      },
+      "fields": {
+        "scheme": 2,
+        "allocator": 977000,
+        "node": 100,
+        "service": 1
+      },
+      "want": "8202821b000ee8680000006401"
+    },
+    {
+      "name": "eid-dtn-null-endpoint",
+      "clause": "4.2.5.1.1",
+      "note": "dtn:none, the null endpoint. Derived from the clause layout. It is the one dtn scheme-specific part encoded as an unsigned integer rather than a text string, which is what makes it worth pinning: an implementation that always wrote a text string would emit 0x8201646e6f6e65 and be readable only by itself.",
+      "config": {
+        "structure": "eid"
+      },
+      "fields": {
+        "scheme": 1,
+        "ssp": "none"
+      },
+      "want": "820100"
+    },
+    {
+      "name": "status-report-delivered",
+      "clause": "6.1.1",
+      "note": "A bundle status report asserting delivery and nothing else, with no status times, about a non-fragment subject. Derived from the clause 6.1 and 6.1.1 layouts. Four elements because the subject is not a fragment; each status item is one element because clause 6.1.1 makes it two only when the status is asserted and the subject asked for times.",
+      "config": {
+        "structure": "status_report"
+      },
+      "fields": {
+        "received": false,
+        "forwarded": false,
+        "delivered": true,
+        "deleted": false,
+        "reason": 0,
+        "subject_source_node": 2,
+        "subject_source_service": 1,
+        "subject_creation_time": 0,
+        "subject_sequence_number": 40
+      },
+      "want": "8201848481f481f481f581f400820282020182001828"
+    }
+  ],
+  "reject": [
+    {
+      "name": "bundle-as-definite-length-array",
+      "clause": "4.1",
+      "note": "The RFC 9173 bundle with its 0x9f indefinite-array head replaced by 0x82, a definite array of two items. Clause 4.1 requires the indefinite form. This is the mistake the appendix B grammar invites, and it is invisible to a round trip.",
+      "config": {
+        "structure": "bundle"
+      },
+      "input": "8288070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164",
+      "error": "malformed_encoding"
+    },
+    {
+      "name": "primary-block-argument-not-in-shortest-form",
+      "clause": "4.1",
+      "note": "The lifetime 1000000 rewritten with an eight-octet CBOR argument where four suffice. Clause 4.1 requires the core deterministic encoding of RFC 8949 clause 4.2.1, which is the shortest head that holds the value.",
+      "config": {
+        "structure": "primary_block"
+      },
+      "input": "88070000820282010282028202018202820201820018281b00000000000f4240",
+      "error": "malformed_encoding"
+    },
+    {
+      "name": "primary-block-version-6",
+      "clause": "4.3.1",
+      "note": "The RFC 9173 primary block with its version field set to 6. Version 6 is a different wire format, not an earlier revision, so a version 7 decoder must refuse rather than attempt it.",
+      "config": {
+        "structure": "primary_block"
+      },
+      "input": "88060000820282010282028202018202820201820018281a000f4240",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "primary-block-length-disagrees-with-fragment-flag",
+      "clause": "4.3.1",
+      "note": "Eight array items with the is-fragment flag set. Clause 4.3.1 fixes the length at 8, 9, 10 or 11 by exactly two facts: whether the bundle is a fragment and whether a CRC is present. A fragment needs ten. Encoder and decoder that both ignored the declared length would agree with each other and emit bundles a conforming node misparses.",
+      "config": {
+        "structure": "primary_block"
+      },
+      "input": "88070100820282010282028202018202820201820018281a000f4240",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "primary-block-undefined-crc-type",
+      "clause": "4.2.1",
+      "note": "CRC type code 3. Clause 4.2.1 defines 0, 1 and 2 \"and no others\".",
+      "config": {
+        "structure": "primary_block"
+      },
+      "input": "88070003820282010282028202018202820201820018281a000f4240",
+      "error": "reserved_value"
+    },
+    {
+      "name": "primary-block-truncated-mid-endpoint",
+      "clause": "4.3.1",
+      "note": "The block ends part way through the destination endpoint.",
+      "config": {
+        "structure": "primary_block"
+      },
+      "input": "8807000082028201",
+      "error": "truncated"
+    },
+    {
+      "name": "bundle-with-trailing-octets",
+      "clause": "4.1",
+      "note": "The RFC 9173 bundle with one octet after its break stop code. The bundle is complete at the break, so anything after it is not part of this bundle and must not be silently ignored.",
+      "config": {
+        "structure": "bundle"
+      },
+      "input": "9f88070000820282010282028202018202820201820018281a000f424085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff00",
+      "error": "trailing_data"
+    },
+    {
+      "name": "block-type-code-zero",
+      "clause": "9.1",
+      "note": "Block type code 0, which the clause 9.1 registry reserves.",
+      "config": {
+        "structure": "canonical_block"
+      },
+      "input": "85000200004319012c",
+      "error": "reserved_value"
+    },
+    {
+      "name": "canonical-block-length-disagrees-with-crc-type",
+      "clause": "4.3.2",
+      "note": "Six array items with CRC type 0. Clause 4.3.2 fixes the length at five without a checksum and six with one.",
+      "config": {
+        "structure": "canonical_block"
+      },
+      "input": "86070200004319012c420000",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "ipn-node-number-above-32-bits",
+      "clause": "6.3",
+      "doc": "RFC 9758",
+      "note": "An ipn endpoint in the three-element form whose node number is 2^32. Clause 6.3 bounds the allocator identifier and the node number below 2^32 so the two-element form can pack both into one 64-bit number.",
+      "config": {
+        "structure": "eid"
+      },
+      "input": "820283011b000000010000000001",
+      "error": "field_out_of_range"
+    }
+  ]
+}

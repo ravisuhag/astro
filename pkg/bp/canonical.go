@@ -1,316 +1,299 @@
 package bp
 
-import (
-	"fmt"
-
-	"github.com/ravisuhag/astro/pkg/sdnv"
-)
-
-// BlockType is the 8-bit type code of a canonical block, per RFC 5050 clause 4.5.2.
-type BlockType uint8
+// BlockType names what a block carries (RFC 9171 clause 9.1). The registry is
+// shared with version 6, and the codes it assigned to version 6 only — 2, 3,
+// 4, 5, 8 and 9 — mean nothing here.
+type BlockType uint64
 
 const (
-	// BlockTypePayload is the bundle payload block. It is the only type
-	// RFC 5050 assigns.
+	// BlockTypePayload carries the application data unit, or one contiguous
+	// piece of it. Every bundle has exactly one (clause 4.1).
 	BlockTypePayload BlockType = 1
-
-	// BlockTypeECOS is the Extended Class of Service block that
-	// CCSDS 734.2-B-1 clause 3.3 requires. The code is IANA-assigned; 19 is the
-	// value in the IANA Bundle Block Types registry.
-	BlockTypeECOS BlockType = 19
+	// BlockTypePreviousNode names the node that forwarded this bundle here
+	// (clause 4.4.1).
+	BlockTypePreviousNode BlockType = 6
+	// BlockTypeBundleAge carries how long the bundle has existed, in
+	// milliseconds, for nodes without a working clock (clause 4.4.2).
+	BlockTypeBundleAge BlockType = 7
+	// BlockTypeHopCount carries a hop limit and a hop count, to stop a bundle
+	// looping forever (clause 4.4.3).
+	BlockTypeHopCount BlockType = 10
 )
 
-// String names the block type.
-func (b BlockType) String() string {
-	switch b {
-	case BlockTypePayload:
-		return "payload"
-	case BlockTypeECOS:
-		return "extended class of service"
-	default:
-		if b >= 192 {
-			return fmt.Sprintf("private(%d)", uint8(b))
-		}
-		return fmt.Sprintf("reserved(%d)", uint8(b))
+// firstPrivateBlockType is where clause 9.1 stops assigning and lets a
+// deployment use codes for whatever it likes. Codes at or above it are never
+// treated as one of the types above.
+const firstPrivateBlockType BlockType = 192
+
+// BlockControlFlags say what to do with a block a node cannot process
+// (RFC 9171 clause 4.2.4). Bit numbering runs from the low-order bit, as it
+// does for the bundle flags.
+type BlockControlFlags uint64
+
+const (
+	// BlockFlagReplicateInEveryFragment copies this block into every fragment.
+	BlockFlagReplicateInEveryFragment BlockControlFlags = 1 << 0
+	// BlockFlagReportIfUnprocessable asks for a status report if this block
+	// cannot be processed.
+	BlockFlagReportIfUnprocessable BlockControlFlags = 1 << 1
+	// BlockFlagDeleteBundleIfUnprocessable deletes the whole bundle if this
+	// block cannot be processed.
+	BlockFlagDeleteBundleIfUnprocessable BlockControlFlags = 1 << 2
+	// BlockFlagDiscardBlockIfUnprocessable drops just this block if it cannot
+	// be processed, and forwards the rest.
+	BlockFlagDiscardBlockIfUnprocessable BlockControlFlags = 1 << 4
+)
+
+// Has reports whether every flag in mask is set.
+func (f BlockControlFlags) Has(mask BlockControlFlags) bool {
+	return f&mask == mask
+}
+
+// PayloadBlockNumber is the block number the payload block always carries
+// (RFC 9171 clause 4.1). The primary block's number is implicitly zero, so
+// extension blocks start at 2.
+const PayloadBlockNumber = 1
+
+// CanonicalBlock is every block except the primary one
+// (RFC 9171 clause 4.3.2).
+//
+// Data holds the block-type-specific field: the contents of the CBOR byte
+// string, not the byte string itself. What is inside depends on the type. For
+// a payload block it is the application data, raw. For the three extension
+// blocks RFC 9171 defines it is itself CBOR — a second layer — which is why
+// those types have their own constructors and accessors below rather than
+// leaving callers to peel it.
+//
+// A block of a type this package does not know keeps its Data untouched and
+// round-trips byte for byte. Clause 4.4 requires that: a node has to forward
+// what it cannot parse, honouring the block's flags.
+type CanonicalBlock struct {
+	Type    BlockType
+	Number  uint64
+	Flags   BlockControlFlags
+	CRCType CRCType
+	Data    []byte
+}
+
+// NewPayloadBlock builds the payload block. Its number is fixed at 1.
+func NewPayloadBlock(data []byte) *CanonicalBlock {
+	return &CanonicalBlock{
+		Type:   BlockTypePayload,
+		Number: PayloadBlockNumber,
+		Data:   data,
 	}
 }
 
-// BlockFlags are the block processing control flags of RFC 5050 clause 4.5.2.
-type BlockFlags uint64
-
-const (
-	// BlockReplicate asks that this block be copied into every fragment (bit 0).
-	BlockReplicate BlockFlags = 1 << 0
-	// BlockReportIfUnprocessed asks for a status report when the block cannot
-	// be processed (bit 1).
-	BlockReportIfUnprocessed BlockFlags = 1 << 1
-	// BlockDeleteIfUnprocessed deletes the bundle when the block cannot be
-	// processed (bit 2).
-	BlockDeleteIfUnprocessed BlockFlags = 1 << 2
-	// BlockLast marks the final block of the bundle (bit 3).
-	BlockLast BlockFlags = 1 << 3
-	// BlockDiscardIfUnprocessed drops the block when it cannot be processed
-	// (bit 4).
-	BlockDiscardIfUnprocessed BlockFlags = 1 << 4
-	// BlockForwarded records that the block passed through a node that could
-	// not process it (bit 5).
-	BlockForwarded BlockFlags = 1 << 5
-	// BlockHasEIDRefs marks a block carrying EID references (bit 6).
-	BlockHasEIDRefs BlockFlags = 1 << 6
-)
-
-// Has reports whether every flag in want is set.
-func (f BlockFlags) Has(want BlockFlags) bool { return f&want == want }
-
-// EIDReference is a pair of dictionary offsets naming an endpoint from within
-// a canonical block, per clause 4.5.2.
-type EIDReference struct {
-	SchemeOffset uint64
-	SSPOffset    uint64
+// NewPreviousNodeBlock builds a Previous Node block naming the forwarder
+// (RFC 9171 clause 4.4.1).
+func NewPreviousNodeBlock(number uint64, node EID) (*CanonicalBlock, error) {
+	if err := checkExtensionBlockNumber(number); err != nil {
+		return nil, err
+	}
+	data, err := appendEID(nil, node)
+	if err != nil {
+		return nil, err
+	}
+	return &CanonicalBlock{Type: BlockTypePreviousNode, Number: number, Data: data}, nil
 }
 
-// DefaultMaxBlockLength bounds a decoded block body when DecodeOptions leaves
-// MaxBlockLength at zero: 16 MiB.
-//
-// RFC 5050 sets no ceiling and a block length is an SDNV reaching 2^64, so
-// without a cap one corrupt bundle would size an allocation from a bogus
-// length.
-const DefaultMaxBlockLength = 16 << 20
-
-// CanonicalBlock is any block other than the primary one, per clause 4.5.2.
-type CanonicalBlock struct {
-	Type  BlockType
-	Flags BlockFlags
-
-	// EIDReferences are present only when BlockHasEIDRefs is set. They point
-	// into the primary block's dictionary.
-	EIDReferences []EIDReference
-
-	// Data is the block-type-specific body.
-	Data []byte
+// NewBundleAgeBlock builds a Bundle Age block (RFC 9171 clause 4.4.2). A
+// bundle whose creation time is unknown must carry exactly one of these.
+func NewBundleAgeBlock(number uint64, ageMilliseconds uint64) (*CanonicalBlock, error) {
+	if err := checkExtensionBlockNumber(number); err != nil {
+		return nil, err
+	}
+	return &CanonicalBlock{
+		Type:   BlockTypeBundleAge,
+		Number: number,
+		Data:   appendUint(nil, ageMilliseconds),
+	}, nil
 }
 
-// IsLast reports whether this block carries the last-block flag.
-func (b *CanonicalBlock) IsLast() bool { return b.Flags.Has(BlockLast) }
+// NewHopCountBlock builds a Hop Count block (RFC 9171 clause 4.4.3). The limit
+// must be 1 to 255; the count normally starts at zero.
+func NewHopCountBlock(number uint64, limit, count uint64) (*CanonicalBlock, error) {
+	if err := checkExtensionBlockNumber(number); err != nil {
+		return nil, err
+	}
+	if limit < 1 || limit > 255 {
+		return nil, ErrHopLimitOutOfRange
+	}
+	data := appendArrayHeader(nil, 2)
+	data = appendUint(data, limit)
+	data = appendUint(data, count)
+	return &CanonicalBlock{Type: BlockTypeHopCount, Number: number, Data: data}, nil
+}
 
-// Validate checks the block against clause 4.5.2.
-func (b *CanonicalBlock) Validate() error {
-	hasRefs := b.Flags.Has(BlockHasEIDRefs)
-	if hasRefs != (len(b.EIDReferences) > 0) {
-		// Clause 4.5.2 ties the flag and the field together: the field is present
-		// "if and only if" the flag is set.
-		return ErrInvalidEndpointID
+// checkExtensionBlockNumber enforces the numbering of clause 4.1: zero belongs
+// to the primary block and one to the payload, so an extension block starts
+// at two.
+func checkExtensionBlockNumber(number uint64) error {
+	if number <= PayloadBlockNumber {
+		return ErrReservedBlockNumber
 	}
 	return nil
 }
 
-// Encode serializes the canonical block.
-func (b *CanonicalBlock) Encode() ([]byte, error) {
+// PreviousNode reads the node ID from a Previous Node block.
+func (b *CanonicalBlock) PreviousNode() (EID, error) {
+	if b.Type != BlockTypePreviousNode {
+		return EID{}, ErrWrongBlockType
+	}
+	return newDecoder(b.Data).eid()
+}
+
+// BundleAge reads the age in milliseconds from a Bundle Age block.
+func (b *CanonicalBlock) BundleAge() (uint64, error) {
+	if b.Type != BlockTypeBundleAge {
+		return 0, ErrWrongBlockType
+	}
+	return newDecoder(b.Data).uint()
+}
+
+// HopCount reads the limit and count from a Hop Count block.
+func (b *CanonicalBlock) HopCount() (limit, count uint64, err error) {
+	if b.Type != BlockTypeHopCount {
+		return 0, 0, ErrWrongBlockType
+	}
+	d := newDecoder(b.Data)
+	n, indefinite, err := d.arrayHeader()
+	if err != nil {
+		return 0, 0, err
+	}
+	if indefinite || n != 2 {
+		return 0, 0, ErrMalformedBlockData
+	}
+	if limit, err = d.uint(); err != nil {
+		return 0, 0, err
+	}
+	if count, err = d.uint(); err != nil {
+		return 0, 0, err
+	}
+	if limit < 1 || limit > 255 {
+		return 0, 0, ErrHopLimitOutOfRange
+	}
+	return limit, count, nil
+}
+
+// Validate checks what can be checked about a block on its own. Rules that
+// need the whole bundle — one payload, one bundle age block — live in
+// Bundle.Validate.
+func (b *CanonicalBlock) Validate() error {
+	if !b.CRCType.valid() {
+		return ErrInvalidCRCType
+	}
+	if b.Type == BlockTypePayload && b.Number != PayloadBlockNumber {
+		return ErrPayloadBlockNumber
+	}
+	if b.Type != BlockTypePayload && b.Number <= PayloadBlockNumber {
+		return ErrReservedBlockNumber
+	}
+	if b.Type == 0 {
+		// Clause 9.1 marks code 0 reserved, so nothing may claim it.
+		return ErrReservedBlockType
+	}
+	return nil
+}
+
+// appendCanonicalBlock writes a canonical block, checksum included.
+func appendCanonicalBlock(dst []byte, b *CanonicalBlock) ([]byte, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
 	}
 
-	out := []byte{byte(b.Type)}
-	out = sdnv.AppendEncode(out, uint64(b.Flags))
-
-	if b.Flags.Has(BlockHasEIDRefs) {
-		out = sdnv.AppendEncode(out, uint64(len(b.EIDReferences)))
-		for _, ref := range b.EIDReferences {
-			out = sdnv.AppendEncode(out, ref.SchemeOffset)
-			out = sdnv.AppendEncode(out, ref.SSPOffset)
-		}
+	items := uint64(5)
+	if b.CRCType != CRCNone {
+		items++
 	}
 
-	out = sdnv.AppendEncode(out, uint64(len(b.Data)))
-	return append(out, b.Data...), nil
+	start := len(dst)
+	dst = appendArrayHeader(dst, items)
+	dst = appendUint(dst, uint64(b.Type))
+	dst = appendUint(dst, b.Number)
+	dst = appendUint(dst, uint64(b.Flags))
+	dst = appendUint(dst, uint64(b.CRCType))
+	dst = appendByteString(dst, b.Data)
+
+	if b.CRCType != CRCNone {
+		dst = appendZeroCRC(dst, b.CRCType)
+		fillCRC(dst[start:], b.CRCType)
+	}
+	return dst, nil
 }
 
-// DecodeCanonicalBlock parses a canonical block from the front of data,
-// returning the block and the octets consumed.
-//
-// maxBlockLength caps the body; pass zero for DefaultMaxBlockLength.
-func DecodeCanonicalBlock(data []byte, maxBlockLength uint64) (*CanonicalBlock, int, error) {
-	if maxBlockLength == 0 {
-		maxBlockLength = DefaultMaxBlockLength
-	}
-	if len(data) < 1 {
-		return nil, 0, ErrDataTooShort
-	}
+// canonicalBlock reads a canonical block and verifies its checksum.
+func (d *decoder) canonicalBlock() (*CanonicalBlock, error) {
+	start := d.pos
 
-	b := &CanonicalBlock{Type: BlockType(data[0])}
-	offset := 1
-
-	flags, n, err := sdnv.Decode(data[offset:])
-	if err != nil {
-		return nil, 0, ErrDataTooShort
-	}
-	b.Flags = BlockFlags(flags)
-	offset += n
-
-	if b.Flags.Has(BlockHasEIDRefs) {
-		count, n, err := sdnv.Decode(data[offset:])
-		if err != nil {
-			return nil, 0, ErrDataTooShort
-		}
-		offset += n
-
-		// A reference is two SDNVs, so at least two octets. Refuse a count
-		// the remaining bytes cannot hold before allocating for it.
-		if count > uint64(len(data)-offset)/2 {
-			return nil, 0, ErrDataTooShort
-		}
-		for i := uint64(0); i < count; i++ {
-			pair, n, err := sdnv.DecodeN(data[offset:], 2)
-			if err != nil {
-				return nil, 0, ErrDataTooShort
-			}
-			b.EIDReferences = append(b.EIDReferences, EIDReference{
-				SchemeOffset: pair[0], SSPOffset: pair[1],
-			})
-			offset += n
-		}
-	}
-
-	length, n, err := sdnv.Decode(data[offset:])
-	if err != nil {
-		return nil, 0, ErrDataTooShort
-	}
-	offset += n
-
-	if length > maxBlockLength {
-		return nil, 0, ErrBlockTooLarge
-	}
-	if uint64(len(data)-offset) < length {
-		return nil, 0, ErrDataTooShort
-	}
-	if length > 0 {
-		b.Data = make([]byte, length)
-		copy(b.Data, data[offset:offset+int(length)])
-	}
-	return b, offset + int(length), nil
-}
-
-// Humanize returns a human-readable summary.
-func (b *CanonicalBlock) Humanize() string {
-	return fmt.Sprintf("Bundle Canonical Block\n  Type ....... %s\n  Last ....... %t\n  Length ..... %d octets",
-		b.Type, b.IsLast(), len(b.Data))
-}
-
-// --- Extended Class of Service, CCSDS 734.2-B-1 annex C ---
-
-// ECOSFlags are the flags byte of an Extended Class of Service block, per
-// annex C, item C2 f).
-type ECOSFlags uint8
-
-const (
-	// ECOSCritical asks that one copy go along every path that might reach
-	// the destination (0x01).
-	ECOSCritical ECOSFlags = 0x01
-	// ECOSStreaming asks for best-efforts forwarding, without retransmission
-	// (0x02).
-	ECOSStreaming ECOSFlags = 0x02
-	// ECOSFlowLabelPresent says a flow label SDNV follows the ordinal byte
-	// (0x04).
-	ECOSFlowLabelPresent ECOSFlags = 0x04
-	// ECOSReliable asks for a convergence layer that retransmits on loss
-	// (0x08).
-	ECOSReliable ECOSFlags = 0x08
-)
-
-// ECOSCustodySignalOrdinal is the ordinal value annex C reserves for custody
-// signals (C3.1.4).
-const ECOSCustodySignalOrdinal uint8 = 255
-
-// ECOS is the Extended Class of Service block CCSDS 734.2-B-1 clause 3.3 requires
-// conformant implementations to support.
-//
-// RFC 5050 gives a bundle three priority levels. Space operations need more:
-// a finer ordinal ranking within the expedited class, a way to mark emergency
-// traffic that should go by every route at once, and a way to ask for or
-// refuse convergence-layer retransmission.
-type ECOS struct {
-	Flags ECOSFlags
-
-	// Ordinal ranks this bundle among other expedited ones: 100 is more
-	// urgent than 99. It has no significance unless the bundle's class of
-	// service is expedited. Value 255 is reserved for custody signals.
-	Ordinal uint8
-
-	// FlowLabel is an opaque value for the convergence layer, present only
-	// when ECOSFlowLabelPresent is set.
-	FlowLabel uint64
-}
-
-// Validate checks the block against annex C, C3.1.
-func (e *ECOS) Validate() error {
-	// C3.1.3 ties the flag and the field together.
-	if e.Flags&ECOSFlowLabelPresent == 0 && e.FlowLabel != 0 {
-		return ErrInvalidECOS
-	}
-	return nil
-}
-
-// Encode serializes the ECOS block data: a flags byte, an ordinal byte, and
-// optionally a flow label SDNV (C2 d to h).
-func (e *ECOS) Encode() ([]byte, error) {
-	if err := e.Validate(); err != nil {
-		return nil, err
-	}
-	out := []byte{byte(e.Flags), e.Ordinal}
-	if e.Flags&ECOSFlowLabelPresent != 0 {
-		out = sdnv.AppendEncode(out, e.FlowLabel)
-	}
-	return out, nil
-}
-
-// DecodeECOS parses ECOS block data.
-func DecodeECOS(data []byte) (*ECOS, error) {
-	// C2 d): the block data length is 2 + N.
-	if len(data) < 2 {
-		return nil, ErrDataTooShort
-	}
-	e := &ECOS{Flags: ECOSFlags(data[0]), Ordinal: data[1]}
-
-	if e.Flags&ECOSFlowLabelPresent != 0 {
-		label, _, err := sdnv.Decode(data[2:])
-		if err != nil {
-			return nil, ErrDataTooShort
-		}
-		e.FlowLabel = label
-	}
-	return e, nil
-}
-
-// Block wraps the ECOS data in a canonical block.
-//
-// Annex C requires bit 0 of the block processing flags (replicate in every
-// fragment) and forbids EID references (C2 b and c).
-func (e *ECOS) Block() (*CanonicalBlock, error) {
-	data, err := e.Encode()
+	items, indefinite, err := d.arrayHeader()
 	if err != nil {
 		return nil, err
 	}
-	return &CanonicalBlock{
-		Type:  BlockTypeECOS,
-		Flags: BlockReplicate,
-		Data:  data,
-	}, nil
-}
+	if indefinite || items < 5 || items > 6 {
+		return nil, ErrMalformedCanonicalBlock
+	}
 
-// Humanize returns a human-readable summary.
-func (e *ECOS) Humanize() string {
-	out := fmt.Sprintf("Extended Class of Service\n  Ordinal .... %d", e.Ordinal)
-	if e.Flags&ECOSCritical != 0 {
-		out += "\n  Critical ... every available route"
+	typeCode, err := d.uint()
+	if err != nil {
+		return nil, err
 	}
-	if e.Flags&ECOSStreaming != 0 {
-		out += "\n  Streaming .. best efforts, no retransmission"
+	number, err := d.uint()
+	if err != nil {
+		return nil, err
 	}
-	if e.Flags&ECOSReliable != 0 {
-		out += "\n  Reliable ... retransmitting convergence layer"
+	flags, err := d.uint()
+	if err != nil {
+		return nil, err
 	}
-	if e.Flags&ECOSFlowLabelPresent != 0 {
-		out += fmt.Sprintf("\n  Flow label . %d", e.FlowLabel)
+	crcCode, err := d.uint()
+	if err != nil {
+		return nil, err
 	}
-	return out
+	crcType := CRCType(crcCode)
+	if !crcType.valid() {
+		return nil, ErrInvalidCRCType
+	}
+
+	// The array length has to agree with the CRC type, the same way the
+	// primary block's does.
+	wantItems := uint64(5)
+	if crcType != CRCNone {
+		wantItems++
+	}
+	if items != wantItems {
+		return nil, ErrCanonicalBlockLengthMismatch
+	}
+
+	data, err := d.byteString()
+	if err != nil {
+		return nil, err
+	}
+
+	if crcType != CRCNone {
+		got, err := d.byteString()
+		if err != nil {
+			return nil, err
+		}
+		if err := checkCRC(d.buf[start:d.pos], crcType, got); err != nil {
+			return nil, err
+		}
+	}
+
+	// Copy the data out of the input buffer: a decoded block outlives the
+	// bytes it came from, and byteString aliases them.
+	owned := make([]byte, len(data))
+	copy(owned, data)
+
+	b := &CanonicalBlock{
+		Type:    BlockType(typeCode),
+		Number:  number,
+		Flags:   BlockControlFlags(flags),
+		CRCType: crcType,
+		Data:    owned,
+	}
+	if err := b.Validate(); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
