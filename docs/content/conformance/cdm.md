@@ -8,8 +8,8 @@ order: 225
 ## Conformance Statement for `pkg/cdm`, CCSDS 508.0-B-1
 
 CCSDS 508.0-B-1 annex A ships an Implementation Conformance Statement. What
-follows fills in its shape for the key-value form of section 3; the XML form of
-section 4 is not implemented.
+follows fills in its shape for both forms: the key-value notation of section 3
+and the XML form of section 4.
 
 ---
 
@@ -39,6 +39,7 @@ section 4 is not implemented.
 | XML form | 4, CCSDS 505.0-B-3 | M | Y: `EncodeXML` and `DecodeXML`; units become attributes and the data section nests into four blocks |
 | Exactly two segments in XML | 505.0-B-3 clause 3.4.2 | M | Y: `ErrMissingObject` |
 | `relativeMetadataData` before the first segment | 505.0-B-3 clause 3.4.2 | M | Y |
+| NDM combined instantiation | 505.0-B-3 clause 4.11 | O | Y: implemented by [`pkg/ndm`](/conformance/ndm). CCSDS 508.0-B-1 does not repeat the rules the way the ODM and ADM do, but clause 4.11.7 of the XML specification allows a CDM among the constituents. |
 | Header, relative metadata/data, then two object sections | 3.1.1 | M | Y |
 | Data for a single conjunction event | 3.1.2 | M | Y: both objects required, `ErrMissingObject` |
 | Keyword order fixed by the standard | 6.3.1.9 | M | Partial: read in any order, written in the order read, see A3 |

@@ -81,6 +81,7 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecode -fuzztime $(FUZZTIME) ./pkg/cdm/
 	go test -run '^$$' -fuzz FuzzDecodeXMLAEM -fuzztime $(FUZZTIME) ./pkg/adm/
 	go test -run '^$$' -fuzz FuzzDecodeXMLACM -fuzztime $(FUZZTIME) ./pkg/adm/
+	go test -run '^$$' -fuzz FuzzDecodeCombined -fuzztime $(FUZZTIME) ./pkg/ndm/
 	go test -run '^$$' -fuzz FuzzDecodeXML -fuzztime $(FUZZTIME) ./pkg/tdm/
 	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/

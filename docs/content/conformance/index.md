@@ -54,3 +54,4 @@ what has never been tested against another implementation.
 | [Tracking Data Message](/conformance/tdm) | `pkg/tdm` | [1](https://github.com/ravisuhag/astro/tree/main/vectors/tdm) | [Protocol](/protocols/mission/tdm) |
 | [Attitude Data Messages](/conformance/adm) | `pkg/adm` | [8](https://github.com/ravisuhag/astro/tree/main/vectors/adm) | [Protocol](/protocols/mission/adm) |
 | [Conjunction Data Message](/conformance/cdm) | `pkg/cdm` | [1](https://github.com/ravisuhag/astro/tree/main/vectors/cdm) | [Protocol](/protocols/mission/cdm) |
+| [NDM Combined Instantiation](/conformance/ndm) | `pkg/ndm` | [2](https://github.com/ravisuhag/astro/tree/main/vectors/ndm) | [Protocol](/protocols/mission/ndm) |

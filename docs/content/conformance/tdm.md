@@ -8,8 +8,8 @@ order: 215
 ## Conformance Statement for `pkg/tdm`, CCSDS 503.0-B-2
 
 CCSDS 503.0-B-2 annex A ships an Implementation Conformance Statement. What
-follows fills in its shape for the key-value form; the XML form of section 5 is
-not implemented.
+follows fills in its shape for both forms: the key-value notation and the XML
+form of section 5.
 
 ---
 
@@ -102,6 +102,7 @@ not implemented.
 | One `observation` element per record | 5 | M | Y |
 | A timetag and exactly one observable per observation | 3.4.3 | M | Y: `ErrMalformedRecord` for two or none |
 | Metadata as a flat element list | 5 | M | Y |
+| NDM combined instantiation | 505.0-B-3 clause 4.11 | O | Y: implemented by [`pkg/ndm`](/conformance/ndm). CCSDS 503.0-B-2 does not repeat the rules the way the ODM and ADM do, but clause 4.11.7 of the XML specification allows a TDM among the constituents. |
 
 ---
 

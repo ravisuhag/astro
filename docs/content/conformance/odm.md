@@ -67,6 +67,7 @@ Ephemeris Message of A2.5.3 and the Orbit Comprehensive Message of A2.5.4.
 | `USER_DEFINED` with the name in an attribute | 8.10, annex G | O | Y: a parameter with an empty name attribute is refused, since its key-value form would be the bare `USER_DEFINED_` |
 | OCM section tags and data line tags | 8.11.13, table 8-9 | M | Y: `traj`, `phys`, `cov`, `man`, `pert`, `od`, `user` and their `trajLine`, `covLine`, `manLine` |
 | OCM data lines as `xsd:string` | 8.11.15 | M | Y: kept as rows, split by the reader, as the clause intends |
+| NDM combined instantiation | 8.12 | O | Y: implemented by [`pkg/ndm`](/conformance/ndm), since a combined file may hold messages from other standards too |
 
 ---
 

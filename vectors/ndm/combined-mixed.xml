@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ndm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xmlns:ndm="urn:ccsds:schema:ndmxml"
+     xsi:noNamespaceSchemaLocation="https://sanaregistry.org/r/ndmxml_unqualified/ndmxml-3.0.0-master-3.0.xsd">
+  <COMMENT>An orbit and the attitude that depends on it</COMMENT>
+  <opm id="CCSDS_OPM_VERS" version="3.0">
+    <header>
+      <CREATION_DATE>2022-11-06T09:23:57Z</CREATION_DATE>
+      <ORIGINATOR>JAXA</ORIGINATOR>
+    </header>
+    <body>
+      <segment>
+        <metadata>
+          <OBJECT_NAME>OSPREY 5</OBJECT_NAME>
+          <OBJECT_ID>1998-999A</OBJECT_ID>
+          <CENTER_NAME>EARTH</CENTER_NAME>
+          <REF_FRAME>ITRF2000</REF_FRAME>
+          <TIME_SYSTEM>UTC</TIME_SYSTEM>
+        </metadata>
+        <data>
+          <stateVector>
+            <EPOCH>2022-12-18T14:28:15.1172Z</EPOCH>
+            <X units="km">6503.514</X>
+            <Y units="km">1239.647</Y>
+            <Z units="km">-717.49</Z>
+            <X_DOT units="km/s">-0.87316</X_DOT>
+            <Y_DOT units="km/s">8.74042</Y_DOT>
+            <Z_DOT units="km/s">-4.191076</Z_DOT>
+          </stateVector>
+        </data>
+      </segment>
+    </body>
+  </opm>
+  <apm id="CCSDS_APM_VERS" version="2.0">
+    <header>
+      <CREATION_DATE>2007-11-10T15:23:57Z</CREATION_DATE>
+      <ORIGINATOR>CNES</ORIGINATOR>
+    </header>
+    <body>
+      <segment>
+        <metadata>
+          <OBJECT_NAME>EUTELSAT W4</OBJECT_NAME>
+          <OBJECT_ID>2000-028A</OBJECT_ID>
+          <TIME_SYSTEM>UTC</TIME_SYSTEM>
+        </metadata>
+        <data>
+          <EPOCH>2006-06-03T00:00:00Z</EPOCH>
+          <quaternionState>
+            <REF_FRAME_A>EME2000</REF_FRAME_A>
+            <REF_FRAME_B>SC_BODY_1</REF_FRAME_B>
+            <quaternion>
+              <Q1>0.00005</Q1>
+              <Q2>0.87543</Q2>
+              <Q3>0.40949</Q3>
+              <QC>0.25752</QC>
+            </quaternion>
+          </quaternionState>
+        </data>
+      </segment>
+    </body>
+  </apm>
+</ndm>

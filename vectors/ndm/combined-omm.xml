@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ndm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:noNamespaceSchemaLocation="https://sanaregistry.org/r/ndmxml_unqualified/ndmxml-3.0.0-master-3.0.xsd">
+  <omm id="CCSDS_OMM_VERS" version="3.0">
+    <header>
+      <COMMENT>GENERATED VIA SPACE-TRACK.ORG API</COMMENT>
+      <CREATION_DATE>2020-05-16T14:00:01</CREATION_DATE>
+      <ORIGINATOR>18 SPCS</ORIGINATOR>
+    </header>
+    <body>
+      <segment>
+         <metadata>
+           <OBJECT_NAME>STARLINK-1073</OBJECT_NAME>
+           <OBJECT_ID>2020-001A</OBJECT_ID>
+           <CENTER_NAME>EARTH</CENTER_NAME>
+           <REF_FRAME>TEME</REF_FRAME>
+           <TIME_SYSTEM>UTC</TIME_SYSTEM>
+           <MEAN_ELEMENT_THEORY>SGP4</MEAN_ELEMENT_THEORY>
+         </metadata>
+         <data>
+           <meanElements>
+             <EPOCH>2020-05-16T14:00:01</EPOCH>
+             <MEAN_MOTION>15.05566242</MEAN_MOTION>
+             <ECCENTRICITY>0.0001225</ECCENTRICITY>
+             <INCLINATION>52.9981</INCLINATION>
+             <RA_OF_ASC_NODE>157.6133</RA_OF_ASC_NODE>
+             <ARG_OF_PERICENTER>93.35</ARG_OF_PERICENTER>
+             <MEAN_ANOMALY>295.8599</MEAN_ANOMALY>
+           </meanElements>
+           <tleParameters>
+             <EPHEMERIS_TYPE>0</EPHEMERIS_TYPE>
+             <CLASSIFICATION_TYPE>U</CLASSIFICATION_TYPE>
+             <NORAD_CAT_ID>44914</NORAD_CAT_ID>
+             <ELEMENT_SET_NO>999</ELEMENT_SET_NO>
+             <REV_AT_EPOCH>176</REV_AT_EPOCH>
+             <BSTAR>0.00057678</BSTAR>
+             <MEAN_MOTION_DOT>0.00008131</MEAN_MOTION_DOT>
+             <MEAN_MOTION_DDOT>0</MEAN_MOTION_DDOT>
+           </tleParameters>
+           <userDefinedParameters>
+             <USER_DEFINED parameter="TLE_LINE0">0 STARLINK-1073</USER_DEFINED>
+           </userDefinedParameters>
+         </data>
+      </segment>
+    </body>
+  </omm>
+</ndm>

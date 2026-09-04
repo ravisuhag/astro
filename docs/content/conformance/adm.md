@@ -122,6 +122,7 @@ also the order clauses 5.3.3.5 and 5.3.4.1 require them to arrive in.
 | ACM section tags and data line tags | Table 7-7 | M | Y: `att`, `phys`, `cov`, `man`, `ad`, `user` and their `attLine`, `covLine` |
 | ACM data lines as `xsd:string` | 7.7.13.3 | M | Y: kept as rows, split by the reader, as the clause intends |
 | `sensorData` elements inside `ad` | 7.7.14 | O | Y: shown by example rather than stated; one outside the attitude determination block is refused |
+| NDM combined instantiation | 7.8 | O | Y: implemented by [`pkg/ndm`](/conformance/ndm), since a combined file may hold messages from other standards too |
 
 ---
 
