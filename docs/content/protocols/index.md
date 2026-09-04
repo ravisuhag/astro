@@ -46,4 +46,3 @@ Open for contribution. See [adding a protocol](/docs/contribute/adding-a-protoco
 | CCSDS 122.0-B-2 | Image Data Compression |
 | CCSDS 122.1-B-1 | Spectral Preprocessing Transform |
 | CCSDS 123.0-B-2 | Low-Complexity Lossless Image Compression |
-| ECSS-E-ST-70-32C | Test and Operations Procedure Language |

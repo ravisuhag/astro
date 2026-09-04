@@ -30,39 +30,40 @@ go run ./examples/dtn/
 
 Bundle Protocol addresses the data. LTP gets it across one hop and knows nothing about what is inside it.
 
-## Version 6, not version 7
+## Version 7, not version 6
 
-Worth saying early, because it is a common surprise. CCSDS 734.2-B-1 profiles RFC 5050, which is Bundle Protocol **version 6**. That is not BPv7 (RFC 9171), which encodes bundles in CBOR and is wire-incompatible. `pkg/bp` implements what CCSDS specifies.
+Worth saying early. `pkg/bp` implements Bundle Protocol **version 7**, RFC 9171 — the version ION, µD3TN and HDTN all speak. Version 6 (RFC 5050, profiled by CCSDS 734.2-B-1) is a different wire format, not an earlier revision: it encodes with SDNV where version 7 encodes with CBOR, and the two cannot talk to each other.
 
 ## A bundle
 
 ```go
 primary := &bp.PrimaryBlock{
-    Flags: (bp.FlagSingleton | bp.FlagCustodyRequested |
-        bp.FlagReportDelivery).WithPriority(bp.PriorityExpedited),
+    Flags:   bp.FlagReportDelivery | bp.FlagStatusTimeRequested,
+    CRCType: bp.CRC32C,
 
-    Destination: bp.IPNEndpoint(earthNode, scienceSvc),
-    Source:      bp.IPNEndpoint(roverNode, scienceSvc),
-    ReportTo:    bp.IPNEndpoint(roverNode, scienceSvc),
+    Destination: bp.IPN(earthNode, scienceSvc),
+    Source:      bp.IPN(roverNode, scienceSvc),
+    ReportTo:    bp.IPN(roverNode, scienceSvc),
 
-    CreationTimestamp: bp.CreationTimestamp{Time: 828_000_000, SequenceNumber: 1},
-    Lifetime:          86400,
+    Timestamp: bp.CreationTimestamp{Time: 828_000_000_000, Sequence: 1},
+    Lifetime:  86_400_000,
 }
 
-bundle, err := bp.NewBundle(primary, payload, bp.WithECOS(bp.ECOS{Ordinal: 100}))
+hops, _ := bp.NewHopCountBlock(2, 32, 0)
+bundle, err := bp.NewBundle(primary, payload, hops)
 ```
 
 Four things in there matter more than they look.
 
-**`FlagCustodyRequested`** is what makes store and forward reliable without an end-to-end session. Each hop takes responsibility for the bundle before the previous hop lets go of it.
+**`CRCType`** is not optional in the way it looks. Version 7 requires a checksum on the primary block unless a security block covers it instead, and astro cannot see a security block it does not implement — so choosing `CRCNone` here is a decision, not a default.
 
-**`Lifetime`** is how long the bundle stays worth carrying, in seconds from the creation timestamp. A node holding an expired bundle deletes it rather than forwarding it into a window that has already closed. Get this wrong in the small direction and your data quietly evaporates in a queue somewhere.
+**`Lifetime`** is how long the bundle stays worth carrying, in milliseconds from the creation timestamp. A node holding an expired bundle deletes it rather than forwarding it into a window that has already closed. Get this wrong in the small direction and your data quietly evaporates in a queue somewhere.
 
-**The creation timestamp** is not just information. Source plus timestamp is what *identifies* a bundle, which is how duplicates are recognised. The time is seconds since 2000, and the sequence number distinguishes bundles made in the same second.
+**The creation timestamp** is not just information. Source plus timestamp is what *identifies* a bundle: duplicates are recognised by it, fragments are reassembled by it, and status reports name their subject by it. The time is milliseconds since 2000 — version 6 counted seconds — and the sequence number distinguishes bundles made in the same millisecond.
 
-**The ECOS block** is mandatory in the CCSDS profile. RFC 5050 gives a bundle three priority levels, and space operations need a finer ranking inside the expedited class, so ECOS adds an ordinal: 100 outranks 99.
+**The hop count block** is cheap insurance against a routing loop. A bundle ping-ponging between two nodes is deleted once it passes the limit, rather than circulating until its lifetime runs out. Version 7 dropped the priority and custody machinery version 6 carried; what is left is plainer.
 
-The four endpoints travel as offsets into a shared dictionary rather than as strings, so a bundle whose source and report-to are the same endpoint pays for that string once.
+The endpoints travel as numbers, not strings. An `ipn` endpoint encodes as a pair of integers, which is why the scheme exists: on a link measured in kilobits, a text URI in every bundle is real money.
 
 ```
   from ............ ipn:1.1
