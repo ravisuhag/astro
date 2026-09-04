@@ -224,6 +224,15 @@ The ADM also names a **different schema** from the ODM: `ndmxml-4.0.0` where
 the orbit messages give `3.0.0`. The numbers track each standard's own schema
 issue, not the NDM/XML document.
 
+## Several messages in one file
+
+Clause 7.8 lets any number of attitude messages be aggregated into a single XML
+file under an `<ndm>` root, and clause 5.2.2 points the ACM straight at it.
+That file is a **combined instantiation**, and
+[`pkg/ndm`](/protocols/mission/ndm) reads and writes it. It is a separate
+package because clause 4.11.7 of CCSDS 505.0-B-3 lets one file mix the
+standards, so an attitude message may sit beside the orbit it depends on.
+
 ## Using the package
 
 ```go

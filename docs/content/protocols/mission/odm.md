@@ -245,6 +245,15 @@ So the two forms of one OEM carry the same numbers in a genuinely different
 shape. Worth knowing before comparing two files by eye and concluding they
 disagree.
 
+## Several messages in one file
+
+Clause 8.12 lets any number of orbit messages be aggregated into a single XML
+file under an `<ndm>` root — a constellation's ephemerides together, or a full
+OEM with the OPMs that mark its important states. That file is a **combined
+instantiation**, and [`pkg/ndm`](/protocols/mission/ndm) reads and writes it.
+It is a separate package because clause 4.11.7 of CCSDS 505.0-B-3 lets one file
+mix the standards, so an orbit message may sit beside an attitude message.
+
 ## Three OMM keyword slots take two names each
 
 Table 4-3 gives three pairs of alternatives, and which name applies is decided

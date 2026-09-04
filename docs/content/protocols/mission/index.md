@@ -15,3 +15,4 @@ How timestamps are written, what goes inside a packet, and what the octets mean.
 | [Tracking Data Message](/protocols/mission/tdm) | CCSDS 503.0-B-2 | `pkg/tdm` | [Conformance](/conformance/tdm) |
 | [Attitude Data Messages](/protocols/mission/adm) | CCSDS 504.0-B-2 | `pkg/adm` | [Conformance](/conformance/adm) |
 | [Conjunction Data Message](/protocols/mission/cdm) | CCSDS 508.0-B-1 | `pkg/cdm` | [Conformance](/conformance/cdm) |
+| [NDM Combined Instantiation](/protocols/mission/ndm) | CCSDS 505.0-B-3 | `pkg/ndm` | [Conformance](/conformance/ndm) |

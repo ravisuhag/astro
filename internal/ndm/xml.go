@@ -184,25 +184,46 @@ type XMLMessage struct {
 	Segments []Segment
 }
 
-// EncodeXML writes the message.
+// EncodeXML writes the message as a document of its own.
 func (m *XMLMessage) EncodeXML() ([]byte, error) {
-	if m.Root == "" || m.ID == "" || m.Version == "" || m.Schema == "" {
+	if m.Schema == "" {
 		return nil, ErrMissingHeaderField
 	}
 
 	var b strings.Builder
 	b.WriteString(xml.Header)
+	if err := m.write(&b, "", m.Schema); err != nil {
+		return nil, err
+	}
+	return []byte(b.String()), nil
+}
 
-	fmt.Fprintf(&b, "<%s xmlns:xsi=%q\n", m.Root, XMLNamespaceInstance)
-	fmt.Fprintf(&b, "     xmlns:ndm=%q\n", XMLNamespace)
-	fmt.Fprintf(&b, "     xsi:noNamespaceSchemaLocation=%q\n", XMLSchemaBase+m.Schema)
-	fmt.Fprintf(&b, "     id=%q version=%q>\n", m.ID, m.Version)
+// write renders the message's element and everything under it.
+//
+// schema is the master schema location for the root element, or empty for a
+// message inside a combined instantiation: clause 4.11.5 of CCSDS 505.0-B-3
+// allows a constituent message tag no attributes but 'id' and 'version',
+// because the namespace and schema attributes belong to the <ndm> root that
+// wraps it.
+func (m *XMLMessage) write(b *strings.Builder, indent, schema string) error {
+	if m.Root == "" || m.ID == "" || m.Version == "" {
+		return ErrMissingHeaderField
+	}
 
-	writeElements(&b, "  ", []Element{{Name: "header", Children: present(m.Header)}})
+	if schema != "" {
+		fmt.Fprintf(b, "%s<%s xmlns:xsi=%q\n", indent, m.Root, XMLNamespaceInstance)
+		fmt.Fprintf(b, "%s     xmlns:ndm=%q\n", indent, XMLNamespace)
+		fmt.Fprintf(b, "%s     xsi:noNamespaceSchemaLocation=%q\n", indent, XMLSchemaBase+schema)
+		fmt.Fprintf(b, "%s     id=%q version=%q>\n", indent, m.ID, m.Version)
+	} else {
+		fmt.Fprintf(b, "%s<%s id=%q version=%q>\n", indent, m.Root, m.ID, m.Version)
+	}
 
-	b.WriteString("  <body>\n")
+	writeElements(b, indent+"  ", []Element{{Name: "header", Children: present(m.Header)}})
+
+	fmt.Fprintf(b, "%s  <body>\n", indent)
 	if len(m.Relative) > 0 {
-		writeElements(&b, "    ", []Element{
+		writeElements(b, indent+"    ", []Element{
 			{Name: "relativeMetadataData", Children: present(m.Relative)},
 		})
 	}
@@ -211,12 +232,12 @@ func (m *XMLMessage) EncodeXML() ([]byte, error) {
 		if data := present(segment.Data); len(data) > 0 {
 			children = append(children, Element{Name: "data", Children: data})
 		}
-		writeElements(&b, "    ", []Element{{Name: "segment", Children: children}})
+		writeElements(b, indent+"    ", []Element{{Name: "segment", Children: children}})
 	}
-	b.WriteString("  </body>\n")
+	fmt.Fprintf(b, "%s  </body>\n", indent)
 
-	fmt.Fprintf(&b, "</%s>\n", m.Root)
-	return []byte(b.String()), nil
+	fmt.Fprintf(b, "%s</%s>\n", indent, m.Root)
+	return nil
 }
 
 // writeElements writes a tree, indenting as it descends.
@@ -274,7 +295,18 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 		return nil, ErrWrongMessageType
 	}
 
-	m := &XMLMessage{Root: root}
+	return decodeMessage(d, start)
+}
+
+// decodeMessage reads one message's attributes and content, the decoder having
+// just returned its start element.
+//
+// It serves both a standalone instantiation and a constituent of a combined
+// one. The difference is only the attributes: clause 4.11.5 gives a
+// constituent no schema location, so its Schema is left empty here and the
+// caller fills in the one the <ndm> root carried.
+func decodeMessage(d *xml.Decoder, start xml.StartElement) (*XMLMessage, error) {
+	m := &XMLMessage{Root: start.Name.Local}
 	for _, attr := range start.Attr {
 		switch attr.Name.Local {
 		case "id":
@@ -298,7 +330,7 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 		// Clause 4.3.6 makes the schema location optional — it is there to
 		// validate against, not to read the message. A caller that re-encodes
 		// needs one, so the default is the message type's own.
-		m.Schema = defaultSchema(root)
+		m.Schema = defaultSchema(m.Root)
 	}
 
 	children, err := readChildren(d)
