@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 132.0-B-3",
+  "package": "tmdl",
+  "source": "captured from spacepackets 0.32.0, an independent implementation",
+  "note": "TM transfer frame primary headers emitted by spacepackets, a Python implementation of the CCSDS formats written from the standards by other authors. The primary header packs twelve fields into six octets with only two of them octet-aligned, so nearly every field shares a boundary with another and a shift off by one produces a header that still round-trips against itself. Every other tmdl vector is derived from the clause 4.1.2 layout; these octets are what catches a boundary two readers placed the same way and both got wrong. The capture program is not committed — it needs a dependency astro does not take — and the fields on each vector are what was asked of the other implementation.",
+  "encode": [
+    {
+      "name": "interop-scid-42-vc0-first-packet",
+      "clause": "4.1.2",
+      "note": "The baseline: spacecraft 42, virtual channel 0, a packet starting at the first octet of the data field. Sync flag set and segment length identifier 11, which clause 4.1.2.7.4 fixes for a frame carrying packets rather than a bitstream.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": false, "mc_frame_count": 0, "vc_frame_count": 0, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 0 },
+      "want": "02a000005800"
+    },
+    {
+      "name": "interop-both-frame-counts-at-maximum",
+      "clause": "4.1.2",
+      "note": "Master channel and virtual channel frame counts both at 255. They are the two octet-aligned fields in the header, so this vector is the control: if it passes and the others fail, the error is in a bit boundary rather than in the field order.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": false, "mc_frame_count": 255, "vc_frame_count": 255, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 0 },
+      "want": "02a0ffff5800"
+    },
+    {
+      "name": "interop-spacecraft-id-1023-and-virtual-channel-7",
+      "clause": "4.1.2",
+      "note": "Both identifiers at the largest their fields hold, which pins where one ends and the next begins. The spacecraft ID is ten bits spanning octets 0 and 1, and the virtual channel ID is the three bits after it — so an implementation giving the spacecraft ID eleven bits or twelve passes the low-value vectors and fails this one.",
+      "fields": { "spacecraft_id": 1023, "virtual_channel_id": 7, "ocf_flag": false, "mc_frame_count": 1, "vc_frame_count": 1, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 0 },
+      "want": "3ffe01015800"
+    },
+    {
+      "name": "interop-operational-control-field-flag",
+      "clause": "4.1.2.5",
+      "note": "The OCF flag, which is the single bit closing octet 1 immediately after the virtual channel ID.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": true, "mc_frame_count": 5, "vc_frame_count": 5, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 0 },
+      "want": "02a105055800"
+    },
+    {
+      "name": "interop-frame-secondary-header-flag",
+      "clause": "4.1.2.7.2",
+      "note": "The secondary header flag, the top bit of the data field status. Paired with the OCF vector this fixes two single-bit flags that sit five octets apart and are easy to transpose.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": false, "mc_frame_count": 1, "vc_frame_count": 1, "fsh_flag": true, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 0 },
+      "want": "02a00101d800"
+    },
+    {
+      "name": "interop-first-header-pointer-2046-idle-frame",
+      "clause": "4.1.2.7.6",
+      "note": "First header pointer 2046, which clause 4.1.2.7.6 reserves to mean the frame carries only idle data. It is one of two reserved values at the top of an eleven-bit field, so it also pins the field's width.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": false, "mc_frame_count": 9, "vc_frame_count": 9, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 2046 },
+      "want": "02a009095ffe"
+    },
+    {
+      "name": "interop-first-header-pointer-2047-no-packet-starts",
+      "clause": "4.1.2.7.6",
+      "note": "First header pointer 2047, the other reserved value: no packet starts in this frame, because a packet from an earlier frame is still being carried. Confusing this with 2046 loses idle-frame detection, and both encode as all-ones in a field whose width has to be exactly right.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 0, "ocf_flag": false, "mc_frame_count": 9, "vc_frame_count": 9, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 2047 },
+      "want": "02a009095fff"
+    },
+    {
+      "name": "interop-first-header-pointer-mid-frame",
+      "clause": "4.1.2.7.6",
+      "note": "A first header pointer of 100 on virtual channel 1: an ordinary value in the middle of the field, so the reserved-value vectors above are not the only evidence for its width or position.",
+      "fields": { "spacecraft_id": 42, "virtual_channel_id": 1, "ocf_flag": false, "mc_frame_count": 3, "vc_frame_count": 3, "fsh_flag": false, "sync_flag": true, "packet_order_flag": false, "segment_length_id": 3, "first_header_pointer": 100 },
+      "want": "02a203035864"
+    }
+  ]
+}

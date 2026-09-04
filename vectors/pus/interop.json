@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "standard": "ECSS-E-ST-70-41C",
+  "package": "pus",
+  "source": "captured from spacepackets 0.32.0, an independent implementation",
+  "note": "PUS-C telecommand secondary headers emitted by spacepackets, a Python implementation written from the standard by other authors. These matter more than most interop vectors here, because ECSS-E-ST-70-41C is behind registration: astro's other pus vectors are derived from a reading of clauses this project cannot publish, and ten of its citations are the only ones in the whole corpus that were never audited against the document for that reason. An independent implementation agreeing on the octets is the strongest check available on that layer. The capture program is not committed — it takes a dependency astro does not.",
+  "encode": [
+    {
+      "name": "interop-tc-service-17-subtype-1-all-acks",
+      "clause": "7.4.4.1",
+      "note": "A connection test telecommand with all four acknowledgement bits requested. Octet 0 is 0x2f: the PUS version number 2 in the high nibble and the four ack flags in the low one, which is the packing an implementation most easily gets backwards. Service 17 and subtype 1 follow, then a 16-bit source ID.",
+      "config": { "tc_spare_bytes": 0 },
+      "fields": { "ack_flags": 15, "service": 17, "subtype": 1, "source_id": 0 },
+      "want": "2f11010000"
+    },
+    {
+      "name": "interop-tc-source-id-at-maximum",
+      "clause": "7.4.4.1",
+      "note": "The source ID at 0xffff, which pins it as 16 bits big-endian rather than one octet. Service 3 and subtype 5 are a housekeeping report request, chosen so neither field is symmetric and a transposition would show.",
+      "config": { "tc_spare_bytes": 0 },
+      "fields": { "ack_flags": 15, "service": 3, "subtype": 5, "source_id": 65535 },
+      "want": "2f0305ffff"
+    },
+    {
+      "name": "interop-tc-no-acknowledgements-requested",
+      "clause": "7.4.4.1",
+      "note": "The same header with every acknowledgement bit clear, so octet 0 is 0x20 and only the version number remains. Paired with the all-acks vector this fixes which nibble holds which, independently of astro's reading of a clause it cannot quote.",
+      "config": { "tc_spare_bytes": 0 },
+      "fields": { "ack_flags": 0, "service": 17, "subtype": 1, "source_id": 0 },
+      "want": "2011010000"
+    }
+  ]
+}

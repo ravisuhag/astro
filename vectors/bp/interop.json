@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "standard": "RFC 9171",
+  "package": "bp",
+  "source": "captured from dtn7-go v0.10.2, an independent implementation",
+  "note": "Bundles emitted by dtn7-go, a Bundle Protocol version 7 implementation written from RFC 9171 by other authors. These are the only vectors in this corpus produced by running software rather than derived from a clause or copied out of a standard, apart from pxsc/convolutional.json. That matters for a specific reason: a derivation catches a clause one reader misread, and only a second implementation catches a clause two readers misread the same way. astro decodes every bundle here and re-encodes it to the identical octets, so the agreement covers both directions. The capture program is not committed — it takes a dependency astro does not, and the octets are the evidence. Rebuilding it needs dtn7-go's BundleBuilder and MarshalCbor; the note on each vector says what was built.",
+  "decode": [
+    {
+      "name": "interop-ipn-endpoints-crc32",
+      "clause": "4.3.1",
+      "note": "A plain bundle between ipn endpoints. dtn7-go applies CRC-32C to the primary block by default even when no checksum is requested, which is its reading of the clause 4.3.1 rule that a primary block CRC is mandatory unless a BPSec integrity block covers it. astro permits CRC type 0 there because it cannot see a security block it does not implement; both readings encode and decode the same way, so the difference is a default rather than a disagreement.",
+      "config": { "structure": "bundle" },
+      "input": "9f890700028202820102820282020182028202018200001a000f424044229180598507020100410085010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff",
+      "fields": {
+        "source": "ipn:2.1",
+        "destination": "ipn:1.2",
+        "report_to": "ipn:2.1",
+        "crc_type": 2,
+        "lifetime": 1000000,
+        "block_count": 2,
+        "payload": "526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+      }
+    },
+    {
+      "name": "interop-x25-crc16-on-every-block",
+      "clause": "4.2.1",
+      "note": "The same bundle with CRC type 1 throughout. This is the vector that matters most in this file. The X-25 CRC-16 is not the CCSDS CRC-16 that pkg/crc computes — it reflects its input and output and applies a final complement — so astro carries its own implementation, and a wrong one would agree with itself perfectly. Here a separate implementation computed 0x4893 over the primary block, 0x2987 over the bundle age block and 0x5114 over the payload block, and astro agrees with all three.",
+      "config": { "structure": "bundle" },
+      "input": "9f890700018202820102820282020182028202018200001a000f42404248938607020101410042298786010100015823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164425114ff",
+      "fields": {
+        "source": "ipn:2.1",
+        "destination": "ipn:1.2",
+        "crc_type": 1,
+        "block_count": 2,
+        "payload": "526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+      }
+    },
+    {
+      "name": "interop-crc32c-on-every-block",
+      "clause": "4.2.1",
+      "note": "The same bundle with CRC type 2 throughout, checking CRC-32C the same way. The checksum covers the block including its own field, zero-filled, and an implementation that omitted the field instead of zeroing it would produce a different and self-consistent answer.",
+      "config": { "structure": "bundle" },
+      "input": "9f890700028202820102820282020182028202018200001a000f4240442291805986070201024100449fcd832086010100025823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164448f2b7e50ff",
+      "fields": {
+        "source": "ipn:2.1",
+        "destination": "ipn:1.2",
+        "crc_type": 2,
+        "block_count": 2,
+        "payload": "526561647920746f2067656e657261746520612033322d62797465207061796c6f6164"
+      }
+    },
+    {
+      "name": "interop-dtn-scheme-endpoints",
+      "clause": "4.2.5.1.1",
+      "note": "dtn-scheme endpoints, which encode as CBOR text strings rather than the number pairs the ipn scheme uses, and dtn:none as the report-to endpoint. The null endpoint is the one dtn scheme-specific part written as an integer zero, so a decoder that always expected a text string would fail on this bundle and on no other.",
+      "config": { "structure": "bundle" },
+      "input": "9f8907000282016d2f2f65617274682f696e626f7882016f2f2f726f7665722f736369656e63658201008200001a0036ee8044595175a586070201024100449fcd832086010100024974656c656d6574727944716ca706ff",
+      "fields": {
+        "source": "dtn://rover/science",
+        "destination": "dtn://earth/inbox",
+        "report_to": "dtn:none",
+        "crc_type": 2,
+        "block_count": 2,
+        "payload": "74656c656d65747279"
+      }
+    },
+    {
+      "name": "interop-extension-blocks",
+      "clause": "4.4",
+      "note": "All three extension blocks RFC 9171 defines, in one bundle: bundle age 300 ms, hop count with a limit of 32, and a previous node of ipn:5.1. Each block's type-specific field is a byte string whose contents are themselves CBOR, and a second implementation writing the same two layers is what settles that reading. The hop count block here is 0x44 wrapping 0x82182000, an array of the limit 32 and the count 0.",
+      "config": { "structure": "bundle" },
+      "input": "9f890700028202820102820282020182028202018200001a000f4240442291805986070201024319012c444aeb6a21860a0301024482182000441cbaaba4860604010245820282050144620b995786010100024974656c656d6574727944716ca706ff",
+      "fields": {
+        "source": "ipn:2.1",
+        "destination": "ipn:1.2",
+        "crc_type": 2,
+        "block_count": 4,
+        "bundle_age": 300,
+        "hop_limit": 32,
+        "hop_count": 0,
+        "previous_node": "ipn:5.1",
+        "payload": "74656c656d65747279"
+      }
+    },
+    {
+      "name": "interop-status-report-delivered",
+      "clause": "6.1.1",
+      "note": "A bundle carrying a status report that asserts delivery of a subject bundle sourced at ipn:2.1. The payload is 0x55 wrapping the administrative record, and the record inside is byte-identical in structure to the one bp/bundle.json derives from the clause: the type code 1, four one-element status items with only the third asserted, the reason code, the subject source and the subject creation timestamp.",
+      "config": { "structure": "bundle" },
+      "input": "9f890702028202820201820282010182028201018200001a0036ee8044f2543c6d86070201024100449fcd83208601010002558201848481f481f481f581f400820282020182000044ef64f812ff",
+      "fields": {
+        "source": "ipn:1.1",
+        "destination": "ipn:2.1",
+        "crc_type": 2,
+        "block_count": 2,
+        "admin_record": true,
+        "status_delivered": true,
+        "status_received": false,
+        "status_reason": 0,
+        "subject_source": "ipn:2.1"
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 732.1-B-3",
+  "package": "usdl",
+  "source": "captured from spacepackets 0.32.0, an independent implementation",
+  "note": "USLP transfer frame primary headers emitted by spacepackets, a Python implementation written from the standards by other authors. USLP's header is harder to get right than TM's: it is variable length, because the virtual channel frame count field is nought to seven octets wide and its width is declared by three bits at the end of the fixed part. Every other usdl vector is derived from the clause 4.1.2 layout; these octets check that reading against another one. The capture program is not committed — it needs a dependency astro does not take.",
+  "encode": [
+    {
+      "name": "interop-scid-42-vc0-map0",
+      "clause": "4.1.2",
+      "note": "The baseline. Version 12 fills the first four bits, which is USLP's marker and the reason a TM decoder cannot be pointed at a USLP frame by accident.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 0, "map_id": 0, "frame_length": 100, "vcf_count_len": 0 },
+      "want": "c002a000006400"
+    },
+    {
+      "name": "interop-source-or-destination-flag",
+      "clause": "4.1.2.3",
+      "note": "The one bit saying whether the spacecraft ID names the source or the destination of the frame. USLP carries a single identifier for both directions and this bit is all that distinguishes them, so reading it backwards points every frame the wrong way while parsing cleanly.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 1, "vcid": 0, "map_id": 0, "frame_length": 100, "vcf_count_len": 0 },
+      "want": "c002a800006400"
+    },
+    {
+      "name": "interop-every-identifier-at-maximum",
+      "clause": "4.1.2",
+      "note": "Spacecraft ID at 65535, virtual channel at 63, MAP at 15 and frame length at 65535. The identifiers run 16, 6 and 4 bits with a single bit between two of them, so this vector fixes all three boundaries at once — and USLP's 16-bit spacecraft ID is the field most easily carried over as TM's 10-bit one.",
+      "fields": { "tfvn": 12, "scid": 65535, "source_or_dest": 0, "vcid": 63, "map_id": 15, "frame_length": 65535, "vcf_count_len": 0 },
+      "want": "cffff7feffff00"
+    },
+    {
+      "name": "interop-operational-control-field-flag",
+      "clause": "4.1.2.7",
+      "note": "The OCF flag, with a virtual channel and MAP both non-zero so the surrounding fields are not all clear.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 1, "map_id": 2, "frame_length": 200, "ocf_flag": true, "vcf_count_len": 0 },
+      "want": "c002a02400c808"
+    },
+    {
+      "name": "interop-bypass-sequence-control-flag",
+      "clause": "4.1.2.6",
+      "note": "The bypass flag, which selects expedited quality of service over sequence-controlled. It is the top bit of the final octet of the fixed header.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 0, "map_id": 0, "frame_length": 100, "bypass_seq_ctrl": true, "vcf_count_len": 0 },
+      "want": "c002a000006480"
+    },
+    {
+      "name": "interop-protocol-control-command-flag",
+      "clause": "4.1.2.6",
+      "note": "The protocol control command flag, the bit next to the bypass flag. Pinning them separately is the point: they are adjacent, both single bits, and both change how the frame is handled rather than how it is parsed, so a transposition is invisible to a round trip.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 0, "map_id": 0, "frame_length": 100, "prot_ctrl_cmd": true, "vcf_count_len": 0 },
+      "want": "c002a000006440"
+    },
+    {
+      "name": "interop-vcf-count-one-octet",
+      "clause": "4.1.2.8",
+      "note": "A one-octet virtual channel frame count. This is where USLP's header stops being fixed length: the three-bit count length declares how many octets follow, so a decoder that assumed a fixed header reads the frame data field as part of the header from here on.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 3, "map_id": 1, "frame_length": 150, "vcf_count_len": 1, "vcf_count": 200 },
+      "want": "c002a062009601c8"
+    },
+    {
+      "name": "interop-vcf-count-four-octets",
+      "clause": "4.1.2.8",
+      "note": "A four-octet count carrying 0xdeadbeef, big-endian. Paired with the one-octet vector this proves the field is as wide as the length says and not a fixed width, and that the value is not padded or byte-swapped on the way in.",
+      "fields": { "tfvn": 12, "scid": 42, "source_or_dest": 0, "vcid": 3, "map_id": 1, "frame_length": 150, "vcf_count_len": 4, "vcf_count": 3735928559 },
+      "want": "c002a062009604deadbeef"
+    }
+  ]
+}

@@ -9,32 +9,32 @@ evidence of conformance.
 | Package | Standard | Vectors | Corpus files |
 |---|---|--:|--:|
 | `aos` | CCSDS 732.0-B-4 | 12 | — |
-| `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 18 | — |
-| `cfdp` | CCSDS 727.0-B-5 | 18 | — |
+| `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 24 | — |
+| `cfdp` | CCSDS 727.0-B-5 | 25 | — |
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
-| `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 9 | — |
+| `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 13 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
 | `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 14 | — |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
-| `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 3 | — |
-| `pus` | ECSS-E-ST-70-41C (PUS-C) | 10 | — |
-| `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 4 | — |
+| `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 4 | — |
+| `pus` | ECSS-E-ST-70-41C (PUS-C) | 13 | — |
+| `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 6 | — |
 | `sdls` | CCSDS 355.0-B-2 | 7 | — |
 | `sdnv` | RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20 | 19 | — |
 | `sle` | ITU-T X.690 (BER), CCSDS 913.1-B-2 (SLE ISP1 TML) | 29 | — |
-| `spp` | CCSDS 133.0-B-2 | 28 | — |
+| `spp` | CCSDS 133.0-B-2 | 35 | — |
 | `stack` | CCSDS 132.0-B-3 composed with CCSDS 131.0-B-5 | 5 | — |
 | `tcf` | CCSDS 301.0-B-4 | 14 | — |
-| `tcsc` | CCSDS 231.0-B-4 | 7 | — |
-| `tmdl` | CCSDS 132.0-B-3 | 21 | — |
+| `tcsc` | CCSDS 231.0-B-4 | 13 | — |
+| `tmdl` | CCSDS 132.0-B-3 | 29 | — |
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
-| `usdl` | CCSDS 732.1-B-3 | 12 | — |
+| `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **291** | **115** |
+| **Total** | | **343** | **115** |
 
-291 vectors and 115 referenced corpus files across 24 packages.
+343 vectors and 115 referenced corpus files across 24 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered

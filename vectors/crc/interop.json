@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 132.0-B-3",
+  "package": "crc",
+  "source": "captured from Yamcs 5.13.5, an independent mission control system",
+  "note": "CRC-16-CCITT values computed by Yamcs, whose CrcCciitCalculator is callable in isolation. The published check value 0x29b1 over the ASCII digits is already pinned elsewhere in this corpus; what these add is agreement on the cases no standard prints — the empty input, all zeros, and a short arbitrary sequence. Those are where an initial value or a final XOR that is wrong by a constant hides, because the check value alone can be reached by more than one wrong combination.",
+  "encode": [
+    {
+      "name": "interop-crc16-check-value",
+      "clause": "4.1.6",
+      "note": "The standard check value over the nine ASCII digits, independently computed. It fixes the polynomial, the initial value and the absence of a final XOR together.",
+      "fields": { "data": "313233343536373839" },
+      "want": "29b1"
+    },
+    {
+      "name": "interop-crc16-of-nothing",
+      "clause": "4.1.6",
+      "note": "The CRC of an empty input is the initial value unchanged, 0xffff. No standard prints this, and it is the shortest possible test of the initial value on its own.",
+      "fields": { "data": "" },
+      "want": "ffff"
+    },
+    {
+      "name": "interop-crc16-of-eight-zero-octets",
+      "clause": "4.1.6",
+      "note": "Eight zero octets give 0x313e rather than 0xffff, which is what distinguishes a real register from one that skips data it reads as empty.",
+      "fields": { "data": "0000000000000000" },
+      "want": "313e"
+    },
+    {
+      "name": "interop-crc16-of-a-short-sequence",
+      "clause": "4.1.6",
+      "note": "Four ascending octets, an ordinary case with no symmetry to hide a byte-order error.",
+      "fields": { "data": "01020304" },
+      "want": "89c3"
+    }
+  ]
+}

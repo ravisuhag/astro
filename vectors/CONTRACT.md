@@ -172,6 +172,13 @@ for this form rather than a nicety.
 Every state a `want_state` may name is in the state dictionary for its
 package, the same way `fields` has a field dictionary.
 
+**A link that loses things is modelled explicitly.** The `ltp` and `cfdp`
+sequences run two machines against each other, and the calls that carry
+data between them — `send`, `drop`, `settle` — are steps like any other.
+That is deliberate: the interesting behaviour of both protocols is what
+happens when something does not arrive, and a loss has to be an event the
+vector schedules rather than a condition the harness simulates.
+
 ## Error vocabulary
 
 A `reject` names one of these. The names say what a conforming
@@ -688,6 +695,31 @@ which encoding is present. Which decoder to use is prior agreement and
 lives in `config`. A consumer that guesses from the octets will read a
 TLV as an LV.
 
+`cfdp/transaction.json` — a sender and receiver driven across a link.
+
+Config: `acknowledged` (class 2 when true), `segment_size`, `file` (hex).
+
+| call | does |
+|---|---|
+| `send` | one sender PDU crosses and is delivered |
+| `drop` | one sender PDU is taken and thrown away; the sender is not told |
+| `corrupt_one_data_pdu` | alters one file data PDU without changing its length or offset |
+| `settle` | runs both ends until neither has a PDU left |
+
+| state | meaning |
+|---|---|
+| `sender_done`, `receiver_done` | the transaction has finished at that end |
+| `file_identical` | the file written at the far end equals the file sent |
+| `pdus_lost`, `pdus_corrupted` | what the link did to the exchange |
+| `naks_sent` | NAK PDUs the receiver produced; zero in class 1 by definition |
+| `checksum_failure` | the receiver's condition code is checksum failure |
+
+The two class 1 runs and the class 2 run share one dropped PDU, and the
+difference in outcome is what a caller chooses between when picking a
+class. Class 1 finishes, reports success, and delivers a file with a hole
+in it. An implementation that recovered there would be adding a guarantee
+the class does not have.
+
 ### `ltp` — CCSDS 734.1-B-1 / RFC 5326
 
 `ltp/header.json`
@@ -703,6 +735,40 @@ so the extension-count octet is not at a fixed offset. The
 `engine-id-crossing-the-sdnv-boundary` vector is the one that catches a
 decoder assuming otherwise: engine ID 128 is the first value needing two
 SDNV octets, which shifts everything after it.
+
+`ltp/session.json` — a sender and receiver driven across a link.
+
+Config: `block` (hex), `segment_size`, `red_part_length`.
+
+| call | does |
+|---|---|
+| `send` | one sender segment crosses and is delivered |
+| `drop` | one sender segment is taken and thrown away |
+| `flush` | runs both ends until neither has a segment left |
+| `flush_dropping_last` | delivers everything but the sender's final segment, which is the checkpoint |
+| `resend_checkpoint` | the caller's retransmission timer firing |
+| `settle` | same as `flush` |
+
+| state | meaning |
+|---|---|
+| `red_part_complete` | the receiver holds the whole red part |
+| `sender_done` | the sender has nothing further to do |
+| `segments_lost` | segments the link discarded |
+| `reports_sent` | report segments the receiver produced; a clean run needs one |
+| `sender_has_output`, `receiver_has_output` | that end has a segment waiting |
+| `block_identical` | the red part received equals the red part sent |
+
+`reports_sent` is how a recovered loss stays visible. A dropped data
+segment recovers inside one `settle` with no timer and no caller action,
+because the checkpoint behind it still prompts a report naming the gap —
+so the only trace left is that the run needed two reports where a clean
+one needs one.
+
+`flush_dropping_last` is the case the timers exist for. A lost data
+segment recovers itself; a lost checkpoint prompts nothing, and both ends
+go quiet with neither reporting an error. `resend_checkpoint` is the way
+out, and it is a call rather than a goroutine because on a light-minutes
+link only the mission knows what a sensible timeout is.
 
 ### `pus` — ECSS-E-ST-70-41C
 
@@ -796,6 +862,34 @@ Two traps these vectors exist to catch, both invisible to a round trip:
 
 Not covered: fragmentation and reassembly, which need a sequence of
 calls across several bundles that no vector form expresses.
+
+## Vectors captured from other implementations
+
+Six files hold octets produced by software rather than derived from a
+clause. They are marked by their `source`, and they are the only vectors
+here that can catch a clause two readers misread the same way:
+
+| File | Source |
+|---|---|
+| `bp/interop.json` | dtn7-go 0.10.2 |
+| `spp/interop.json`, `tmdl/interop.json`, `usdl/interop.json`, `pus/interop.json` | spacepackets 0.32.0 |
+| `pxsc/convolutional.json` | a deployed realization of the CCSDS 171/133 code |
+
+**A consumer treats them exactly like any other vector.** The `fields`
+are what was asked of the other implementation and the `want` is what it
+produced, so nothing about consuming them differs. The capture programs
+are not committed: each needs a dependency astro does not take, and the
+octets are the evidence rather than the script that fetched them.
+
+**What they are worth depends on the layer.** For `pus` they are worth
+more than everything else in the package, because ECSS-E-ST-70-41C is
+behind registration and its ten citations are the only ones in this
+corpus never audited against the document. For the two frame headers they
+catch the specific mistake a derivation cannot: TM packs twelve fields
+into six octets with only two octet-aligned, and USLP's header is
+variable length because three bits declare how many octets of frame count
+follow. A boundary off by one and a header assumed fixed both round-trip
+perfectly against themselves.
 
 ## Constants shared across files
 

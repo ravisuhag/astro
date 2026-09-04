@@ -52,6 +52,27 @@ func tcHeaderFrom(f vectors.Fields, config vectors.Fields) (*pus.TCHeader, error
 		pus.AckFlags(ack)), nil
 }
 
+// TestTCHeaderInteropVectors runs headers captured from spacepackets, a Python
+// implementation written from ECSS-E-ST-70-41C by other authors.
+//
+// This is the most valuable check in the package. The standard is behind
+// registration, so every other pus vector rests on a reading of clauses this
+// project cannot publish — and its ten citations are the only ones in the
+// corpus never audited against the document, for the same reason. An
+// independent implementation agreeing on the octets is the strongest
+// corroboration available here.
+func TestTCHeaderInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "pus/interop.json", vectors.Impl{
+		EncodeFn: func(f, config vectors.Fields) ([]byte, error) {
+			h, err := tcHeaderFrom(f, config)
+			if err != nil {
+				return nil, err
+			}
+			return h.Encode()
+		},
+	})
+}
+
 func TestTCHeaderVectors(t *testing.T) {
 	vectors.RunFile(t, "pus/tc-header.json", vectors.Impl{
 		EncodeFn: func(f, config vectors.Fields) ([]byte, error) {
