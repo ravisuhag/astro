@@ -8,6 +8,7 @@ evidence of conformance.
 
 | Package | Standard | Vectors | Corpus files |
 |---|---|--:|--:|
+| `adm` | CCSDS 504.0-B-2 (APM and AEM) | 3 | 3 |
 | `aos` | CCSDS 732.0-B-4 | 12 | — |
 | `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 24 | — |
 | `bpsec` | RFC 9172 (BPSec), with default security contexts per RFC 9173 | 13 | — |
@@ -36,9 +37,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **374** | **122** |
+| **Total** | | **377** | **125** |
 
-374 vectors and 122 referenced corpus files across 28 packages.
+377 vectors and 125 referenced corpus files across 29 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered

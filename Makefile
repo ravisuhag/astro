@@ -72,6 +72,8 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeOEM -fuzztime $(FUZZTIME) ./pkg/odm/
 	go test -run '^$$' -fuzz FuzzDecodeOMM -fuzztime $(FUZZTIME) ./pkg/odm/
 	go test -run '^$$' -fuzz FuzzDecode -fuzztime $(FUZZTIME) ./pkg/tdm/
+	go test -run '^$$' -fuzz FuzzDecodeAPM -fuzztime $(FUZZTIME) ./pkg/adm/
+	go test -run '^$$' -fuzz FuzzDecodeAEM -fuzztime $(FUZZTIME) ./pkg/adm/
 	go test -run '^$$' -fuzz FuzzDecodeTransferFrame -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzDecodeSPDU -fuzztime $(FUZZTIME) ./pkg/pxdl/
 	go test -run '^$$' -fuzz FuzzReassembler -fuzztime $(FUZZTIME) ./pkg/pxdl/

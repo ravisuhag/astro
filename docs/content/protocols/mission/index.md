@@ -13,3 +13,4 @@ How timestamps are written, what goes inside a packet, and what the octets mean.
 | [XTCE](/protocols/mission/xtce) | XTCE 1.2 | `pkg/xtce` | [Conformance](/conformance/xtce) |
 | [Orbit Data Messages](/protocols/mission/odm) | CCSDS 502.0-B-3 | `pkg/odm` | [Conformance](/conformance/odm) |
 | [Tracking Data Message](/protocols/mission/tdm) | CCSDS 503.0-B-2 | `pkg/tdm` | [Conformance](/conformance/tdm) |
+| [Attitude Data Messages](/protocols/mission/adm) | CCSDS 504.0-B-2 | `pkg/adm` | [Conformance](/conformance/adm) |
