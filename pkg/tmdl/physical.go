@@ -79,10 +79,9 @@ func (c ChannelConfig) DataFieldCapacity(secondaryHeaderLen int) int {
 // per CCSDS 132.0-B-3. For sync-layer operations (ASM, randomization,
 // CADU wrapping), use the tmsc package (CCSDS 131.0-B-5).
 type PhysicalChannel struct {
-	Name           string // Channel identifier (e.g., "X-band")
-	config         ChannelConfig
-	mux            *sdl.MCMultiplexer[*TMTransferFrame]
-	masterChannels map[uint16]*MasterChannel
+	Name     string // Channel identifier (e.g., "X-band")
+	config   ChannelConfig
+	channels *sdl.MasterChannelSet[*TMTransferFrame, *MasterChannel]
 
 	// oidFill is the fallback PN generator for idle frames produced with no
 	// Master Channel registered; a registered Master Channel uses its own.
@@ -92,24 +91,22 @@ type PhysicalChannel struct {
 // NewPhysicalChannel creates a physical channel with the given configuration.
 func NewPhysicalChannel(name string, config ChannelConfig) *PhysicalChannel {
 	return &PhysicalChannel{
-		Name:           name,
-		config:         config,
-		mux:            sdl.NewMCMultiplexer[*TMTransferFrame](),
-		masterChannels: make(map[uint16]*MasterChannel),
+		Name:     name,
+		config:   config,
+		channels: sdl.NewMasterChannelSet[*TMTransferFrame, *MasterChannel](),
 	}
 }
 
 // AddMasterChannel registers a Master Channel with a priority weight
 // for the MC multiplexing scheme. Priority must be at least 1.
 func (pc *PhysicalChannel) AddMasterChannel(mc *MasterChannel, priority int) {
-	pc.masterChannels[mc.SCID()] = mc
-	pc.mux.Add(mc, priority)
+	pc.channels.Add(mc, priority)
 }
 
 // GetNextFrame selects the next frame for transmission using weighted
 // round-robin MC multiplexing across registered Master Channels.
 func (pc *PhysicalChannel) GetNextFrame() (*TMTransferFrame, error) {
-	return pc.mux.Next()
+	return pc.channels.Next()
 }
 
 // GetNextFrameOrIdle returns the next frame from MC multiplexing,
@@ -133,13 +130,8 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 	if pc.config.FrameLength == 0 {
 		return nil, sdl.ErrNoFramesAvailable
 	}
-	var chosen *MasterChannel
-	for _, mc := range pc.masterChannels {
-		if chosen == nil || mc.scid < chosen.scid {
-			chosen = mc
-		}
-	}
-	if chosen != nil {
+	chosen, ok := pc.channels.Lowest()
+	if ok {
 		return chosen.GetNextFrameOrIdle()
 	}
 	if pc.oidFill == nil {
@@ -151,19 +143,15 @@ func (pc *PhysicalChannel) GetNextFrameOrIdle() (*TMTransferFrame, error) {
 // AddFrame demultiplexes an inbound frame to the appropriate Master Channel
 // based on the Spacecraft ID in the frame header.
 func (pc *PhysicalChannel) AddFrame(frame *TMTransferFrame) error {
-	mc, ok := pc.masterChannels[frame.Header.SpacecraftID]
-	if !ok {
-		return ErrMasterChannelNotFound
-	}
-	return mc.AddFrame(frame)
+	return pc.channels.Route(frame.Header.SpacecraftID, frame)
 }
 
 // HasPendingFrames checks if any Master Channel has pending frames.
 func (pc *PhysicalChannel) HasPendingFrames() bool {
-	return pc.mux.HasPending()
+	return pc.channels.HasPending()
 }
 
 // Len returns the number of registered Master Channels.
 func (pc *PhysicalChannel) Len() int {
-	return pc.mux.Len()
+	return pc.channels.Len()
 }
