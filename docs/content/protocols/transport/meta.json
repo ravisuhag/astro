@@ -5,6 +5,7 @@
     "epp",
     "cfdp",
     "ltp",
-    "bp"
+    "bp",
+    "bpsec"
   ]
 }

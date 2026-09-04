@@ -31,6 +31,7 @@ what has never been tested against another implementation.
 | [CCSDS File Delivery Protocol](/conformance/cfdp) | `pkg/cfdp` | [14](https://github.com/ravisuhag/astro/tree/main/vectors/cfdp) | [Protocol](/protocols/transport/cfdp) |
 | [Licklider Transmission Protocol](/conformance/ltp) | `pkg/ltp` | [9](https://github.com/ravisuhag/astro/tree/main/vectors/ltp) | [Protocol](/protocols/transport/ltp) |
 | [Bundle Protocol](/conformance/bp) | `pkg/bp` | [5](https://github.com/ravisuhag/astro/tree/main/vectors/bp) | [Protocol](/protocols/transport/bp) |
+| [Bundle Protocol Security](/conformance/bpsec) | `pkg/bpsec` | [13](https://github.com/ravisuhag/astro/tree/main/vectors/bpsec) | [Protocol](/protocols/transport/bpsec) |
 | [TM Space Data Link Protocol](/conformance/tmdl) | `pkg/tmdl` | [20](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) | [Protocol](/protocols/data-link/tmdl) |
 | [TM Space Data Link (ECSS)](/conformance/tmdl-ecss) | `pkg/tmdl` | [20](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) | [Protocol](/protocols/data-link/tmdl) |
 | [TC Space Data Link Protocol](/conformance/tcdl) | `pkg/tcdl` | — | [Protocol](/protocols/data-link/tcdl) |

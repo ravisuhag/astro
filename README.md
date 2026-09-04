@@ -5,7 +5,7 @@
 
 Astro is a Go library and CLI implementing [CCSDS](https://public.ccsds.org) and [ECSS](https://ecss.nl) space communication standards, the protocols NASA, ESA, JAXA and other agencies use to talk to spacecraft.
 
-22 standards, from channel coding up to mission operations. `pkg/` takes no dependencies outside the Go standard library.
+23 standards, from channel coding up to mission operations. `pkg/` takes no dependencies outside the Go standard library.
 
 **[Documentation](https://astro.ravisuhag.com)** | [Protocols](https://astro.ravisuhag.com/protocols) | [CLI](https://astro.ravisuhag.com/cli) | [Conformance](https://astro.ravisuhag.com/conformance)
 
@@ -92,7 +92,7 @@ go run ./examples/capture/           # writes a capture to practise debugging on
 
 ## Contributing
 
-Several standards are still [unimplemented and open](https://astro.ravisuhag.com/protocols#not-implemented-yet).
+Every standard astro has scoped now has a package, so a new protocol starts with a case for why it belongs. The [scope note](https://astro.ravisuhag.com/protocols#out-of-scope) says what astro deliberately leaves out.
 
 Read [contributing](https://astro.ravisuhag.com/docs/contribute) (especially the rule about never coding a constant or field layout from memory) and [adding a protocol](https://astro.ravisuhag.com/docs/contribute/adding-a-protocol). Open an issue to discuss your approach first.
 
