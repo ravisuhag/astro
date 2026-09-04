@@ -36,6 +36,9 @@ section 4 is not implemented.
 | Feature | Reference | Status | Support |
 |---|---|:-:|---|
 | Plain text, one keyword per line | 3.1.1, 6.3.1.4 | M | Y |
+| XML form | 4, CCSDS 505.0-B-3 | M | Y: `EncodeXML` and `DecodeXML`; units become attributes and the data section nests into four blocks |
+| Exactly two segments in XML | 505.0-B-3 clause 3.4.2 | M | Y: `ErrMissingObject` |
+| `relativeMetadataData` before the first segment | 505.0-B-3 clause 3.4.2 | M | Y |
 | Header, relative metadata/data, then two object sections | 3.1.1 | M | Y |
 | Data for a single conjunction event | 3.1.2 | M | Y: both objects required, `ErrMissingObject` |
 | Keyword order fixed by the standard | 6.3.1.9 | M | Partial: read in any order, written in the order read, see A3 |
@@ -88,10 +91,6 @@ section 4 is not implemented.
 ---
 
 ## A3 EXCEPTIONS AND UNSUPPORTED FEATURES
-
-**The XML form is not implemented.** Section 4 defines it and CCSDS 505.0-B-3
-specifies the container. Clause 3.1.1 and section 4 offer both forms, so a
-partner sending XML cannot be read today.
 
 **No conjunction analysis.** Nothing propagates either object, recomputes the
 miss distance or relative velocity from the two state vectors, or calculates a

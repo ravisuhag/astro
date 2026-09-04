@@ -25,7 +25,9 @@ between exactly two objects.
 **Implemented.** Reading and writing, in key-value notation. All the keywords
 of tables 3-1 through 3-8.
 
-**Not yet implemented.** The XML form of section 4.
+**Implemented: the XML form** of section 4, with the structure of
+CCSDS 505.0-B-3. `EncodeXML` and `DecodeXML` sit beside `Encode` and `Decode`,
+and the two forms carry the same values.
 
 **Deliberately absent: conjunction analysis.** Nothing here propagates either
 object, recomputes a miss distance, or calculates a collision probability.
@@ -95,6 +97,35 @@ That is deliberate. An orbit message is data a caller assembles and edits; a
 conjunction warning is a report a caller reads, forwards and archives, and
 re-emitting it unchanged is worth more than a tidy number format.
 
+## The XML form is not a reformatting
+
+Three things genuinely differ, and none is cosmetic.
+
+**Units move.** The key-value form puts them in the value, in brackets. XML
+puts them in an attribute:
+
+```
+MISS_DISTANCE = 715 [m]
+<MISS_DISTANCE units="m">715</MISS_DISTANCE>
+```
+
+**XML nests what KVN leaves flat.** A CDM's object data is one run of keywords
+in the key-value form and four elements in XML — `odParameters`,
+`additionalParameters`, `stateVector`, `covarianceMatrix`. The relative section
+gains a `relativeStateVector`. Converting means knowing which keyword belongs
+to which block.
+
+**`OBJECT` stops being the boundary.** In the key-value form it is what
+separates the two object sections. In XML the `<segment>` elements do that, and
+`OBJECT` becomes an ordinary element that could disagree with the segment it
+sits in. That disagreement would flip which object an operator thinks can
+manoeuvre, so it is refused.
+
+The metadata and data split is another thing the key-value form does not have:
+an object section there runs from `OBJECT` to the last covariance element with
+no divider. The split comes from the tables — 3-3 is metadata, 3-5 through 3-8
+are data.
+
 ## Two header keywords are unique to this message
 
 | Keyword | Here | Elsewhere |
@@ -109,7 +140,9 @@ when someone asks about it a week later.
 ## Using the package
 
 ```go
-message, err := cdm.Decode(data)
+// Either form, same values.
+message, err := cdm.Decode(data)     // keyword = value
+message, err = cdm.DecodeXML(data)   // XML
 
 tca, _ := message.TCA()
 miss, _ := message.MissDistance()
