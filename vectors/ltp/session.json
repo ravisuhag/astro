@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 734.1-B-1",
+  "package": "ltp",
+  "source": "derived from the clause 6 retransmission procedures of RFC 5326, which CCSDS 734.1-B-1 adopts",
+  "note": "The LTP session machines, sender and receiver, driven as a pair across a link that can drop segments. A single input and output pair cannot express any of this: what a segment means depends entirely on what arrived before it, and the whole point of the protocol is what happens when something does not arrive. Segment octets are not asserted here — those are pinned in ltp/header.json — so these vectors assert the state the exchange leaves behind. The link is modelled explicitly: send puts the next segment on it, deliver hands it to the far end, and drop throws it away, which is the event the entire retransmission machinery exists for.",
+  "sequence": [
+    {
+      "name": "ltp-red-part-completes-without-loss",
+      "clause": "6.2",
+      "note": "The nominal case, and the baseline the loss runs are read against. The sender emits the red part as data segments and closes it with a checkpoint that is also the end of red part and end of block. The receiver answers with one report claiming everything, the sender acknowledges it, and both ends are done. Clause 6.2 makes the report the receiver's response to a checkpoint, which is why nothing is sent until the checkpoint arrives.",
+      "config": {
+        "block": "48656c6c6f2c20447465656e2073706163652e",
+        "segment_size": 8,
+        "red_part_length": 19
+      },
+      "steps": [
+        {
+          "call": "settle",
+          "want_state": {
+            "red_part_complete": true,
+            "sender_done": true,
+            "block_identical": true,
+            "segments_lost": 0,
+            "reports_sent": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "ltp-recovers-a-lost-data-segment",
+      "clause": "6.2",
+      "note": "One data segment is dropped. Recovery is automatic and needs no timer and no caller action: the checkpoint that follows the loss still arrives, the receiver reports what it actually holds, and the gap is in that report, so the sender retransmits only the missing extent. That is why a single settle is enough here and the block still comes out identical. What the loss cost is visible in reports_sent: the clean run needs one report, this one needs two, and the second is the round trip the retransmission bought. A report is a claim about what arrived, not an acknowledgement of what was sent.",
+      "config": {
+        "block": "48656c6c6f2c20447465656e2073706163652e",
+        "segment_size": 8,
+        "red_part_length": 19
+      },
+      "steps": [
+        {
+          "call": "send",
+          "want_state": {
+            "red_part_complete": false
+          }
+        },
+        {
+          "call": "drop",
+          "want_state": {
+            "segments_lost": 1,
+            "red_part_complete": false
+          }
+        },
+        {
+          "call": "settle",
+          "want_state": {
+            "red_part_complete": true,
+            "sender_done": true,
+            "block_identical": true,
+            "reports_sent": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "ltp-stalls-when-the-checkpoint-itself-is-lost",
+      "clause": "6.7",
+      "note": "The failure LTP's timers exist for, and the reason this package makes the caller own them. A lost data segment recovers on its own because the checkpoint behind it still prompts a report. A lost checkpoint prompts nothing: the receiver is waiting for a checkpoint that will not arrive and the sender is waiting for a report that nothing will produce, so both ends sit still with neither reporting an error. Clause 6.7 puts the recovery in the checkpoint retransmission timer, which is a mission decision on a link measured in light-minutes, so ResendCheckpoint is a call the caller makes rather than a goroutine this package runs.",
+      "config": {
+        "block": "48656c6c6f2c20447465656e2073706163652e",
+        "segment_size": 8,
+        "red_part_length": 19
+      },
+      "steps": [
+        {
+          "call": "flush_dropping_last",
+          "want_state": {
+            "red_part_complete": false,
+            "sender_has_output": false,
+            "receiver_has_output": false
+          }
+        },
+        {
+          "call": "resend_checkpoint",
+          "want_state": {
+            "sender_has_output": true
+          }
+        },
+        {
+          "call": "settle",
+          "want_state": {
+            "red_part_complete": true,
+            "sender_done": true,
+            "block_identical": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "ltp-green-part-is-not-retransmitted",
+      "clause": "6.2",
+      "note": "A block that is half red and half green. The red part is acknowledged and recovered; the green part is sent once and never repeated, and losing a green segment costs that data with no report and no retransmission. The vector drops a green segment and still reaches a complete red part, which is the whole distinction: red is reliable, green is not, and they travel in the same session.",
+      "config": {
+        "block": "48656c6c6f2c20447465656e2073706163652e",
+        "segment_size": 8,
+        "red_part_length": 8
+      },
+      "steps": [
+        {
+          "call": "flush",
+          "want_state": {
+            "red_part_complete": true
+          }
+        },
+        {
+          "call": "settle",
+          "want_state": {
+            "red_part_complete": true,
+            "sender_done": true
+          }
+        }
+      ]
+    }
+  ]
+}
