@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 132.0-B-3",
+  "package": "stack",
+  "source": "derived from the clause 2.1.3 fixed-length channel rule and the virtual channel multiplexing of clause 4.1.2.3, composed with the CADU framing of CCSDS 131.0-B-5",
+  "note": "The downlink composed end to end: packets into a sender, CADUs out, and back into a receiver. What this pins is not a wire layout, since every layer here has its own vectors, but the ordering the multiplexer imposes, which nothing else can express. Frame counts advance per channel, priority decides which channel goes first when two have frames ready, and a flush has to produce the same frames in the same order every time or two ground stations reading one pass disagree about it. A single input and output pair has nowhere to put any of that.",
+  "sequence": [
+    {
+      "name": "stack-round-trips-packets-through-cadus",
+      "clause": "2.1.3",
+      "note": "The nominal path. A packet goes in on virtual channel 0, a flush releases the partly filled frame padded to the channel length, and the receiver hands the same packet back. Without the flush the packet would sit in a buffer waiting for traffic that is not coming, which is the end-of-pass case the call exists for.",
+      "config": {
+        "spacecraft_id": 42,
+        "frame_length": 64,
+        "fecf": true,
+        "channels": "0"
+      },
+      "steps": [
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 0,
+            "packet": "0064c0000003deadbeef"
+          },
+          "want_state": {
+            "cadus_ready": 0
+          }
+        },
+        {
+          "call": "flush",
+          "want_state": {
+            "cadus_ready": 1
+          }
+        },
+        {
+          "call": "deliver_all",
+          "want_state": {
+            "received_on_vc0": 1,
+            "all_packets_identical": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "stack-keeps-a-frame-count-per-channel",
+      "clause": "4.1.2.4",
+      "note": "Two channels each sending one packet. The virtual channel frame count is per channel, so both frames carry count 0 rather than 0 and 1 — clause 4.1.2.4 counts frames on the channel, not on the physical link. An implementation using one shared counter produces frames a receiver reads as gaps on both channels at once.",
+      "config": {
+        "spacecraft_id": 42,
+        "frame_length": 64,
+        "fecf": true,
+        "channels": "0,1"
+      },
+      "steps": [
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 0,
+            "packet": "0064c0000003deadbeef"
+          }
+        },
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 1,
+            "packet": "0065c0000003cafebabe"
+          }
+        },
+        {
+          "call": "flush",
+          "want_state": {
+            "cadus_ready": 2
+          }
+        },
+        {
+          "call": "deliver_all",
+          "want_state": {
+            "received_on_vc0": 1,
+            "received_on_vc1": 1,
+            "all_packets_identical": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "stack-flush-order-follows-channel-order-not-map-order",
+      "clause": "4.1.2.3",
+      "note": "Three equal-weight channels flushed together, fed in reverse. The frames come out in channel order every time. That matters because the obvious implementation iterates a map and Go randomises that: a flush would emit the same frames in a different order on every run, and two ground stations replaying one pass would disagree about what arrived first. A map-order implementation fails this on most runs rather than all of them, which is worse than failing always and is exactly why it is pinned. Note that a flush is channel-ordered regardless of weight — weighting governs the round-robin between backed-up channels, which the next vector covers.",
+      "config": {
+        "spacecraft_id": 42,
+        "frame_length": 64,
+        "fecf": true,
+        "channels": "0,1,2"
+      },
+      "steps": [
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 2,
+            "packet": "0066c0000003aaaaaaaa"
+          }
+        },
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 0,
+            "packet": "0064c0000003deadbeef"
+          }
+        },
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 1,
+            "packet": "0065c0000003cafebabe"
+          }
+        },
+        {
+          "call": "flush",
+          "want_state": {
+            "cadus_ready": 3,
+            "cadu_vcid_order": "0,1,2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stack-priority-is-a-round-robin-weight-not-a-rank",
+      "clause": "4.1.2.3",
+      "note": "What Priority actually does, which is not what the name suggests. Clause 4.1.2.3 leaves the multiplexing policy to the mission, and astro's is a weighted round-robin: a channel with weight 3 gets three consecutive turns for every one a channel with weight 1 gets. It is a share of the link, not a rank — a higher-weighted channel does not drain first and does not starve the others, which is what a mission wants when housekeeping has to keep flowing underneath a science downlink. The order here reads 0,1,1,1 twice over and then channel 0's remainder once channel 1 runs dry, which is the behaviour in one line. Pinning the exact interleaving matters because strict priority and weighted round-robin agree on the totals and differ on every ordering, so counting frames would not tell them apart.",
+      "config": {
+        "spacecraft_id": 42,
+        "frame_length": 64,
+        "fecf": true,
+        "channels": "0:1,1:3"
+      },
+      "steps": [
+        {
+          "call": "send_many",
+          "fields": {
+            "vcid": 0,
+            "count": 8,
+            "packet_size": 40
+          }
+        },
+        {
+          "call": "send_many",
+          "fields": {
+            "vcid": 1,
+            "count": 8,
+            "packet_size": 40
+          }
+        },
+        {
+          "call": "flush",
+          "want_state": {
+            "cadu_vcid_order": "0,1,1,1,0,1,1,1,0,0,0,0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stack-randomized-channel-round-trips",
+      "clause": "7",
+      "doc": "CCSDS 131.0-B-5",
+      "note": "The same downlink with the pseudo-randomizer on. Both ends have to agree or nothing decodes, and they agree here because one configuration value builds both, which is the reason this package exists. The randomizer is self-inverse, so a wrong sequence still round-trips inside one implementation; what this vector adds is that the composed sender and receiver stay in step when the option is set.",
+      "config": {
+        "spacecraft_id": 42,
+        "frame_length": 64,
+        "fecf": true,
+        "randomize": true,
+        "channels": "0"
+      },
+      "steps": [
+        {
+          "call": "send",
+          "fields": {
+            "vcid": 0,
+            "packet": "0064c0000003deadbeef"
+          }
+        },
+        {
+          "call": "flush",
+          "want_state": {
+            "cadus_ready": 1
+          }
+        },
+        {
+          "call": "deliver_all",
+          "want_state": {
+            "received_on_vc0": 1,
+            "all_packets_identical": true
+          }
+        }
+      ]
+    }
+  ]
+}

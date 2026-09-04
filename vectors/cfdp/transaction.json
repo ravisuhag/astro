@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 727.0-B-5",
+  "package": "cfdp",
+  "source": "derived from the clause 4.6 transaction procedures and the class 1 and class 2 definitions of clause 4.1",
+  "note": "The CFDP transaction engines, sender and receiver, driven as a pair across a link that can drop PDUs. A file transfer is a sequence by nature: metadata, then file data, then an end-of-file, then whatever recovery the class demands. No single input and output pair can say what a NAK means, because a NAK is a statement about which PDUs did not arrive. PDU octets are pinned in the other cfdp files; these vectors assert what the exchange leaves behind, and above all whether the file at the far end is the file that was sent. The link is explicit: send puts one PDU on it, drop throws one away, and settle runs both ends until neither has anything left to say.",
+  "sequence": [
+    {
+      "name": "cfdp-class-1-transfers-a-file-unacknowledged",
+      "clause": "4.1",
+      "note": "Class 1, unacknowledged. The sender emits metadata, the file data and an end-of-file, and stops. There is no NAK, no Finished and no ACK, because class 1 has no reliability machinery at all — its guarantee comes from whatever is underneath it. The file arrives because nothing was lost, not because the protocol checked.",
+      "config": {
+        "acknowledged": false,
+        "segment_size": 8,
+        "file": "534f4c20313234372053504543545255cd204f4b"
+      },
+      "steps": [
+        { "call": "settle", "want_state": { "sender_done": true, "file_identical": true, "naks_sent": 0 } }
+      ]
+    },
+    {
+      "name": "cfdp-class-1-loses-data-silently",
+      "clause": "4.1",
+      "note": "The same transfer with one file data PDU dropped. The sender still finishes and still reports success, and the file at the far end has a hole in it. This is not a defect, it is what unacknowledged means, and it is the reason the vector exists: an implementation that quietly recovered here would be adding a guarantee class 1 does not have, and a caller choosing class 1 over class 2 needs the difference to be real.",
+      "config": {
+        "acknowledged": false,
+        "segment_size": 8,
+        "file": "534f4c20313234372053504543545255cd204f4b"
+      },
+      "steps": [
+        { "call": "send", "want_state": { "sender_done": false } },
+        { "call": "drop", "want_state": { "pdus_lost": 1 } },
+        { "call": "settle", "want_state": { "sender_done": true, "file_identical": false, "naks_sent": 0 } }
+      ]
+    },
+    {
+      "name": "cfdp-class-2-recovers-a-lost-data-pdu",
+      "clause": "4.6",
+      "note": "Class 2, acknowledged, with one file data PDU dropped. The end-of-file still arrives, the receiver compares what it holds against the file size the EOF declares, and asks for the gap with a NAK. The sender retransmits only that extent. The file comes out identical and naks_sent shows what the loss cost, which is the difference from the class 1 run above on the same dropped PDU.",
+      "config": {
+        "acknowledged": true,
+        "segment_size": 8,
+        "file": "534f4c20313234372053504543545255cd204f4b"
+      },
+      "steps": [
+        { "call": "send", "want_state": { "sender_done": false } },
+        { "call": "drop", "want_state": { "pdus_lost": 1 } },
+        { "call": "settle", "want_state": { "file_identical": true, "naks_sent": 1 } }
+      ]
+    },
+    {
+      "name": "cfdp-class-2-detects-a-corrupted-file-by-checksum",
+      "clause": "4.6",
+      "note": "Every PDU arrives, but one file data PDU is altered on the way. Length checks cannot catch that — the file is the right size and every offset is filled — so the only thing that can is the checksum the EOF carries, computed over the whole file per clause 4.6. The receiver's condition code reports the mismatch rather than reporting success on a file it cannot vouch for.",
+      "config": {
+        "acknowledged": true,
+        "segment_size": 8,
+        "file": "534f4c20313234372053504543545255cd204f4b"
+      },
+      "steps": [
+        { "call": "corrupt_one_data_pdu", "want_state": { "pdus_corrupted": 1 } },
+        { "call": "settle", "want_state": { "file_identical": false, "checksum_failure": true } }
+      ]
+    }
+  ]
+}

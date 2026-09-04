@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 913.1-B-2",
+  "package": "sle",
+  "source": "derived from the clause 3.2 association procedures and the clause 3.3.3 heartbeat rules",
+  "note": "The SLE association machine on both sides of a link: a user that sends BIND and a provider that answers. Two ends and a handshake cannot be expressed as an input and output pair — a BIND return means one thing after a BIND and is a protocol error before one, and that difference is the entire state machine. Operation octets are pinned in the other sle files; these vectors assert which side may do what, and when. Time is a step here rather than a clock, which the package makes possible by taking a now argument on every call: a heartbeat that read the system clock could not be tested this way at all.",
+  "sequence": [
+    {
+      "name": "sle-bind-handshake-brings-both-ends-up",
+      "clause": "3.2",
+      "note": "The nominal handshake. The user sends BIND from unbound and enters bind pending; the provider answers positively and is bound immediately; the user becomes bound on receiving the return. The asymmetry is the point — the provider is bound one step before the user is, because it has nothing left to wait for.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "bind",
+          "want_state": {
+            "user_state": "bind pending",
+            "provider_state": "unbound"
+          }
+        },
+        {
+          "call": "accept_bind",
+          "want_state": {
+            "user_state": "bind pending",
+            "provider_state": "bound"
+          }
+        },
+        {
+          "call": "receive_bind_return",
+          "want_state": {
+            "user_state": "bound",
+            "provider_state": "bound",
+            "user_bound": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "sle-unbind-closes-the-association-at-both-ends",
+      "clause": "3.2",
+      "note": "The reverse, from a bound association. UNBIND does not return the association to unbound: clause 3.2 ends it, and StateClosed is where both ends land — the TCP connection goes with it, so rebinding means a new association rather than a second BIND on this one. An implementation that went back to unbound would let a peer rebind on a connection the standard has already finished with. The order is the same asymmetry as BIND: the provider closes on handling the invocation, the user on handling the return.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "bind"
+        },
+        {
+          "call": "accept_bind"
+        },
+        {
+          "call": "receive_bind_return",
+          "want_state": {
+            "user_bound": true
+          }
+        },
+        {
+          "call": "unbind",
+          "want_state": {
+            "user_state": "unbind pending",
+            "provider_state": "bound"
+          }
+        },
+        {
+          "call": "accept_unbind",
+          "want_state": {
+            "provider_state": "closed",
+            "provider_bound": false
+          }
+        },
+        {
+          "call": "receive_unbind_return",
+          "want_state": {
+            "user_state": "closed",
+            "user_bound": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "sle-a-provider-cannot-send-bind",
+      "clause": "3.2",
+      "note": "Roles are not symmetric. BIND travels from user to provider and nowhere else, so a provider asked to send one refuses rather than producing a PDU its peer would have to reject. Clause 3.2 assigns the invocation to the user side, and this is the rule that keeps a misconfigured pair from binding in both directions at once.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "provider_bind",
+          "error": "reserved_value"
+        }
+      ]
+    },
+    {
+      "name": "sle-heartbeat-comes-due-then-the-peer-is-declared-dead",
+      "clause": "3.3.3",
+      "note": "The heartbeat, driven one second at a time. Nothing is due before the interval elapses; at the interval a heartbeat is due. The dead check is strict: clause 3.3.3 gives the peer dead_factor intervals, and astro reads that as elapsed time having to exceed the product rather than reach it — so with an interval of 30 and a factor of 3 the peer is still alive at exactly 90 seconds and dead at 91. The vector steps onto the boundary and then over it, because a comparison using >= instead of > passes any test that only checks well past the deadline.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "bind"
+        },
+        {
+          "call": "accept_bind"
+        },
+        {
+          "call": "receive_bind_return"
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 29
+          },
+          "want_state": {
+            "heartbeat_due": false,
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 1
+          },
+          "want_state": {
+            "heartbeat_due": true,
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 60
+          },
+          "want_state": {
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 1
+          },
+          "want_state": {
+            "heartbeat_due": true,
+            "peer_dead": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "sle-traffic-resets-the-dead-timer",
+      "clause": "3.3.3",
+      "note": "The same run with a PDU arriving before the deadline. Receiving anything counts as proof of life, so the dead timer restarts and the peer is not declared gone. Without this an association carrying steady traffic would still be torn down on schedule.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "bind"
+        },
+        {
+          "call": "accept_bind"
+        },
+        {
+          "call": "receive_bind_return"
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 90
+          },
+          "want_state": {
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "record_received",
+          "want_state": {
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 90
+          },
+          "want_state": {
+            "peer_dead": false
+          }
+        },
+        {
+          "call": "tick",
+          "fields": {
+            "seconds": 1
+          },
+          "want_state": {
+            "peer_dead": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "sle-peer-abort-drops-the-association-from-either-side",
+      "clause": "3.2",
+      "note": "A peer abort ends the association without a handshake, which is what distinguishes it from UNBIND: there is no return to wait for and no agreement to reach. The provider aborts here and the user is closed as soon as it handles the abort.",
+      "config": {
+        "heartbeat_interval": 30,
+        "dead_factor": 3
+      },
+      "steps": [
+        {
+          "call": "bind"
+        },
+        {
+          "call": "accept_bind"
+        },
+        {
+          "call": "receive_bind_return",
+          "want_state": {
+            "user_bound": true
+          }
+        },
+        {
+          "call": "provider_abort",
+          "want_state": {
+            "provider_state": "closed"
+          }
+        },
+        {
+          "call": "receive_abort",
+          "want_state": {
+            "user_state": "closed",
+            "user_bound": false
+          }
+        }
+      ]
+    }
+  ]
+}

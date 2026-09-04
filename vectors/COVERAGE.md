@@ -10,30 +10,31 @@ evidence of conformance.
 |---|---|--:|--:|
 | `aos` | CCSDS 732.0-B-4 | 12 | — |
 | `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 18 | — |
-| `cfdp` | CCSDS 727.0-B-5 | 14 | — |
+| `cfdp` | CCSDS 727.0-B-5 | 18 | — |
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
 | `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 9 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
-| `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 10 | — |
+| `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 14 | — |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
 | `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 3 | — |
 | `pus` | ECSS-E-ST-70-41C (PUS-C) | 10 | — |
 | `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 4 | — |
 | `sdls` | CCSDS 355.0-B-2 | 7 | — |
 | `sdnv` | RFC 5050 clause 4.1 (SDNV), adopted by CCSDS 734.1-B-1 via RFC 5326 clause 1.6 item 20 | 19 | — |
-| `sle` | ITU-T X.690 (BER), CCSDS 913.1-B-2 (SLE ISP1 TML) | 23 | — |
+| `sle` | ITU-T X.690 (BER), CCSDS 913.1-B-2 (SLE ISP1 TML) | 29 | — |
 | `spp` | CCSDS 133.0-B-2 | 28 | — |
+| `stack` | CCSDS 132.0-B-3 composed with CCSDS 131.0-B-5 | 5 | — |
 | `tcf` | CCSDS 301.0-B-4 | 14 | — |
 | `tcsc` | CCSDS 231.0-B-4 | 7 | — |
 | `tmdl` | CCSDS 132.0-B-3 | 21 | — |
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 12 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **272** | **115** |
+| **Total** | | **291** | **115** |
 
-272 vectors and 115 referenced corpus files across 23 packages.
+291 vectors and 115 referenced corpus files across 24 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -52,15 +53,40 @@ reaching it needs a buffer-availability signal that clause 6.3.2.3
 leaves optional, so a vector requiring it would pin an implementation
 choice rather than the standard.
 
-The other machines are still uncovered: the CFDP transaction engines,
-the LTP session and receiver, SLE association, bundle reassembly and
-custody transfer, and frame multiplexing and flush ordering. The form
-they need now has two worked examples to follow.
+**Every state machine in the library is now covered.** `cop`, `ltp`,
+`cfdp`, `sle` and `stack`, 29 sequence vectors across the five. All of it
+was added once the runner existed. Before that, sequence vectors were data no test read:
+`internal/vectors` skipped every one of them with "no runner is wired for
+them", so COP-1's ten sat in the corpus and in this table's counts
+without ever running against `pkg/cop`. They run now, and so do the rest.
 
-Within FARM-1, the Wait state is deliberately untested: reaching it
-needs a buffer-availability signal that clause 6.3.2.3 leaves optional,
-so a vector requiring it would pin an implementation choice rather than
-the standard.
+`ltp/session.json` drives a sender and receiver across a link that drops
+segments: the clean run, a lost data segment recovering with no timer,
+the lost *checkpoint* that recovers with nothing until the caller resends
+it, and a green part that is never retransmitted.
+
+`cfdp/transaction.json` drives a file transfer the same way. The pair of
+class 1 runs is the point: the same dropped PDU is silently lost in
+class 1 and recovered by a NAK in class 2, so the difference a caller
+chooses between is a fact the corpus states rather than prose. A fourth
+run alters a PDU without changing its length or offset, which no length
+check can catch and only the end-of-file checksum does.
+
+`sle/association.json` drives a user and a provider through the bind and
+unbind handshakes, a provider refused permission to send BIND, and the
+heartbeat stepped one second at a time across both its deadlines. Two
+rules it pins were written down only after the vectors disagreed with a
+first reading of them: UNBIND closes the association rather than
+returning it to unbound, and the dead-peer check is strict, so a peer is
+still alive at exactly dead_factor intervals and gone one second later.
+
+`stack/downlink.json` composes a sender and receiver from one
+configuration and pins the ordering the multiplexer imposes: a frame
+count per channel, a flush that emits in channel order on every run
+rather than in Go's randomised map order, and what Priority actually
+means. That last one also corrected a first reading — it is a
+weighted round-robin share, not a rank, so a higher-weighted channel
+neither drains first nor starves the others.
 
 **Layers with nothing to pin as octets.** Some layers a full stack needs
 are absent here, and deliberately so — what they define is not an octet
@@ -136,31 +162,107 @@ that the clauses were read correctly.
 Three limits remain, and they are properties of the corpus rather than of
 any one check.
 
-**A derivation cannot catch a clause misread twice.** Where a value comes
-from a published corpus or a worked example the standard prints, that
-risk is gone — the CCSDS 121.0 data set, the annex F checksum, the RFC
-5050 SDNV examples, the RFC 4493 and NIST CMAC sets, the published
+**A derivation cannot catch a clause misread twice.** Two things remove
+that risk, and they are not the same thing.
+
+*Published data* — the CCSDS 121.0 data set, the annex F checksum, the
+RFC 5050 SDNV examples, the RFC 4493 and NIST CMAC sets, the published
 randomizer sequences, and the bundle encodings of RFC 9173 appendix A.
-Everywhere else it stands.
+The standards body settles these.
 
-**Five layers cannot be corroborated from outside at all, and the reason
-is structural.** `cop`, `epp`, `ltp`, `ocsc` and `sdls` rest on clause
-derivation alone, and no amount of effort changes that cheaply.
+*Another implementation's octets*, which is stronger, because it is the
+only thing that catches a clause two readers misread the same way. Four
+files hold them:
 
-`bp` used to be the sixth, and no longer is. Replacing Bundle Protocol
-version 6 with version 7 brought RFC 9173 appendix A into reach: it
-prints four worked example bundles in CBOR diagram notation beside their
-hex, and says plainly they can inform unit and interoperability test
-suites. Four `bp` vectors — the primary block, the payload block, the
-Bundle Age block and a whole bundle — are those published octets. A
-second working group wrote them, which is exactly the corroboration the
-rest of this section is about not having.
+| File | Source | Covers |
+|---|---|--:|
+| `bp/interop.json` | dtn7-go 0.10.2 | 6 |
+| `spp/interop.json` | spacepackets 0.32.0 | 7 |
+| `tmdl/interop.json` | spacepackets 0.32.0 | 8 |
+| `usdl/interop.json` | spacepackets 0.32.0 | 8 |
+| `pus/interop.json` | spacepackets 0.32.0 | 3 |
+| `cfdp/interop.json` | spacepackets 0.32.0 | 7 |
+| `tcsc/interop.json` | Yamcs 5.13.5 | 6 |
+| `crc/interop.json` | Yamcs 5.13.5 | 4 |
+| `pxsc/interop.json` | Yamcs 5.13.5 | 2 |
+| `pn/interop.json` | Yamcs 5.13.5 | 1 |
+| `pxsc/convolutional.json` | a deployed CCSDS 171/133 realization | 4 |
+
+That is 56 vectors across ten packages, and it covers the layers where a
+shared misreading is likeliest — the places where a mistake produces an
+implementation that agrees with itself perfectly:
+
+- **The TC uplink coding.** `tcsc` had no outside check at all before
+  Yamcs. A BCH(63,56) parity octet, the complement applied to it, and the
+  0x55 fill padding a short codeblock are three such places. The start
+  sequence 0xeb90 is a fourth, and the worst of them: it does not survive
+  text extraction from the standard, which yields a pattern reading FF00
+  from a page that plainly shows EB90, so a vector taken from the
+  extracted text would have condemned a correct implementation.
+- **The pseudo-randomizer.** Plan 026 found astro generating the TM
+  sequence from the wrong feedback taps. Every randomized frame was
+  unreadable by a conforming receiver and no round trip could tell,
+  because XOR is self-inverse. The published digits caught it; Yamcs
+  agreeing means two sources rather than one reading of one table.
+
+- **The two frame headers.** TM packs twelve fields into six octets with
+  only two octet-aligned; USLP's header is variable length because a
+  three-bit field declares how many octets of frame count follow it. A
+  boundary off by one and a header assumed fixed both round-trip.
+- **CFDP's transmission mode bit**, which table 5-1 inverts: '0' means
+  acknowledged. An implementation using the obvious sense marks every
+  acknowledged transaction unacknowledged.
+- **PUS**, for the reason below.
+
+The `pus` three matter out of proportion to their number.
+ECSS-E-ST-70-41C is behind registration, so every other `pus` vector
+rests on a reading of clauses this project cannot publish, and its ten
+citations are the only ones in this corpus never audited against the
+document. An independent implementation agreeing on the octets is the
+strongest check available on that layer.
+
+Everywhere else the derivation risk stands.
+
+**Four layers cannot be corroborated from outside at all, and the reason
+is structural.** `cop`, `epp`, `ocsc` and `sdls` rest on clause
+derivation alone, and no amount of effort changes that cheaply. `ltp`
+would join `bp` if ION were ever built, since ION implements both.
+
+`bp` used to be the sixth, and no longer is — twice over.
+
+First, replacing Bundle Protocol version 6 with version 7 brought
+RFC 9173 appendix A into reach: it prints four worked example bundles in
+CBOR diagram notation beside their hex, and says plainly they can inform
+unit and interoperability test suites. Four `bp` vectors are those
+published octets.
+
+Second, `bp/interop.json` holds six bundles captured from **dtn7-go**, a
+version 7 implementation written from RFC 9171 by other authors. astro
+decodes every one and re-encodes it to the identical octets. That covers
+both CRC algorithms, both endpoint schemes, the checksum-over-its-own-
+zeroed-field rule, the indefinite-length bundle array, and the
+double-wrapped extension data — each of them a place where a wrong
+implementation agrees with itself perfectly.
+
+The X-25 CRC-16 is the sharpest case. It is not the CCSDS CRC-16 that
+`pkg/crc` computes, so `pkg/bp` carries its own, and a wrong one would
+pass every round trip. A separate implementation computing the same
+0x4893, 0x2987 and 0x5114 over the same three blocks is what settles
+it.
 
 Worth noting how it came about. The corroboration was not the reason for
 the change; the reason was that nothing runs version 6. It came free with
 picking the version people actually deploy, which is the general lesson:
 a live standard has a published record around it, and a dead one does
 not.
+
+What makes the difference is not effort but shape. dtn7-go exposes a
+bundle as a value with a marshal method, spacepackets does the same for
+packets and frames, and Yamcs — a whole mission control system — turns
+out to expose its BCH generator, randomizer and CRC calculators as
+plain classes callable without a server. Each capture was a short
+program. The remaining layers expose no such surface, and that, not
+difficulty, is the whole gap.
 
 Corroboration works where an implementation exposes a *codec*: a
 function from field values to octets, callable in isolation. Where the
@@ -170,7 +272,7 @@ parameters, a server component that reads a stream -- there is nothing
 to call. Their state lives across a session rather than in a return
 value.
 
-That is why these five are the gap and the others are not, and why
+That is why these four are the gap and the others are not, and why
 closing it means standing up a running system rather than installing a
 library. Anyone attempting it should know that before starting.
 
