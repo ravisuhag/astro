@@ -12,6 +12,7 @@ func (m *OPM) EncodeXML() ([]byte, error) {
 		Root:    "opm",
 		ID:      "CCSDS_OPM_VERS",
 		Version: m.Header.Version,
+		Schema:  ndm.XMLSchemaODM,
 		Header:  m.Header.xmlHeader(),
 		Segments: []ndm.Segment{{
 			Metadata: m.xmlMetadata(),

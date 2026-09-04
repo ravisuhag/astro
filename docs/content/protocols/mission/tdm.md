@@ -29,7 +29,8 @@ section of Tracking Data Records.
 **Implemented.** Reading and writing, in key-value notation. Every metadata
 keyword table 3-3 allows and every data keyword table 3-5 allows.
 
-**Not yet implemented.** The XML form of section 5.
+**Also implemented: the XML form** of section 5. `EncodeXML` and `DecodeXML`
+sit beside `Encode` and `Decode`.
 
 **Deliberately absent: tracking mathematics.** Nothing here differences a
 range, unwraps an ambiguous one, applies a media or clock correction, or
@@ -83,6 +84,31 @@ meaning lives in an ICD.
 A struct would be forty pointers, and a caller meeting an unfamiliar keyword
 would have no way to see it. `Get` reaches anything; the accessors cover what
 changes how a number must be read.
+
+## The XML form lines up neatly, with one rule kept
+
+A Tracking Data Record becomes an `<observation>` carrying its epoch and its
+measurement:
+
+```
+RANGE = 2010-215T20:04:24.000 65249.6771931631
+```
+```xml
+<observation>
+  <EPOCH>2010-215T20:04:24.000</EPOCH>
+  <RANGE>65249.6771931631</RANGE>
+</observation>
+```
+
+Clause 3.4.3 pairs a timetag with exactly one observable, so an `<observation>`
+carrying two measurements is refused: the second has no timetag of its own.
+
+What does not change is the important part. The units a measurement is in still
+come from the segment's `RANGE_UNITS`, in either form. The XML form does not
+put them on the record any more than the key-value form does.
+
+The TDM names schema issue **2.0** — `ndmxml-2.0.0-master-2.0.xsd` — where the
+ODM gives 3.0 and the ADM 4.0.
 
 ## Two keyword families overlap by prefix
 

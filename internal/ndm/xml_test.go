@@ -186,6 +186,41 @@ func TestXMLRoundTrip(t *testing.T) {
 			t.Errorf("the %s block did not survive", name)
 		}
 	}
+
+	// The schema a message arrived under is kept, so re-encoding does not
+	// silently move it to another standard's schema.
+	if second.Schema != first.Schema {
+		t.Errorf("schema changed: %q then %q", first.Schema, second.Schema)
+	}
+	if first.Schema != XMLSchemaODM {
+		t.Errorf("schema = %q, want the ODM's", first.Schema)
+	}
+}
+
+// The four navigation standards name four different master schemas, and the
+// numbers do not track the NDM/XML document. Substituting one for another
+// produces a file that validates against the wrong schema.
+func TestSchemaLocationsDifferPerStandard(t *testing.T) {
+	tests := []struct {
+		root string
+		want string
+	}{
+		{"opm", XMLSchemaODM},
+		{"oem", XMLSchemaODM},
+		{"apm", XMLSchemaADM},
+		{"aem", XMLSchemaADM},
+		{"tdm", XMLSchemaTDM},
+		{"cdm", XMLSchemaCDM},
+	}
+	for _, tt := range tests {
+		if got := defaultSchema(tt.root); got != tt.want {
+			t.Errorf("defaultSchema(%q) = %q, want %q", tt.root, got, tt.want)
+		}
+	}
+
+	if XMLSchemaODM == XMLSchemaADM {
+		t.Error("the ODM and ADM schemas are the same; the standards give 3.0 and 4.0")
+	}
 }
 
 // An empty block is written as nothing. A block exists only to group the
@@ -193,7 +228,7 @@ func TestXMLRoundTrip(t *testing.T) {
 // would be a claim that the block is present but empty.
 func TestEmptyBlocksAreOmitted(t *testing.T) {
 	m := &XMLMessage{
-		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0",
+		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0", Schema: XMLSchemaODM,
 		Header: []Element{Leaf("ORIGINATOR", "JAXA")},
 		Segments: []Segment{{
 			Metadata: []Element{Leaf("OBJECT_NAME", "A")},
@@ -225,7 +260,7 @@ func TestNamespaceIsHTTPNotHTTPS(t *testing.T) {
 	}
 
 	m := &XMLMessage{
-		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0",
+		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0", Schema: XMLSchemaODM,
 		Header:   []Element{Leaf("ORIGINATOR", "JAXA")},
 		Segments: []Segment{{Metadata: []Element{Leaf("OBJECT_NAME", "A")}}},
 	}
@@ -241,7 +276,7 @@ func TestNamespaceIsHTTPNotHTTPS(t *testing.T) {
 // Values that contain XML's reserved characters have to survive.
 func TestXMLEscaping(t *testing.T) {
 	m := &XMLMessage{
-		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0",
+		Root: "opm", ID: "CCSDS_OPM_VERS", Version: "3.0", Schema: XMLSchemaODM,
 		Header:   []Element{Leaf("ORIGINATOR", `A & B <C> "D"`)},
 		Segments: []Segment{{Metadata: []Element{Leaf("OBJECT_NAME", "A")}}},
 	}

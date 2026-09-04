@@ -27,6 +27,7 @@ func (m *OEM) EncodeXML() ([]byte, error) {
 		Root:    "oem",
 		ID:      "CCSDS_OEM_VERS",
 		Version: m.Header.Version,
+		Schema:  ndm.XMLSchemaODM,
 		Header:  m.Header.xmlHeader(),
 	}
 	for i := range m.Blocks {

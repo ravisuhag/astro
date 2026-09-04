@@ -30,6 +30,7 @@ func (m *OMM) EncodeXML() ([]byte, error) {
 		Root:    "omm",
 		ID:      "CCSDS_OMM_VERS",
 		Version: m.Header.Version,
+		Schema:  ndm.XMLSchemaODM,
 		Header:  m.Header.xmlHeader(),
 		Segments: []ndm.Segment{{
 			Metadata: metadata,
