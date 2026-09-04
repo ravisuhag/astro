@@ -64,3 +64,56 @@ func FuzzDecodeOPM(f *testing.F) {
 		}
 	})
 }
+
+// The OEM adds what the OPM does not have: delimited blocks that can nest
+// wrongly or never close, positional data rows with two legal widths, and a
+// covariance section whose 21 values are spread over however many lines the
+// producer chose.
+func FuzzDecodeOEM(f *testing.F) {
+	f.Add(figureG11)
+	f.Add(figureG12)
+	f.Add(figureG13Covariance)
+	f.Add("")
+	f.Add("CCSDS_OEM_VERS = 3.0\n")
+
+	// Delimiters out of place, which is the shape the block reader has to
+	// survive: an unclosed group, a nested one, a stray stop, and a covariance
+	// section with no epoch.
+	f.Add("CCSDS_OEM_VERS = 3.0\nCREATION_DATE = 1996-11-04T17:22:31\nORIGINATOR = X\nMETA_START\n")
+	f.Add("CCSDS_OEM_VERS = 3.0\nCREATION_DATE = 1996-11-04T17:22:31\nORIGINATOR = X\nMETA_START\nMETA_START\n")
+	f.Add("CCSDS_OEM_VERS = 3.0\nCREATION_DATE = 1996-11-04T17:22:31\nORIGINATOR = X\nMETA_STOP\n")
+	f.Add("CCSDS_OEM_VERS = 3.0\nCREATION_DATE = 1996-11-04T17:22:31\nORIGINATOR = X\nCOVARIANCE_START\n1.0\nCOVARIANCE_STOP\n")
+
+	f.Fuzz(func(t *testing.T, data string) {
+		m, err := odm.DecodeOEM([]byte(data))
+		if err != nil {
+			return
+		}
+
+		if m.Humanize() == "" {
+			t.Fatal("Humanize returned nothing for a message that decoded")
+		}
+		encoded, err := m.Encode()
+		if err != nil {
+			t.Fatalf("a message that decoded failed to encode: %v", err)
+		}
+
+		again, err := odm.DecodeOEM(encoded)
+		if err != nil {
+			t.Fatalf("re-decoding our own output failed: %v\n%s", err, encoded)
+		}
+		if again.Records() != m.Records() {
+			t.Fatalf("record count changed on round trip: %d then %d", m.Records(), again.Records())
+		}
+		if len(again.Blocks) != len(m.Blocks) {
+			t.Fatalf("block count changed on round trip: %d then %d", len(m.Blocks), len(again.Blocks))
+		}
+		for i := range m.Blocks {
+			for j := range m.Blocks[i].Lines {
+				if m.Blocks[i].Lines[j] != again.Blocks[i].Lines[j] {
+					t.Fatalf("block %d line %d changed on round trip", i, j)
+				}
+			}
+		}
+	})
+}

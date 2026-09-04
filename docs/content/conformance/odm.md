@@ -9,8 +9,8 @@ order: 210
 
 CCSDS 502.0-B-3 annex A ships an Implementation Conformance Statement
 proforma. This fills in the Orbit Parameter Message requirements list of
-A2.5.1. The requirements lists for the OMM, the OEM and the OCM are not filled
-in, because those messages are not implemented.
+A2.5.1 and the Orbit Ephemeris Message list of A2.5.3. The lists for the OMM
+and the OCM are not filled in, because those messages are not implemented.
 
 ---
 
@@ -29,7 +29,7 @@ in, because those messages are not implemented.
 | Implementation Name | astro/pkg/odm |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library reading and writing the Orbit Parameter Message in 'keyword = value' notation. The OMM, OEM and OCM are not implemented, nor is the XML form of any message. No orbital mechanics: nothing propagates, converts frames, or derives one element set from another. |
+| Other Information | Go library reading and writing the Orbit Parameter Message and the Orbit Ephemeris Message in 'keyword = value' notation. The OMM and OCM are not implemented, nor is the XML form of any message. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
 
 ## A2.3 IDENTIFICATION OF SUPPLIER
 
@@ -110,23 +110,74 @@ conditional.
 
 ---
 
-## A2.5.2 to A2.5.4
+## A2.5.3 Orbit Ephemeris Message Requirements List
+
+| Item | Feature | Keyword | Status | Support |
+|--:|---|---|:-:|---|
+| 1 | OEM Header | N/A | M | Y |
+| 2 | OEM Version | `CCSDS_OEM_VERS` | M | Y |
+| 3 | Comment | `COMMENT` | O | Y: header comments only immediately after the version keyword |
+| 4 | Message classification | `CLASSIFICATION` | O | Y |
+| 5 | Message creation date and time | `CREATION_DATE` | M | Y |
+| 6 | Message originator | `ORIGINATOR` | M | Y |
+| 7 | Unique message identifier | `MESSAGE_ID` | O | Y |
+| 8 | Metadata logical block | N/A | M | Y: several per message, per clause 5.2.3.3 |
+| 9 | Start of OEM Metadata | `META_START` | M | Y |
+| 10 | Comment | `COMMENT` | O | Y |
+| 11 | Name of space object | `OBJECT_NAME` | M | Y |
+| 12 | Identifier of space object | `OBJECT_ID` | M | Y |
+| 13 | Orbit center | `CENTER_NAME` | M | Y: may be a spacecraft, which table 5-3 allows and the OPM's table does not |
+| 14 | Reference frame | `REF_FRAME` | M | Y: clause 3.2.3.3 values not enforced, see A2.6 |
+| 15 | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y |
+| 16 | Time system | `TIME_SYSTEM` | M | Y: a change between groups is refused, per clause 5.2.4.5 |
+| 17 | Start of TOTAL time span | `START_TIME` | M | Y |
+| 18 | Start of useable span | `USEABLE_START_TIME` | O | Y: read and preserved, never used to trim, see A2.6 |
+| 19 | End of useable span | `USEABLE_STOP_TIME` | O | Y: as above |
+| 20 | End of TOTAL time span | `STOP_TIME` | M | Y |
+| 21 | Recommended interpolation method | `INTERPOLATION` | O | Y: carried, not acted on, see A2.6 |
+| 22 | Recommended interpolation degree | `INTERPOLATION_DEGREE` | C | Y: absence alongside a method is refused, per table 5-3 |
+| 23 | End of OEM Metadata | `META_STOP` | M | Y |
+| 24 | OEM Data logical block | N/A | M | Y |
+| 25 | Ephemeris data lines | positional | M | Y: 7 or 10 fields, per clauses 5.2.4.1 and 5.2.4.2 |
+| 26 | OEM Covariance logical block | N/A | O | Y |
+| 27 | Start of OEM Covariance | `COVARIANCE_START` | M | Y |
+| 28 | Epoch of the covariance | `EPOCH` | C | Y: required, since it is what separates one matrix from the next |
+| 29 | Reference frame of the covariance | `COV_REF_FRAME` | C | Y: omitted when the same as the ephemeris frame |
+| 30 | Covariance matrix lines | positional | O | Y: 21 lower triangular values, over any number of lines |
+| 31 | End of OEM Covariance | `COVARIANCE_STOP` | M | Y |
+
+---
+
+## A2.5.2 and A2.5.4
 
 | Requirements list | Support |
 |---|---|
 | A2.5.2 Orbit Mean Elements Message | N: not implemented |
-| A2.5.3 Orbit Ephemeris Message | N: not implemented |
 | A2.5.4 Orbit Comprehensive Message | N: not implemented |
 
 ---
 
 ## A2.6 EXCEPTIONS AND UNSUPPORTED FEATURES
 
-**Only the OPM is implemented, and only in key-value notation.** The OMM, the
-OEM and the OCM are not, and neither is the XML form described in section 8 of
-the Blue Book and specified by CCSDS 505.0-B-3. Clause 1.1 leaves the choice of
-notation to the exchanging parties, so a partner who sends XML cannot be read
-today.
+**Only the OPM and the OEM are implemented, and only in key-value notation.**
+The OMM and the OCM are not, and neither is the XML form described in section 8
+of the Blue Book and specified by CCSDS 505.0-B-3. Clause 1.1 leaves the choice
+of notation to the exchanging parties, so a partner who sends XML cannot be
+read today.
+
+**Interpolation is not performed.** `INTERPOLATION` and
+`INTERPOLATION_DEGREE` are read, preserved and reported, and nothing here acts
+on them. Interpolating an ephemeris is orbital mechanics, and clause 5.2.4.6
+attaches a rule to it this package cannot enforce on a caller's behalf: a
+consumer must not interpolate across a metadata group boundary. `OEM.Blocks`
+keeps the groups separate so that a caller can respect that; whether it does is
+the caller's business.
+
+**The useable span is not applied.** `USEABLE_START_TIME` and
+`USEABLE_STOP_TIME` are read and preserved. Records outside them are not
+dropped, because table 5-3 makes those bounds advice to the consumer about
+where a producer padded the data with fictitious interpolation nodes, and
+silently discarding records would change what the file says.
 
 **Enumerated values are not enforced.** Clauses 3.2.3.2, 3.2.3.3 and 3.2.4.11
 list the expected values for `TIME_SYSTEM`, `REF_FRAME` and the manoeuvre and
@@ -167,20 +218,22 @@ spelling does not.
 | Line terminators accepted | CR, LF, CR/LF, LF/CR | Clause 7.3.7 |
 | Character set | Printable ASCII and blanks | Clause 7.3.4 |
 | Maneuvers per message | bounded by the input | No ceiling is imposed |
+| Ephemeris records per message | bounded by the input | No ceiling is imposed; records are read into memory rather than streamed |
+| Metadata groups per OEM | bounded by the input | No ceiling is imposed |
 
 ---
 
 ## Wire test vectors
 
-The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 2 decode vectors and 2 corpus files.
+The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 5 decode vectors and 5 corpus files.
 
 | File | |
 |---|---|
-| [`odm/opm.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/opm.json) | 2 vectors |
-| `odm/opm-simple.kvn`, `odm/opm-maneuvers.kvn` | the annex G examples as readable files |
+| [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 5 vectors |
+| `odm/opm-*.kvn`, `odm/oem-*.kvn` | the annex G examples as readable files |
 
 Both are **published text rather than derived values**: annex G of the Blue Book prints them, so a second working group wrote them.
 
-The vectors assert the text and integer content — version, originator, object identifiers, frames, epoch, maneuver count. The numeric state vector is not asserted there, because a vector field has no float accessor and pinning floats as formatted strings would test this package's number formatting rather than the standard. Those values are checked in `pkg/odm` against the same published text.
+The vectors assert the text and integer content — version, originator, object identifiers, frames, epoch, and the counts. For an OEM the counts carry most of the weight: how many metadata groups, how many records, whether a record has acceleration, and how many covariance matrices are what a consumer must read correctly before any single number matters. The numeric state vector is not asserted there, because a vector field has no float accessor and pinning floats as formatted strings would test this package's number formatting rather than the standard. Those values are checked in `pkg/odm` against the same published text.
 
 See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how to consume these, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.
