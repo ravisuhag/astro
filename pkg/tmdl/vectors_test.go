@@ -77,6 +77,27 @@ func headerFrom(f vectors.Fields) (tmdl.PrimaryHeader, error) {
 	return h, nil
 }
 
+// TestPrimaryHeaderInteropVectors runs headers captured from spacepackets, a
+// Python implementation of the CCSDS formats written from the standards by
+// other authors.
+//
+// The primary header packs twelve fields into six octets and only two of them
+// are octet-aligned, so almost every field shares a boundary with another. A
+// shift off by one there produces a header that round-trips against itself
+// perfectly, which is exactly what a derived vector cannot catch and another
+// implementation can.
+func TestPrimaryHeaderInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "tmdl/interop.json", vectors.Impl{
+		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {
+			h, err := headerFrom(f)
+			if err != nil {
+				return nil, err
+			}
+			return h.Encode()
+		},
+	})
+}
+
 func TestPrimaryHeaderVectors(t *testing.T) {
 	vectors.RunFile(t, "tmdl/header.json", vectors.Impl{
 		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {

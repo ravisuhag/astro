@@ -88,3 +88,147 @@ func TestWireVectors(t *testing.T) {
 		},
 	})
 }
+
+// TestPDUInteropVectors runs PDUs captured from spacepackets, a Python
+// implementation written from the standards by other authors.
+//
+// The fixed header packs six single-bit flags into its first octet, and two of
+// them change how a PDU is handled without changing how it parses. The
+// transmission mode bit is the sharper one, because table 5-1 inverts it: '0'
+// means acknowledged. An implementation using the obvious sense marks every
+// acknowledged transaction unacknowledged, works perfectly against itself, and
+// confuses anything else.
+func TestPDUInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "cfdp/interop.json", vectors.Impl{
+		EncodeFn: encodeInteropPDU,
+	})
+}
+
+// encodeInteropPDU builds whichever PDU the vector's config names, wraps it in
+// a fixed header and encodes the whole thing.
+func encodeInteropPDU(f, config vectors.Fields) ([]byte, error) {
+	structure, err := config.Str("structure")
+	if err != nil {
+		return nil, err
+	}
+	direction, err := config.Uint("direction")
+	if err != nil {
+		return nil, err
+	}
+	acknowledged, err := config.Bool("acknowledged")
+	if err != nil {
+		return nil, err
+	}
+	crcFlag, err := config.BoolOr("crc_flag", false)
+	if err != nil {
+		return nil, err
+	}
+
+	body, isFileData, err := interopBody(structure, f)
+	if err != nil {
+		return nil, err
+	}
+
+	header := &cfdp.PDUHeader{
+		IsFileData:     isFileData,
+		Direction:      cfdp.Direction(direction),
+		Acknowledged:   acknowledged,
+		CRCFlag:        crcFlag,
+		DataLength:     uint16(len(body)),
+		Source:         cfdp.NewEntityID(1),
+		Destination:    cfdp.NewEntityID(2),
+		TransactionSeq: cfdp.NewEntityID(7),
+	}
+	pdu := &cfdp.PDU{Header: header, Data: body}
+	return pdu.Encode()
+}
+
+func interopBody(structure string, f vectors.Fields) (body []byte, isFileData bool, err error) {
+	switch structure {
+	case "metadata":
+		checksumType, err := f.Uint("checksum_type")
+		if err != nil {
+			return nil, false, err
+		}
+		fileSize, err := f.Uint("file_size")
+		if err != nil {
+			return nil, false, err
+		}
+		source, err := f.Hex("source_file_name")
+		if err != nil {
+			return nil, false, err
+		}
+		dest, err := f.Hex("destination_file_name")
+		if err != nil {
+			return nil, false, err
+		}
+		m := &cfdp.MetadataPDU{
+			ChecksumType:        uint8(checksumType),
+			FileSize:            fileSize,
+			SourceFileName:      cfdp.LV{Value: source},
+			DestinationFileName: cfdp.LV{Value: dest},
+		}
+		body, err = m.Encode(false)
+		return body, false, err
+
+	case "eof":
+		code, err := f.Uint("condition_code")
+		if err != nil {
+			return nil, false, err
+		}
+		checksum, err := f.Uint("file_checksum")
+		if err != nil {
+			return nil, false, err
+		}
+		fileSize, err := f.Uint("file_size")
+		if err != nil {
+			return nil, false, err
+		}
+		e := &cfdp.EOFPDU{
+			ConditionCode: cfdp.ConditionCode(code),
+			FileChecksum:  uint32(checksum),
+			FileSize:      fileSize,
+		}
+		body, err = e.Encode(false)
+		return body, false, err
+
+	case "nak":
+		start, err := f.Uint("start_of_scope")
+		if err != nil {
+			return nil, false, err
+		}
+		end, err := f.Uint("end_of_scope")
+		if err != nil {
+			return nil, false, err
+		}
+		reqStart, err := f.Uint("request_start")
+		if err != nil {
+			return nil, false, err
+		}
+		reqEnd, err := f.Uint("request_end")
+		if err != nil {
+			return nil, false, err
+		}
+		n := &cfdp.NAKPDU{
+			StartOfScope: start,
+			EndOfScope:   end,
+			Requests:     []cfdp.SegmentRequest{{StartOffset: reqStart, EndOffset: reqEnd}},
+		}
+		body, err = n.Encode(false)
+		return body, false, err
+
+	case "file_data":
+		offset, err := f.Uint("offset")
+		if err != nil {
+			return nil, false, err
+		}
+		data, err := f.Hex("file_data")
+		if err != nil {
+			return nil, false, err
+		}
+		fd := &cfdp.FileDataPDU{Offset: offset, Data: data}
+		body, err = fd.Encode(false, false)
+		return body, true, err
+	}
+	return nil, false, fmt.Errorf("unknown CFDP structure %q", structure)
+}

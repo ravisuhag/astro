@@ -39,3 +39,24 @@ func TestSequenceVectors(t *testing.T) {
 		},
 	})
 }
+
+// TestSequenceInteropVectors runs the TM sequence as Yamcs produces it, a
+// mission control system written from the standards by other authors.
+//
+// This is the smallest interop vector in the corpus and among the most
+// valuable. Plan 026 found astro generating this sequence from the wrong
+// feedback taps: every randomized frame was unreadable by a conforming
+// receiver, and no round-trip test could tell, because XOR is self-inverse.
+// The published digits caught it then. An independent implementation agreeing
+// now means two sources rather than one reading of one table.
+func TestSequenceInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "pn/interop.json", vectors.Impl{
+		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {
+			n, err := f.Uint("length")
+			if err != nil {
+				return nil, err
+			}
+			return pn.TMSequence(int(n)), nil
+		},
+	})
+}

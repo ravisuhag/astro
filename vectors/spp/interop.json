@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 133.0-B-2",
+  "package": "spp",
+  "source": "captured from spacepackets 0.32.0, an independent implementation",
+  "note": "Space Packet primary headers emitted by spacepackets, a Python implementation of the CCSDS packet and frame formats written from the standards by other authors. Every other spp vector in this corpus is derived from the clause 4.1.3 field layout, which catches a clause one reader misread and cannot catch a clause two readers misread the same way. These octets can. The capture program is not committed — it needs a dependency astro does not take — and the fields on each vector are what was asked of the other implementation, so the capture can be reproduced.",
+  "encode": [
+    {
+      "name": "interop-tm-apid-100-unsegmented",
+      "clause": "4.1.3",
+      "note": "A telemetry packet from application 100, unsegmented, with a data field of four octets. The packet length field carries the data field length minus one, which is the single most misread field in the standard: an implementation that writes the true length is off by one on every packet and round-trips perfectly against itself.",
+      "fields": { "packet_type": 0, "apid": 100, "sequence_flags": 3, "sequence_count": 0, "packet_length": 3 },
+      "want": "0064c0000003"
+    },
+    {
+      "name": "interop-tc-every-field-at-maximum",
+      "clause": "4.1.3",
+      "note": "A telecommand with the APID at 2047 and the sequence count at 16383, both the largest their bit fields hold. This pins the field boundaries: the APID's three high bits share octet 0 with the version, type and secondary header flag, and the sequence count's six high bits share octet 2 with the sequence flags. An implementation that gave either field a whole octet passes the low-value vectors and fails this one.",
+      "fields": { "packet_type": 1, "apid": 2047, "sequence_flags": 3, "sequence_count": 16383, "packet_length": 1 },
+      "want": "17ffffff0001"
+    },
+    {
+      "name": "interop-tm-with-secondary-header-flag",
+      "clause": "4.1.3",
+      "note": "The secondary header flag set, which moves it into bit 3 of octet 0 alongside the APID's high bits.",
+      "fields": { "packet_type": 0, "secondary_header_flag": 1, "apid": 1, "sequence_flags": 3, "sequence_count": 1, "packet_length": 7 },
+      "want": "0801c0010007"
+    },
+    {
+      "name": "interop-first-segment",
+      "clause": "4.1.3",
+      "note": "Sequence flags 01, the first segment of a segmented application data unit. The three segmentation values and the unsegmented value are the whole of what the field means, and they are pinned separately because an implementation that reversed the first and last codes still round-trips.",
+      "fields": { "packet_type": 0, "apid": 42, "sequence_flags": 1, "sequence_count": 5, "packet_length": 3 },
+      "want": "002a40050003"
+    },
+    {
+      "name": "interop-continuation-segment",
+      "clause": "4.1.3",
+      "note": "Sequence flags 00, a continuation segment. It is the one value that leaves the high bits of octet 2 clear, so an implementation that failed to mask would pass this and fail the others.",
+      "fields": { "packet_type": 0, "apid": 42, "sequence_flags": 0, "sequence_count": 6, "packet_length": 3 },
+      "want": "002a00060003"
+    },
+    {
+      "name": "interop-last-segment",
+      "clause": "4.1.3",
+      "note": "Sequence flags 10, the last segment.",
+      "fields": { "packet_type": 0, "apid": 42, "sequence_flags": 2, "sequence_count": 7, "packet_length": 3 },
+      "want": "002a80070003"
+    },
+    {
+      "name": "interop-all-fields-zero-except-sequence-flags",
+      "clause": "4.1.3",
+      "note": "Everything at zero with the unsegmented flags, which is the smallest header the standard allows. Worth pinning because it is the case where a mistaken default shows up as the only non-zero octet.",
+      "fields": { "packet_type": 0, "apid": 0, "sequence_flags": 3, "sequence_count": 0, "packet_length": 0 },
+      "want": "0000c0000000"
+    }
+  ]
+}

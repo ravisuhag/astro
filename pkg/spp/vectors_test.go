@@ -84,6 +84,27 @@ func TestHeaderVectors(t *testing.T) {
 	})
 }
 
+// TestHeaderInteropVectors runs headers captured from spacepackets, a Python
+// implementation of the CCSDS formats written from the standards by other
+// authors.
+//
+// Every other spp vector is derived from the clause 4.1.3 field layout. A
+// derivation catches a clause one reader misread; only a second
+// implementation catches a clause two readers misread the same way — and the
+// packet length field, which carries the data field length minus one, is the
+// one most likely to be misread the same way twice.
+func TestHeaderInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "spp/interop.json", vectors.Impl{
+		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {
+			h, err := headerFrom(f)
+			if err != nil {
+				return nil, err
+			}
+			return h.Encode()
+		},
+	})
+}
+
 // buildPacket constructs a SpacePacket from a vector's fields and config.
 func buildPacket(f, config vectors.Fields) (*spp.SpacePacket, error) {
 	apid, err := f.Uint("apid")

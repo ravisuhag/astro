@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 211.2-B-3",
+  "package": "pxsc",
+  "source": "captured from Yamcs 5.13.5, an independent mission control system",
+  "note": "Proximity-1 CRC-32 values computed by Yamcs, whose ProximityCrc32 is callable in isolation. The annex C worked example is already pinned in this corpus from the standard itself; these add an independent implementation agreeing on it and on a case the annex does not print.",
+  "encode": [
+    {
+      "name": "interop-proximity-crc32-check-value",
+      "clause": "C",
+      "note": "The nine ASCII digits under the Proximity-1 CRC-32. It is not any of the common CRC-32 variants — a different polynomial and a different initial value — so an implementation reaching for a standard library CRC-32 gets a plausible wrong answer here.",
+      "fields": { "data": "313233343536373839" },
+      "want": "51693c0c"
+    },
+    {
+      "name": "interop-proximity-crc32-of-a-short-sequence",
+      "clause": "C",
+      "note": "Four ascending octets, with no symmetry to hide a byte-order error.",
+      "fields": { "data": "01020304" },
+      "want": "55b8622d"
+    }
+  ]
+}

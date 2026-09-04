@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 131.0-B-5",
+  "package": "pn",
+  "source": "captured from Yamcs 5.13.5, an independent mission control system",
+  "note": "The first 24 octets of the TM pseudo-randomizer sequence, obtained by randomizing zeros with Yamcs's Randomizer. This is the single most valuable interop vector in the corpus for its size. Plan 026 in this repository found astro generating the wrong sequence from the wrong feedback taps: every randomized frame was unreadable by a conforming receiver, and no round-trip test could tell, because XOR is self-inverse. The published sequence caught it then; an independent implementation agreeing on it now means two sources rather than one reading.",
+  "encode": [
+    {
+      "name": "interop-tm-randomizer-first-24-octets",
+      "clause": "10.4.2",
+      "note": "The sequence begins 0xff480ec09a, which is what the standard prints and what Yamcs produces. An implementation with mirrored feedback taps emits 0xff1aaf6652 instead and decodes only its own output.",
+      "fields": {
+        "sequence": "tm",
+        "length": 24
+      },
+      "want": "ff480ec09a0d70bc8e2c93ada7b746ce5a977dcc32a2bf3e"
+    }
+  ]
+}

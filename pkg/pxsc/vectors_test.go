@@ -1,6 +1,7 @@
 package pxsc_test
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/ravisuhag/astro/internal/vectors"
@@ -20,6 +21,27 @@ func TestConvolutionalVectors(t *testing.T) {
 				return nil, err
 			}
 			return pxsc.ConvolutionalEncode(data), nil
+		},
+	})
+}
+
+// TestCRC32InteropVectors runs values computed by Yamcs, a mission control
+// system written from the standards by other authors.
+//
+// The Proximity-1 CRC-32 is not any of the common variants — different
+// polynomial, different initial value — so an implementation reaching for a
+// standard library CRC-32 gets a plausible wrong answer. An independent
+// implementation agreeing is what rules that out.
+func TestCRC32InteropVectors(t *testing.T) {
+	vectors.RunFile(t, "pxsc/interop.json", vectors.Impl{
+		EncodeFn: func(f, _ vectors.Fields) ([]byte, error) {
+			data, err := f.Hex("data")
+			if err != nil {
+				return nil, err
+			}
+			out := make([]byte, 4)
+			binary.BigEndian.PutUint32(out, pxsc.ComputeCRC32(data))
+			return out, nil
 		},
 	})
 }

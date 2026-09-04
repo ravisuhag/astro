@@ -1,6 +1,7 @@
 package bp
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"github.com/ravisuhag/astro/internal/vectors"
@@ -22,6 +23,19 @@ import (
 // Not covered here: fragmentation and reassembly need a sequence of calls
 // across several bundles, which no vector form expresses. They are covered by
 // fragment_internal_test.go.
+// TestInteropVectors runs bundles captured from dtn7-go, an implementation
+// written from RFC 9171 by other authors.
+//
+// This is the only check in the package that a second implementation cannot
+// share a misreading with. Everything else here is derived from a clause or
+// copied from a standard, and a derivation only catches a clause one reader
+// got wrong.
+func TestInteropVectors(t *testing.T) {
+	vectors.RunFile(t, "bp/interop.json", vectors.Impl{
+		DecodeFn: decodeVector,
+	})
+}
+
 func TestBundleVectors(t *testing.T) {
 	vectors.RunFile(t, "bp/bundle.json", vectors.Impl{
 		EncodeFn: encodeVector,
@@ -93,8 +107,11 @@ func decodeVector(input []byte, config vectors.Fields) (vectors.Fields, error) {
 		_, err := newDecoder(input).canonicalBlock()
 		return vectors.Fields{}, err
 	case "bundle":
-		_, err := Decode(input)
-		return vectors.Fields{}, err
+		b, err := Decode(input)
+		if err != nil {
+			return nil, err
+		}
+		return bundleFields(b), nil
 	case "status_report":
 		_, err := DecodeStatusReport(input)
 		return vectors.Fields{}, err
@@ -281,4 +298,49 @@ func statusReportFromFields(f vectors.Fields) (*StatusReport, error) {
 	}
 	r.SubjectTimestamp = CreationTimestamp{Time: DTNTime(created), Sequence: sequence}
 	return &r, nil
+}
+
+// bundleFields reports what a decode vector may ask about. It returns
+// everything it can find; the runner compares only the fields the vector
+// names, so a vector asking about three of them need not list the rest.
+func bundleFields(b *Bundle) vectors.Fields {
+	f := vectors.Fields{
+		"source":       b.Primary.Source.String(),
+		"destination":  b.Primary.Destination.String(),
+		"report_to":    b.Primary.ReportTo.String(),
+		"crc_type":     uint64(b.Primary.CRCType),
+		"lifetime":     b.Primary.Lifetime,
+		"block_count":  uint64(len(b.Blocks)),
+		"payload":      hex.EncodeToString(b.Payload()),
+		"admin_record": b.Primary.Flags.Has(FlagAdminRecord),
+	}
+
+	for _, blk := range b.Blocks {
+		switch blk.Type {
+		case BlockTypeBundleAge:
+			if age, err := blk.BundleAge(); err == nil {
+				f["bundle_age"] = age
+			}
+		case BlockTypeHopCount:
+			if limit, count, err := blk.HopCount(); err == nil {
+				f["hop_limit"], f["hop_count"] = limit, count
+			}
+		case BlockTypePreviousNode:
+			if node, err := blk.PreviousNode(); err == nil {
+				f["previous_node"] = node.String()
+			}
+		}
+	}
+
+	if b.Primary.Flags.Has(FlagAdminRecord) {
+		if r, err := b.StatusReport(); err == nil {
+			f["status_received"] = r.Received.Asserted
+			f["status_forwarded"] = r.Forwarded.Asserted
+			f["status_delivered"] = r.Delivered.Asserted
+			f["status_deleted"] = r.Deleted.Asserted
+			f["status_reason"] = uint64(r.Reason)
+			f["subject_source"] = r.SubjectSource.String()
+		}
+	}
+	return f
 }

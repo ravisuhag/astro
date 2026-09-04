@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 231.0-B-4",
+  "package": "tcsc",
+  "source": "captured from Yamcs 5.13.5, an independent mission control system",
+  "note": "CLTUs produced by Yamcs, the mission control system used by ESA, DLR and a range of commercial operators, written from the standards by other authors. Its BchCltuGenerator and Randomizer are callable in isolation, so these are captured octets rather than a reading of a clause. That matters here more than almost anywhere else in the corpus: a BCH(63,56) codeblock's parity octet, the complement rule applied to it, and the fill that pads a short block are three places where an implementation agrees with itself perfectly and with nobody else. The capture program is not committed; it needs a Java dependency astro does not take.",
+  "encode": [
+    {
+      "name": "interop-cltu-from-eight-zero-octets",
+      "clause": "5.2",
+      "note": "Eight zero octets, which is one octet more than a BCH codeblock holds, so the CLTU carries two codeblocks and the second is padded. Both parity octets fall out of the all-zero data, which is the case where a missing complement step is most visible: without it the parity would be 0x01 rather than 0xfe.",
+      "config": { "randomize": false },
+      "fields": { "data": "0000000000000000" },
+      "want": "eb9000000000000000fe0055555555555568c5c5c5c5c5c5c579"
+    },
+    {
+      "name": "interop-cltu-from-a-single-high-bit",
+      "clause": "5.2",
+      "note": "One bit set, in the first transmitted position. It changes the first codeblock's parity from 0xfe to 0x3a and leaves the padded second block alone, which pins the bit ordering the BCH generator walks the data in.",
+      "config": { "randomize": false },
+      "fields": { "data": "8000000000000000" },
+      "want": "eb90800000000000003a0055555555555568c5c5c5c5c5c5c579"
+    },
+    {
+      "name": "interop-cltu-fills-a-short-codeblock-with-0x55",
+      "clause": "5.2",
+      "note": "Four data octets in a codeblock that holds seven, so three fill octets follow. The fill is 0x55 and the parity is computed over the padded block, not over the data alone — an implementation padding with zeros produces the same length and a different parity.",
+      "config": { "randomize": false },
+      "fields": { "data": "01020304" },
+      "want": "eb90010203045555556ac5c5c5c5c5c5c579"
+    },
+    {
+      "name": "interop-cltu-start-sequence",
+      "clause": "5.2.2",
+      "note": "The CLTU start sequence, 0xeb90. Worth capturing rather than reading: it does not survive PDF text extraction from the standard, which yields a pattern reading FF00 from the page that plainly shows EB90. A vector taken from the extracted text would have condemned a correct implementation.",
+      "config": { "randomize": false },
+      "fields": { "sequence": "start" },
+      "want": "eb90"
+    },
+    {
+      "name": "interop-cltu-tail-sequence",
+      "clause": "5.2.4",
+      "note": "The CLTU tail sequence, seven octets of 0xc5 closed by 0x79.",
+      "config": { "randomize": false },
+      "fields": { "sequence": "tail" },
+      "want": "c5c5c5c5c5c5c579"
+    },
+    {
+      "name": "interop-tc-randomizer-first-24-octets",
+      "clause": "6.2",
+      "note": "The first 24 octets of the TC pseudo-randomizer sequence, obtained by randomizing zeros. The randomizer is self-inverse, so a wrong sequence round-trips perfectly and is unreadable by everyone else — plan 026 in this repository found exactly that in the TM randomizer. Only octets from another implementation settle it.",
+      "config": { "randomize": true },
+      "fields": { "length": 24 },
+      "want": "ff399e5a68e906f56c892fa1315e08c052a8bbae4ec2c7ed"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "standard": "CCSDS 727.0-B-5",
+  "package": "cfdp",
+  "source": "captured from spacepackets 0.32.0, an independent implementation",
+  "note": "CFDP PDUs emitted by spacepackets, a Python implementation written from the standards by other authors. The fixed header packs six single-bit flags into its first octet, and two of them — transmission mode and direction — change how a PDU is handled without changing how it parses, so getting either backwards produces a transaction that works against itself and confuses anything else. The transmission mode bit is the sharper of the two because table 5-1 inverts it: '0' means acknowledged. The capture program is not committed; it needs a dependency astro does not take.",
+  "encode": [
+    {
+      "name": "interop-metadata-acknowledged",
+      "clause": "5.2.5",
+      "note": "A metadata PDU naming a 20-octet file at both ends, in acknowledged mode. The mode bit is '0' here, which is the inversion table 5-1 specifies and the easiest thing in the header to read the wrong way round: an implementation using the obvious sense sends every acknowledged transaction marked unacknowledged.",
+      "config": { "structure": "metadata", "direction": 0, "acknowledged": true },
+      "fields": { "checksum_type": 0, "file_size": 20, "source_file_name": "646f776e6c696e6b2e646174", "destination_file_name": "75706c696e6b2e646174" },
+      "want": "20001e000107020700000000140c646f776e6c696e6b2e6461740a75706c696e6b2e646174"
+    },
+    {
+      "name": "interop-metadata-unacknowledged",
+      "clause": "5.2.5",
+      "note": "The same metadata PDU in unacknowledged mode, where the bit is '1'. The pair is the point: nothing else in the two encodings differs, so this fixes the inverted sense of table 5-1 with a single-bit diff and no other variable.",
+      "config": { "structure": "metadata", "direction": 0, "acknowledged": false },
+      "fields": { "checksum_type": 0, "file_size": 20, "source_file_name": "646f776e6c696e6b2e646174", "destination_file_name": "75706c696e6b2e646174" },
+      "want": "24001e000107020700000000140c646f776e6c696e6b2e6461740a75706c696e6b2e646174"
+    },
+    {
+      "name": "interop-eof-no-error",
+      "clause": "5.2.2",
+      "note": "The end-of-file PDU, carrying the condition code, the checksum over the whole file and the file size. The condition code takes the high four bits of its octet with four spare bits below, so an implementation putting it in the low nibble writes a plausible header with the wrong code.",
+      "config": { "structure": "eof", "direction": 0, "acknowledged": true },
+      "fields": { "condition_code": 0, "file_checksum": 3735928559, "file_size": 20 },
+      "want": "20000a000107020400deadbeef00000014"
+    },
+    {
+      "name": "interop-nak-one-segment-request",
+      "clause": "5.2.6",
+      "note": "A NAK asking for the extent from 8 to 16 within a scope of 0 to 20. The direction bit is set, because a NAK travels from the file receiver back to the sender — it is the only PDU family in these vectors that does. astro's receiver sets it for everything it emits; a hand-built header is where it gets forgotten.",
+      "config": { "structure": "nak", "direction": 1, "acknowledged": true },
+      "fields": { "start_of_scope": 0, "end_of_scope": 20, "request_start": 8, "request_end": 16 },
+      "want": "280011000107020800000000000000140000000800000010"
+    },
+    {
+      "name": "interop-eof-with-pdu-crc",
+      "clause": "4.1.3.2",
+      "note": "The same end-of-file PDU with a PDU CRC. Two things move at once and both are easy to get wrong: the CRC occupies the final octets of the data field, and its two octets count toward the declared data field length — so the length rises from 0x0a to 0x0c rather than staying put.",
+      "config": { "structure": "eof", "direction": 0, "acknowledged": true, "crc_flag": true },
+      "fields": { "condition_code": 0, "file_checksum": 3735928559, "file_size": 20 },
+      "want": "22000c000107020400deadbeef00000014d6cd"
+    },
+    {
+      "name": "interop-file-data-offset-zero",
+      "clause": "5.3",
+      "note": "A file data PDU at offset 0. The PDU type bit is '1' here, the only vector in this file where it is, and it changes the meaning of every bit after it: a file data PDU has no directive code, so a decoder reading one as a directive takes the first octet of file content as the directive type.",
+      "config": { "structure": "file_data", "direction": 0, "acknowledged": true },
+      "fields": { "offset": 0, "file_data": "534f4c2031323437" },
+      "want": "30000c0001070200000000534f4c2031323437"
+    },
+    {
+      "name": "interop-file-data-non-zero-offset",
+      "clause": "5.3",
+      "note": "The same segment at offset 8, which pins the offset as a four-octet big-endian field ahead of the data rather than behind it.",
+      "config": { "structure": "file_data", "direction": 0, "acknowledged": true },
+      "fields": { "offset": 8, "file_data": "534f4c2031323437" },
+      "want": "30000c0001070200000008534f4c2031323437"
+    }
+  ]
+}
