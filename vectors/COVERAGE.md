@@ -15,6 +15,7 @@ evidence of conformance.
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
 | `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 13 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
+| `keywrap` | RFC 3394 (AES Key Wrap) | 6 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
 | `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 14 | — |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
@@ -32,9 +33,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **343** | **115** |
+| **Total** | | **349** | **115** |
 
-343 vectors and 115 referenced corpus files across 24 packages.
+349 vectors and 115 referenced corpus files across 25 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
