@@ -690,7 +690,7 @@ type PeerAbort struct {
 // rather than wrapping it. On the wire the whole PDU is a primitive
 // context-specific element, 9F 68 01 xx, with no nested INTEGER TLV.
 func (p *PeerAbort) Encode() []byte {
-	return encodeIntegerContent(int64(p.Diagnostic))
+	return IntegerContent(int64(p.Diagnostic))
 }
 
 // UrgentData returns the diagnostic as the single octet CCSDS 913.1-B-2 clause 3.4

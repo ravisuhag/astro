@@ -1,36 +1,25 @@
 package sle
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ravisuhag/astro/internal/ber"
+)
 
 // Sentinel errors returned by the SLE codecs and the association machine.
 var (
-	// ErrDataTooShort indicates the input ended before a field it must contain.
-	ErrDataTooShort = errors.New("data too short for the SLE field being read")
-
-	// ErrInvalidTag indicates a BER tag the decoder did not expect here.
-	ErrInvalidTag = errors.New("unexpected BER tag")
-
-	// ErrInvalidLength indicates a BER length that is malformed or beyond the
-	// bytes available.
-	ErrInvalidLength = errors.New("invalid BER length")
-
-	// ErrIndefiniteLength indicates the indefinite-length form on a primitive
-	// encoding, which X.690 clause 8.1.3.2 forbids. Constructed indefinite-length
-	// encodings are accepted.
-	ErrIndefiniteLength = errors.New("indefinite BER length on a primitive encoding")
-
-	// ErrInvalidObjectIdentifier indicates an OBJECT IDENTIFIER that cannot
-	// be encoded or decoded.
-	ErrInvalidObjectIdentifier = errors.New("invalid object identifier")
-
-	// ErrLengthTooLarge indicates a BER length beyond the configured maximum.
-	// A length field can name far more than any real PDU contains, so a cap
-	// is what stops one hostile message exhausting memory.
-	ErrLengthTooLarge = errors.New("BER length exceeds the maximum this decoder accepts")
-
-	// ErrIntegerOverflow indicates a BER INTEGER too large for the Go type
-	// receiving it.
-	ErrIntegerOverflow = errors.New("BER integer does not fit")
+	// The BER codec moved to internal/ber so that pkg/csts could share it:
+	// the CSTS specification framework is a different set of ASN.1 modules
+	// carried by the same encoding. These names are aliases of the ones
+	// there, so a caller comparing against sle.ErrInvalidTag is comparing
+	// against the same value the codec returns.
+	ErrDataTooShort            = ber.ErrDataTooShort
+	ErrInvalidTag              = ber.ErrInvalidTag
+	ErrInvalidLength           = ber.ErrInvalidLength
+	ErrIndefiniteLength        = ber.ErrIndefiniteLength
+	ErrInvalidObjectIdentifier = ber.ErrInvalidObjectIdentifier
+	ErrLengthTooLarge          = ber.ErrLengthTooLarge
+	ErrIntegerOverflow         = ber.ErrIntegerOverflow
 
 	// ErrInvalidMessageType indicates a TML message type outside the three of
 	// CCSDS 913.1-B-2 table 3-1.

@@ -1,4 +1,4 @@
-package sle_test
+package ber_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/ravisuhag/astro/pkg/sle"
+	"github.com/ravisuhag/astro/internal/ber"
 )
 
 func TestIntegerEncodingMatchesStdlibDER(t *testing.T) {
@@ -26,7 +26,7 @@ func TestIntegerEncodingMatchesStdlibDER(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := sle.AppendInteger(nil, v)
+		got := ber.AppendInteger(nil, v)
 
 		if !bytes.Equal(got, want) {
 			t.Errorf("AppendInteger(%d) = % X, want % X", v, got, want)
@@ -40,9 +40,9 @@ func TestIntegerRoundTrip(t *testing.T) {
 		math.MaxInt64, math.MinInt64,
 	}
 	for _, v := range values {
-		encoded := sle.AppendInteger(nil, v)
+		encoded := ber.AppendInteger(nil, v)
 
-		e, err := sle.NewDecoder(encoded).Next()
+		e, err := ber.NewDecoder(encoded).Next()
 		if err != nil {
 			t.Fatalf("decoding %d: %v", v, err)
 		}
@@ -66,17 +66,17 @@ func TestOctetStringAndVisibleStringMatchStdlib(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sle.AppendOctetString(nil, payload); !bytes.Equal(got, want) {
+	if got := ber.AppendOctetString(nil, payload); !bytes.Equal(got, want) {
 		t.Errorf("AppendOctetString = % X, want % X", got, want)
 	}
 
 	// VisibleString. encoding/asn1 does not have a dedicated type, so check
 	// the tag and content directly against X.690.
-	encoded := sle.AppendVisibleString(nil, "CCSDS")
+	encoded := ber.AppendVisibleString(nil, "CCSDS")
 	if encoded[0] != 0x1A {
 		t.Errorf("VisibleString tag = %#02x, want 0x1A", encoded[0])
 	}
-	e, err := sle.NewDecoder(encoded).Next()
+	e, err := ber.NewDecoder(encoded).Next()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,9 +89,9 @@ func TestLongFormLength(t *testing.T) {
 	// X.690 clause 8.1.3: values of 128 octets or more use the long form.
 	for _, size := range []int{127, 128, 255, 256, 65535, 65536} {
 		content := make([]byte, size)
-		encoded := sle.AppendOctetString(nil, content)
+		encoded := ber.AppendOctetString(nil, content)
 
-		e, err := sle.NewDecoder(encoded).Next()
+		e, err := ber.NewDecoder(encoded).Next()
 		if err != nil {
 			t.Fatalf("size %d: %v", size, err)
 		}
@@ -114,16 +114,16 @@ func TestHighTagNumberForm(t *testing.T) {
 	// SLE uses context tags like [100] for rafBindInvocation, which is past
 	// the 30 the low-tag form can hold (X.690 clause 8.1.2.4).
 	for _, tag := range []uint32{0, 1, 30, 31, 100, 127, 128, 1000, 100000} {
-		encoded := sle.AppendElement(nil, sle.ClassContext, true, tag, []byte{0xAA})
+		encoded := ber.AppendElement(nil, ber.ClassContext, true, tag, []byte{0xAA})
 
-		e, err := sle.NewDecoder(encoded).Next()
+		e, err := ber.NewDecoder(encoded).Next()
 		if err != nil {
 			t.Fatalf("tag %d: %v", tag, err)
 		}
 		if e.Tag != tag {
 			t.Errorf("tag = %d, want %d", e.Tag, tag)
 		}
-		if e.Class != sle.ClassContext {
+		if e.Class != ber.ClassContext {
 			t.Errorf("tag %d: class = %#x, want context", tag, e.Class)
 		}
 		if !e.Constructed {
@@ -143,11 +143,11 @@ func TestHighTagNumberForm(t *testing.T) {
 func TestSequenceNesting(t *testing.T) {
 	// A SEQUENCE of an INTEGER and an OCTET STRING, decoded by nesting.
 	var content []byte
-	content = sle.AppendInteger(content, 42)
-	content = sle.AppendOctetString(content, []byte("payload"))
-	encoded := sle.AppendSequence(nil, content)
+	content = ber.AppendInteger(content, 42)
+	content = ber.AppendOctetString(content, []byte("payload"))
+	encoded := ber.AppendSequence(nil, content)
 
-	d := sle.NewDecoder(encoded)
+	d := ber.NewDecoder(encoded)
 	seq, err := d.Next()
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestSequenceNesting(t *testing.T) {
 }
 
 func TestNullEncoding(t *testing.T) {
-	encoded := sle.AppendNull(nil)
+	encoded := ber.AppendNull(nil)
 	if !bytes.Equal(encoded, []byte{0x05, 0x00}) {
 		t.Errorf("NULL = % X, want 05 00", encoded)
 	}
@@ -193,14 +193,14 @@ func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
 	// X.690 clause 8.1.3.6. Real providers emit it, so the decoder scans for the
 	// end-of-contents octets rather than refusing.
 	data := []byte{0x30, 0x80, 0x02, 0x01, 0x2A, 0x00, 0x00}
-	seq, err := sle.NewDecoder(data).Next()
+	seq, err := ber.NewDecoder(data).Next()
 	if err != nil {
 		t.Fatalf("Next() = %v", err)
 	}
 	if !seq.IsUniversal(16) || !seq.Constructed {
 		t.Fatal("outer element is not a constructed SEQUENCE")
 	}
-	inner, err := sle.NewDecoder(seq.Bytes).Next()
+	inner, err := ber.NewDecoder(seq.Bytes).Next()
 	if err != nil {
 		t.Fatalf("nested Next() = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
 
 	// Nested indefinite lengths resolve too.
 	nested := []byte{0x30, 0x80, 0x30, 0x80, 0x02, 0x01, 0x07, 0x00, 0x00, 0x00, 0x00}
-	outer, err := sle.NewDecoder(nested).Next()
+	outer, err := ber.NewDecoder(nested).Next()
 	if err != nil {
 		t.Fatalf("nested indefinite Next() = %v", err)
 	}
@@ -222,7 +222,7 @@ func TestDecoderAcceptsIndefiniteLength(t *testing.T) {
 func TestDecoderRejectsPrimitiveIndefiniteLength(t *testing.T) {
 	// Clause 8.1.3.2: only a constructed encoding may use the indefinite form.
 	data := []byte{0x04, 0x80, 0x00, 0x00}
-	if _, err := sle.NewDecoder(data).Next(); !errors.Is(err, sle.ErrIndefiniteLength) {
+	if _, err := ber.NewDecoder(data).Next(); !errors.Is(err, ber.ErrIndefiniteLength) {
 		t.Errorf("error = %v, want ErrIndefiniteLength", err)
 	}
 }
@@ -230,15 +230,15 @@ func TestDecoderRejectsPrimitiveIndefiniteLength(t *testing.T) {
 func TestDecoderRejectsOversizedLength(t *testing.T) {
 	// A length field can name far more than any real PDU holds.
 	data := []byte{0x04, 0x84, 0x7F, 0xFF, 0xFF, 0xFF}
-	if _, err := sle.NewDecoderWithLimit(data, 1024).Next(); !errors.Is(err, sle.ErrLengthTooLarge) {
+	if _, err := ber.NewDecoderWithLimit(data, 1024).Next(); !errors.Is(err, ber.ErrLengthTooLarge) {
 		t.Errorf("error = %v, want ErrLengthTooLarge", err)
 	}
 }
 
 func TestDecoderRejectsTruncatedInput(t *testing.T) {
-	full := sle.AppendOctetString(nil, []byte("some content here"))
+	full := ber.AppendOctetString(nil, []byte("some content here"))
 	for cut := 0; cut < len(full); cut++ {
-		if _, err := sle.NewDecoder(full[:cut]).Next(); err == nil {
+		if _, err := ber.NewDecoder(full[:cut]).Next(); err == nil {
 			t.Errorf("length %d: expected an error, got nil", cut)
 		}
 	}
@@ -246,7 +246,7 @@ func TestDecoderRejectsTruncatedInput(t *testing.T) {
 
 func TestDecoderRejectsReservedLengthOctet(t *testing.T) {
 	// X.690 clause 8.1.3.5 c) reserves 0xFF.
-	if _, err := sle.NewDecoder([]byte{0x04, 0xFF, 0x00}).Next(); !errors.Is(err, sle.ErrInvalidLength) {
+	if _, err := ber.NewDecoder([]byte{0x04, 0xFF, 0x00}).Next(); !errors.Is(err, ber.ErrInvalidLength) {
 		t.Errorf("error = %v, want ErrInvalidLength", err)
 	}
 }
@@ -254,11 +254,11 @@ func TestDecoderRejectsReservedLengthOctet(t *testing.T) {
 func TestIntegerOverflowRejected(t *testing.T) {
 	// Nine content octets cannot be an int64.
 	data := []byte{0x02, 0x09, 0x01, 0, 0, 0, 0, 0, 0, 0, 0}
-	e, err := sle.NewDecoder(data).Next()
+	e, err := ber.NewDecoder(data).Next()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Int64(); !errors.Is(err, sle.ErrIntegerOverflow) {
+	if _, err := e.Int64(); !errors.Is(err, ber.ErrIntegerOverflow) {
 		t.Errorf("error = %v, want ErrIntegerOverflow", err)
 	}
 }
@@ -267,7 +267,7 @@ func TestUint64HandlesFullRange(t *testing.T) {
 	// A positive value needing all 64 bits carries a leading zero octet, so
 	// its content is nine octets and Int64 cannot hold it.
 	data := []byte{0x02, 0x09, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
-	e, err := sle.NewDecoder(data).Next()
+	e, err := ber.NewDecoder(data).Next()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,8 +281,8 @@ func TestUint64HandlesFullRange(t *testing.T) {
 }
 
 func TestElementCopyDoesNotAlias(t *testing.T) {
-	encoded := sle.AppendOctetString(nil, []byte("original"))
-	e, err := sle.NewDecoder(encoded).Next()
+	encoded := ber.AppendOctetString(nil, []byte("original"))
+	e, err := ber.NewDecoder(encoded).Next()
 	if err != nil {
 		t.Fatal(err)
 	}
