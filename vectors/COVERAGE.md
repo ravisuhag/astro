@@ -20,6 +20,7 @@ evidence of conformance.
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
 | `ltp` | CCSDS 734.1-B-1 / RFC 5326 | 19 | — |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
+| `odm` | CCSDS 502.0-B-3 (OPM only) | 2 | 2 |
 | `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 4 | — |
 | `pus` | ECSS-E-ST-70-41C (PUS-C) | 13 | — |
 | `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 6 | — |
@@ -34,9 +35,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **367** | **115** |
+| **Total** | | **369** | **117** |
 
-367 vectors and 115 referenced corpus files across 26 packages.
+369 vectors and 117 referenced corpus files across 27 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered

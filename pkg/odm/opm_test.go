@@ -356,3 +356,42 @@ func TestOPMManeuverRules(t *testing.T) {
 		}
 	})
 }
+
+// A whole number with sixteen digits sits exactly at the ceiling clause 7.5.6
+// sets, and the trailing zero the clause also requires puts it one over. The
+// encoder used to count digits before adding that zero and emit a value its own
+// reader refused. Found by FuzzDecodeOPM.
+func TestEncodeStaysWithinTheDigitCeiling(t *testing.T) {
+	tests := []struct {
+		name  string
+		value float64
+	}{
+		{"sixteen digits, whole", 1e15},
+		{"sixteen digits, fractional", 123456789012345.6},
+		{"far past the ceiling", 1e300},
+		{"very small", 1e-300},
+		{"negative and large", -1e15},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := odm.DecodeOPM([]byte(figureG1))
+			if err != nil {
+				t.Fatalf("DecodeOPM: %v", err)
+			}
+			m.Data.StateVector.Z = tt.value
+
+			encoded, err := m.Encode()
+			if err != nil {
+				t.Fatalf("Encode: %v", err)
+			}
+			back, err := odm.DecodeOPM(encoded)
+			if err != nil {
+				t.Fatalf("our own output was refused: %v\n%s", err, encoded)
+			}
+			if back.Data.StateVector.Z != tt.value {
+				t.Errorf("Z round-tripped to %v, want %v", back.Data.StateVector.Z, tt.value)
+			}
+		})
+	}
+}
