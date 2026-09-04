@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -25,10 +26,28 @@ type Impl struct {
 	// construction, which is where most range rules live.
 	ConstructFn func(fields, config Fields) error
 
+	// MachineFn builds a state machine from a sequence vector's init and
+	// config, ready to be driven step by step. A package with no state
+	// machine leaves it nil, and its sequence vectors report as skipped.
+	MachineFn func(init, config Fields) (Machine, error)
+
 	// Caps names the vector capabilities this implementation has. An API
 	// that always allocates has none, and vectors requiring
 	// encode_into skip.
 	Caps []string
+}
+
+// Machine is a state machine under test, driven one call at a time.
+//
+// A sequence vector is the only kind that can say anything about ordering,
+// which is what a state machine is made of: the same call gives different
+// answers depending on what came before. Encode and decode vectors cannot
+// express that, because they have nowhere to put the "before".
+type Machine interface {
+	// Step performs one named call. It returns any octets the call puts on
+	// the wire — nil when the call emits nothing — and the machine's state
+	// afterwards, holding at least the variables the vector asks about.
+	Step(call string, fields Fields) (out []byte, state Fields, err error)
 }
 
 // Run executes every vector in the file against impl. Each vector becomes
@@ -128,11 +147,59 @@ func Run(t *testing.T, f *File, impl Impl) {
 		ran++
 	}
 
-	if len(f.Sequence) > 0 {
-		t.Run("sequence", func(t *testing.T) {
-			t.Skipf("%d sequence vectors present; no runner is wired for them", len(f.Sequence))
+	for _, v := range f.Sequence {
+		v := v
+		t.Run("sequence/"+v.Name, func(t *testing.T) {
+			if impl.MachineFn == nil {
+				t.Skip("package supplies no MachineFn")
+			}
+			m, err := impl.MachineFn(v.Init, v.Config)
+			if err != nil {
+				t.Fatalf("building the machine: %v\n  %s", err, cite(v.Clause, v.Note))
+			}
+
+			for i, step := range v.Steps {
+				// Name the step in every failure. A sequence fails at a
+				// point, and which point is most of the diagnosis.
+				where := fmt.Sprintf("step %d, %s", i+1, step.Call)
+
+				out, state, err := m.Step(step.Call, step.Fields)
+
+				if step.Error != "" {
+					if err == nil {
+						t.Fatalf("%s: the call was accepted, and the standard requires it to be refused (%s)\n  %s",
+							where, step.Error, cite(v.Clause, v.Note))
+					}
+					continue
+				}
+				if err != nil {
+					t.Fatalf("%s: %v\n  %s", where, err, cite(v.Clause, v.Note))
+				}
+
+				if step.Want != "" {
+					want, err := hex.DecodeString(step.Want)
+					if err != nil {
+						t.Fatalf("%s: vector want is not hex: %v", where, err)
+					}
+					if !bytes.Equal(out, want) {
+						t.Fatalf("%s: emitted %x, want %s\n  %s",
+							where, out, step.Want, cite(v.Clause, v.Note))
+					}
+				}
+
+				if len(step.WantState) > 0 {
+					if bad := diff(step.WantState, state); len(bad) > 0 {
+						t.Fatalf("%s: state differs\n  %s\n  %s",
+							where, joinLines(bad), cite(v.Clause, v.Note))
+					}
+				}
+			}
 		})
-		skipped += len(f.Sequence)
+		if impl.MachineFn != nil {
+			ran++
+		} else {
+			skipped++
+		}
 	}
 
 	t.Logf("%s: %d vectors run, %d skipped", f.Path, ran, skipped)
