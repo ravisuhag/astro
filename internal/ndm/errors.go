@@ -88,3 +88,10 @@ var (
 	// ErrDuplicateHeaderKeyword indicates a header keyword given twice.
 	ErrDuplicateHeaderKeyword = errors.New("ndm: header keyword appears more than once")
 )
+
+// Sentinel errors from the XML form (CCSDS 505.0-B-3).
+var (
+	// ErrMalformedXML indicates XML that does not have the shape clauses 3.2
+	// to 3.4 require: a header, a body, and segments of metadata and data.
+	ErrMalformedXML = errors.New("ndm: XML does not have the structure of an NDM")
+)
