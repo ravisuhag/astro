@@ -36,14 +36,17 @@ choice to the two parties exchanging the file.
 
 ## Scope
 
-**Implemented.** The OPM, the OMM and the OEM, in key-value notation. Reading,
-writing, and the structural rules the standard states.
+**Implemented.** All four messages, in key-value notation. Reading, writing,
+and the structural rules the standard states.
 
-**Also implemented: the XML form** of section 8, for all three messages.
-`EncodeXML` sits beside `Encode`, and `DecodeXMLOPM`, `DecodeXMLOMM` and
-`DecodeXMLOEM` beside their key-value counterparts.
+**Also implemented: the XML form** of section 8, for all four messages.
+`EncodeXML` sits beside `Encode`, and `DecodeXMLOPM`, `DecodeXMLOMM`,
+`DecodeXMLOEM` and `DecodeXMLOCM` beside their key-value counterparts.
 
-**Not yet implemented.** The OCM.
+**Carried, not checked: the SANA-registered values.** `TRAJ_TYPE` and
+`COV_TYPE` name an OCM row's columns, and clauses 6.2.5.11 and 6.2.7.12.1 draw
+their values from the SANA registry rather than from the Blue Book. So this
+package cannot say how wide such a row should be. See the OCM section below.
 
 **Deliberately absent: orbital mechanics.** Nothing here propagates a state
 vector, converts between reference frames, or turns mean elements into a
@@ -108,6 +111,97 @@ the upper triangle is filled in on decode, because a covariance matrix is
 symmetric by definition and a caller indexing `Matrix[1][2]` should not get a
 zero.
 
+### OCM
+
+An OCM is a header, one metadata section, and any number of data sections in
+the order table 6-1 fixes. Every section is delimited.
+
+```
+CCSDS_OCM_VERS = 3.0
+CREATION_DATE  = ...
+ORIGINATOR     = ...
+
+META_START   ... META_STOP     one, mandatory
+TRAJ_START   ... TRAJ_STOP     any number
+PHYS_START   ... PHYS_STOP     at most one
+COV_START    ... COV_STOP      any number
+MAN_START    ... MAN_STOP      any number
+PERT_START   ... PERT_STOP     at most one
+OD_START     ... OD_STOP       at most one
+USER_START   ... USER_STOP     at most one
+```
+
+| Piece | Go | Notes |
+|---|---|---|
+| Metadata | `OCM.Metadata` | 48 keywords, of which only `EPOCH_TZERO` has no default. |
+| Trajectory | `OCM.Trajectories` | Keywords, then positional rows. `TRAJ_TYPE` names the columns. |
+| Physical | `OCM.Physical` | 50 keywords describing the object itself. |
+| Covariance | `OCM.Covariances` | `COV_TYPE` and `COV_ORDERING` say how a row folds into a matrix. |
+| Manoeuvre | `OCM.Maneuvers` | `MAN_COMPOSITION` names the columns of each row. |
+| Perturbations | `OCM.Perturbations` | The force models. Required alongside an OD section. |
+| Orbit determination | `OCM.OrbitDetermination` | How the orbit was determined, and how well. |
+| User-defined | `OCM.UserDefined` | `USER_DEFINED_x`, as in the OPM. |
+
+The sections are held as ordered keyword lists with typed accessors, not as
+struct fields. There are over two hundred keywords, most optional and most
+describing how an orbit was determined rather than what it is. Two hundred
+pointer fields would help nobody, and a caller meeting an unfamiliar keyword
+could not see it. `Get` reaches anything.
+
+## An OCM time tag may be a date or a number
+
+This is what most distinguishes the OCM from the rest of the family. Clause
+6.2.2.3 lets a time tag be an absolute time **or** a signed count of SI seconds
+from `EPOCH_TZERO`:
+
+```
+2018-11-13T11:13:20.5Z    absolute
+20157.26                  relative to EPOCH_TZERO
+```
+
+A reader that assumes absolute times parses nothing. One that assumes relative
+times reads a date as a malformed number. `DataRow.TimeTag` resolves either
+against the message's `EPOCH_TZERO`, and `IsRelative` says which arrived.
+
+Clause 6.2.2.5 makes a block pick one and keep it, so the two never mix inside
+a block — but two blocks in one message may disagree, and figure G-19 of the
+Blue Book is exactly that.
+
+## Three OCM keywords say what a row's numbers mean
+
+An OCM data row is positional, and nothing in the row says how wide it is or
+what each column holds. Three keywords do, and only one of them can be checked
+here.
+
+| Keyword | Section | Values from |
+|---|---|---|
+| `TRAJ_TYPE` | trajectory | SANA registry (clause 6.2.5.11) |
+| `COV_TYPE` with `COV_ORDERING` | covariance | SANA registry; the orderings are in clause 6.2.7.12.3 |
+| `MAN_COMPOSITION` | manoeuvre | Tables 6-8 and 6-9 |
+
+`MAN_COMPOSITION` is the checkable one. Its field names are printed in the Blue
+Book, so `ManFields` returns the column names and refuses a composition that
+mixes the propulsive fields of table 6-8 with the deployment fields of table
+6-9, lists them out of the fixed order, or does not start with a time tag.
+
+`COV_ORDERING` is checkable in a different way: the element set is registered
+elsewhere, but clause 6.2.7.12.3 defines exactly five layouts, so `CovMatrix`
+can fold a row back into a square matrix and work out its size from how many
+numbers arrived.
+
+**`LTMWCC` and `UTMWCC` are not symmetric.** Their off-diagonal half carries
+correlations rather than covariances — a covariance divided by the product of
+two standard deviations. `CovMatrix` returns those two as written. Mirroring
+them the way an `LTM` is mirrored would silently scale half the matrix.
+
+## An OCM with no data at all is valid
+
+Clause 6.2.1.1's note calls it a "degenerate case" and says it was an
+intentional choice. The metadata alone carries contact details, links to other
+messages and timing source information, all of which are useful without a
+single state vector. So a header, a metadata section and nothing else is a
+well-formed OCM, and this package reads it as one.
+
 ## The XML form is a different shape, not a reformatting
 
 Section 8 says the rules for which keywords may appear are the same as for the
@@ -128,6 +222,16 @@ USER_DEFINED_EARTH_MODEL = WGS-84
 
 **Repetition becomes repeated elements.** Two manoeuvres in an OPM are two runs
 of the same keywords in KVN and two `<maneuverParameters>` blocks in XML.
+
+### The OCM keeps its rows
+
+Clause 8.11.15 gives `<trajLine>`, `<covLine>` and `<manLine>` the type
+`xsd:string`. The schema does not look inside them: the recipient still splits
+the line on blanks and reads the columns by whatever `TRAJ_TYPE`, `COV_TYPE` or
+`MAN_COMPOSITION` says. That is the opposite of the OEM below.
+
+What does change is the delimiters, which become the block elements `<traj>`,
+`<phys>`, `<cov>`, `<man>`, `<pert>`, `<od>` and `<user>` of table 8-9.
 
 ### The OEM diverges most
 

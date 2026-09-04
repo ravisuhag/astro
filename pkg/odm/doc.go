@@ -43,4 +43,20 @@
 // say values should be selected from those sets and that anything else
 // "should be documented in an ICD", so an unrecognised value is carried
 // through rather than refused.
+//
+// # The OCM is held differently from the other three
+//
+// The OPM, the OMM and the OEM have typed fields, because their keyword tables
+// are small enough to name. The OCM's are not: eight sections and something
+// over two hundred keywords, most of them optional and most describing how an
+// orbit was determined rather than what it is. Its sections are ordered
+// keyword lists with typed accessors for the keywords that change how the data
+// must be read, so an unfamiliar keyword is still visible to a caller and Get
+// reaches anything.
+//
+// Two of its rules have no counterpart in the rest of the family. A time tag
+// may be a signed count of seconds from EPOCH_TZERO rather than a date
+// (clause 6.2.2.3), and DataRow.TimeTag resolves either. And an OCM with no
+// data blocks at all is valid on purpose — clause 6.2.1.1's note calls it a
+// degenerate case and explains why the metadata alone is worth sending.
 package odm

@@ -8,10 +8,9 @@ order: 210
 ## Conformance Statement for `pkg/odm`, CCSDS 502.0-B-3
 
 CCSDS 502.0-B-3 annex A ships an Implementation Conformance Statement
-proforma. This fills in the Orbit Parameter Message requirements list of
-A2.5.1, the Orbit Mean Elements Message list of A2.5.2, and the Orbit
-Ephemeris Message list of A2.5.3. The list for the OCM is not filled in,
-because that message is not implemented.
+proforma. This fills in all four requirements lists: the Orbit Parameter
+Message of A2.5.1, the Orbit Mean Elements Message of A2.5.2, the Orbit
+Ephemeris Message of A2.5.3 and the Orbit Comprehensive Message of A2.5.4.
 
 ---
 
@@ -30,7 +29,7 @@ because that message is not implemented.
 | Implementation Name | astro/pkg/odm |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library reading and writing the Orbit Parameter Message, the Orbit Mean-Elements Message and the Orbit Ephemeris Message, in both the 'keyword = value' notation of section 7 and the XML form of section 8. The OCM is not implemented. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
+| Other Information | Go library reading and writing all four orbit data messages, in both the 'keyword = value' notation of section 7 and the XML form of section 8. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
 
 ## A2.3 IDENTIFICATION OF SUPPLIER
 
@@ -58,14 +57,16 @@ because that message is not implemented.
 | Root element and its id and version attributes | 8.3, 8.8.2–8.8.4 | M | Y: one per message type |
 | Schema instance namespace, exactly as given | 505.0-B-3 clause 4.3.3 | M | Y: http, not https — the string names a namespace |
 | Header, body, segment, metadata, data | 505.0-B-3 clauses 3.2–3.4 | M | Y: shared across all four navigation packages |
-| One segment for OPM and OMM | 505.0-B-3 clause 3.3 | M | Y |
+| One segment for OPM, OMM and OCM | 505.0-B-3 clause 3.3 | M | Y: the OCM has one metadata section, per clause 6.2.4.3 |
 | One or more segments for OEM | 505.0-B-3 clause 3.4 | M | Y |
 | Keyword tags in upper case | 8.10.9 | M | Y |
 | Units as an attribute, matching section 5 | 8.10.10, 8.10.11 | O | Y |
 | Block elements for the logical blocks | 8.8.12–8.8.15, 8.9, 8.10.13 | M | Y |
 | Each ephemeris line as a named `stateVector` | 8.10.14 | M | Y |
 | OEM covariance with the OPM's named keywords | 8.10.19 | M | Y |
-| `USER_DEFINED` with the name in an attribute | 8.10, annex G | O | Y |
+| `USER_DEFINED` with the name in an attribute | 8.10, annex G | O | Y: a parameter with an empty name attribute is refused, since its key-value form would be the bare `USER_DEFINED_` |
+| OCM section tags and data line tags | 8.11.13, table 8-9 | M | Y: `traj`, `phys`, `cov`, `man`, `pert`, `od`, `user` and their `trajLine`, `covLine`, `manLine` |
+| OCM data lines as `xsd:string` | 8.11.15 | M | Y: kept as rows, split by the reader, as the clause intends |
 
 ---
 
@@ -197,24 +198,82 @@ rule that `TEME` may be used for nothing else is enforced too.
 
 ---
 
-## A2.5.4
+## A2.5.4 Orbit Comprehensive Message Requirements List
 
-| Requirements list | Support |
-|---|---|
-| A2.5.4 Orbit Comprehensive Message | N: not implemented |
+The OCM's eight sections hold something over two hundred keywords, so this
+lists them by section rather than one row apiece. The full tables are in
+`pkg/odm/ocm_keywords.go`, in the order the Blue Book prints them, which is
+also the order clause 6.2.2.1 requires them to arrive in.
+
+| Item | Feature | Keyword | Status | Support |
+|--:|---|---|:-:|---|
+| — | OCM Header | `CCSDS_OCM_VERS`, `COMMENT`, `CLASSIFICATION`, `CREATION_DATE`, `ORIGINATOR`, `MESSAGE_ID` | M/O | Y: table 6-2, in the order clause 6.2.3.3 fixes |
+| — | Metadata section | `META_START` … `META_STOP` | M | Y: one only, per clause 6.2.4.3 |
+| — | Metadata keywords | 48 keywords of table 6-3 | M/O/C | Y: only `EPOCH_TZERO` is mandatory with no default; the rest are optional or default, per clause 6.2.1.3 |
+| — | Spacecraft clock keywords | `SCLK_OFFSET_AT_EPOCH`, `SCLK_SEC_PER_SI_SEC` | C | Y: required when `TIME_SYSTEM` is `SCLK`, as table 6-3 states |
+| — | Trajectory sections | `TRAJ_START` … `TRAJ_STOP` | O | Y: any number, per clause 6.2.5.3 |
+| — | Trajectory keywords | 18 keywords of table 6-4 | M/O/C | Y: `CENTER_NAME`, `TRAJ_REF_FRAME` and `TRAJ_TYPE` default to `EARTH`, `ICRF3` and `CARTPV` |
+| — | Trajectory data lines | positional | M | Y: kept as text fields; the width comes from `TRAJ_TYPE`, see A2.6 |
+| — | Physical characteristics section | `PHYS_START` … `PHYS_STOP` | O | Y: one only, per clause 6.2.6.2 |
+| — | Physical characteristics keywords | 50 keywords of table 6-5 | O/C | Y |
+| — | Covariance sections | `COV_START` … `COV_STOP` | O | Y: any number, per clause 6.2.7.3 |
+| — | Covariance keywords | 13 keywords of table 6-6 | M/O/C | Y: `COV_REF_FRAME`, `COV_TYPE` and `COV_ORDERING` default to `TNW_INERTIAL`, `CARTPV` and `LTM` |
+| — | Covariance data lines | positional | M | Y: one matrix per line, per clause 6.2.7.12; `CovMatrix` folds a line back into a square matrix |
+| — | Covariance orderings | `LTM`, `UTM`, `FULL`, `LTMWCC`, `UTMWCC` | M | Y: all five of clause 6.2.7.12.3; the two `WCC` forms are returned unmirrored, see A2.6 |
+| — | Manoeuvre sections | `MAN_START` … `MAN_STOP` | O | Y: any number, per clause 6.2.8.4 |
+| — | Manoeuvre keywords | 30 keywords of table 6-7 | M/O/C | Y: `MAN_ID`, `MAN_DEVICE_ID` and `MAN_COMPOSITION` are required; `DC_TYPE` defaults to `CONTINUOUS` |
+| — | Manoeuvre composition | `MAN_COMPOSITION` | M | Y: names from tables 6-8 and 6-9, not commingled (6.2.8.15), in the fixed order (6.2.8.16), starting with one time tag (6.2.8.18) |
+| — | Manoeuvre data lines | positional | M | Y: the field count must match `MAN_COMPOSITION` |
+| — | Perturbations section | `PERT_START` … `PERT_STOP` | C | Y: one only (6.2.9.2), and required alongside an orbit determination section (6.2.10.5) |
+| — | Perturbations keywords | 29 keywords of table 6-10 | O | Y |
+| — | Orbit determination section | `OD_START` … `OD_STOP` | O | Y: one only, per clause 6.2.10.2 |
+| — | Orbit determination keywords | 29 keywords of table 6-11 | M/O | Y: `OD_ID`, `OD_METHOD` and `OD_EPOCH` are required |
+| — | User-defined section | `USER_START` … `USER_STOP` | O | Y: one only (6.2.11.2), and at least one parameter, as table 6-12 requires |
+| — | User-defined parameter | `USER_DEFINED_x` | M | Y: within the section |
+| — | Section order | table 6-1 | M | Y: a section out of order is refused |
+| — | Keyword order within a section | 6.2.2.1 | M | Y: a keyword out of its table's order is refused |
+| — | Relative or absolute time tags | 6.2.2.3 | M | Y: `DataRow.TimeTag` resolves either against `EPOCH_TZERO` |
+| — | No duplicate time tags in a block | 6.2.2.4 | M | Y |
+| — | One time tag kind per block | 6.2.2.5 | M | Y |
+| — | Monotonic time in trajectory and covariance blocks | 6.2.5.6, 6.2.7.6 | M | Y: manoeuvre blocks are exempt, since clause 6.2.8.5 lets them overlap |
+| — | A message with no data blocks | 6.2.1.1 note | O | Y: valid, and read as such |
 
 ---
 
 ## A2.6 EXCEPTIONS AND UNSUPPORTED FEATURES
 
-**The OCM is not implemented.** Section 6's Orbit Comprehensive Message is over
-half the Blue Book, arrived with the 2023 issue, and has thin adoption next to
-the other three.
-
-Both notations are implemented for the OPM, the OMM and the OEM: the key-value
-form of section 7 and the XML form of section 8, with the structure of
+Both notations are implemented for all four messages: the key-value form of
+section 7 and the XML form of section 8, with the structure of
 CCSDS 505.0-B-3. Clause 1.1 leaves the choice to the exchanging parties, so
 both are needed.
+
+**An OCM row's width is not checked, except for a manoeuvre.** A trajectory
+row's columns come from `TRAJ_TYPE` and a covariance row's from `COV_TYPE`,
+and clauses 6.2.5.11 and 6.2.7.12.1 draw both from the SANA registry rather
+than from the Blue Book. Nothing here says how many numbers a `CARTPV` row
+holds, so the rows are carried as text fields and the caller reads the columns.
+The exception is `MAN_COMPOSITION`, whose field names are printed in tables
+6-8 and 6-9: those are checked, and a manoeuvre row whose width disagrees with
+its composition is refused.
+
+The Blue Book's own figure G-15 shows why this cannot be tightened. It leaves
+`TRAJ_TYPE` out, so the default `CARTPV` applies, and then prints rows of nine
+values — a position, a velocity and an acceleration, which is `CARTPVA`. A
+reader that trusted the registry would have to refuse a published example.
+
+**The `LTMWCC` and `UTMWCC` covariance matrices are not made symmetric.**
+Clauses 6.2.7.12.3.4 and 6.2.7.12.3.5 put correlations rather than covariances
+in one triangle of each, so the matrix is not symmetric. `CovMatrix` returns
+those two as they were written. Mirroring them the way an `LTM` is mirrored
+would silently scale half the entries by the product of two standard
+deviations.
+
+**An OCM's keywords are not typed.** Its sections are held as ordered keyword
+lists with typed accessors for the keywords that change how the data must be
+read. There are over two hundred keywords, most optional and most drawn from
+the SANA registry, so there is nothing to parse a value into and no way for a
+caller to see an unfamiliar keyword if it were dropped. `Get` reaches anything;
+the values are carried as text.
 
 **Interpolation is not performed.** `INTERPOLATION` and
 `INTERPOLATION_DEGREE` are read, preserved and reported, and nothing here acts
@@ -270,7 +329,8 @@ spelling does not.
 
 | Limit | Value | Source |
 |---|---|---|
-| Line length | 254 characters | Clause 7.3.2. Clause 7.3.3 exempts the OCM, which is not implemented. |
+| Line length, OPM, OMM and OEM | 254 characters | Clause 7.3.2 |
+| Line length, OCM | unbounded | Clause 7.3.3 exempts the OCM outright, and a 6x6 covariance matrix is 21 numbers that clause 6.2.7.12 requires on one line |
 | Integer range | −2 147 483 648 to 2 147 483 647 | Clause 7.5.4 |
 | Digits in a non-integer value | 16 | Clauses 7.5.6 and 7.5.7 |
 | Line terminators accepted | CR, LF, CR/LF, LF/CR | Clause 7.3.7 |
@@ -278,20 +338,23 @@ spelling does not.
 | Maneuvers per message | bounded by the input | No ceiling is imposed |
 | Ephemeris records per message | bounded by the input | No ceiling is imposed; records are read into memory rather than streamed |
 | Metadata groups per OEM | bounded by the input | No ceiling is imposed |
+| Data sections per OCM | bounded by the input | No ceiling is imposed on the repeating sections; the rest are limited to one by the standard |
+| Covariance matrix size in an OCM | derived from the row | The dimension comes from how many values the row holds under its `COV_ORDERING` |
 
 ---
 
 ## Wire test vectors
 
-The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 6 decode vectors and 6 corpus files.
+The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/odm) — 11 decode vectors and 11 corpus files.
 
 | File | |
 |---|---|
-| [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 6 vectors |
-| `odm/opm-*.kvn`, `odm/omm-*.kvn`, `odm/oem-*.kvn` | the annex G examples as readable files |
+| [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 11 vectors |
+| `odm/opm-*.kvn`, `odm/omm-*.kvn`, `odm/oem-*.kvn`, `odm/ocm-*.kvn` | the annex G examples as readable files |
+| `odm/ocm-xml.xml` | figure G-20, the same OCM in the XML form of section 8 |
 
 Both are **published text rather than derived values**: annex G of the Blue Book prints them, so a second working group wrote them.
 
-The vectors assert the text and integer content — version, originator, object identifiers, frames, epoch, and the counts. For an OEM the counts carry most of the weight: how many metadata groups, how many records, whether a record has acceleration, and how many covariance matrices are what a consumer must read correctly before any single number matters. The numeric state vector is not asserted there, because a vector field has no float accessor and pinning floats as formatted strings would test this package's number formatting rather than the standard. Those values are checked in `pkg/odm` against the same published text.
+The vectors assert the text and integer content — version, originator, object identifiers, frames, epoch, and the counts. For the OEM and the OCM the counts carry most of the weight: how many metadata groups, how many records, whether a record has acceleration, and how many covariance matrices are what a consumer must read correctly before any single number matters. The same goes for an OCM, whose section shape is what says how to read its rows at all, and whose vectors also assert the defaults clause 6.2.1.3 lets a producer leave out. The numeric state vector is not asserted there, because a vector field has no float accessor and pinning floats as formatted strings would test this package's number formatting rather than the standard. Those values are checked in `pkg/odm` against the same published text.
 
 See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how to consume these, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

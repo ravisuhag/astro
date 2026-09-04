@@ -303,3 +303,69 @@ func (t TLEParameters) Humanize() string {
 	}
 	return sb.String()
 }
+
+// Humanize returns a human-readable summary of the message.
+//
+// An OCM can hold eight sections and a couple of hundred keywords, so the
+// sections are counted and characterised rather than printed. What a reader
+// wants at a glance is which sections arrived, what each one's rows mean, and
+// the epoch the relative time tags are measured from — without which a
+// trajectory block reading "500.0 ..." says nothing at all.
+func (m *OCM) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "CCSDS Orbit Comprehensive Message %s\n", m.Header.Version)
+	fmt.Fprintf(&sb, "  Originator ...... %s\n", m.Header.Originator)
+	fmt.Fprintf(&sb, "  Created ......... %s UTC\n", m.Header.CreationDate.Format("2006-01-02T15:04:05"))
+	if m.Header.MessageID != "" {
+		fmt.Fprintf(&sb, "  Message ID ...... %s\n", m.Header.MessageID)
+	}
+	if m.Header.Classification != "" {
+		fmt.Fprintf(&sb, "  Classification .. %s\n", m.Header.Classification)
+	}
+
+	if name := m.ObjectName(); name != "" {
+		fmt.Fprintf(&sb, "  Object .......... %s\n", name)
+	}
+	fmt.Fprintf(&sb, "  Time system ..... %s\n", m.TimeSystem())
+	if tzero, ok := m.EpochTZero(); ok {
+		fmt.Fprintf(&sb, "  Epoch T-zero .... %s\n", tzero.Format("2006-01-02T15:04:05.999999999"))
+	}
+	fmt.Fprintf(&sb, "  Metadata ........ %d keyword(s)\n", len(m.Metadata.Fields))
+
+	for i, section := range m.Trajectories {
+		fmt.Fprintf(&sb, "  Trajectory %d .... %d state(s), %s in %s\n",
+			i+1, len(section.Rows), section.TrajType(), section.RefFrame())
+	}
+	for i, section := range m.Covariances {
+		fmt.Fprintf(&sb, "  Covariance %d .... %d matrix/matrices, %s ordered %s\n",
+			i+1, len(section.Rows), section.CovType(), section.CovOrdering())
+	}
+	for i, section := range m.Maneuvers {
+		fmt.Fprintf(&sb, "  Maneuver %d ...... %d row(s), %d field(s) per row on %s\n",
+			i+1, len(section.Rows), len(section.ManComposition()),
+			section.GetOr("MAN_DEVICE_ID", "an unnamed device"))
+	}
+
+	for _, single := range []struct {
+		label   string
+		section *OCMSection
+	}{
+		{"Physical", m.Physical},
+		{"Perturbations", m.Perturbations},
+		{"Orbit det.", m.OrbitDetermination},
+	} {
+		if single.section == nil {
+			continue
+		}
+		fmt.Fprintf(&sb, "  %-15s %d keyword(s)\n", single.label+" ...", len(single.section.Fields))
+	}
+
+	if len(m.UserDefined) > 0 {
+		fmt.Fprintf(&sb, "  User-defined .... %d parameter(s)\n", len(m.UserDefined))
+		for _, u := range m.UserDefined {
+			fmt.Fprintf(&sb, "    %s = %s\n", u.Name, u.Value)
+		}
+	}
+	return sb.String()
+}

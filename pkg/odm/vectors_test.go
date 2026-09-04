@@ -52,6 +52,20 @@ func decodeVector(input []byte, config vectors.Fields) (vectors.Fields, error) {
 			return nil, err
 		}
 		return ommFields(m), nil
+	case "ocm":
+		m, err := odm.DecodeOCM(input)
+		if err != nil {
+			return nil, err
+		}
+		return ocmFields(m), nil
+	case "ocm-xml":
+		// The XML form reports the same fields, so a vector can hold one
+		// message in both forms and assert that they say the same thing.
+		m, err := odm.DecodeXMLOCM(input)
+		if err != nil {
+			return nil, err
+		}
+		return ocmFields(m), nil
 	}
 	return nil, errUnknownVectorStructure
 }
@@ -143,6 +157,67 @@ func ommFields(m *odm.OMM) vectors.Fields {
 		f["norad_cat_id"] = uint64(t.NoradCatID)
 		f["element_set_no"] = uint64(t.ElementSetNo)
 		f["rev_at_epoch"] = uint64(t.RevAtEpoch)
+	}
+	return f
+}
+
+// ocmFields reports the parts of a decoded comprehensive message a vector can
+// compare.
+//
+// The shape is most of what matters. An OCM's sections are what say how to
+// read its numbers — TRAJ_TYPE names a trajectory row's columns, COV_ORDERING
+// says how a covariance row folds into a matrix, MAN_COMPOSITION names a
+// manoeuvre row's fields — so a consumer that gets the shape wrong reads every
+// value wrongly. The defaults are asserted too, because a keyword left out is
+// not a keyword with no value: clause 6.2.1.3 says the recipient adopts the
+// table's default.
+func ocmFields(m *odm.OCM) vectors.Fields {
+	f := vectors.Fields{
+		"version":              m.Header.Version,
+		"originator":           m.Header.Originator,
+		"creation_date":        m.Header.CreationDate.Format("2006-01-02T15:04:05Z"),
+		"message_id":           m.Header.MessageID,
+		"classification":       m.Header.Classification,
+		"object_name":          m.ObjectName(),
+		"time_system":          m.TimeSystem(),
+		"metadata_count":       uint64(len(m.Metadata.Fields)),
+		"trajectory_count":     uint64(len(m.Trajectories)),
+		"covariance_count":     uint64(len(m.Covariances)),
+		"maneuver_count":       uint64(len(m.Maneuvers)),
+		"has_physical":         m.Physical != nil,
+		"has_perturbations":    m.Perturbations != nil,
+		"has_orbit_det":        m.OrbitDetermination != nil,
+		"user_defined_count":   uint64(len(m.UserDefined)),
+		"header_comment_count": uint64(len(m.Header.Comments)),
+	}
+	if tzero, ok := m.EpochTZero(); ok {
+		f["epoch_tzero"] = tzero.Format("2006-01-02T15:04:05.999999999Z")
+	}
+	if len(m.Trajectories) > 0 {
+		first := m.Trajectories[0]
+		f["traj_type"] = first.TrajType()
+		f["traj_ref_frame"] = first.RefFrame()
+		f["traj_center_name"] = first.CenterName()
+		f["traj_row_count"] = uint64(len(first.Rows))
+		f["traj_relative_times"] = len(first.Rows) > 0 && first.Rows[0].IsRelative()
+	}
+	if len(m.Covariances) > 0 {
+		first := m.Covariances[0]
+		f["cov_type"] = first.CovType()
+		f["cov_ordering"] = first.CovOrdering()
+		f["cov_row_count"] = uint64(len(first.Rows))
+		if len(first.Rows) > 0 {
+			if matrix, err := first.CovMatrix(first.Rows[0]); err == nil {
+				f["cov_dimension"] = uint64(len(matrix))
+			}
+		}
+	}
+	if len(m.Maneuvers) > 0 {
+		first := m.Maneuvers[0]
+		f["man_device_id"] = first.GetOr("MAN_DEVICE_ID", "")
+		f["man_field_count"] = uint64(len(first.ManComposition()))
+		f["man_row_count"] = uint64(len(first.Rows))
+		f["man_duty_cycle"] = first.DutyCycle()
 	}
 	return f
 }
