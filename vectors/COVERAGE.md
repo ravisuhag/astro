@@ -31,13 +31,14 @@ evidence of conformance.
 | `stack` | CCSDS 132.0-B-3 composed with CCSDS 131.0-B-5 | 5 | — |
 | `tcf` | CCSDS 301.0-B-4 | 14 | — |
 | `tcsc` | CCSDS 231.0-B-4 | 13 | — |
+| `tdm` | CCSDS 503.0-B-2 | 1 | 1 |
 | `tmdl` | CCSDS 132.0-B-3 | 29 | — |
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **373** | **121** |
+| **Total** | | **374** | **122** |
 
-373 vectors and 121 referenced corpus files across 27 packages.
+374 vectors and 122 referenced corpus files across 28 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
