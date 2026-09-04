@@ -119,15 +119,24 @@ func userDefinedElements(params []UserDefined) ndm.Element {
 
 // readUserDefined reads the user-defined block, taking each parameter's name
 // from its attribute rather than from the element name.
-func readUserDefined(elements []ndm.Element) []UserDefined {
+//
+// A parameter with no name is refused. The name is the whole of what a
+// user-defined parameter means — clause 3.2.4.12 and table 6-12 both describe
+// the keyword as USER_DEFINED_ with the name substituted in — and the
+// key-value form of a nameless one is the bare 'USER_DEFINED_ = value', which
+// this package's own reader will not take back.
+func readUserDefined(elements []ndm.Element) ([]UserDefined, error) {
 	var out []UserDefined
 	for _, e := range elements {
 		if e.Name != ndm.KeywordUserDefined {
 			continue
 		}
+		if e.Parameter == "" {
+			return nil, ndm.ErrEmptyKeyword
+		}
 		out = append(out, UserDefined{Name: e.Parameter, Value: e.Value})
 	}
-	return out
+	return out, nil
 }
 
 // xmlHeader renders a header for the XML form.

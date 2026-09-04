@@ -1,9 +1,11 @@
 package odm_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/ravisuhag/astro/internal/ndm"
 	"github.com/ravisuhag/astro/pkg/odm"
 )
 
@@ -224,5 +226,47 @@ func TestOPMXMLUserDefinedParameters(t *testing.T) {
 	}
 	if back.Data.UserDefined[0].Name != "EARTH_MODEL" || back.Data.UserDefined[0].Value != "WGS-84" {
 		t.Errorf("user-defined parameter = %+v", back.Data.UserDefined[0])
+	}
+}
+
+// A user-defined parameter with no name is refused in both forms.
+//
+// The name is the whole of what one means: clause 3.2.4.12 describes the
+// keyword as USER_DEFINED_ with the name substituted in, so a nameless one has
+// the key-value form 'USER_DEFINED_ = value', which this package's own reader
+// will not take back. Accepting it in XML would produce a message that cannot
+// be written as KVN. Found by FuzzDecodeXMLOCM.
+func TestUserDefinedParameterNeedsAName(t *testing.T) {
+	withEmptyName := strings.Replace(figureG5,
+		"</spacecraftParameters>",
+		`</spacecraftParameters>
+         <userDefinedParameters>
+           <USER_DEFINED parameter="">WGS-84</USER_DEFINED>
+         </userDefinedParameters>`, 1)
+
+	if _, err := odm.DecodeXMLOPM([]byte(withEmptyName)); !errors.Is(err, ndm.ErrEmptyKeyword) {
+		t.Errorf("DecodeXMLOPM = %v, want %v", err, ndm.ErrEmptyKeyword)
+	}
+
+	// And the same in the key-value form.
+	const kvn = `CCSDS_OPM_VERS = 3.0
+CREATION_DATE = 2022-11-06T09:23:57
+ORIGINATOR = JAXA
+OBJECT_NAME = A
+OBJECT_ID = 1998-999A
+CENTER_NAME = EARTH
+REF_FRAME = ITRF2000
+TIME_SYSTEM = UTC
+EPOCH = 2022-12-18T14:28:15.1172
+X = 1.0
+Y = 2.0
+Z = 3.0
+X_DOT = 4.0
+Y_DOT = 5.0
+Z_DOT = 6.0
+USER_DEFINED_ = WGS-84
+`
+	if _, err := odm.DecodeOPM([]byte(kvn)); !errors.Is(err, ndm.ErrEmptyKeyword) {
+		t.Errorf("DecodeOPM = %v, want %v", err, ndm.ErrEmptyKeyword)
 	}
 }

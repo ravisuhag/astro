@@ -107,6 +107,11 @@ func (d *ommDecoder) run(s *ndm.Scanner) error {
 
 func (d *ommDecoder) assign(keyword, value string) error {
 	if name, ok := strings.CutPrefix(keyword, userDefinedPrefix); ok {
+		// A bare USER_DEFINED_ names no parameter, and the XML form has no
+		// way to write one, so neither form accepts it.
+		if name == "" {
+			return ndm.ErrEmptyKeyword
+		}
 		d.enter(ommUserDefined)
 		d.message.Data.UserDefined = append(d.message.Data.UserDefined,
 			UserDefined{Name: name, Value: value})

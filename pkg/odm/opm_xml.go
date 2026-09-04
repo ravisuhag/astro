@@ -225,7 +225,11 @@ func (m *OPM) readXMLData(elements []ndm.Element) error {
 			}
 			m.Data.Maneuvers = append(m.Data.Maneuvers, man)
 		case xmlUserDefinedParams:
-			m.Data.UserDefined = readUserDefined(e.Children)
+			params, err := readUserDefined(e.Children)
+			if err != nil {
+				return err
+			}
+			m.Data.UserDefined = params
 		default:
 			return ErrUnknownKeyword
 		}
