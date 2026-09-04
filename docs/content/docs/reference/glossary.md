@@ -85,10 +85,10 @@ Ordered by where it sits in [the stack](/docs/start/concepts) rather than alphab
 |---|---|---|
 | **CFDP** | CCSDS File Delivery Protocol | CCSDS 727.0-B-5, moving whole files. [`pkg/cfdp`](/protocols/transport/cfdp) |
 | **DTN** | Delay-Tolerant Networking | Store and forward, for links that are never all up at once. |
-| **BP** | Bundle Protocol | The DTN network layer, RFC 5050 as profiled by CCSDS 734.2-B-1. Version 6, not BPv7. [`pkg/bp`](/protocols/transport/bp) |
+| **BP** | Bundle Protocol | The DTN network layer, RFC 9171. Version 7, which encodes with CBOR; version 6 (RFC 5050) is a different wire format and is not implemented. [`pkg/bp`](/protocols/transport/bp) |
 | **LTP** | Licklider Transmission Protocol | The DTN convergence layer for one hop, RFC 5326 as profiled by CCSDS 734.1-B-1. [`pkg/ltp`](/protocols/transport/ltp) |
 | **SDNV** | Self-Delimiting Numeric Value | The variable-length integer BP and LTP encode nearly every field with. |
-| **ECOS** | Extended Class of Service | The bundle block CCSDS requires on top of RFC 5050, adding a finer priority ordinal. |
+| **DTN time** | Delay-Tolerant Networking time | Milliseconds since 2000-01-01, ignoring leap seconds. Bundle Protocol version 7 uses it; version 6 counted seconds. |
 
 ## Ground to ground
 

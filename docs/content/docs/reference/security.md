@@ -33,8 +33,7 @@ A length field in a header is a number an attacker picks. Where a standard sets 
 
 | Package | Limit | Value | Why |
 |---|---|---|---|
-| `pkg/bp` | `DefaultMaxBlockLength` | 16 MiB | RFC 5050 sets no ceiling and a block length is an SDNV reaching 2^64 |
-| `pkg/bp` | `DefaultMaxBlocks` | 64 | A bundle claiming millions of blocks |
+| `pkg/bp` | none | — | Version 7 decodes from a caller-supplied slice rather than a stream, so a length field can only claim what is already in memory. The caller's own bound is the ceiling |
 | `pkg/ltp` | `DefaultMaxBlockSize` | 64 MiB | Not in RFC 5326: a segment offset is an SDNV reaching 2^64, so one corrupt segment could claim a huge offset |
 | `pkg/xtce` | `MaxDocumentSize` | 64 MiB | A very large database file |
 | `pkg/xtce` | `MaxDepth` | 100 | A deeply nested document. The check runs as a token scan before any decoding, so deep input is refused rather than recursed into |

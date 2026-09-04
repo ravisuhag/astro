@@ -1,281 +1,164 @@
 ---
 title: Bundle Protocol
 short: BP
-description: CCSDS 734.2-B-1, store-and-forward bundles for delay-tolerant networking.
+description: RFC 9171, store-and-forward bundles for delay-tolerant networking.
 identifiers:
-  - "CCSDS 734.2-B-1 * Bundle Protocol"
+  - "RFC 9171 * Bundle Protocol version 7"
   - "pkg/bp * astro bp"
 order: 14
 ---
 
-> **CCSDS 734.2-B-1** | [Blue Book](https://public.ccsds.org/Pubs/734x2b1.pdf) | [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050) | [`pkg/bp`](https://github.com/ravisuhag/astro/tree/main/pkg/bp) | [`astro bp`](/cli/bp)
+> **RFC 9171** | [RFC 9171](https://www.rfc-editor.org/rfc/rfc9171) | [`pkg/bp`](https://github.com/ravisuhag/astro/tree/main/pkg/bp) | [`astro bp`](/cli/bp)
 
 ## Overview
 
 Bundle Protocol is the network layer of Delay-Tolerant Networking. It moves
-application data units (**bundles**) across networks where no end-to-end
-path exists at any single moment.
+application data units — **bundles** — across networks where no end-to-end path
+exists at any single moment.
 
 That is the whole idea. IP assumes a path exists right now. In space, a relay
 orbiter may be behind a planet, a ground station may not be in view for six
-hours, and the far end may be light-minutes away. BP stores a bundle at each
-hop and forwards it when a link opens, rather than holding a session open
-across the gap.
+hours, and the far end may be light-minutes away. BP stores a bundle at each hop
+and forwards it when a link opens, instead of holding a session open across the
+gap.
 
-### Version 6, not version 7
+### This is version 7
 
-**CCSDS 734.2-B-1 profiles RFC 5050, which is Bundle Protocol version 6.**
+astro implements **RFC 9171, Bundle Protocol version 7**. That is the version
+live implementations speak: ION, µD3TN and NASA's HDTN.
 
-This matters. BPv7 (RFC 9171) encodes bundles in CBOR and is wire-incompatible
-with v6, the two cannot talk to each other. This package implements what
-CCSDS specifies. If you need BPv7, it would be a separate package.
+Version 6 (RFC 5050, profiled by CCSDS 734.2-B-1) is **a different wire format,
+not an earlier revision.** It encodes with SDNV; version 7 encodes with CBOR.
+The endpoint naming, the time base and the block structure all changed. The two
+cannot talk to each other, and nothing here reads a version 6 bundle.
 
-The CCSDS profile adds two things to RFC 5050: the **IPN naming scheme** with
-Compressed Bundle Header Encoding (RFC 6260), and a mandatory **Extended Class
-of Service** block.
-
-### Where BP fits
-
-```
-┌─────────────────────────────────────────────┐
-│  Application data (files, telemetry)        │
-├─────────────────────────────────────────────┤
-│  Bundle Protocol (pkg/bp)                   │  <- this package
-├─────────────────────────────────────────────┤
-│  Convergence layer: LTP (pkg/ltp) or        │
-│  Encapsulation Packets (pkg/epp)            │
-├─────────────────────────────────────────────┤
-│  Space Data Link (pkg/aos, pkg/usdl, ...)   │
-└─────────────────────────────────────────────┘
-```
-
-## Scope
-
-**Implemented.** The BPv6 wire format: primary block, canonical blocks, the endpoint dictionary, fragmentation and reassembly, Extended Class of Service, and administrative records. Decoder limits are configurable.
-
-**Not here yet.**
-
-- **Bundle Protocol agent**: routing, contact graphs, storage, custody
-  timers. This package is the wire format and the block structure; forwarding
-  policy is a layer above.
-- **Aggregate Custody Signals** (annex D) and **Delay-Tolerant Payload
-  Conditioning** (annex E).
-- **Bundle Security Protocol** blocks.
-- **BPv7** (RFC 9171), a different wire format, and a separate package if
-  anyone needs it.
-- **CLI subcommands**: a follow-up once the API settles.
+astro implemented version 6 until it did not. If you need it, it is in git
+history at tag `v0.4.0`.
 
 ## Bundle structure
 
-A bundle is a primary block followed by one or more canonical blocks:
+A bundle is a CBOR indefinite-length array: a primary block, then one or more
+canonical blocks, the last of which is the payload. A break stop code closes it.
 
 ```
-[ primary block │ extension blocks... │ payload block ]
+9f                          indefinite-length array
+  88 07 00 00 ...           primary block
+  85 01 01 00 00 ...        payload block (type 1, number 1)
+ff                          break
 ```
 
-The **primary block** carries everything needed to route the bundle:
-destination, source, report-to and custodian endpoints, a creation timestamp,
-a lifetime, and the processing flags.
+The primary block is immutable once created. It carries the version, the
+processing flags, three endpoint IDs (destination, source, report-to), the
+creation timestamp, the lifetime, and optionally the fragment fields and a
+checksum.
 
-**Canonical blocks** are everything else. The payload is one of them, always
-last, always carrying the last-block flag.
+Every other block shares one shape: type code, block number, flags, checksum
+type, then a byte string of type-specific data.
 
-Nearly every field is a Self-Delimiting Numeric Value, which is why this
-package builds on `pkg/sdnv`.
+### Endpoint IDs
 
-## Endpoints and the dictionary
-
-An endpoint is a URI: a scheme and a scheme-specific part. CCSDS requires the
-**IPN scheme** (clause 3.2.1), where the scheme-specific part is a node number, a
-period, and a service number:
+Two schemes. `dtn` names endpoints with text; `ipn` names them with numbers, for
+compactness on a constrained link.
 
 ```go
-dest := bp.IPNEndpoint(2, 1)   // ipn:2.1
-src  := bp.IPNEndpoint(1, 1)   // ipn:1.1
+bp.IPN(1, 2)                        // ipn:1.2
+bp.IPNWithAllocator(977000, 100, 1) // ipn:977000.100.1
+bp.DTN("//receiver/inbox")          // dtn://receiver/inbox
+bp.NullEID()                        // dtn:none, the anonymous source
 ```
 
-Node numbers run 1 to 2^64-1 and are assigned by SANA. Service numbers run
-0 to 2^64-1.
+astro follows [RFC 9758](https://www.rfc-editor.org/rfc/rfc9758) for the `ipn`
+scheme, which added an allocator identifier. Both its encodings decode, and the
+one astro writes is byte-identical to RFC 9171's when the allocator is zero —
+so bundles astro produces are readable by implementations that predate
+RFC 9758.
 
-Here is the part worth understanding. The primary block does not store four
-endpoint URIs. It stores a **dictionary** (a run of null-terminated strings)
-and each endpoint travels as a *pair of offsets* into it, one for the scheme
-and one for the scheme-specific part. Identical strings are stored once, so
-four endpoints all in one scheme pay for that scheme string once. That much
-is plain RFC 5050.
+### Time
 
-**Compressed Bundle Header Encoding** (RFC 6260) goes further. When all four
-endpoints are in the IPN scheme (with `dtn:none` allowed, traveling as node
-0, service 0) the dictionary is omitted entirely. Its length encodes as
-zero, and each endpoint's node and service numbers ride directly in the two
-offset fields. No strings at all, and on a link where every octet is paid
-for in watts, that is the point. CCSDS mandates it, and this package applies
-it automatically: all-ipn bundles encode in CBHE form, and a decoded
-dictionary length of zero is recognized as CBHE.
+DTN time counts **milliseconds since 2000-01-01**, ignoring leap seconds.
+Version 6 counted seconds. A bundle read with the wrong unit still parses and
+still round-trips inside one implementation, and is wrong by a factor of a
+thousand on the wire.
 
-The null endpoint `dtn:none` names nobody, and is what you use for a custodian
-when nobody has custody.
+A node with no working clock sends a creation time of zero and carries a Bundle
+Age block instead.
 
-## Building a bundle
+## Extension blocks
 
-```go
-import "github.com/ravisuhag/astro/pkg/bp"
+RFC 9171 defines three, and astro gives each a constructor and an accessor:
 
-primary := &bp.PrimaryBlock{
-    Flags:       bp.BundleFlags(0).WithPriority(bp.PriorityNormal) | bp.FlagSingleton,
-    Destination: bp.IPNEndpoint(2, 1),
-    Source:      bp.IPNEndpoint(1, 1),
-    ReportTo:    bp.IPNEndpoint(1, 0),
-    Custodian:   bp.NullEndpoint,
-    CreationTimestamp: bp.CreationTimestamp{Time: secondsSince2000(), SequenceNumber: 1},
-    Lifetime:    3600, // seconds
-}
+| Block | Type | What it carries |
+|---|--:|---|
+| Previous Node | 6 | the node that forwarded this bundle here |
+| Bundle Age | 7 | how long the bundle has existed, in milliseconds |
+| Hop Count | 10 | a hop limit and a hop count, against routing loops |
 
-bundle, err := bp.NewBundle(primary, payload)
-if err != nil {
-    return err
-}
-
-raw, err := bundle.Encode()
-```
-
-The creation timestamp counts seconds since the start of the year 2000. It and
-the source endpoint together identify the bundle, which is how status reports
-and custody signals refer back to it.
-
-## Processing flags
-
-The flags field is an SDNV, so it has no fixed width. Three groups (clause 4.2):
-
-**Handling requests**, bits 0 to 5: fragment, administrative record, must not
-fragment, custody transfer requested, singleton destination, application
-acknowledgement.
-
-**Class of service**, bits 7 and 8: bulk, normal, expedited. Use
-`WithPriority`, which leaves the other bits alone.
-
-**Status report requests**, bits 14 to 18: reception, custody acceptance,
-forwarding, delivery, deletion.
-
-Rules the library enforces (clause 4.2): an administrative record must request
-neither custody transfer nor any status report. Class of service 3 is
-reserved and rejected. A bundle cannot both be a fragment and forbid
-fragmentation. And an anonymous bundle (source `dtn:none`) must not
-request custody and must set the "must not be fragmented" flag, because
-without a source it is not uniquely identifiable.
-
-## Extended class of service
-
-CCSDS 734.2-B-1 clause 3.3 **requires** conformant implementations to support the
-ECOS block. Three priority levels are not enough for spacecraft operations.
-
-```go
-bundle, err := bp.NewBundle(primary, payload,
-    bp.WithECOS(bp.ECOS{
-        Flags:   bp.ECOSCritical,
-        Ordinal: 200,
-    }))
-```
-
-What it adds (annex C):
-
-- **Ordinal**, 0 to 255. Within the expedited class, a finer ranking: ordinal
-  100 beats ordinal 99. It means nothing unless the class of service is
-  expedited. Value 255 is reserved for custody signals.
-- **Critical**: send one copy along *every* path that might reach the
-  destination, not just the best one. The bundle arrives by whatever route
-  turns out to be fastest, at the cost of flooding the network. This is for
-  emergency traffic.
-- **Streaming**: best efforts, no retransmission. For data where a late copy
-  is worse than none, like video.
-- **Reliable**: the opposite: use a convergence layer that retransmits.
-- **Flow label**: an opaque value passed down to the convergence layer.
-
-Two structural rules the library enforces: the ECOS block must come before the
-payload, and a bundle may carry at most one.
+A block of a type astro does not know keeps its bytes and round-trips exactly,
+because clause 4.4 requires a node to forward what it cannot parse.
 
 ## Fragmentation
 
-A bundle too large for a contact window can be split:
+A contact window too short for a bundle is the normal case, not the exception.
+`Fragment` splits one, and `Reassemble` puts it back:
 
 ```go
-fragments, err := bundle.Fragment(1024)
+fragments, _ := bundle.Fragment(1024)
+// ... fragments travel by different routes, arriving out of order
+original, _ := bp.Reassemble(fragments)
 ```
 
-Each fragment carries the fragment flag, its offset into the original
-application data unit, and the total ADU length so the far end knows when it
-has everything.
+Reassembly works in *material extents*, so fragments may overlap. Clause 5.8
+allows separate fragmentation episodes in different parts of the network to
+produce overlapping slices of the same payload, and clause 5.9 requires a
+receiver to cope.
 
-Extension blocks flagged "replicate in every fragment" are copied into each
-piece. Of the rest, clause 5.8 splits them around the payload: blocks that precede
-it ride with the first fragment, and blocks that follow it ride with the
-last, sending an extension block five times when once will do wastes the
-link.
+## Status reports
 
-Reassembly takes them in any order:
-
-```go
-original, err := bp.Reassemble(fragments)
-```
-
-Overlapping fragments are fine. Gaps are not: reassembly fails rather than
-handing back a partly-filled buffer.
-
-A bundle with the "must not be fragmented" flag refuses to split.
-
-## Administrative records
-
-Two kinds, both carried as a bundle payload with the administrative-record
-flag set (clause 6.1).
-
-**Status reports** say what a node did with a bundle: received it, took
-custody, forwarded it, delivered it, deleted it. Each event has a timestamp,
-and (this is the subtle part) **a timestamp is present on the wire only when
-its matching status flag is set**. A report of one event is shorter than a
-report of five.
-
-**Custody signals** accept or refuse custody. The high bit of the status byte
-says which; the low seven bits carry the reason.
+The one administrative record version 7 defines. It reports four assertions —
+received, forwarded, delivered, deleted — about a bundle named by its source
+node ID and creation timestamp.
 
 ```go
-record, err := bundle.AdminRecord()
-if err != nil {
-    return err
-}
-if record.StatusReport != nil {
-    log.Printf("%s", record.StatusReport.Humanize())
-}
-```
-
-Times in administrative records are "DTN time": seconds since the start of
-2000, plus nanoseconds. CCSDS clause 3.4 relaxes this, where a spacecraft clock
-cannot produce meaningful nanoseconds, the onboard precision is used, and this
-does not become a requirement on the clock.
-
-## Decoder limits
-
-A block length is an SDNV reaching 2^64. Sizing an allocation from one is a
-trivial denial of service, so decoding is bounded:
-
-```go
-bundle, err := bp.DecodeBundleWithOptions(raw, bp.DecodeOptions{
-    MaxBlockLength: 1 << 20,
-    MaxBlocks:      32,
+b, _ := bp.NewStatusReportBundle(primary, &bp.StatusReport{
+    Delivered:        bp.StatusItem{Asserted: true},
+    SubjectSource:    bp.IPN(2, 1),
+    SubjectTimestamp: subject.Primary.Timestamp,
 })
 ```
 
-`DecodeBundle` applies defaults of 16 MiB per block and 64 blocks. Neither cap
-is in RFC 5050 (the protocol states no ceiling) but no real implementation
-can go without one.
+A bundle carrying a status report cannot itself request status reports.
+Otherwise reports would beget reports, and clause 4.2.3 forbids it.
 
-A bundle ends at its last block. Octets past it are corruption, not padding,
-so `DecodeBundle` refuses them with `ErrTrailingBytes`. When bundles arrive
-back to back in one buffer, use `DecodeBundleN`, which returns the octets
-consumed and leaves the rest for the next call.
+## What this package does not do
+
+It encodes, decodes and validates bundles. It does not move them.
+
+There is no convergence layer, no routing, no contact graph and no daemon.
+Those need timers, sockets and a network, and astro hands that to the caller —
+the same rule every package here follows. Compose with
+[`pkg/ltp`](/protocols/transport/ltp) when a bundle needs a transport
+underneath; the [DTN example](https://github.com/ravisuhag/astro/tree/main/examples/dtn)
+shows the two together.
+
+Bundle Protocol Security ([RFC 9172](https://www.rfc-editor.org/rfc/rfc9172))
+is a separate standard and would be a separate package.
+
+## Two things the standard makes easy to get wrong
+
+**The bundle array is indefinite-length.** The CDDL grammar in RFC 9171
+appendix B writes it as `[primary-block, *extension-block, payload-block]`,
+which reads as definite. Clause 4.1 requires the indefinite form, and the
+appendix says the prose wins wherever the two disagree. An implementation
+trusting the grammar emits bundles no conforming node accepts, while reading
+its own output back without complaint. The published bundle in RFC 9173
+appendix A.1.1.3 opens `0x9f` and ends `0xff`, settling it.
+
+**Extension block data is two layers deep.** The block-type-specific field is a
+byte string whose contents are themselves CBOR. A Bundle Age block carrying
+300 ms encodes as `0x43` — a three-octet byte string — wrapping `0x19012c`.
+astro's constructors and accessors peel both layers.
 
 ## Reference
 
-- [CCSDS 734.2-B-1](https://public.ccsds.org/Pubs/734x2b1.pdf), CCSDS Bundle Protocol Specification
-- [RFC 5050](https://www.rfc-editor.org/rfc/rfc5050.txt), Bundle Protocol Specification, the wire format
-- [RFC 6260](https://www.rfc-editor.org/rfc/rfc6260.txt), Compressed Bundle Header Encoding
-- [CLI](/cli/bp) | [Conformance](/conformance/bp) | [The stack](/docs/start/concepts)
+[Package documentation](https://pkg.go.dev/github.com/ravisuhag/astro/pkg/bp) ·
+[conformance statement](/conformance/bp) · [CLI](/cli/bp)

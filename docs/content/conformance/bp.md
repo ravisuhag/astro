@@ -5,7 +5,7 @@ description: "PICS proforma: what this package implements, clause by clause."
 order: 50
 ---
 
-## Conformance Statement for `pkg/bp`, CCSDS 734.2-B-1 / RFC 5050
+## Conformance Statement for `pkg/bp`, RFC 9171
 
 ---
 
@@ -15,18 +15,18 @@ order: 50
 
 | Field | Value |
 |---|---|
-| Date of Statement (DD/MM/YYYY) | 23/08/2026 |
-| PICS Serial Number | ASTRO-BP-PICS-001 |
+| Date of Statement (DD/MM/YYYY) | 03/09/2026 |
+| PICS Serial Number | ASTRO-BP-PICS-002 |
 | System Conformance Statement Cross-Reference | This document |
 
 ### A1.1.2 Identification of Implementation Under Test (IUT)
 
 | Field | Value |
 |---|---|
-| Implementation Name | astro/pkg/bp, with astro/pkg/sdnv |
+| Implementation Name | astro/pkg/bp |
 | Implementation Version | See `go.mod` / latest commit on `main` |
-| Special Configuration | `DecodeOptions` bounds block length and block count |
-| Other Information | Go library implementing Bundle Protocol version 6 block formats: primary block with the RFC 5050 dictionary and RFC 6260 Compressed Bundle Header Encoding, canonical blocks, the CCSDS Extended Class of Service block, fragmentation and reassembly, and both administrative record types. Bundle agent behavior, routing, storage, custody timers, is out of scope. |
+| Special Configuration | None |
+| Other Information | Go library implementing Bundle Protocol version 7 block formats: the primary block, canonical blocks, the three extension blocks RFC 9171 defines, fragmentation and reassembly, and bundle status reports. Bundle agent behaviour — routing, storage, forwarding, convergence layers — is out of scope. |
 
 ### A1.1.3 Identification of Supplier
 
@@ -41,88 +41,85 @@ order: 50
 
 | Field | Value |
 |---|---|
-| Specification | CCSDS 734.2-B-1 (CCSDS Bundle Protocol Specification, Blue Book, Issue 1, September 2015), profiling RFC 5050 and RFC 6260 |
+| Specification | RFC 9171 (Bundle Protocol Version 7, Standards Track, January 2022), with the `ipn` URI scheme per RFC 9758 (May 2025) |
 | Have any exceptions been required? | Yes [X] No [ ], see A1.6 |
 
 ---
 
-## A1.2 CCSDS PROFILE REQUIREMENTS
+## A1.2 ENCODING
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Bundle Protocol version 6 per RFC 5050 | clause 3.1 | M | Y: not BPv7, which is wire-incompatible |
-| IPN naming scheme | clause 3.2.1, RFC 6260 clause 2.1 | M | Y: `IPNEndpoint`, node 1 to 2^64-1, service 0 to 2^64-1 |
-| Compressed Bundle Header Encoding | clause 3.2, RFC 6260 clause 2 | M | Y: when all four endpoints are ipn (dtn:none as node 0, service 0) the dictionary length encodes as zero and node/service numbers ride in the offset fields; a decoded dictionary length of zero is parsed as CBHE |
-| Node number range enforced | clause 3.2.1 | M | Y: node 0 rejected; on CBHE decode, node 0 with a nonzero service rejected |
-| Extended Class of Service block | clause 3.3, annex C | M | Y |
-| DTN time precision relaxation | clause 3.4 | O | Y: nanoseconds carried, precision left to the caller |
+| Bundles conform to CBOR | clause 4.1 | M | Y: a hand-rolled subset codec, no external dependency |
+| Core deterministic encoding, indefinite-length items excepted | clause 4.1 | M | Y: arguments written in shortest form; longer forms refused on decode |
+| Bundle is a CBOR indefinite-length array closed by a break | clause 4.1 | M | Y: a definite-length array is refused. The appendix B grammar reads as definite; clause 4.1 governs and RFC 9173 appendix A.1.1.3 confirms |
+| Non-conformant input accepted and transformed | clause 4.1 | O | N: refused instead, see A1.6 |
 
 ---
 
-## A1.3 BLOCK FORMATS
+## A1.3 FUNDAMENTAL DATA STRUCTURES
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Primary bundle block | RFC 5050 clause 4.5.1 | M | Y |
-| Version field = 6 | clause 4.5.1 | M | Y: other versions rejected on decode |
-| Bundle processing control flags | clause 4.2 | M | Y: SDNV, all defined bits |
-| Class of service, bits 7 to 8 | clause 4.2 | M | Y: bulk, normal, expedited; the reserved value 3 rejected |
-| Status report request flags, bits 14 to 18 | clause 4.2 | O | Y |
-| Administrative record flag constraints | clause 4.2 | M | Y: custody and report flags rejected together with it |
-| Anonymous-source constraints | clause 4.2 | M | Y: source dtn:none must not request custody and must set the no-fragment flag |
-| Contradictory fragment flags rejected | clause 4.2 | M | Y: a fragment cannot also forbid fragmentation |
-| Bundle ends at the last block | clause 4.1 | M | Y: trailing octets rejected (`ErrTrailingBytes`); `DecodeBundleN` returns consumed length for concatenated streams |
-| Dictionary with endpoint offsets | clause 4.4, clause 4.5.1 | M | Y: repeated strings interned once |
-| Creation timestamp and sequence number | clause 4.5.1 | M | Y |
-| Lifetime | clause 4.5.1 | M | Y |
-| Fragment offset and total ADU length | clause 4.5.1 | O | Y: present only with the fragment flag |
-| Canonical block format | clause 4.5.2 | M | Y |
-| Block type code | clause 4.5.2 | M | Y |
-| Block processing control flags | clause 4.5.2 | M | Y: all seven defined bits |
-| EID reference field | clause 4.5.2 | O | Y: present if and only if the flag is set |
-| Block data length and body | clause 4.5.2 | M | Y |
-| Payload block, type 1 | clause 4.5.2 | M | Y: exactly one per bundle |
-| Last-block flag on the final block | clause 4.5.2 | M | Y: validated |
+| CRC type codes 0, 1, 2 and no others | clause 4.2.1 | M | Y: code 3 and above refused |
+| X-25 CRC-16 | clause 4.2.1 | M | Y: pinned to the published check value 0x906E |
+| CRC-32C, Castagnoli | clause 4.2.1 | M | Y: stdlib `hash/crc32` |
+| CRC as a byte string of 2 or 4 octets, network byte order | clause 4.2.2 | M | Y |
+| CRC computed with its own field zeroed | clauses 4.3.1, 4.3.2 | M | Y |
+| Bundle processing control flags | clause 4.2.3 | M | Y: all nine version 7 bits |
+| Unrecognised bundle flags ignored, not refused | clause 4.2.3 | M | Y |
+| Administrative record must not request status reports | clause 4.2.3 | M | Y: validated |
+| Anonymous source must set must-not-fragment and request no reports | clause 4.2.3 | M | Y: validated |
+| Block processing control flags | clause 4.2.4 | M | Y: all four version 7 bits |
+| Endpoint ID as a two-item array | clause 4.2.5.1 | M | Y |
+| `dtn` URI scheme, with `dtn:none` as an integer zero | clause 4.2.5.1.1 | M | Y |
+| `ipn` URI scheme | clause 4.2.5.1.2 | M | Y: per RFC 9758, see A1.6 |
+| DTN time, milliseconds since 2000-01-01, no leap seconds | clause 4.2.6 | M | Y |
+| Creation timestamp as time plus sequence number | clause 4.2.7 | M | Y |
 
 ---
 
-## A1.4 EXTENDED CLASS OF SERVICE
+## A1.4 BLOCK FORMATS
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| ECOS block conforms to clause 4.5.2 and clause 4.6 | annex C, C2 | M | Y |
-| Replicate-in-every-fragment flag set | C2 b) | M | Y: enforced by bundle validation and decode, not just the construction helper |
-| No EID references | C2 c) | M | Y: enforced by bundle validation and decode |
-| Block data length 2 + N | C2 d) | M | Y |
-| Flags byte: critical (0x01) | C2 f) 1) | M | Y |
-| Flags byte: streaming (0x02) | C2 f) 2) | M | Y |
-| Flags byte: flow label present (0x04) | C2 f) 3) | M | Y |
-| Flags byte: reliable (0x08) | C2 f) 4) | M | Y |
-| Ordinal byte, 0 to 255 | C2 g) | M | Y |
-| Ordinal 255 reserved for custody signals | C3.1.4 | M | Y: rejected unless the bundle is an administrative record |
-| Flow label as SDNV | C2 h) | O | Y |
-| ECOS precedes the payload block | C3.1.1 | M | Y: validated |
-| At most one ECOS block per bundle | C3.1.2 | M | Y: validated |
-| Flow-label flag matches the field | C3.1.3 | M | Y: validated |
+| Primary block as an array of 8, 9, 10 or 11 items | clause 4.3.1 | M | Y: a length disagreeing with the flags and CRC type is refused |
+| Version field = 7 | clause 4.3.1 | M | Y: other versions refused on decode |
+| Three endpoint IDs, then timestamp and lifetime | clause 4.3.1 | M | Y |
+| Fragment offset and total ADU length, iff the fragment flag is set | clause 4.3.1 | M | Y |
+| Primary block CRC present unless a BPSec BIB targets it | clause 4.3.1 | M | Partial: astro permits CRC type 0, since it cannot see a BIB it does not implement. See A1.6 |
+| Canonical block as an array of 5 or 6 items | clause 4.3.2 | M | Y: a length disagreeing with the CRC type is refused |
+| Block type code, number, flags, CRC type, type-specific data | clause 4.3.2 | M | Y |
+| Block-type-specific data as a definite-length byte string | clause 4.3.2 | M | Y: the indefinite form is refused |
+| Payload block is type 1, number 1, and last | clauses 4.1, 4.3.2 | M | Y: validated |
+| Exactly one primary and one payload block | clause 4.1 | M | Y: validated |
+| Block numbers unique within a bundle | clause 4.1 | M | Y: validated |
+| Bundle ends at the break stop code | clause 4.1 | M | Y: trailing octets refused |
 
 ---
 
-## A1.5 PROCEDURES
+## A1.5 EXTENSION BLOCKS AND PROCEDURES
 
 | Feature | Reference | Status | Support |
 |---|---|---|---|
-| Fragmentation | RFC 5050 clause 5.8 | O | Y |
-| Replicated blocks copied to every fragment | clause 5.8 | M | Y |
-| Blocks preceding the payload replicated in the first fragment; blocks following the payload in the last | clause 5.8 | M | Y |
-| "Must not be fragmented" respected | clause 4.2 | M | Y |
-| Reassembly | clause 5.9 | O | Y: any order, overlaps tolerated, gaps rejected |
-| Administrative record framing | clause 6.1 | M | Y: 4-bit type, 4-bit flags |
-| DTN time representation | clause 6.1 | M | Y: seconds and nanoseconds as SDNVs |
-| Bundle status report | clause 6.1.1 | O | Y: times present only for set status flags |
-| Status flags | clause 6.1.1, figure 11 | M | Y: all five |
-| Reason codes | clause 6.1.1 | M | Y: the nine RFC 5050 defines |
-| Custody signal | clause 6.1.2 | O | Y: succeeded bit plus 7-bit reason |
-| Fragment fields in administrative records | clause 6.1, figure 9 | O | Y |
+| Recognise, parse and act on the three defined extension blocks | clause 4.4 | M | Y |
+| Unknown block types forwarded intact | clause 4.4 | M | Y: data and flags round-trip byte for byte |
+| Previous Node block, type 6 | clause 4.4.1 | M | Y: at most one per bundle, validated |
+| Bundle Age block, type 7 | clause 4.4.2 | M | Y: at most one per bundle; required when the creation time is zero |
+| Hop Count block, type 10 | clause 4.4.3 | M | Y: hop limit bounded to 1 through 255 |
+| Fragmentation | clause 5.8 | O | Y |
+| Fragment payloads concatenate to the original | clause 5.8 | M | Y |
+| Fragment carries the offset, total length and a fresh CRC | clause 5.8 | M | Y |
+| Replicate-in-every-fragment blocks copied to all fragments | clause 5.8 | M | Y |
+| Offset-zero fragment carries the remaining extension blocks | clause 5.8 | M | Y |
+| Must-not-fragment respected | clause 5.8 | M | Y |
+| Reassembly by material extents | clause 5.9 | O | Y: any order, overlaps tolerated, gaps refused |
+| Administrative record as a two-item array | clause 6.1 | M | Y |
+| Bundle status report, record type 1 | clause 6.1.1 | O | Y |
+| Report array of 4 or 6 elements by subject fragmentation | clause 6.1.1 | M | Y |
+| Status item of 2 elements only when asserted and times requested | clause 6.1.1 | M | Y: a time on an unasserted status is refused |
+| At least four status assertions, extras skipped | clause 6.1.1 | M | Y |
+| Reason codes | clause 6.1.1, table 1 | M | Y: the twelve RFC 9171 defines; unknown codes decode rather than fail |
 
 ---
 
@@ -130,14 +127,13 @@ order: 50
 
 | Feature | Reference | Support | Rationale |
 |---|---|---|---|
-| Bundle protocol agent: routing, storage, forwarding | RFC 5050 clause 5 | N | This package is the wire format and block structure. Forwarding policy, contact graphs and storage belong to a layer above. |
-| Custody transfer timers and retransmission | clause 5.10, clause 6.3 | N | Requires an agent and a clock; the same reasoning as `pkg/ltp`. |
-| Aggregate Custody Signals | CCSDS 734.2-B-1 annex D | N | A separate normative annex; a follow-up. |
-| Delay-Tolerant Payload Conditioning | annex E | N | A separate normative annex; a follow-up. |
-| Bundle Security Protocol blocks | [BSP] | N | A separate specification. |
-| BP managed information | annex F | N | Management data model, not wire format. |
-| Bundle Protocol version 7 | RFC 9171 | N | A CBOR encoding, wire-incompatible with v6. CCSDS 734.2-B-1 profiles v6. |
-| CLI subcommands | - | N | A follow-up once the API settles. |
+| Bundle protocol agent: routing, storage, forwarding, dispatch | clause 5 | N | This package is the wire format and block structure. Forwarding policy, contact graphs and storage belong to a layer above, and need timers and sockets this library does not own. |
+| Convergence layer adapters | clause 7 | N | A transport, not a format. Compose with `pkg/ltp` from the outside. |
+| Bundle Protocol Security | RFC 9172, RFC 9173 | N | A separate specification, and a separate package if it is written. RFC 9173's appendix is used here only as a source of published bundle octets. |
+| Primary block CRC mandatory unless a BIB targets it | clause 4.3.1 | Partial | The rule is conditional on a BPSec block astro does not implement. Refusing CRC type 0 outright would reject valid bundles; astro therefore permits it and leaves the check to a node that can see the BIB. |
+| Accepting non-conformant CBOR and repairing it | clause 4.1 | N | Clause 4.1 permits this and astro declines. Quietly accepting a malformed bundle is how two implementations come to disagree about what they are exchanging. |
+| `ipn` scheme exactly as RFC 9171 prints it | clause 4.2.5.1.2 | Superseded | astro implements RFC 9758, which packs an allocator identifier into the node number. With the default allocator the octets are identical to RFC 9171's, so this is a superset rather than a departure. |
+| Bundle Protocol version 6 | RFC 5050, CCSDS 734.2-B-1 | N | A different wire format, not an earlier revision. Nothing current speaks it. astro implemented it until `v0.4.0`, where it remains in git history. |
 
 ---
 
@@ -145,19 +141,21 @@ order: 50
 
 | Limit | Value | Source |
 |---|---|---|
-| SDNV value range | 0 to 2^64 - 1 | `pkg/sdnv` |
-| Block body length | `MaxBlockLength`, default 16 MiB | Implementation choice; RFC 5050 states no ceiling, but a block length is an SDNV reaching 2^64 and would otherwise size an allocation |
-| Blocks per bundle | `MaxBlocks`, default 64 | Same reasoning |
-| Reassembled application data unit | 16 MiB | Bounded by the same block-length cap |
+| Unsigned integer range | 0 to 2^64 - 1 | CBOR argument width, RFC 8949 clause 3 |
+| `ipn` allocator identifier and node number | below 2^32 each | RFC 9758 clause 6.3 |
+| Hop limit | 1 to 255 | RFC 9171 clause 4.4.3 |
+| Bundle and block size | bounded by the input slice | No ceiling is imposed: a decoder reads from a caller-supplied slice, so the caller's own bound applies |
 
 ---
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/bp) — 5 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/bp) — 18 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
-| [`bp/admin-record.json`](https://github.com/ravisuhag/astro/blob/main/vectors/bp/admin-record.json) | 5 vectors |
+| [`bp/bundle.json`](https://github.com/ravisuhag/astro/blob/main/vectors/bp/bundle.json) | 18 vectors |
+
+Four of them are **published octets rather than derived values**. RFC 9173 appendix A prints worked example bundles beside their hex, and the primary block, payload block, Bundle Age block and whole-bundle vectors are those bytes. A different working group wrote them, which is corroboration almost nothing else in this corpus has.
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.
