@@ -12,6 +12,7 @@ evidence of conformance.
 | `aos` | CCSDS 732.0-B-4 | 12 | — |
 | `bp` | RFC 9171 (BPv7), with ipn scheme per RFC 9758 | 24 | — |
 | `bpsec` | RFC 9172 (BPSec), with default security contexts per RFC 9173 | 13 | — |
+| `cdm` | CCSDS 508.0-B-1 | 1 | 1 |
 | `cfdp` | CCSDS 727.0-B-5 | 25 | — |
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
@@ -37,9 +38,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **377** | **125** |
+| **Total** | | **378** | **126** |
 
-377 vectors and 125 referenced corpus files across 29 packages.
+378 vectors and 126 referenced corpus files across 30 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
