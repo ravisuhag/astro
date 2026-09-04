@@ -158,9 +158,9 @@ func (d *opmDecoder) assign(keyword, value string) error {
 	case blockKeplerian:
 		return d.assignKeplerian(keyword, value)
 	case blockSpacecraft:
-		return d.assignSpacecraft(keyword, value)
+		return assignSpacecraftKeyword(d.spacecraft(), keyword, value)
 	case blockCovariance:
-		return d.assignCovariance(keyword, value)
+		return assignCovarianceKeyword(d.covariance(), keyword, value)
 	case blockManeuver:
 		return d.assignManeuver(keyword, value)
 	}
@@ -322,48 +322,6 @@ func (d *opmDecoder) assignKeplerian(keyword, value string) error {
 	case "GM":
 		k.GM = v
 	}
-	return nil
-}
-
-func (d *opmDecoder) assignSpacecraft(keyword, value string) error {
-	s := d.spacecraft()
-
-	v, err := parseValue(value)
-	if err != nil {
-		return err
-	}
-	switch keyword {
-	case "MASS":
-		s.SetMass(v)
-	case "SOLAR_RAD_AREA":
-		s.SolarRadArea = v
-	case "SOLAR_RAD_COEFF":
-		s.SolarRadCoeff = v
-	case "DRAG_AREA":
-		s.DragArea = v
-	case "DRAG_COEFF":
-		s.DragCoeff = v
-	}
-	return nil
-}
-
-func (d *opmDecoder) assignCovariance(keyword, value string) error {
-	c := d.covariance()
-
-	if keyword == "COV_REF_FRAME" {
-		c.RefFrame = value
-		return nil
-	}
-
-	v, err := parseValue(value)
-	if err != nil {
-		return err
-	}
-	at := covarianceIndex[keyword]
-	// A covariance matrix is symmetric, so the upper triangle is filled in
-	// here rather than left at zero for a caller who indexes the other way.
-	c.Matrix[at[0]][at[1]] = v
-	c.Matrix[at[1]][at[0]] = v
 	return nil
 }
 

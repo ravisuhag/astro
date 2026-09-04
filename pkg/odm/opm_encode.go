@@ -101,24 +101,10 @@ func (m *OPM) writeData(w *ndm.Writer) {
 	}
 
 	if s := m.Data.Spacecraft; s != nil {
-		w.Comments(s.Comments)
-		if s.hasMass {
-			w.AssignUnits("MASS", formatValue(s.Mass), "kg")
-		}
-		w.AssignUnits("SOLAR_RAD_AREA", formatValue(s.SolarRadArea), "m**2")
-		w.Assign("SOLAR_RAD_COEFF", formatValue(s.SolarRadCoeff))
-		w.AssignUnits("DRAG_AREA", formatValue(s.DragArea), "m**2")
-		w.Assign("DRAG_COEFF", formatValue(s.DragCoeff))
+		writeSpacecraftParameters(w, s)
 	}
-
 	if c := m.Data.Covariance; c != nil {
-		w.Comments(c.Comments)
-		if c.RefFrame != "" {
-			w.Assign("COV_REF_FRAME", c.RefFrame)
-		}
-		for _, e := range covarianceElements {
-			w.AssignUnits(e.keyword, formatValue(c.Matrix[e.row][e.col]), e.units)
-		}
+		writeCovarianceKeywords(w, c)
 	}
 
 	for _, man := range m.Data.Maneuvers {

@@ -1,6 +1,7 @@
 package odm_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/odm"
@@ -113,6 +114,59 @@ func FuzzDecodeOEM(f *testing.F) {
 				if m.Blocks[i].Lines[j] != again.Blocks[i].Lines[j] {
 					t.Fatalf("block %d line %d changed on round trip", i, j)
 				}
+			}
+		}
+	})
+}
+
+// The OMM's risk is the paired keywords: three slots in table 4-3 accept two
+// names each, which name applies depends on MEAN_ELEMENT_THEORY, and giving
+// both must be refused rather than silently resolved.
+func FuzzDecodeOMM(f *testing.F) {
+	f.Add(figureG7)
+	f.Add("")
+	f.Add("CCSDS_OMM_VERS = 3.0\n")
+
+	// Both halves of each pair, and a TLE-based message breaking each of the
+	// four conventions clause 4.2.4.6 fixes.
+	f.Add(figureG7 + "SEMI_MAJOR_AXIS = 42165.0\n")
+	f.Add(figureG7 + "BTERM = 0.02\n")
+	f.Add(figureG7 + "AGOM = 0.01\n")
+	f.Add(strings.Replace(figureG7, "REF_FRAME      = TEME", "REF_FRAME      = EME2000", 1))
+	f.Add(strings.Replace(figureG7, "MEAN_ELEMENT_THEORY = SGP/SGP4", "MEAN_ELEMENT_THEORY = DSST", 1))
+
+	f.Fuzz(func(t *testing.T, data string) {
+		m, err := odm.DecodeOMM([]byte(data))
+		if err != nil {
+			return
+		}
+
+		if m.Humanize() == "" {
+			t.Fatal("Humanize returned nothing for a message that decoded")
+		}
+		encoded, err := m.Encode()
+		if err != nil {
+			t.Fatalf("a message that decoded failed to encode: %v", err)
+		}
+
+		again, err := odm.DecodeOMM(encoded)
+		if err != nil {
+			t.Fatalf("re-decoding our own output failed: %v\n%s", err, encoded)
+		}
+		// The choice between each pair of alternatives must survive, since it
+		// changes what the numbers mean.
+		if again.Data.Elements.UsesMeanMotion != m.Data.Elements.UsesMeanMotion {
+			t.Fatal("the size keyword changed on round trip")
+		}
+		if (again.Data.TLE == nil) != (m.Data.TLE == nil) {
+			t.Fatal("the TLE block appeared or vanished on round trip")
+		}
+		if m.Data.TLE != nil {
+			if again.Data.TLE.UsesBTerm != m.Data.TLE.UsesBTerm {
+				t.Fatal("the drag keyword changed on round trip")
+			}
+			if again.Data.TLE.UsesAgom != m.Data.TLE.UsesAgom {
+				t.Fatal("the second-derivative keyword changed on round trip")
 			}
 		}
 	})
