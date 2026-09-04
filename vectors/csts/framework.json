@@ -1,0 +1,141 @@
+{
+  "corpus": [],
+  "decode": [
+    {
+      "clause": "F3.5",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 7,
+        "operation": 2,
+        "operation_name": "UNBIND invocation",
+        "procedure_name": "Association Control",
+        "procedure_oid": "1.3.112.4.4.1.1.3.1",
+        "procedure_role": "association control"
+      },
+      "input": "a21730138000020107300c06082b7004040101030182008100",
+      "name": "unbind-invocation-decode",
+      "note": "The same octets read back. An UNBIND invocation with no credentials, derived from annex F3.5. a2 17 is the [2] alternative of the framework PDU CHOICE, constructed because annex F3.15 uses IMPLICIT TAGS and the alternative is a SEQUENCE, so the context tag replaces the universal one. Inside: 30 13 the standard invocation header, 80 00 credentials 'unused', 02 01 07 the invoke id, 30 0c the procedure name holding 06 08 2b7004040101 0301 for the OID 1.3.112.4.4.1.1.3.1 and 82 00 for the role 'associationControl', then 81 00 for the unused extension."
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 7,
+        "operation": 3,
+        "operation_name": "UNBIND return",
+        "positive": true
+      },
+      "input": "a3098000020107a0028100",
+      "name": "unbind-return-positive-decode",
+      "note": "The same octets read back. An UNBIND return with a positive result. This is the alternative that shows the tagging rule at work: UnbindReturn ::= StandardReturnHeader, which is a SEQUENCE, so the [3] of annex F3.15 replaces that SEQUENCE's tag and there is no 30 in the encoding at all. a3 09 then 80 00 credentials 'unused', 02 01 07 the invoke id copied from the invocation per clause 3.3.2.4.2, and a0 02 81 00 the result CHOICE taking 'positive' with an unused extension."
+    },
+    {
+      "clause": "F3.3",
+      "fields": {
+        "credentials_used": false,
+        "diagnostic": "other reason: busy",
+        "invoke_id": 5,
+        "operation": 11,
+        "operation_name": "START return",
+        "positive": false
+      },
+      "input": "ab0f8000020105a1088204627573798100",
+      "name": "start-return-negative-decode",
+      "note": "The same octets read back. A START return with a negative result carrying an 'otherReason' diagnostic. The negative alternative of the result CHOICE is a SEQUENCE of a Diagnostic and an Extended, and otherReason is alternative [2] of the Diagnostic CHOICE, a primitive AdditionalText. StartReturn is another name for StandardReturnHeader, so the [11] tag replaces its SEQUENCE tag as it does for the UNBIND return."
+    },
+    {
+      "clause": "F3.3",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 9,
+        "operation": 10,
+        "operation_name": "START invocation",
+        "procedure_instance": 4,
+        "procedure_name": "Cyclic Report",
+        "procedure_oid": "1.3.112.4.4.1.1.3.2.1.1",
+        "procedure_role": "secondary"
+      },
+      "input": "aa1a30168000020109300f060a2b7004040101030201018101048100",
+      "name": "start-secondary-procedure-decode",
+      "note": "The same octets read back. A START invocation naming a secondary instance of the Cyclic Report procedure. The procedure role is a three-way CHOICE, and the secondary alternative [1] carries the instance number that tells two instances of one procedure type apart within a service. The procedure type OID is 1.3.112.4.4.1.1.3.2.1.1, which is {unbufferedDataDelivery 1 1}: a derived procedure sits under the procedure it derives from rather than beside it."
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "operation": 4,
+        "operation_name": "PEER-ABORT invocation",
+        "peer_abort_diagnostic": 40,
+        "peer_abort_name": "access denied",
+        "peer_abort_origin": "CSTS Association Control"
+      },
+      "input": "a403040128",
+      "name": "peer-abort-access-denied-decode",
+      "note": "The same octets read back. A PEER-ABORT invocation with diagnostic 40, accessDenied. It is the one operation with no standard header, which clause 3.3.1.1 states outright: annex F3.5 calls its ASN.1 a dummy definition and explains that ISP1 carries an abort as a single octet, so there is nowhere to put one. a4 03 04 01 28 is the [4] alternative holding an OCTET STRING of one octet. The value space is partitioned across the cross support family — 0 to 39 are SLE's, 40 to 69 this framework's, 128 to 199 ISP1's, 200 to 250 the application's — so 40 means accessDenied here and something else entirely from another layer."
+    }
+  ],
+  "encode": [
+    {
+      "clause": "F3.5",
+      "fields": {
+        "invoke_id": 7,
+        "operation": 2,
+        "procedure_role": "association control",
+        "procedure_type": "associationControl"
+      },
+      "name": "unbind-invocation",
+      "note": "An UNBIND invocation with no credentials, derived from annex F3.5. a2 17 is the [2] alternative of the framework PDU CHOICE, constructed because annex F3.15 uses IMPLICIT TAGS and the alternative is a SEQUENCE, so the context tag replaces the universal one. Inside: 30 13 the standard invocation header, 80 00 credentials 'unused', 02 01 07 the invoke id, 30 0c the procedure name holding 06 08 2b7004040101 0301 for the OID 1.3.112.4.4.1.1.3.1 and 82 00 for the role 'associationControl', then 81 00 for the unused extension.",
+      "want": "a21730138000020107300c06082b7004040101030182008100"
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "invoke_id": 7,
+        "operation": 3,
+        "positive": true
+      },
+      "name": "unbind-return-positive",
+      "note": "An UNBIND return with a positive result. This is the alternative that shows the tagging rule at work: UnbindReturn ::= StandardReturnHeader, which is a SEQUENCE, so the [3] of annex F3.15 replaces that SEQUENCE's tag and there is no 30 in the encoding at all. a3 09 then 80 00 credentials 'unused', 02 01 07 the invoke id copied from the invocation per clause 3.3.2.4.2, and a0 02 81 00 the result CHOICE taking 'positive' with an unused extension.",
+      "want": "a3098000020107a0028100"
+    },
+    {
+      "clause": "F3.3",
+      "fields": {
+        "diagnostic_text": "busy",
+        "invoke_id": 5,
+        "operation": 11,
+        "positive": false
+      },
+      "name": "start-return-negative",
+      "note": "A START return with a negative result carrying an 'otherReason' diagnostic. The negative alternative of the result CHOICE is a SEQUENCE of a Diagnostic and an Extended, and otherReason is alternative [2] of the Diagnostic CHOICE, a primitive AdditionalText. StartReturn is another name for StandardReturnHeader, so the [11] tag replaces its SEQUENCE tag as it does for the UNBIND return.",
+      "want": "ab0f8000020105a1088204627573798100"
+    },
+    {
+      "clause": "F3.3",
+      "fields": {
+        "invoke_id": 9,
+        "operation": 10,
+        "procedure_instance": 4,
+        "procedure_role": "secondary",
+        "procedure_type": "cyclicReport"
+      },
+      "name": "start-secondary-procedure",
+      "note": "A START invocation naming a secondary instance of the Cyclic Report procedure. The procedure role is a three-way CHOICE, and the secondary alternative [1] carries the instance number that tells two instances of one procedure type apart within a service. The procedure type OID is 1.3.112.4.4.1.1.3.2.1.1, which is {unbufferedDataDelivery 1 1}: a derived procedure sits under the procedure it derives from rather than beside it.",
+      "want": "aa1a30168000020109300f060a2b7004040101030201018101048100"
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "operation": 4,
+        "peer_abort_diagnostic": 40
+      },
+      "name": "peer-abort-access-denied",
+      "note": "A PEER-ABORT invocation with diagnostic 40, accessDenied. It is the one operation with no standard header, which clause 3.3.1.1 states outright: annex F3.5 calls its ASN.1 a dummy definition and explains that ISP1 carries an abort as a single octet, so there is nowhere to put one. a4 03 04 01 28 is the [4] alternative holding an OCTET STRING of one octet. The value space is partitioned across the cross support family — 0 to 39 are SLE's, 40 to 69 this framework's, 128 to 199 ISP1's, 200 to 250 the application's — so 40 means accessDenied here and something else entirely from another layer.",
+      "want": "a403040128"
+    }
+  ],
+  "note": "The CSTS specification framework. These vectors are DERIVED, not published: CCSDS 921.1-B-2 prints no worked example and no octets, because it is an abstract specification with an ASN.1 annex rather than a wire format document. Each vector's note carries its derivation from annex F octet by octet, so a reader can check it against the module instead of against this package. What they pin hardest is the tagging. Every module in annex F uses IMPLICIT TAGS, so a CHOICE alternative's context tag replaces the tag of the type beneath it: where an alternative is defined as 'X ::= StandardReturnHeader', the [n] replaces that SEQUENCE's tag and no SEQUENCE appears in the encoding. Writing one there as well produces a PDU one level too deep, which round-trips perfectly against itself and against nothing else.",
+  "package": "csts",
+  "schema_version": 1,
+  "source": "derived from CCSDS 921.1-B-2 annex F",
+  "standard": "CCSDS 921.1-B-2"
+}
