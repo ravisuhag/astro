@@ -1,6 +1,7 @@
 package odm
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -24,14 +25,39 @@ import (
 // falls back to the floating-point notation of clause 7.5.7.
 func formatValue(v float64) string {
 	s := strconv.FormatFloat(v, 'f', -1, 64)
-	if countDigits(s) > 16 {
-		return strconv.FormatFloat(v, 'E', -1, 64)
-	}
 	if !strings.ContainsRune(s, '.') {
 		s += ".0"
 	}
-	return s
+	// Count after the '.0' is on, not before it. A whole number with sixteen
+	// digits is already at the ceiling, and the trailing zero clause 7.5.6
+	// forces onto it puts it over — which this package's own reader then
+	// refuses. Found by FuzzDecodeOPM.
+	if countDigits(s) <= maxValueDigits {
+		return s
+	}
+	return formatScientific(v)
 }
+
+// formatScientific writes a number in the floating-point notation of
+// clause 7.5.7, with a decimal point in the mantissa as sub-clause (b) asks.
+// strconv leaves it out for a mantissa of one digit, giving 1E+15 where the
+// clause wants 1.0E+15.
+func formatScientific(v float64) string {
+	s := strconv.FormatFloat(v, 'E', -1, 64)
+
+	mantissa, exponent, found := strings.Cut(s, "E")
+	if !found {
+		return s
+	}
+	if !strings.ContainsRune(mantissa, '.') {
+		mantissa += ".0"
+	}
+	return mantissa + "E" + exponent
+}
+
+// maxValueDigits is the ceiling clauses 7.5.6 and 7.5.7 put on how many
+// decimal digits a non-integer value may carry.
+const maxValueDigits = 16
 
 // countDigits counts the decimal digits in a formatted number.
 func countDigits(s string) int {
@@ -75,4 +101,17 @@ func epochPrecision(t time.Time) int {
 		digits--
 	}
 	return digits
+}
+
+// sqrt returns the square root, and zero for a negative input.
+//
+// A covariance diagonal cannot be negative in a well-formed matrix, but this
+// package does not check that a message's numbers are physically sensible —
+// clause 1.2 puts that outside the standard — so a dump has to survive one
+// that is.
+func sqrt(v float64) float64 {
+	if v <= 0 {
+		return 0
+	}
+	return math.Sqrt(v)
 }
