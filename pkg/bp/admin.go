@@ -1,5 +1,7 @@
 package bp
 
+import "github.com/ravisuhag/astro/internal/cbor"
+
 // AdminRecordType names a kind of administrative record
 // (RFC 9171 clause 6.1). Only one is defined for version 7.
 type AdminRecordType uint64
@@ -76,17 +78,17 @@ type StatusReport struct {
 // at one otherwise.
 func appendStatusItem(dst []byte, item StatusItem, includeTime bool) []byte {
 	if item.Asserted && includeTime {
-		dst = appendArrayHeader(dst, 2)
-		dst = appendBool(dst, true)
-		return appendUint(dst, uint64(item.Time))
+		dst = cbor.AppendArrayHeader(dst, 2)
+		dst = cbor.AppendBool(dst, true)
+		return cbor.AppendUint(dst, uint64(item.Time))
 	}
-	dst = appendArrayHeader(dst, 1)
-	return appendBool(dst, item.Asserted)
+	dst = cbor.AppendArrayHeader(dst, 1)
+	return cbor.AppendBool(dst, item.Asserted)
 }
 
 // statusItem reads one assertion.
-func (d *decoder) statusItem() (StatusItem, error) {
-	n, indefinite, err := d.arrayHeader()
+func decodeStatusItem(d *cbor.Decoder) (StatusItem, error) {
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return StatusItem{}, err
 	}
@@ -94,7 +96,7 @@ func (d *decoder) statusItem() (StatusItem, error) {
 		return StatusItem{}, ErrMalformedStatusReport
 	}
 
-	asserted, err := d.boolean()
+	asserted, err := d.Boolean()
 	if err != nil {
 		return StatusItem{}, err
 	}
@@ -106,7 +108,7 @@ func (d *decoder) statusItem() (StatusItem, error) {
 		if !asserted {
 			return StatusItem{}, ErrStatusTimeWithoutAssertion
 		}
-		t, err := d.uint()
+		t, err := d.Uint()
 		if err != nil {
 			return StatusItem{}, err
 		}
@@ -126,22 +128,22 @@ func (r *StatusReport) Encode() ([]byte, error) {
 	}
 
 	// Clause 6.1: [record type code, record content].
-	out := appendArrayHeader(nil, 2)
-	out = appendUint(out, uint64(AdminRecordStatusReport))
+	out := cbor.AppendArrayHeader(nil, 2)
+	out = cbor.AppendUint(out, uint64(AdminRecordStatusReport))
 
 	// Clause 6.1.1: six elements for a fragment, four otherwise.
 	items := uint64(4)
 	if r.SubjectIsFragment {
 		items = 6
 	}
-	out = appendArrayHeader(out, items)
+	out = cbor.AppendArrayHeader(out, items)
 
-	out = appendArrayHeader(out, 4)
+	out = cbor.AppendArrayHeader(out, 4)
 	for _, item := range []StatusItem{r.Received, r.Forwarded, r.Delivered, r.Deleted} {
 		out = appendStatusItem(out, item, r.IncludeTime)
 	}
 
-	out = appendUint(out, uint64(r.Reason))
+	out = cbor.AppendUint(out, uint64(r.Reason))
 
 	var err error
 	if out, err = appendEID(out, r.SubjectSource); err != nil {
@@ -150,8 +152,8 @@ func (r *StatusReport) Encode() ([]byte, error) {
 	out = appendCreationTimestamp(out, r.SubjectTimestamp)
 
 	if r.SubjectIsFragment {
-		out = appendUint(out, r.SubjectFragmentOffset)
-		out = appendUint(out, r.SubjectPayloadLength)
+		out = cbor.AppendUint(out, r.SubjectFragmentOffset)
+		out = cbor.AppendUint(out, r.SubjectPayloadLength)
 	}
 	return out, nil
 }
@@ -159,9 +161,9 @@ func (r *StatusReport) Encode() ([]byte, error) {
 // DecodeStatusReport reads an administrative record and returns the status
 // report inside it.
 func DecodeStatusReport(data []byte) (*StatusReport, error) {
-	d := newDecoder(data)
+	d := cbor.NewDecoder(data)
 
-	n, indefinite, err := d.arrayHeader()
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +171,7 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 		return nil, ErrMalformedAdminRecord
 	}
 
-	recordType, err := d.uint()
+	recordType, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +179,7 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 		return nil, ErrUnknownAdminRecordType
 	}
 
-	items, indefinite, err := d.arrayHeader()
+	items, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +187,7 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 		return nil, ErrMalformedStatusReport
 	}
 
-	statusCount, indefinite, err := d.arrayHeader()
+	statusCount, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +199,7 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 
 	r := &StatusReport{}
 	for _, into := range []*StatusItem{&r.Received, &r.Forwarded, &r.Delivered, &r.Deleted} {
-		item, err := d.statusItem()
+		item, err := decodeStatusItem(d)
 		if err != nil {
 			return nil, err
 		}
@@ -207,30 +209,30 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 		}
 	}
 	for i := uint64(4); i < statusCount; i++ {
-		if _, err := d.statusItem(); err != nil {
+		if _, err := decodeStatusItem(d); err != nil {
 			return nil, err
 		}
 	}
 
-	reason, err := d.uint()
+	reason, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
 	r.Reason = StatusReportReason(reason)
 
-	if r.SubjectSource, err = d.eid(); err != nil {
+	if r.SubjectSource, err = decodeEIDFrom(d); err != nil {
 		return nil, err
 	}
-	if r.SubjectTimestamp, err = d.creationTimestamp(); err != nil {
+	if r.SubjectTimestamp, err = decodeCreationTimestamp(d); err != nil {
 		return nil, err
 	}
 
 	if items == 6 {
 		r.SubjectIsFragment = true
-		if r.SubjectFragmentOffset, err = d.uint(); err != nil {
+		if r.SubjectFragmentOffset, err = d.Uint(); err != nil {
 			return nil, err
 		}
-		if r.SubjectPayloadLength, err = d.uint(); err != nil {
+		if r.SubjectPayloadLength, err = d.Uint(); err != nil {
 			return nil, err
 		}
 	}

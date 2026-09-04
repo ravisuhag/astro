@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"testing"
+
+	"github.com/ravisuhag/astro/internal/cbor"
 )
 
 // RFC 9173 appendix A.1.1.3, the whole bundle: the primary block of A.1.1.1
@@ -45,7 +47,7 @@ func TestBundleRFC9173Vector(t *testing.T) {
 	// Re-encode block by block. Encode itself refuses this bundle, because its
 	// creation time is unknown and it carries no Bundle Age block — see the
 	// test below. The wire bytes still have to come out identical.
-	out := appendIndefiniteArrayHeader(nil)
+	out := cbor.AppendIndefiniteArrayHeader(nil)
 	if out, err = appendPrimaryBlock(out, b.Primary); err != nil {
 		t.Fatalf("re-encoding the primary block: %v", err)
 	}
@@ -54,7 +56,7 @@ func TestBundleRFC9173Vector(t *testing.T) {
 			t.Fatalf("re-encoding block %d: %v", blk.Number, err)
 		}
 	}
-	out = appendBreak(out)
+	out = cbor.AppendBreak(out)
 
 	if !bytes.Equal(out, raw) {
 		t.Errorf("re-encoded\n got %s\nwant %s", hex.EncodeToString(out), rfc9173Bundle)

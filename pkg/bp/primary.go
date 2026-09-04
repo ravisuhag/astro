@@ -1,5 +1,7 @@
 package bp
 
+import "github.com/ravisuhag/astro/internal/cbor"
+
 // Version is the Bundle Protocol version this package speaks
 // (RFC 9171 clause 4.3.1). Version 6 is a different protocol, not an earlier
 // revision of this one, and nothing here reads it.
@@ -114,10 +116,10 @@ func appendPrimaryBlock(dst []byte, p *PrimaryBlock) ([]byte, error) {
 	}
 
 	start := len(dst)
-	dst = appendArrayHeader(dst, items)
-	dst = appendUint(dst, Version)
-	dst = appendUint(dst, uint64(p.Flags))
-	dst = appendUint(dst, uint64(p.CRCType))
+	dst = cbor.AppendArrayHeader(dst, items)
+	dst = cbor.AppendUint(dst, Version)
+	dst = cbor.AppendUint(dst, uint64(p.Flags))
+	dst = cbor.AppendUint(dst, uint64(p.CRCType))
 
 	var err error
 	for _, e := range []EID{p.Destination, p.Source, p.ReportTo} {
@@ -127,11 +129,11 @@ func appendPrimaryBlock(dst []byte, p *PrimaryBlock) ([]byte, error) {
 	}
 
 	dst = appendCreationTimestamp(dst, p.Timestamp)
-	dst = appendUint(dst, p.Lifetime)
+	dst = cbor.AppendUint(dst, p.Lifetime)
 
 	if p.Flags.Has(FlagIsFragment) {
-		dst = appendUint(dst, p.FragmentOffset)
-		dst = appendUint(dst, p.TotalADULength)
+		dst = cbor.AppendUint(dst, p.FragmentOffset)
+		dst = cbor.AppendUint(dst, p.TotalADULength)
 	}
 
 	if p.CRCType != CRCNone {
@@ -142,10 +144,10 @@ func appendPrimaryBlock(dst []byte, p *PrimaryBlock) ([]byte, error) {
 }
 
 // primaryBlock reads a primary block and verifies its checksum.
-func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
-	start := d.pos
+func decodePrimaryBlock(d *cbor.Decoder) (*PrimaryBlock, error) {
+	start := d.Offset()
 
-	items, indefinite, err := d.arrayHeader()
+	items, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +155,7 @@ func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
 		return nil, ErrMalformedPrimaryBlock
 	}
 
-	version, err := d.uint()
+	version, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
@@ -161,11 +163,11 @@ func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
 		return nil, ErrUnsupportedVersion
 	}
 
-	flags, err := d.uint()
+	flags, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
-	crcCode, err := d.uint()
+	crcCode, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
@@ -177,17 +179,17 @@ func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
 	p := &PrimaryBlock{Flags: BundleControlFlags(flags), CRCType: crcType}
 
 	for _, dest := range []*EID{&p.Destination, &p.Source, &p.ReportTo} {
-		e, err := d.eid()
+		e, err := decodeEIDFrom(d)
 		if err != nil {
 			return nil, err
 		}
 		*dest = e
 	}
 
-	if p.Timestamp, err = d.creationTimestamp(); err != nil {
+	if p.Timestamp, err = decodeCreationTimestamp(d); err != nil {
 		return nil, err
 	}
-	if p.Lifetime, err = d.uint(); err != nil {
+	if p.Lifetime, err = d.Uint(); err != nil {
 		return nil, err
 	}
 
@@ -204,20 +206,20 @@ func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
 	}
 
 	if p.Flags.Has(FlagIsFragment) {
-		if p.FragmentOffset, err = d.uint(); err != nil {
+		if p.FragmentOffset, err = d.Uint(); err != nil {
 			return nil, err
 		}
-		if p.TotalADULength, err = d.uint(); err != nil {
+		if p.TotalADULength, err = d.Uint(); err != nil {
 			return nil, err
 		}
 	}
 
 	if crcType != CRCNone {
-		got, err := d.byteString()
+		got, err := d.ByteString()
 		if err != nil {
 			return nil, err
 		}
-		if err := checkCRC(d.buf[start:d.pos], crcType, got); err != nil {
+		if err := checkCRC(d.Slice(start, d.Offset()), crcType, got); err != nil {
 			return nil, err
 		}
 	}
@@ -226,4 +228,16 @@ func (d *decoder) primaryBlock() (*PrimaryBlock, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// Encode writes the primary block on its own, checksum included.
+//
+// A whole bundle normally goes out through Bundle.Encode. This exists because
+// the canonical form of the primary block is an input to the integrity and
+// confidentiality services of RFC 9172 — both the IPPT and the additional
+// authenticated data start with it — and pkg/bpsec has no other way to ask for
+// those octets. RFC 9172 clause 4 requires the deterministic encoding this
+// package already emits, so there is nothing extra to do here.
+func (p *PrimaryBlock) Encode() ([]byte, error) {
+	return appendPrimaryBlock(nil, p)
 }

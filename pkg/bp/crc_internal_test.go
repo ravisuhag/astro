@@ -1,6 +1,10 @@
 package bp
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ravisuhag/astro/internal/cbor"
+)
 
 // Both algorithms have a published check value: the CRC of the nine ASCII
 // digits "123456789". Pinning it proves the polynomial, the initial value, the
@@ -53,9 +57,9 @@ func TestCRCTypeSizes(t *testing.T) {
 // agree with the RFC.
 func TestCRCFillAndCheck(t *testing.T) {
 	for _, crcType := range []CRCType{CRC16X25, CRC32C} {
-		block := appendArrayHeader(nil, 3)
-		block = appendUint(block, 7)
-		block = appendUint(block, uint64(crcType))
+		block := cbor.AppendArrayHeader(nil, 3)
+		block = cbor.AppendUint(block, 7)
+		block = cbor.AppendUint(block, uint64(crcType))
 		block = appendZeroCRC(block, crcType)
 
 		n := crcType.size()

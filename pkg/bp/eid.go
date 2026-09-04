@@ -3,6 +3,8 @@ package bp
 import (
 	"strconv"
 	"strings"
+
+	"github.com/ravisuhag/astro/internal/cbor"
 )
 
 // SchemeCode is the integer standing in for a URI scheme name on the wire.
@@ -146,29 +148,29 @@ func appendEID(dst []byte, e EID) ([]byte, error) {
 		return nil, err
 	}
 
-	dst = appendArrayHeader(dst, 2)
-	dst = appendUint(dst, uint64(e.Scheme))
+	dst = cbor.AppendArrayHeader(dst, 2)
+	dst = cbor.AppendUint(dst, uint64(e.Scheme))
 
 	switch e.Scheme {
 	case SchemeDTN:
 		if e.DTNSSP == dtnNoneSSP {
 			// The null endpoint is the one dtn SSP that is a number.
-			return appendUint(dst, 0), nil
+			return cbor.AppendUint(dst, 0), nil
 		}
-		return appendTextString(dst, e.DTNSSP), nil
+		return cbor.AppendTextString(dst, e.DTNSSP), nil
 
 	case SchemeIPN:
-		dst = appendArrayHeader(dst, 2)
-		dst = appendUint(dst, e.Allocator<<32|e.Node) // the Fully Qualified Node Number
-		return appendUint(dst, e.Service), nil
+		dst = cbor.AppendArrayHeader(dst, 2)
+		dst = cbor.AppendUint(dst, e.Allocator<<32|e.Node) // the Fully Qualified Node Number
+		return cbor.AppendUint(dst, e.Service), nil
 	}
 
 	return nil, ErrUnknownURIScheme
 }
 
 // eid reads an EID.
-func (d *decoder) eid() (EID, error) {
-	n, indefinite, err := d.arrayHeader()
+func decodeEIDFrom(d *cbor.Decoder) (EID, error) {
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return EID{}, err
 	}
@@ -176,16 +178,16 @@ func (d *decoder) eid() (EID, error) {
 		return EID{}, ErrMalformedEID
 	}
 
-	scheme, err := d.uint()
+	scheme, err := d.Uint()
 	if err != nil {
 		return EID{}, err
 	}
 
 	switch SchemeCode(scheme) {
 	case SchemeDTN:
-		return d.dtnSSP()
+		return decodeDTNSSP(d)
 	case SchemeIPN:
-		return d.ipnSSP()
+		return decodeIPNSSP(d)
 	default:
 		return EID{}, ErrUnknownURIScheme
 	}
@@ -194,14 +196,14 @@ func (d *decoder) eid() (EID, error) {
 // dtnSSP reads the scheme-specific part of a dtn EID. It is a text string,
 // except for the null endpoint, which is the number zero
 // (RFC 9171 clause 4.2.5.1.1).
-func (d *decoder) dtnSSP() (EID, error) {
-	head, err := d.peek()
+func decodeDTNSSP(d *cbor.Decoder) (EID, error) {
+	head, err := d.Peek()
 	if err != nil {
 		return EID{}, err
 	}
 
-	if head>>5 == majorUint {
-		v, err := d.uint()
+	if head>>5 == cbor.MajorUint {
+		v, err := d.Uint()
 		if err != nil {
 			return EID{}, err
 		}
@@ -211,7 +213,7 @@ func (d *decoder) dtnSSP() (EID, error) {
 		return NullEID(), nil
 	}
 
-	ssp, err := d.textString()
+	ssp, err := d.TextString()
 	if err != nil {
 		return EID{}, err
 	}
@@ -220,8 +222,8 @@ func (d *decoder) dtnSSP() (EID, error) {
 
 // ipnSSP reads the scheme-specific part of an ipn EID, in either the two- or
 // three-element form, following the decoding rule of RFC 9758 clause 6.2.
-func (d *decoder) ipnSSP() (EID, error) {
-	n, indefinite, err := d.arrayHeader()
+func decodeIPNSSP(d *cbor.Decoder) (EID, error) {
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return EID{}, err
 	}
@@ -229,11 +231,11 @@ func (d *decoder) ipnSSP() (EID, error) {
 		return EID{}, ErrMalformedEID
 	}
 
-	first, err := d.uint()
+	first, err := d.Uint()
 	if err != nil {
 		return EID{}, err
 	}
-	second, err := d.uint()
+	second, err := d.Uint()
 	if err != nil {
 		return EID{}, err
 	}
@@ -255,7 +257,7 @@ func (d *decoder) ipnSSP() (EID, error) {
 		}, nil
 	}
 
-	third, err := d.uint()
+	third, err := d.Uint()
 	if err != nil {
 		return EID{}, err
 	}
@@ -263,4 +265,29 @@ func (d *decoder) ipnSSP() (EID, error) {
 		return EID{}, ErrIPNComponentTooLarge
 	}
 	return EID{Scheme: SchemeIPN, Allocator: first, Node: second, Service: third}, nil
+}
+
+// Encode writes the endpoint ID as the two-item array of RFC 9171
+// clause 4.2.5.1.
+func (e EID) Encode() ([]byte, error) {
+	return appendEID(nil, e)
+}
+
+// DecodeEID reads an endpoint ID that stands alone, and rejects any octet
+// after it.
+//
+// Security blocks carry a security source as an endpoint ID inside their own
+// CBOR (RFC 9172 clause 3.6). pkg/bpsec lifts that item out of the stream whole
+// and hands it here, so the scheme rules stay in one place rather than being
+// written a second time next to the security block that quotes them.
+func DecodeEID(data []byte) (EID, error) {
+	d := cbor.NewDecoder(data)
+	e, err := decodeEIDFrom(d)
+	if err != nil {
+		return EID{}, err
+	}
+	if !d.AtEnd() {
+		return EID{}, ErrTrailingBytes
+	}
+	return e, nil
 }

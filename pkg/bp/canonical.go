@@ -1,5 +1,7 @@
 package bp
 
+import "github.com/ravisuhag/astro/internal/cbor"
+
 // BlockType names what a block carries (RFC 9171 clause 9.1). The registry is
 // shared with version 6, and the codes it assigned to version 6 only — 2, 3,
 // 4, 5, 8 and 9 — mean nothing here.
@@ -49,10 +51,16 @@ func (f BlockControlFlags) Has(mask BlockControlFlags) bool {
 	return f&mask == mask
 }
 
-// PayloadBlockNumber is the block number the payload block always carries
-// (RFC 9171 clause 4.1). The primary block's number is implicitly zero, so
-// extension blocks start at 2.
-const PayloadBlockNumber = 1
+// Block numbers RFC 9171 clause 4.1 fixes. Extension blocks start at 2.
+const (
+	// PrimaryBlockNumber is the number the primary block carries implicitly.
+	// The primary block has no block number field on the wire, but clause 4.1
+	// says its number is zero, and BPSec security blocks name it that way when
+	// they target it (RFC 9172 clause 3.4).
+	PrimaryBlockNumber = 0
+	// PayloadBlockNumber is the block number the payload block always carries.
+	PayloadBlockNumber = 1
+)
 
 // CanonicalBlock is every block except the primary one
 // (RFC 9171 clause 4.3.2).
@@ -106,7 +114,7 @@ func NewBundleAgeBlock(number uint64, ageMilliseconds uint64) (*CanonicalBlock, 
 	return &CanonicalBlock{
 		Type:   BlockTypeBundleAge,
 		Number: number,
-		Data:   appendUint(nil, ageMilliseconds),
+		Data:   cbor.AppendUint(nil, ageMilliseconds),
 	}, nil
 }
 
@@ -119,9 +127,9 @@ func NewHopCountBlock(number uint64, limit, count uint64) (*CanonicalBlock, erro
 	if limit < 1 || limit > 255 {
 		return nil, ErrHopLimitOutOfRange
 	}
-	data := appendArrayHeader(nil, 2)
-	data = appendUint(data, limit)
-	data = appendUint(data, count)
+	data := cbor.AppendArrayHeader(nil, 2)
+	data = cbor.AppendUint(data, limit)
+	data = cbor.AppendUint(data, count)
 	return &CanonicalBlock{Type: BlockTypeHopCount, Number: number, Data: data}, nil
 }
 
@@ -140,7 +148,7 @@ func (b *CanonicalBlock) PreviousNode() (EID, error) {
 	if b.Type != BlockTypePreviousNode {
 		return EID{}, ErrWrongBlockType
 	}
-	return newDecoder(b.Data).eid()
+	return decodeEIDFrom(cbor.NewDecoder(b.Data))
 }
 
 // BundleAge reads the age in milliseconds from a Bundle Age block.
@@ -148,7 +156,7 @@ func (b *CanonicalBlock) BundleAge() (uint64, error) {
 	if b.Type != BlockTypeBundleAge {
 		return 0, ErrWrongBlockType
 	}
-	return newDecoder(b.Data).uint()
+	return cbor.NewDecoder(b.Data).Uint()
 }
 
 // HopCount reads the limit and count from a Hop Count block.
@@ -156,18 +164,18 @@ func (b *CanonicalBlock) HopCount() (limit, count uint64, err error) {
 	if b.Type != BlockTypeHopCount {
 		return 0, 0, ErrWrongBlockType
 	}
-	d := newDecoder(b.Data)
-	n, indefinite, err := d.arrayHeader()
+	d := cbor.NewDecoder(b.Data)
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return 0, 0, err
 	}
 	if indefinite || n != 2 {
 		return 0, 0, ErrMalformedBlockData
 	}
-	if limit, err = d.uint(); err != nil {
+	if limit, err = d.Uint(); err != nil {
 		return 0, 0, err
 	}
-	if count, err = d.uint(); err != nil {
+	if count, err = d.Uint(); err != nil {
 		return 0, 0, err
 	}
 	if limit < 1 || limit > 255 {
@@ -208,12 +216,12 @@ func appendCanonicalBlock(dst []byte, b *CanonicalBlock) ([]byte, error) {
 	}
 
 	start := len(dst)
-	dst = appendArrayHeader(dst, items)
-	dst = appendUint(dst, uint64(b.Type))
-	dst = appendUint(dst, b.Number)
-	dst = appendUint(dst, uint64(b.Flags))
-	dst = appendUint(dst, uint64(b.CRCType))
-	dst = appendByteString(dst, b.Data)
+	dst = cbor.AppendArrayHeader(dst, items)
+	dst = cbor.AppendUint(dst, uint64(b.Type))
+	dst = cbor.AppendUint(dst, b.Number)
+	dst = cbor.AppendUint(dst, uint64(b.Flags))
+	dst = cbor.AppendUint(dst, uint64(b.CRCType))
+	dst = cbor.AppendByteString(dst, b.Data)
 
 	if b.CRCType != CRCNone {
 		dst = appendZeroCRC(dst, b.CRCType)
@@ -223,10 +231,10 @@ func appendCanonicalBlock(dst []byte, b *CanonicalBlock) ([]byte, error) {
 }
 
 // canonicalBlock reads a canonical block and verifies its checksum.
-func (d *decoder) canonicalBlock() (*CanonicalBlock, error) {
-	start := d.pos
+func decodeCanonicalBlock(d *cbor.Decoder) (*CanonicalBlock, error) {
+	start := d.Offset()
 
-	items, indefinite, err := d.arrayHeader()
+	items, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -234,19 +242,19 @@ func (d *decoder) canonicalBlock() (*CanonicalBlock, error) {
 		return nil, ErrMalformedCanonicalBlock
 	}
 
-	typeCode, err := d.uint()
+	typeCode, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
-	number, err := d.uint()
+	number, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
-	flags, err := d.uint()
+	flags, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
-	crcCode, err := d.uint()
+	crcCode, err := d.Uint()
 	if err != nil {
 		return nil, err
 	}
@@ -265,17 +273,17 @@ func (d *decoder) canonicalBlock() (*CanonicalBlock, error) {
 		return nil, ErrCanonicalBlockLengthMismatch
 	}
 
-	data, err := d.byteString()
+	data, err := d.ByteString()
 	if err != nil {
 		return nil, err
 	}
 
 	if crcType != CRCNone {
-		got, err := d.byteString()
+		got, err := d.ByteString()
 		if err != nil {
 			return nil, err
 		}
-		if err := checkCRC(d.buf[start:d.pos], crcType, got); err != nil {
+		if err := checkCRC(d.Slice(start, d.Offset()), crcType, got); err != nil {
 			return nil, err
 		}
 	}
@@ -296,4 +304,11 @@ func (d *decoder) canonicalBlock() (*CanonicalBlock, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// Encode writes the block on its own, checksum included. Bundle.Encode calls
+// the same code for every block in a bundle; this is for a caller holding one
+// block, such as a security acceptor rebuilding a target it has just decrypted.
+func (b *CanonicalBlock) Encode() ([]byte, error) {
+	return appendCanonicalBlock(nil, b)
 }

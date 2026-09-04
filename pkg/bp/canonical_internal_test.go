@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"testing"
+
+	"github.com/ravisuhag/astro/internal/cbor"
 )
 
 // The payload for RFC 9173's worked examples: a 35-octet ASCII string, carried
@@ -55,7 +57,7 @@ func TestCanonicalBlockRFC9173Vectors(t *testing.T) {
 			continue
 		}
 
-		back, err := newDecoder(mustHex(t, tt.want)).canonicalBlock()
+		back, err := decodeCanonicalBlock(cbor.NewDecoder(mustHex(t, tt.want)))
 		if err != nil {
 			t.Errorf("%s: decode: %v", tt.name, err)
 			continue
@@ -116,7 +118,7 @@ func TestCanonicalBlockUnknownTypeRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	back, err := newDecoder(encoded).canonicalBlock()
+	back, err := decodeCanonicalBlock(cbor.NewDecoder(encoded))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -132,7 +134,7 @@ func TestCanonicalBlockUnknownTypeRoundTrips(t *testing.T) {
 // who reuses that buffer silently corrupts the block.
 func TestCanonicalBlockOwnsItsData(t *testing.T) {
 	input := mustHex(t, rfc9173BundleAgeBlock)
-	b, err := newDecoder(input).canonicalBlock()
+	b, err := decodeCanonicalBlock(cbor.NewDecoder(input))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -188,7 +190,7 @@ func TestCanonicalBlockRejects(t *testing.T) {
 		{"indefinite-length array", "9f0101000040ff", ErrMalformedCanonicalBlock},
 	}
 	for _, tt := range decodeTests {
-		if _, err := newDecoder(mustHex(t, tt.input)).canonicalBlock(); !errors.Is(err, tt.want) {
+		if _, err := decodeCanonicalBlock(cbor.NewDecoder(mustHex(t, tt.input))); !errors.Is(err, tt.want) {
 			t.Errorf("%s: err = %v, want %v", tt.name, err, tt.want)
 		}
 	}

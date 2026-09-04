@@ -1,6 +1,10 @@
 package bp
 
-import "hash/crc32"
+import (
+	"hash/crc32"
+
+	"github.com/ravisuhag/astro/internal/cbor"
+)
 
 // The two checksums RFC 9171 clause 4.2.1 allows on a block.
 //
@@ -94,7 +98,7 @@ func appendZeroCRC(dst []byte, t CRCType) []byte {
 	if n == 0 {
 		return dst
 	}
-	dst = appendHead(dst, majorByteStr, uint64(n))
+	dst = cbor.AppendHead(dst, cbor.MajorByteStr, uint64(n))
 	for i := 0; i < n; i++ {
 		dst = append(dst, 0)
 	}

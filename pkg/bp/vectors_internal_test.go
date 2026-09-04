@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ravisuhag/astro/internal/cbor"
 	"github.com/ravisuhag/astro/internal/vectors"
 )
 
@@ -98,13 +99,13 @@ func decodeVector(input []byte, config vectors.Fields) (vectors.Fields, error) {
 
 	switch structure {
 	case "eid":
-		_, err := newDecoder(input).eid()
+		_, err := decodeEIDFrom(cbor.NewDecoder(input))
 		return vectors.Fields{}, err
 	case "primary_block":
-		_, err := newDecoder(input).primaryBlock()
+		_, err := decodePrimaryBlock(cbor.NewDecoder(input))
 		return vectors.Fields{}, err
 	case "canonical_block":
-		_, err := newDecoder(input).canonicalBlock()
+		_, err := decodeCanonicalBlock(cbor.NewDecoder(input))
 		return vectors.Fields{}, err
 	case "bundle":
 		b, err := Decode(input)
@@ -240,14 +241,14 @@ func bundleFromFields(f vectors.Fields) ([]byte, error) {
 		return nil, err
 	}
 
-	out := appendIndefiniteArrayHeader(nil)
+	out := cbor.AppendIndefiniteArrayHeader(nil)
 	if out, err = appendPrimaryBlock(out, p); err != nil {
 		return nil, err
 	}
 	if out, err = appendCanonicalBlock(out, NewPayloadBlock(payload)); err != nil {
 		return nil, err
 	}
-	return appendBreak(out), nil
+	return cbor.AppendBreak(out), nil
 }
 
 func statusReportFromFields(f vectors.Fields) (*StatusReport, error) {
