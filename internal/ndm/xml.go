@@ -47,8 +47,16 @@ type Element struct {
 	// <MISS_DISTANCE units="m">715</MISS_DISTANCE>. Carrying it in the value
 	// here would put the brackets inside the element text, which no schema
 	// accepts.
-	Units    string
-	Children []Element
+	Units string
+	// Parameter is the parameter attribute, which one element uses.
+	//
+	// The user-defined keyword is the only place the two forms name a thing
+	// differently rather than merely place it differently. In the key-value
+	// form the name is part of the keyword — USER_DEFINED_EARTH_MODEL — and in
+	// XML it is an attribute on a fixed element name:
+	// <USER_DEFINED parameter="EARTH_MODEL">WGS-84</USER_DEFINED>.
+	Parameter string
+	Children  []Element
 }
 
 // Leaf returns an element carrying a value.
@@ -58,6 +66,11 @@ func Leaf(name, value string) Element { return Element{Name: name, Value: value}
 // A value whose units are empty is written without the attribute.
 func LeafWithUnits(name, value, units string) Element {
 	return Element{Name: name, Value: value, Units: units}
+}
+
+// UserDefined returns a user-defined parameter element.
+func UserDefined(name, value string) Element {
+	return Element{Name: KeywordUserDefined, Value: value, Parameter: name}
 }
 
 // SplitLeaf returns an element from a key-value form value, moving any unit
@@ -180,18 +193,27 @@ func (m *XMLMessage) EncodeXML() ([]byte, error) {
 func writeElements(b *strings.Builder, indent string, elements []Element) {
 	for _, e := range elements {
 		if len(e.Children) == 0 {
-			if e.Units != "" {
-				fmt.Fprintf(b, "%s<%s units=%q>%s</%s>\n",
-					indent, e.Name, e.Units, escapeXML(e.Value), e.Name)
-				continue
-			}
-			fmt.Fprintf(b, "%s<%s>%s</%s>\n", indent, e.Name, escapeXML(e.Value), e.Name)
+			fmt.Fprintf(b, "%s<%s%s>%s</%s>\n",
+				indent, e.Name, attributes(e), escapeXML(e.Value), e.Name)
 			continue
 		}
 		fmt.Fprintf(b, "%s<%s>\n", indent, e.Name)
 		writeElements(b, indent+"  ", e.Children)
 		fmt.Fprintf(b, "%s</%s>\n", indent, e.Name)
 	}
+}
+
+// attributes renders the attributes an element carries, in the order the
+// schema set writes them.
+func attributes(e Element) string {
+	var b strings.Builder
+	if e.Parameter != "" {
+		fmt.Fprintf(&b, " parameter=%q", e.Parameter)
+	}
+	if e.Units != "" {
+		fmt.Fprintf(&b, " units=%q", e.Units)
+	}
+	return b.String()
 }
 
 // escapeXML escapes the five characters XML reserves.
@@ -336,8 +358,11 @@ func readChildren(d *xml.Decoder) ([]Element, error) {
 func readElement(d *xml.Decoder, start xml.StartElement) (Element, error) {
 	e := Element{Name: start.Name.Local}
 	for _, attr := range start.Attr {
-		if attr.Name.Local == "units" {
+		switch attr.Name.Local {
+		case "units":
 			e.Units = attr.Value
+		case "parameter":
+			e.Parameter = attr.Value
 		}
 	}
 

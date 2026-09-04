@@ -11,6 +11,12 @@ const (
 	KeywordOriginator     = "ORIGINATOR"
 	KeywordMessageFor     = "MESSAGE_FOR"
 	KeywordMessageID      = "MESSAGE_ID"
+
+	// KeywordUserDefined is the element name the XML form gives every
+	// user-defined parameter, with the parameter's own name in an attribute.
+	// In the key-value form the name is part of the keyword instead, after a
+	// USER_DEFINED_ prefix.
+	KeywordUserDefined = "USER_DEFINED"
 )
 
 // Presence says how a standard's header table treats a keyword: not listed at

@@ -39,7 +39,11 @@ choice to the two parties exchanging the file.
 **Implemented.** The OPM, the OMM and the OEM, in key-value notation. Reading,
 writing, and the structural rules the standard states.
 
-**Not yet implemented.** The OCM, and the XML form of all four.
+**Also implemented: the XML form** of section 8, for all three messages.
+`EncodeXML` sits beside `Encode`, and `DecodeXMLOPM`, `DecodeXMLOMM` and
+`DecodeXMLOEM` beside their key-value counterparts.
+
+**Not yet implemented.** The OCM.
 
 **Deliberately absent: orbital mechanics.** Nothing here propagates a state
 vector, converts between reference frames, or turns mean elements into a
@@ -103,6 +107,39 @@ row by row (clause 3.2.4.10). `Covariance.Matrix` is the full symmetric 6×6:
 the upper triangle is filled in on decode, because a covariance matrix is
 symmetric by definition and a caller indexing `Matrix[1][2]` should not get a
 zero.
+
+## The XML form is a different shape, not a reformatting
+
+Section 8 says the rules for which keywords may appear are the same as for the
+key-value form. Three things around them are not.
+
+**Units become an attribute.** `X = 6503.514 [km]` becomes
+`<X units="km">6503.514</X>`. Clause 8.10.10 makes them optional in XML as
+clause 7.7.1.1 does in KVN.
+
+**A user-defined parameter changes shape.** In the key-value form the name is
+part of the keyword; in XML the element is always `USER_DEFINED` and the name
+is an attribute:
+
+```
+USER_DEFINED_EARTH_MODEL = WGS-84
+<USER_DEFINED parameter="EARTH_MODEL">WGS-84</USER_DEFINED>
+```
+
+**Repetition becomes repeated elements.** Two manoeuvres in an OPM are two runs
+of the same keywords in KVN and two `<maneuverParameters>` blocks in XML.
+
+### The OEM diverges most
+
+Its ephemeris records are positional lines in KVN and one `<stateVector>` block
+each in XML, with every component named (clause 8.10.14). Its covariance
+matrices are positional rows between `COVARIANCE_START` and `COVARIANCE_STOP`
+in KVN, and the OPM's named `CX_X` family in XML (clause 8.10.19). The
+delimiters disappear entirely — the blocks are the delimiters.
+
+So the two forms of one OEM carry the same numbers in a genuinely different
+shape. Worth knowing before comparing two files by eye and concluding they
+disagree.
 
 ## Three OMM keyword slots take two names each
 
