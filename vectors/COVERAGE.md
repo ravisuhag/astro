@@ -140,7 +140,8 @@ any one check.
 from a published corpus or a worked example the standard prints, that
 risk is gone — the CCSDS 121.0 data set, the annex F checksum, the RFC
 5050 SDNV examples, the RFC 4493 and NIST CMAC sets, the published
-randomizer sequences. Everywhere else it stands.
+randomizer sequences, and the bundle encodings of RFC 9173 appendix A.
+Everywhere else it stands.
 
 **Five layers cannot be corroborated from outside at all, and the reason
 is structural.** `cop`, `epp`, `ltp`, `ocsc` and `sdls` rest on clause
