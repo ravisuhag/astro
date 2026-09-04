@@ -356,7 +356,7 @@ func bpCmd() *cobra.Command {
 	cmd.AddCommand(newPDUDecodeCmd(
 		"admin [file]",
 		"Decode an administrative record",
-		"Decode an administrative record: a status report or a custody signal, which is what a bundle's payload holds when it is an administrative bundle.",
+		"Decode an administrative record. Version 7 defines one kind, the bundle status report, which is what a bundle's payload holds when its administrative record flag is set.",
 		`  # Decode a status report
   astro bp admin --input hex < record.hex`,
 		decodeBPAdminRecord,
@@ -365,26 +365,26 @@ func bpCmd() *cobra.Command {
 }
 
 func decodeBPBundle(data []byte) (pduDescription, error) {
-	bundle, err := bp.DecodeBundle(data)
+	bundle, err := bp.Decode(data)
 	if err != nil {
 		return pduDescription{}, fmt.Errorf("decoding the bundle: %w", err)
 	}
 
 	return pduDescription{
-		Kind:    "BPv6 Bundle",
+		Kind:    "BPv7 Bundle",
 		Summary: bundle.Humanize(),
 		Octets:  len(data),
 	}, nil
 }
 
 func decodeBPAdminRecord(data []byte) (pduDescription, error) {
-	record, err := bp.DecodeAdminRecord(data)
+	record, err := bp.DecodeStatusReport(data)
 	if err != nil {
 		return pduDescription{}, fmt.Errorf("decoding the administrative record: %w", err)
 	}
 
 	return pduDescription{
-		Kind:    "BPv6 Administrative Record",
+		Kind:    "BPv7 Administrative Record",
 		Summary: record.Humanize(),
 		Octets:  len(data),
 	}, nil

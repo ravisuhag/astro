@@ -38,6 +38,13 @@ var ErrorNames = map[string]bool{
 	// A caller-supplied output buffer is too short. Only reachable through
 	// requires: ["encode_into"], which Go has no equivalent for.
 	"buffer_too_small": true,
+	// The octets parse as the underlying encoding but are not the form the
+	// standard requires of it: a CBOR definite-length array where BPv7
+	// clause 4.1 mandates the indefinite form, or an argument written wider
+	// than the deterministic encoding of RFC 8949 clause 4.2.1 allows.
+	// Distinct from reserved_value because no field holds a forbidden value —
+	// the container itself is written the wrong way.
+	"malformed_encoding": true,
 }
 
 // errorVocabulary returns the vocabulary in sorted order, for messages.

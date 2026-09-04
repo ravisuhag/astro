@@ -7,10 +7,9 @@
 //
 // Delay-Tolerant Networking is the answer, and it is two layers:
 //
-//	Bundle Protocol (CCSDS 734.2, pkg/bp)
-//	  The network layer. A bundle is addressed, prioritised and given a
-//	  lifetime, then stored at each hop rather than held in an end-to-end
-//	  session.
+//	Bundle Protocol version 7 (RFC 9171, pkg/bp)
+//	  The network layer. A bundle is addressed and given a lifetime, then
+//	  stored at each hop rather than held in an end-to-end session.
 //
 //	Licklider Transmission Protocol (CCSDS 734.1, pkg/ltp)
 //	  The convergence layer for one hop. It pushes a whole block, then asks
@@ -56,40 +55,43 @@ func buildBundle() *bp.Bundle {
 	fmt.Println()
 
 	primary := &bp.PrimaryBlock{
-		// Singleton means the destination is one endpoint, not a group.
-		// Custody requested asks each hop to take responsibility for the
-		// bundle before the previous hop lets go of it, which is what makes
-		// store and forward reliable without an end-to-end session.
-		Flags: (bp.FlagSingleton | bp.FlagCustodyRequested |
-			bp.FlagReportDelivery).WithPriority(bp.PriorityExpedited),
+		// Version 7 dropped the custody-transfer and priority machinery
+		// version 6 carried. What is left is plainer: ask for a delivery
+		// report, and ask for the time each status was asserted.
+		Flags: bp.FlagReportDelivery | bp.FlagStatusTimeRequested,
 
-		Destination: bp.IPNEndpoint(earthNode, scienceSvc),
-		Source:      bp.IPNEndpoint(roverNode, scienceSvc),
-		ReportTo:    bp.IPNEndpoint(roverNode, scienceSvc),
+		Destination: bp.IPN(earthNode, scienceSvc),
+		Source:      bp.IPN(roverNode, scienceSvc),
+		ReportTo:    bp.IPN(roverNode, scienceSvc),
 
-		// Seconds since 2000, plus a sequence number for bundles created in
-		// the same second. Source plus timestamp is what identifies a bundle.
-		CreationTimestamp: bp.CreationTimestamp{Time: 828_000_000, SequenceNumber: 1},
+		// A checksum on the primary block. Version 7 makes one mandatory
+		// unless a security block covers the block instead.
+		CRCType: bp.CRC32C,
 
-		// How long the bundle stays worth carrying. A node holding an expired
-		// bundle deletes it rather than forwarding it into a window that has
-		// already closed.
-		Lifetime: 86400, // one day
+		// Milliseconds since 2000, plus a sequence number for bundles created
+		// in the same millisecond. Source plus timestamp identifies a bundle,
+		// and reassembly and status reports both key on that pair.
+		Timestamp: bp.CreationTimestamp{Time: 828_000_000_000, Sequence: 1},
+
+		// How long the bundle stays worth carrying, in milliseconds. A node
+		// holding an expired bundle deletes it rather than forwarding it into
+		// a window that has already closed.
+		Lifetime: 86_400_000, // one day
 	}
 
 	payload := []byte("SPECTRUM 4096 CHANNELS SOL 1247 SITE MERIDIANI")
 
-	// The Extended Class of Service block is mandatory in the CCSDS profile.
-	// RFC 5050 gives a bundle three priority levels; space operations need a
-	// finer ranking inside the expedited class.
-	bundle, err := bp.NewBundle(primary, payload, bp.WithECOS(bp.ECOS{
-		Ordinal: 100, // ranks above ordinal 99, below 101
-	}))
+	// A hop count block is the cheap insurance against a routing loop: a
+	// bundle ping-ponging between two nodes is deleted once it passes the
+	// limit, instead of circulating until its lifetime runs out.
+	hops, err := bp.NewHopCountBlock(2, 32, 0)
+	if err != nil {
+		log.Fatalf("building the hop count block: %v", err)
+	}
+
+	bundle, err := bp.NewBundle(primary, payload, hops)
 	if err != nil {
 		log.Fatalf("building the bundle: %v", err)
-	}
-	if err := bundle.Validate(); err != nil {
-		log.Fatalf("validating the bundle: %v", err)
 	}
 
 	encoded, err := bundle.Encode()
@@ -99,11 +101,10 @@ func buildBundle() *bp.Bundle {
 
 	fmt.Printf("  from ............ %s\n", primary.Source)
 	fmt.Printf("  to .............. %s\n", primary.Destination)
-	fmt.Printf("  priority ........ %s, ordinal 100\n", primary.Flags.Priority())
-	fmt.Printf("  lifetime ........ %d s\n", primary.Lifetime)
+	fmt.Printf("  lifetime ........ %d ms\n", primary.Lifetime)
 	fmt.Printf("  payload ......... %d octets\n", len(payload))
 	fmt.Printf("  encoded bundle .. %d octets\n", len(encoded))
-	fmt.Printf("  blocks .......... %d (ECOS, then payload)\n", len(bundle.Blocks))
+	fmt.Printf("  blocks .......... %d (hop count, then payload)\n", len(bundle.Blocks))
 	fmt.Println()
 
 	return bundle
@@ -242,23 +243,20 @@ func readBundle(block []byte) {
 	fmt.Println("--- The far end ---")
 	fmt.Println()
 
-	bundle, err := bp.DecodeBundle(block)
+	bundle, err := bp.Decode(block)
 	if err != nil {
 		log.Fatalf("decoding the bundle: %v", err)
 	}
-
-	payload, err := bundle.Payload()
-	if err != nil {
-		log.Fatalf("reading the payload: %v", err)
-	}
+	payload := bundle.Payload()
 
 	fmt.Printf("  from ......... %s\n", bundle.Primary.Source)
 	fmt.Printf("  to ........... %s\n", bundle.Primary.Destination)
-	fmt.Printf("  priority ..... %s\n", bundle.Primary.Flags.Priority())
-	if ecos, ok := bundle.ECOS(); ok {
-		fmt.Printf("  ECOS ordinal . %d\n", ecos.Ordinal)
+	fmt.Printf("  created ...... %s\n", bundle.Primary.Timestamp.Humanize())
+	for _, blk := range bundle.Blocks {
+		if limit, count, err := blk.HopCount(); err == nil {
+			fmt.Printf("  hops ......... %d of %d\n", count, limit)
+		}
 	}
-	fmt.Printf("  custody ...... %t\n", bundle.Primary.Flags.Has(bp.FlagCustodyRequested))
 	fmt.Printf("  payload ...... %q\n", payload)
 	fmt.Println()
 }
@@ -364,19 +362,13 @@ func fragment(bundle *bp.Bundle) {
 		log.Fatalf("reassembling: %v", err)
 	}
 
-	original, err := bundle.Payload()
-	if err != nil {
-		log.Fatalf("reading the original payload: %v", err)
-	}
-	recovered, err := rejoined.Payload()
-	if err != nil {
-		log.Fatalf("reading the reassembled payload: %v", err)
-	}
+	original := bundle.Payload()
+	recovered := rejoined.Payload()
 
 	fmt.Printf("  reassembled ..... %d octets, identical %t\n",
 		len(recovered), bytes.Equal(recovered, original))
 	fmt.Println()
-	fmt.Println("  A bundle marked FlagNoFragment cannot be split, so it waits")
+	fmt.Println("  A bundle with FlagMustNotFragment cannot be split, so it waits")
 	fmt.Println("  for a window big enough or expires trying.")
 }
 
