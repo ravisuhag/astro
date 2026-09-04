@@ -30,7 +30,7 @@ because that message is not implemented.
 | Implementation Name | astro/pkg/odm |
 | Implementation Version | See `go.mod` / latest commit on `main` |
 | Special Configuration | None |
-| Other Information | Go library reading and writing the Orbit Parameter Message, the Orbit Mean-Elements Message and the Orbit Ephemeris Message in 'keyword = value' notation. The OCM is not implemented, nor is the XML form of any message. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
+| Other Information | Go library reading and writing the Orbit Parameter Message, the Orbit Mean-Elements Message and the Orbit Ephemeris Message, in both the 'keyword = value' notation of section 7 and the XML form of section 8. The OCM is not implemented. No orbital mechanics: nothing propagates, converts frames, interpolates, or derives one element set from another. |
 
 ## A2.3 IDENTIFICATION OF SUPPLIER
 
@@ -48,6 +48,24 @@ because that message is not implemented.
 | Specification | CCSDS 502.0-B-3 (Orbit Data Messages, Blue Book, April 2023), also published as ISO 26900 |
 | Time formats | CCSDS 301.0-B-4 ASCII time codes A and B, via `pkg/tcf` |
 | Have any exceptions been required? | Yes [X] No [ ], see A2.6 |
+
+---
+
+## A2.5 XML FORM
+
+| Feature | Reference | Status | Support |
+|---|---|:-:|---|
+| Root element and its id and version attributes | 8.3, 8.8.2–8.8.4 | M | Y: one per message type |
+| Schema instance namespace, exactly as given | 505.0-B-3 clause 4.3.3 | M | Y: http, not https — the string names a namespace |
+| Header, body, segment, metadata, data | 505.0-B-3 clauses 3.2–3.4 | M | Y: shared across all four navigation packages |
+| One segment for OPM and OMM | 505.0-B-3 clause 3.3 | M | Y |
+| One or more segments for OEM | 505.0-B-3 clause 3.4 | M | Y |
+| Keyword tags in upper case | 8.10.9 | M | Y |
+| Units as an attribute, matching section 5 | 8.10.10, 8.10.11 | O | Y |
+| Block elements for the logical blocks | 8.8.12–8.8.15, 8.9, 8.10.13 | M | Y |
+| Each ephemeris line as a named `stateVector` | 8.10.14 | M | Y |
+| OEM covariance with the OPM's named keywords | 8.10.19 | M | Y |
+| `USER_DEFINED` with the name in an attribute | 8.10, annex G | O | Y |
 
 ---
 
@@ -189,11 +207,14 @@ rule that `TEME` may be used for nothing else is enforced too.
 
 ## A2.6 EXCEPTIONS AND UNSUPPORTED FEATURES
 
-**Only the OPM, the OMM and the OEM are implemented, and only in key-value
-notation.** The OCM is not, and neither is the XML form described in section 8
-of the Blue Book and specified by CCSDS 505.0-B-3. Clause 1.1 leaves the choice
-of notation to the exchanging parties, so a partner who sends XML cannot be
-read today.
+**The OCM is not implemented.** Section 6's Orbit Comprehensive Message is over
+half the Blue Book, arrived with the 2023 issue, and has thin adoption next to
+the other three.
+
+Both notations are implemented for the OPM, the OMM and the OEM: the key-value
+form of section 7 and the XML form of section 8, with the structure of
+CCSDS 505.0-B-3. Clause 1.1 leaves the choice to the exchanging parties, so
+both are needed.
 
 **Interpolation is not performed.** `INTERPOLATION` and
 `INTERPOLATION_DEGREE` are read, preserved and reported, and nothing here acts

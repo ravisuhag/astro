@@ -171,3 +171,46 @@ func FuzzDecodeOMM(f *testing.F) {
 		}
 	})
 }
+
+// The XML form is a second front door. Its risks are different from the
+// key-value form's: attributes rather than bracketed units, blocks rather than
+// keyword order, and an XML parser between the input and the message.
+func FuzzDecodeXMLOPM(f *testing.F) {
+	f.Add(figureG5)
+	f.Add("")
+	f.Add("<opm/>")
+	f.Add(`<opm id="CCSDS_OPM_VERS" version="3.0"><header/><body/></opm>`)
+	f.Add(`<opm id="CCSDS_OPM_VERS" version="3.0"><header/><body><segment><metadata/><data/></segment></body></opm>`)
+
+	f.Fuzz(func(t *testing.T, data string) {
+		m, err := odm.DecodeXMLOPM([]byte(data))
+		if err != nil {
+			return
+		}
+
+		encoded, err := m.EncodeXML()
+		if err != nil {
+			t.Fatalf("a message that decoded failed to encode: %v", err)
+		}
+		again, err := odm.DecodeXMLOPM(encoded)
+		if err != nil {
+			t.Fatalf("re-decoding our own XML failed: %v\n%s", err, encoded)
+		}
+		if again.Data.StateVector.X != m.Data.StateVector.X {
+			t.Fatal("X changed on an XML round trip")
+		}
+
+		// And the two forms must still agree after a crossing.
+		kvn, err := m.Encode()
+		if err != nil {
+			t.Fatalf("a message that decoded from XML failed to encode as KVN: %v", err)
+		}
+		crossed, err := odm.DecodeOPM(kvn)
+		if err != nil {
+			t.Fatalf("the key-value form written from XML does not read back: %v", err)
+		}
+		if crossed.Data.StateVector.X != m.Data.StateVector.X {
+			t.Fatal("X changed crossing the forms")
+		}
+	})
+}
