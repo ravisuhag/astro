@@ -1,0 +1,44 @@
+CCSDS_APM_VERS = 2.0
+CREATION_DATE = 2006-03-13T13:13:33
+ORIGINATOR     = GSFC
+MESSAGE_ID     = A7015Z2
+
+OBJECT_NAME   = GOES-P
+OBJECT_ID     = 2006-003A
+CENTER_NAME   = EARTH
+TIME_SYSTEM   = UTC
+
+COMMENT Attitude given by Euler angles
+
+EPOCH = 2006-03-12T09:56:39.4987
+
+EULER_START
+COMMENT Euler angles
+REF_FRAME_A   = BODY_FRAME_A
+REF_FRAME_B   = ITRF1997
+EULER_ROT_SEQ = YXY
+ANGLE_1    = -26.78 [deg]
+ANGLE_2    = 3.71 [deg]
+ANGLE_3    = -11.16 [deg]
+EULER_STOP
+
+INERTIA_START
+INERTIA_REF_FRAME = SC_BODY_1
+IXX       = 6080.0 [kg*m**2]
+IYY       = 5245.5 [kg*m**2]
+IZZ       = 8067.3 [kg*m**2]
+IXY       = -135.9 [kg*m**2]
+IXZ       = 89.3   [kg*m**2]
+IYZ       = -90.7 [kg*m**2]
+INERTIA_STOP
+
+MAN_START
+COMMENT Data follows for 1 planned maneuver.
+COMMENT Impulsive, torque direction fixed in body frame
+MAN_EPOCH_START = 2004-02-14T14:29:00.5098
+MAN_DURATION = 3     [s]
+MAN_REF_FRAME = ICRF
+MAN_TOR_X     = -1.25 [N*m]
+MAN_TOR_Y     = -0.5   [N*m]
+MAN_TOR_Z     = 0.5   [N*m]
+MAN_STOP

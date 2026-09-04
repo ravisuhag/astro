@@ -52,3 +52,4 @@ what has never been tested against another implementation.
 | [XTCE](/conformance/xtce) | `pkg/xtce` | [8 files](https://github.com/ravisuhag/astro/tree/main/vectors/xtce) | [Protocol](/protocols/mission/xtce) |
 | [Orbit Data Messages](/conformance/odm) | `pkg/odm` | [6](https://github.com/ravisuhag/astro/tree/main/vectors/odm) | [Protocol](/protocols/mission/odm) |
 | [Tracking Data Message](/conformance/tdm) | `pkg/tdm` | [1](https://github.com/ravisuhag/astro/tree/main/vectors/tdm) | [Protocol](/protocols/mission/tdm) |
+| [Attitude Data Messages](/conformance/adm) | `pkg/adm` | [3](https://github.com/ravisuhag/astro/tree/main/vectors/adm) | [Protocol](/protocols/mission/adm) |
