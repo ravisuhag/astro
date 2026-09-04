@@ -1,4 +1,4 @@
-package bp
+package cbor
 
 import (
 	"bytes"
@@ -29,13 +29,13 @@ func TestCBORAppendUint(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := hex.EncodeToString(appendUint(nil, tt.value))
+		got := hex.EncodeToString(AppendUint(nil, tt.value))
 		if got != tt.want {
-			t.Errorf("appendUint(%d) = %s, want %s", tt.value, got, tt.want)
+			t.Errorf("AppendUint(%d) = %s, want %s", tt.value, got, tt.want)
 		}
 
 		// And it reads back as itself.
-		v, err := newDecoder(mustHex(t, tt.want)).uint()
+		v, err := NewDecoder(mustHex(t, tt.want)).Uint()
 		if err != nil {
 			t.Errorf("decoding %s: %v", tt.want, err)
 			continue
@@ -52,15 +52,15 @@ func TestCBORAppendStringsAndArrays(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"empty byte string", hex.EncodeToString(appendByteString(nil, nil)), "40"},
-		{"byte string 01020304", hex.EncodeToString(appendByteString(nil, []byte{1, 2, 3, 4})), "4401020304"},
-		{"empty text string", hex.EncodeToString(appendTextString(nil, "")), "60"},
-		{"text string a", hex.EncodeToString(appendTextString(nil, "a")), "6161"},
-		{"text string IETF", hex.EncodeToString(appendTextString(nil, "IETF")), "6449455446"},
-		{"empty array", hex.EncodeToString(appendArrayHeader(nil, 0)), "80"},
-		{"array of 3", hex.EncodeToString(appendArrayHeader(nil, 3)), "83"},
-		{"indefinite array", hex.EncodeToString(appendIndefiniteArrayHeader(nil)), "9f"},
-		{"break", hex.EncodeToString(appendBreak(nil)), "ff"},
+		{"empty byte string", hex.EncodeToString(AppendByteString(nil, nil)), "40"},
+		{"byte string 01020304", hex.EncodeToString(AppendByteString(nil, []byte{1, 2, 3, 4})), "4401020304"},
+		{"empty text string", hex.EncodeToString(AppendTextString(nil, "")), "60"},
+		{"text string a", hex.EncodeToString(AppendTextString(nil, "a")), "6161"},
+		{"text string IETF", hex.EncodeToString(AppendTextString(nil, "IETF")), "6449455446"},
+		{"empty array", hex.EncodeToString(AppendArrayHeader(nil, 0)), "80"},
+		{"array of 3", hex.EncodeToString(AppendArrayHeader(nil, 3)), "83"},
+		{"indefinite array", hex.EncodeToString(AppendIndefiniteArrayHeader(nil)), "9f"},
+		{"break", hex.EncodeToString(AppendBreak(nil)), "ff"},
 	}
 
 	for _, tt := range tests {
@@ -74,28 +74,28 @@ func TestCBORAppendStringsAndArrays(t *testing.T) {
 // form [_ 1, 2, 3] as 0x9f010203ff. A bundle is the indefinite kind
 // (RFC 9171 clause 4.1), so both paths matter.
 func TestCBORArrayForms(t *testing.T) {
-	d := newDecoder(mustHex(t, "83010203"))
-	n, indefinite, err := d.arrayHeader()
+	d := NewDecoder(mustHex(t, "83010203"))
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil || indefinite || n != 3 {
 		t.Fatalf("definite array header = (%d, %v, %v), want (3, false, nil)", n, indefinite, err)
 	}
 	for want := uint64(1); want <= 3; want++ {
-		if v, err := d.uint(); err != nil || v != want {
+		if v, err := d.Uint(); err != nil || v != want {
 			t.Fatalf("item %d = (%d, %v)", want, v, err)
 		}
 	}
-	if !d.atEnd() {
+	if !d.AtEnd() {
 		t.Error("definite array left bytes unread")
 	}
 
-	d = newDecoder(mustHex(t, "9f010203ff"))
-	n, indefinite, err = d.arrayHeader()
+	d = NewDecoder(mustHex(t, "9f010203ff"))
+	n, indefinite, err = d.ArrayHeader()
 	if err != nil || !indefinite || n != 0 {
 		t.Fatalf("indefinite array header = (%d, %v, %v), want (0, true, nil)", n, indefinite, err)
 	}
 	count := 0
-	for !d.atBreak() {
-		if _, err := d.uint(); err != nil {
+	for !d.AtBreak() {
+		if _, err := d.Uint(); err != nil {
 			t.Fatalf("item %d: %v", count, err)
 		}
 		count++
@@ -103,10 +103,10 @@ func TestCBORArrayForms(t *testing.T) {
 	if count != 3 {
 		t.Errorf("read %d items before the break, want 3", count)
 	}
-	if err := d.readBreak(); err != nil {
+	if err := d.ReadBreak(); err != nil {
 		t.Errorf("readBreak: %v", err)
 	}
-	if !d.atEnd() {
+	if !d.AtEnd() {
 		t.Error("indefinite array left bytes unread")
 	}
 }
@@ -126,7 +126,7 @@ func TestCBORRejectsNonShortestForm(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, err := newDecoder(mustHex(t, tt.input)).uint()
+		_, err := NewDecoder(mustHex(t, tt.input)).Uint()
 		if !errors.Is(err, ErrNotDeterministic) {
 			t.Errorf("%s: err = %v, want ErrNotDeterministic", tt.name, err)
 		}
@@ -139,35 +139,35 @@ func TestCBORTruncated(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		read  func(*decoder) error
+		read  func(*Decoder) error
 	}{
-		{"empty input", "", func(d *decoder) error { _, err := d.uint(); return err }},
-		{"uint head with no argument", "18", func(d *decoder) error { _, err := d.uint(); return err }},
-		{"uint argument cut short", "1b00000000", func(d *decoder) error { _, err := d.uint(); return err }},
-		{"byte string shorter than its length", "4401", func(d *decoder) error { _, err := d.byteString(); return err }},
-		{"text string shorter than its length", "6449", func(d *decoder) error { _, err := d.textString(); return err }},
-		{"array head with no items", "83", func(d *decoder) error {
-			if _, _, err := d.arrayHeader(); err != nil {
+		{"empty input", "", func(d *Decoder) error { _, err := d.Uint(); return err }},
+		{"uint head with no argument", "18", func(d *Decoder) error { _, err := d.Uint(); return err }},
+		{"uint argument cut short", "1b00000000", func(d *Decoder) error { _, err := d.Uint(); return err }},
+		{"byte string shorter than its length", "4401", func(d *Decoder) error { _, err := d.ByteString(); return err }},
+		{"text string shorter than its length", "6449", func(d *Decoder) error { _, err := d.TextString(); return err }},
+		{"array head with no items", "83", func(d *Decoder) error {
+			if _, _, err := d.ArrayHeader(); err != nil {
 				return err
 			}
-			_, err := d.uint()
+			_, err := d.Uint()
 			return err
 		}},
-		{"missing break", "9f0102", func(d *decoder) error {
-			if _, _, err := d.arrayHeader(); err != nil {
+		{"missing break", "9f0102", func(d *Decoder) error {
+			if _, _, err := d.ArrayHeader(); err != nil {
 				return err
 			}
-			for !d.atBreak() && !d.atEnd() {
-				if _, err := d.uint(); err != nil {
+			for !d.AtBreak() && !d.AtEnd() {
+				if _, err := d.Uint(); err != nil {
 					return err
 				}
 			}
-			return d.readBreak()
+			return d.ReadBreak()
 		}},
 	}
 
 	for _, tt := range tests {
-		err := tt.read(newDecoder(mustHex(t, tt.input)))
+		err := tt.read(NewDecoder(mustHex(t, tt.input)))
 		if !errors.Is(err, ErrTruncated) {
 			t.Errorf("%s: err = %v, want ErrTruncated", tt.name, err)
 		}
@@ -189,7 +189,7 @@ func TestCBORRejectsMalformedHeads(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, err := newDecoder(mustHex(t, tt.input)).uint()
+		_, err := NewDecoder(mustHex(t, tt.input)).Uint()
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s: err = %v, want %v", tt.name, err, tt.want)
 		}
@@ -199,7 +199,7 @@ func TestCBORRejectsMalformedHeads(t *testing.T) {
 // RFC 9171 clause 4.3.2 requires block-type-specific data to be a
 // definite-length byte string. 0x5f opens the indefinite kind.
 func TestCBORRejectsIndefiniteByteString(t *testing.T) {
-	_, err := newDecoder(mustHex(t, "5f42010243030405ff")).byteString()
+	_, err := NewDecoder(mustHex(t, "5f42010243030405ff")).ByteString()
 	if !errors.Is(err, ErrIndefiniteByteString) {
 		t.Errorf("err = %v, want ErrIndefiniteByteString", err)
 	}
@@ -207,7 +207,7 @@ func TestCBORRejectsIndefiniteByteString(t *testing.T) {
 
 func TestCBORByteStringAliasesInput(t *testing.T) {
 	in := mustHex(t, "4401020304")
-	got, err := newDecoder(in).byteString()
+	got, err := NewDecoder(in).ByteString()
 	if err != nil {
 		t.Fatalf("byteString: %v", err)
 	}

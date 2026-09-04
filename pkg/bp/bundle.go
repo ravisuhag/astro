@@ -1,5 +1,7 @@
 package bp
 
+import "github.com/ravisuhag/astro/internal/cbor"
+
 // Bundle is a complete Bundle Protocol version 7 data unit
 // (RFC 9171 clause 4.1).
 //
@@ -147,7 +149,7 @@ func (b *Bundle) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	out := appendIndefiniteArrayHeader(nil)
+	out := cbor.AppendIndefiniteArrayHeader(nil)
 
 	var err error
 	if out, err = appendPrimaryBlock(out, b.Primary); err != nil {
@@ -158,15 +160,15 @@ func (b *Bundle) Encode() ([]byte, error) {
 			return nil, err
 		}
 	}
-	return appendBreak(out), nil
+	return cbor.AppendBreak(out), nil
 }
 
 // Decode reads one bundle. It returns an error rather than a partial bundle
 // for any input it cannot fully account for.
 func Decode(data []byte) (*Bundle, error) {
-	d := newDecoder(data)
+	d := cbor.NewDecoder(data)
 
-	_, indefinite, err := d.arrayHeader()
+	_, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -176,26 +178,26 @@ func Decode(data []byte) (*Bundle, error) {
 		return nil, ErrDefiniteLengthBundle
 	}
 
-	primary, err := d.primaryBlock()
+	primary, err := decodePrimaryBlock(d)
 	if err != nil {
 		return nil, err
 	}
 	b := &Bundle{Primary: primary}
 
-	for !d.atBreak() {
-		if d.atEnd() {
+	for !d.AtBreak() {
+		if d.AtEnd() {
 			return nil, ErrTruncated
 		}
-		blk, err := d.canonicalBlock()
+		blk, err := decodeCanonicalBlock(d)
 		if err != nil {
 			return nil, err
 		}
 		b.Blocks = append(b.Blocks, blk)
 	}
-	if err := d.readBreak(); err != nil {
+	if err := d.ReadBreak(); err != nil {
 		return nil, err
 	}
-	if !d.atEnd() {
+	if !d.AtEnd() {
 		return nil, ErrTrailingBytes
 	}
 
@@ -203,4 +205,20 @@ func Decode(data []byte) (*Bundle, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// Block returns the block carrying the given number, or nil if the bundle has
+// none.
+//
+// Block number 0 belongs to the primary block, which is not a CanonicalBlock
+// and is reached through the Primary field instead; asking for it returns nil.
+// BPSec security blocks name their targets by block number
+// (RFC 9172 clause 3.4), which is what this is for.
+func (b *Bundle) Block(number uint64) *CanonicalBlock {
+	for _, blk := range b.Blocks {
+		if blk.Number == number {
+			return blk
+		}
+	}
+	return nil
 }

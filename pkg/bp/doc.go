@@ -21,7 +21,8 @@
 // caller. Compose with pkg/ltp when a bundle needs a transport underneath.
 //
 // Bundle Protocol Security (RFC 9172) is not here either. It is a separate
-// standard and deserves a separate package.
+// standard and has its own package, pkg/bpsec, which adds integrity and
+// confidentiality blocks to a bundle this package built.
 //
 //	primary := &bp.PrimaryBlock{
 //	    CRCType:     bp.CRC32C,

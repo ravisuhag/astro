@@ -1,6 +1,10 @@
 package bp
 
-import "time"
+import (
+	"time"
+
+	"github.com/ravisuhag/astro/internal/cbor"
+)
 
 // dtnEpochUnix is 2000-01-01T00:00:00Z as a Unix second count. The DTN epoch
 // (RFC 9171 clause 4.2.6) starts there rather than at 1970.
@@ -59,14 +63,14 @@ type CreationTimestamp struct {
 
 // appendCreationTimestamp writes the two-item array of RFC 9171 clause 4.2.7.
 func appendCreationTimestamp(dst []byte, ts CreationTimestamp) []byte {
-	dst = appendArrayHeader(dst, 2)
-	dst = appendUint(dst, uint64(ts.Time))
-	return appendUint(dst, ts.Sequence)
+	dst = cbor.AppendArrayHeader(dst, 2)
+	dst = cbor.AppendUint(dst, uint64(ts.Time))
+	return cbor.AppendUint(dst, ts.Sequence)
 }
 
 // creationTimestamp reads a creation timestamp.
-func (d *decoder) creationTimestamp() (CreationTimestamp, error) {
-	n, indefinite, err := d.arrayHeader()
+func decodeCreationTimestamp(d *cbor.Decoder) (CreationTimestamp, error) {
+	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
 		return CreationTimestamp{}, err
 	}
@@ -74,11 +78,11 @@ func (d *decoder) creationTimestamp() (CreationTimestamp, error) {
 		return CreationTimestamp{}, ErrMalformedTimestamp
 	}
 
-	dtn, err := d.uint()
+	dtn, err := d.Uint()
 	if err != nil {
 		return CreationTimestamp{}, err
 	}
-	seq, err := d.uint()
+	seq, err := d.Uint()
 	if err != nil {
 		return CreationTimestamp{}, err
 	}

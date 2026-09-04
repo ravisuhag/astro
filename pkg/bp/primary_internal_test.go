@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"testing"
+
+	"github.com/ravisuhag/astro/internal/cbor"
 )
 
 // The vector is RFC 9173 appendix A.1.1.1, which prints the primary block of a
@@ -42,7 +44,7 @@ func TestPrimaryBlockRFC9173Vector(t *testing.T) {
 		t.Fatalf("encoded  %s\nwant     %s", hex.EncodeToString(got), rfc9173PrimaryBlock)
 	}
 
-	back, err := newDecoder(mustHex(t, rfc9173PrimaryBlock)).primaryBlock()
+	back, err := decodePrimaryBlock(cbor.NewDecoder(mustHex(t, rfc9173PrimaryBlock)))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestPrimaryBlockShapes(t *testing.T) {
 			t.Errorf("%s: array head = 0x%02X, want 0x%02X", tt.name, encoded[0], 0x80|tt.wantItems)
 		}
 
-		back, err := newDecoder(encoded).primaryBlock()
+		back, err := decodePrimaryBlock(cbor.NewDecoder(encoded))
 		if err != nil {
 			t.Errorf("%s: decode: %v", tt.name, err)
 			continue
@@ -130,7 +132,7 @@ func TestPrimaryBlockDetectsCorruption(t *testing.T) {
 			copy(corrupt, encoded)
 			corrupt[i] ^= 0x01
 
-			if _, err := newDecoder(corrupt).primaryBlock(); err == nil {
+			if _, err := decodePrimaryBlock(cbor.NewDecoder(corrupt)); err == nil {
 				t.Errorf("CRCType(%d): flipping a bit at offset %d went unnoticed", crcType, i)
 			}
 		}
@@ -213,7 +215,7 @@ func TestPrimaryBlockRejects(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, err := newDecoder(mustHex(t, tt.input)).primaryBlock()
+		_, err := decodePrimaryBlock(cbor.NewDecoder(mustHex(t, tt.input)))
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s: err = %v, want %v", tt.name, err, tt.want)
 		}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ravisuhag/astro/internal/cbor"
 )
 
 // The ipn vectors are the worked examples of RFC 9758 clause 6.1.1 and 6.1.2.
@@ -39,7 +41,7 @@ func TestEIDEncoding(t *testing.T) {
 			continue
 		}
 
-		back, err := newDecoder(got).eid()
+		back, err := decodeEIDFrom(cbor.NewDecoder(got))
 		if err != nil {
 			t.Errorf("%s: decode: %v", tt.name, err)
 			continue
@@ -56,11 +58,11 @@ func TestEIDBothIPNFormsAgree(t *testing.T) {
 	two := mustHex(t, "8202821b000ee8680000006401")        // clause 6.1.1
 	three := mustHex(t, "820283"+"1a000ee868"+"1864"+"01") // clause 6.1.2
 
-	fromTwo, err := newDecoder(two).eid()
+	fromTwo, err := decodeEIDFrom(cbor.NewDecoder(two))
 	if err != nil {
 		t.Fatalf("two-element form: %v", err)
 	}
-	fromThree, err := newDecoder(three).eid()
+	fromThree, err := decodeEIDFrom(cbor.NewDecoder(three))
 	if err != nil {
 		t.Fatalf("three-element form: %v", err)
 	}
@@ -152,7 +154,7 @@ func TestEIDRejects(t *testing.T) {
 		{"ipn SSP array of four items", "82028401020304", ErrMalformedEID},
 	}
 	for _, tt := range decodeTests {
-		if _, err := newDecoder(mustHex(t, tt.input)).eid(); !errors.Is(err, tt.want) {
+		if _, err := decodeEIDFrom(cbor.NewDecoder(mustHex(t, tt.input))); !errors.Is(err, tt.want) {
 			t.Errorf("%s: err = %v, want %v", tt.name, err, tt.want)
 		}
 	}
@@ -202,7 +204,7 @@ func TestCreationTimestamp(t *testing.T) {
 		t.Fatalf("got %s, want 82001828", hex.EncodeToString(got))
 	}
 
-	back, err := newDecoder(got).creationTimestamp()
+	back, err := decodeCreationTimestamp(cbor.NewDecoder(got))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

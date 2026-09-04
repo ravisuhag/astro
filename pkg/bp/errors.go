@@ -1,35 +1,44 @@
 package bp
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ravisuhag/astro/internal/cbor"
+)
 
 // Sentinel errors returned by the CBOR reader. A bundle is CBOR before it is
 // anything else, so these come back from every decoder in the package.
+//
+// They are the values internal/cbor returns, re-exported under this package's
+// names. pkg/bpsec reads the same octets with the same reader, and a caller
+// that checks errors.Is against one of these must get the same answer whichever
+// package handed the error back.
 var (
 	// ErrTruncated indicates the input ended in the middle of an item.
-	ErrTruncated = errors.New("bpv7: input ended before the CBOR item did")
+	ErrTruncated = cbor.ErrTruncated
 
 	// ErrInvalidCBOR indicates a head byte CBOR does not define: one of the
 	// reserved additional-information values 28 to 30, or an indefinite-length
 	// marker on a type that cannot have one (RFC 8949 clause 3).
-	ErrInvalidCBOR = errors.New("bpv7: malformed CBOR head")
+	ErrInvalidCBOR = cbor.ErrInvalidCBOR
 
 	// ErrNotDeterministic indicates an argument encoded wider than it needed to
 	// be. RFC 9171 clause 4.1 requires the core deterministic encoding of
 	// RFC 8949 clause 4.2.1, which means the shortest head that holds the value.
-	ErrNotDeterministic = errors.New("bpv7: CBOR argument is not in shortest form")
+	ErrNotDeterministic = cbor.ErrNotDeterministic
 
 	// ErrWrongCBORType indicates a well-formed item of the wrong major type,
 	// such as a text string where the bundle format wants an integer.
-	ErrWrongCBORType = errors.New("bpv7: CBOR item is not the type this field needs")
+	ErrWrongCBORType = cbor.ErrWrongCBORType
 
 	// ErrIndefiniteByteString indicates an indefinite-length byte string.
 	// RFC 9171 clause 4.3.2 requires block-type-specific data to be a
 	// definite-length byte string, and no other bundle field is a byte string.
-	ErrIndefiniteByteString = errors.New("bpv7: byte string must be definite-length")
+	ErrIndefiniteByteString = cbor.ErrIndefiniteByteString
 
 	// ErrExpectedBreak indicates a missing break stop code at the end of an
 	// indefinite-length item.
-	ErrExpectedBreak = errors.New("bpv7: expected a CBOR break stop code")
+	ErrExpectedBreak = cbor.ErrExpectedBreak
 )
 
 // Sentinel errors from the endpoint identifier and timestamp codecs.
