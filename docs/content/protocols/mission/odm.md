@@ -36,12 +36,12 @@ choice to the two parties exchanging the file.
 
 ## Scope
 
-**Implemented.** The OPM, in key-value notation. Reading, writing, and the
-structural rules the standard states.
+**Implemented.** The OPM and the OEM, in key-value notation. Reading, writing,
+and the structural rules the standard states.
 
-**Not yet implemented.** The OMM, the OEM and the OCM, and the XML form of all
-four. The shared line syntax and header live in `internal/ndm`, so the
-remaining messages are keyword tables rather than new machinery.
+**Not yet implemented.** The OMM and the OCM, and the XML form of all four. The
+shared line syntax and header live in `internal/ndm`, so the remaining messages
+are keyword tables rather than new machinery.
 
 **Deliberately absent: orbital mechanics.** Nothing here propagates a state
 vector, converts between reference frames, or turns mean elements into a
@@ -56,6 +56,36 @@ expected sets and then say anything else "should be documented in an ICD", so
 an unrecognised value is not an error.
 
 ## Field map
+
+### OEM
+
+An OEM is a header followed by one or more metadata groups, each with its
+ephemeris rows and an optional covariance section.
+
+```
+CCSDS_OEM_VERS = 3.0
+CREATION_DATE  = ...
+ORIGINATOR     = ...
+
+META_START
+  OBJECT_NAME ... INTERPOLATION_DEGREE
+META_STOP
+  <epoch> <x> <y> <z> <x_dot> <y_dot> <z_dot> [<x_ddot> <y_ddot> <z_ddot>]
+  ...
+  COVARIANCE_START
+    EPOCH = ...
+    [COV_REF_FRAME = ...]
+    <21 lower triangular values over as many lines as you like>
+  COVARIANCE_STOP
+```
+
+| Piece | Go | Notes |
+|---|---|---|
+| Metadata group | `EphemerisBlock.Metadata` | `OBJECT_NAME`, `OBJECT_ID`, `CENTER_NAME`, `REF_FRAME`, `TIME_SYSTEM`, `START_TIME`, `STOP_TIME` are mandatory. |
+| Ephemeris row | `EphemerisLine` | Positional, not key-value. Seven fields, or ten with acceleration. |
+| Covariance | `EphemerisBlock.Covariances` | Any number, ordered by increasing epoch (clause 5.2.5.7). |
+
+### OPM
 
 The OPM data section is six logical blocks, of which only the state vector is
 mandatory.
@@ -75,6 +105,42 @@ row by row (clause 3.2.4.10). `Covariance.Matrix` is the full symmetric 6×6:
 the upper triangle is filled in on decode, because a covariance matrix is
 symmetric by definition and a caller indexing `Matrix[1][2]` should not get a
 zero.
+
+## A second metadata group is a fence
+
+An OEM may carry several metadata groups, and clause 5.2.4.6 gives that
+meaning rather than merely permission: **a consumer must not interpolate
+across the boundary.** It is how a producer marks a manoeuvre, an eclipse
+entry, or any other discontinuity — figure G-11 of the Blue Book uses it for a
+trajectory correction manoeuvre and says so in a comment.
+
+A reader that flattens the blocks into one list of records throws that away,
+and will happily interpolate a spacecraft straight through a burn.
+`OEM.Blocks` keeps them separate for that reason. `Records` and `Span` are
+there for the summary a caller usually wants, and neither of them is an
+invitation to concatenate.
+
+## The useable span can be narrower than the total
+
+`START_TIME` and `STOP_TIME` bound what is in the block. `USEABLE_START_TIME`
+and `USEABLE_STOP_TIME` bound what a consumer should use.
+
+They differ because table 5-3 lets a producer pad the ends with smooth,
+fictitious nodes so that an interpolator needing more than two points has
+something to work with at the edges. Those nodes are not measurements. If the
+useable span is given and you use the total span instead, you are using made-up
+data.
+
+This package reads both and trims neither.
+
+## Clause 7.8.9 names a keyword that does not exist
+
+Clause 7.8.9 lists where comments may appear in an OEM, and calls the covariance
+delimiter `COV_START`. Table 5-4 defines `COVARIANCE_START`.
+
+`COV_` is the OPM's family — `COV_REF_FRAME`, `CX_X` and the rest live in
+table 3-3. The OEM spells its delimiters out in full. A reader built from
+clause 7.8.9 alone will not find the section.
 
 ## An underscore is a blank
 
@@ -153,6 +219,20 @@ fmt.Println(message.Humanize())
 out, err := message.Encode()
 ```
 
+An ephemeris, keeping the blocks apart:
+
+```go
+ephemeris, err := odm.DecodeOEM(data)
+start, stop := ephemeris.Span()
+
+for _, block := range ephemeris.Blocks {
+    // Do not interpolate from one block into the next (clause 5.2.4.6).
+    for _, row := range block.Lines {
+        fmt.Println(row.Epoch, row.X, row.Y, row.Z)
+    }
+}
+```
+
 ### Errors
 
 | Error | Means |
@@ -165,6 +245,19 @@ out, err := message.Encode()
 | `ErrManeuverWithoutMass` | A manoeuvre with no `MASS`, which clause 3.2.4.9 requires. |
 | `ErrDeltaMassNotNegative` | A `MAN_DELTA_MASS` of zero or more. Clause 3.2.4.7 requires it to be negative: a manoeuvre spends propellant. |
 | `ErrKeywordOutOfOrder` | A manoeuvre parameter before the `MAN_EPOCH_IGNITION` that starts its block. |
+
+OEM-specific:
+
+| Error | Means |
+|---|---|
+| `ErrNoEphemerisBlock` | An OEM with no metadata group at all. |
+| `ErrUnterminatedBlock` | A `META_START` or `COVARIANCE_START` that never closes. |
+| `ErrUnexpectedDelimiter` | A delimiter where clause 5.2.3.3 does not allow one, including an ephemeris row before any metadata group. |
+| `ErrEphemerisLineFields` | A data row without 7 or 10 fields. |
+| `ErrInterpolationDegreeMissing` | `INTERPOLATION` without `INTERPOLATION_DEGREE`, which table 5-3 makes mandatory alongside it. |
+| `ErrTimeSystemChanged` | Two metadata groups naming different time systems, which clause 5.2.4.5 forbids. |
+| `ErrCovarianceOutOfOrder` | Covariance epochs that do not increase (clause 5.2.5.7). |
+| `ErrCovarianceValueCount` | A matrix that is not 21 lower triangular values. |
 
 Line syntax errors come from `internal/ndm` and carry the line number.
 

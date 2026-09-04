@@ -50,4 +50,4 @@ what has never been tested against another implementation.
 | [Time Code Formats](/conformance/tcf) | `pkg/tcf` | [14](https://github.com/ravisuhag/astro/tree/main/vectors/tcf) | [Protocol](/protocols/mission/tcf) |
 | [Packet Utilization Standard](/conformance/pus) | `pkg/pus` | [10](https://github.com/ravisuhag/astro/tree/main/vectors/pus) | [Protocol](/protocols/mission/pus) |
 | [XTCE](/conformance/xtce) | `pkg/xtce` | [8 files](https://github.com/ravisuhag/astro/tree/main/vectors/xtce) | [Protocol](/protocols/mission/xtce) |
-| [Orbit Data Messages](/conformance/odm) | `pkg/odm` | [2](https://github.com/ravisuhag/astro/tree/main/vectors/odm) | [Protocol](/protocols/mission/odm) |
+| [Orbit Data Messages](/conformance/odm) | `pkg/odm` | [5](https://github.com/ravisuhag/astro/tree/main/vectors/odm) | [Protocol](/protocols/mission/odm) |

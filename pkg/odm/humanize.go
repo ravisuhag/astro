@@ -3,6 +3,7 @@ package odm
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Humanize returns a human-readable summary of the message.
@@ -153,4 +154,69 @@ func (m Maneuver) Humanize() string {
 	fmt.Fprintf(&sb, "    Delta-v ....... %.8f %.8f %.8f km/s in %s\n",
 		m.DV[0], m.DV[1], m.DV[2], m.RefFrame)
 	return sb.String()
+}
+
+// Humanize returns a human-readable summary of the message.
+//
+// An OEM can hold tens of thousands of ephemeris records, so the records
+// themselves are counted rather than printed. What a reader wants at a glance
+// is the span, the cadence and where the discontinuities are.
+func (m *OEM) Humanize() string {
+	start, stop := m.Span()
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "CCSDS Orbit Ephemeris Message %s\n", m.Header.Version)
+	fmt.Fprintf(&sb, "  Originator ...... %s\n", m.Header.Originator)
+	fmt.Fprintf(&sb, "  Created ......... %s UTC\n", m.Header.CreationDate.Format("2006-01-02T15:04:05"))
+	fmt.Fprintf(&sb, "  Span ............ %s to %s\n",
+		start.Format("2006-01-02T15:04:05.999"), stop.Format("2006-01-02T15:04:05.999"))
+	fmt.Fprintf(&sb, "  Records ......... %d in %d block(s)\n", m.Records(), len(m.Blocks))
+
+	for i := range m.Blocks {
+		b := &m.Blocks[i]
+		if len(m.Blocks) > 1 {
+			// Clause 5.2.4.6: a second block is a fence, not a convenience.
+			fmt.Fprintf(&sb, "  Block %d ......... do not interpolate across the boundary\n", i+1)
+		}
+		sb.WriteString(b.Metadata.Humanize())
+		fmt.Fprintf(&sb, "    Records ....... %d", len(b.Lines))
+		if len(b.Lines) > 0 && b.Lines[0].HasAcceleration {
+			sb.WriteString(", with acceleration")
+		}
+		sb.WriteString("\n")
+		if len(b.Covariances) > 0 {
+			fmt.Fprintf(&sb, "    Covariance .... %d matrix(es)\n", len(b.Covariances))
+		}
+	}
+	return sb.String()
+}
+
+// Humanize returns a human-readable summary of an OEM metadata group.
+func (md OEMMetadata) Humanize() string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "    Object ........ %s (%s)\n", md.ObjectName, md.ObjectID)
+	fmt.Fprintf(&sb, "    Center ........ %s\n", md.CenterName)
+	fmt.Fprintf(&sb, "    Frame ......... %s, time system %s\n", md.RefFrame, md.TimeSystem)
+	fmt.Fprintf(&sb, "    Total span .... %s to %s\n",
+		md.StartTime.Format("2006-01-02T15:04:05.999"), md.StopTime.Format("2006-01-02T15:04:05.999"))
+
+	if md.UseableStartTime != nil || md.UseableStopTime != nil {
+		// The useable span is narrower than the total when the producer padded
+		// the ends with fictitious nodes for an interpolator.
+		fmt.Fprintf(&sb, "    Useable span .. %s to %s\n",
+			optionalTime(md.UseableStartTime), optionalTime(md.UseableStopTime))
+	}
+	if md.Interpolation != "" {
+		fmt.Fprintf(&sb, "    Interpolation . %s, degree %d\n", md.Interpolation, md.InterpolationDegree)
+	}
+	return sb.String()
+}
+
+// optionalTime formats a time that may be absent.
+func optionalTime(t *time.Time) string {
+	if t == nil {
+		return "(not given)"
+	}
+	return t.Format("2006-01-02T15:04:05.999")
 }
