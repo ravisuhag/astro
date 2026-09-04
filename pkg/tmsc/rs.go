@@ -29,6 +29,13 @@ func gfPowB(n int) byte {
 type RSCodec struct {
 	nroots int    // number of parity symbols
 	gen    []byte // generator polynomial coefficients (nroots+1 entries, monic)
+
+	// logGen holds the logarithm of each generator coefficient, taken once at
+	// construction. It lets the parity loop multiply with a single table
+	// lookup, the same way syndromes does for the decoder's roots. Every
+	// coefficient of g(x) is a product of powers of the primitive element and
+	// so is never zero, which is what makes dropping gfMul's zero test safe.
+	logGen []byte
 }
 
 // NewRS255_223 returns an RSCodec for CCSDS (255,223) with 32 parity symbols.
@@ -58,7 +65,18 @@ func newRSCodec(nroots int) *RSCodec {
 		gen[0] = gfMul(gen[0], root)
 	}
 
-	return &RSCodec{nroots: nroots, gen: gen}
+	logGen := make([]byte, len(gen))
+	for i, c := range gen {
+		if c == 0 {
+			// Unreachable for a real generator polynomial, and worth saying so:
+			// a zero coefficient would make the single-lookup multiply below
+			// return a wrong product rather than zero.
+			panic("tmsc: generator polynomial has a zero coefficient")
+		}
+		logGen[i] = gfLog[c]
+	}
+
+	return &RSCodec{nroots: nroots, gen: gen, logGen: logGen}
 }
 
 // NRoots returns the number of parity symbols.
@@ -100,10 +118,15 @@ func (rs *RSCodec) parity(cdata []byte) []byte {
 	for i := range cdata {
 		feedback := cdata[i] ^ parity[0]
 		if feedback != 0 {
+			// feedback is constant across the inner loop, so its logarithm is
+			// taken once here rather than inside gfMul on every step. What is
+			// left per coefficient is one add and one lookup, which is the
+			// same shape the syndrome loop uses.
+			logFeedback := int(gfLog[feedback])
 			for j := range rs.nroots - 1 {
-				parity[j] = parity[j+1] ^ gfMul(feedback, rs.gen[rs.nroots-1-j])
+				parity[j] = parity[j+1] ^ gfExp[logFeedback+int(rs.logGen[rs.nroots-1-j])]
 			}
-			parity[rs.nroots-1] = gfMul(feedback, rs.gen[0])
+			parity[rs.nroots-1] = gfExp[logFeedback+int(rs.logGen[0])]
 		} else {
 			copy(parity, parity[1:])
 			parity[rs.nroots-1] = 0
@@ -177,6 +200,13 @@ func (rs *RSCodec) syndromes(work []byte) ([]byte, bool) {
 		logRoots[i] = int(gfLog[gfPowB(rsFCR+i)])
 	}
 
+	// This loop is where a clean decode spends its time, and it has no
+	// headroom left. Replacing the two lookups below with a single 256x256
+	// multiplication table changes throughput by nothing measurable, because
+	// 64 KB does not stay in L1 while these tables do. A clean codeword needs
+	// all 255x32 evaluations before it can be declared clean, and at 7.3us
+	// that is about 0.9ns each. Getting past it means SIMD, and so assembly.
+	//
 	// Horner's method, evaluated at every root in one pass over the codeword.
 	//
 	// The obvious shape is a pass per root, but each pass is a serial chain:
