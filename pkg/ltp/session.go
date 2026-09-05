@@ -1,6 +1,9 @@
 package ltp
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 // SessionState is where a transmission session has got to.
 type SessionState int
@@ -44,37 +47,45 @@ type spanSet struct {
 	spans []span
 }
 
-// add folds a range into the set, merging it with any neighbours.
+// add folds a range into the set, merging it with any neighbours it touches
+// or overlaps. The set stays sorted, merged and non-overlapping.
 func (s *spanSet) add(start, end uint64) {
 	if end <= start {
 		return
 	}
-	merged := make([]span, 0, len(s.spans)+1)
-	added := false
 
-	for _, existing := range s.spans {
-		switch {
-		case existing.end < start:
-			merged = append(merged, existing)
-		case existing.start > end:
-			if !added {
-				merged = append(merged, span{start, end})
-				added = true
-			}
-			merged = append(merged, existing)
-		default:
-			if existing.start < start {
-				start = existing.start
-			}
-			if existing.end > end {
-				end = existing.end
-			}
+	// Spans are sorted and non-overlapping, so an existing span's end is
+	// monotonically increasing across the slice. lo is the first index whose
+	// span cannot lie entirely below the new range: the first with an end at
+	// or past start. Every earlier span stays untouched.
+	lo, _ := slices.BinarySearchFunc(s.spans, start, func(sp span, start uint64) int {
+		if sp.end < start {
+			return -1
 		}
+		return 1
+	})
+
+	// Absorb every span from lo onward that touches or overlaps [start, end),
+	// growing the new range to cover them.
+	hi := lo
+	for hi < len(s.spans) && s.spans[hi].start <= end {
+		if s.spans[hi].start < start {
+			start = s.spans[hi].start
+		}
+		if s.spans[hi].end > end {
+			end = s.spans[hi].end
+		}
+		hi++
 	}
-	if !added {
-		merged = append(merged, span{start, end})
+
+	if lo == hi {
+		s.spans = slices.Insert(s.spans, lo, span{start, end})
+		return
 	}
-	s.spans = merged
+	s.spans[lo] = span{start, end}
+	if hi-lo > 1 {
+		s.spans = slices.Delete(s.spans, lo+1, hi)
+	}
 }
 
 // gaps returns the ranges missing below limit.
