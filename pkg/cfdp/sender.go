@@ -340,12 +340,29 @@ func (s *Sender) NextPDU() (*PDU, bool, error) {
 		return pdu, true, nil
 	}
 
-	// Retransmissions come before fresh data so gaps close promptly.
+	// Retransmissions come before fresh data so gaps close promptly. Each
+	// request is served at most SegmentSize octets at a time, the same as the
+	// fresh-data path below: a NAK can ask for an arbitrarily large gap in one
+	// request, and PDU.Encode refuses a data field over 16 bits. The request
+	// pops only once it has been fully served, and only after a PDU for it
+	// was built successfully, so a build failure leaves it queued rather than
+	// dropping the range.
 	if len(s.resend) > 0 {
 		req := s.resend[0]
-		s.resend = s.resend[1:]
-		pdu, err := s.fileDataPDU(req.StartOffset, req.EndOffset)
-		return pdu, err == nil, err
+		end := req.EndOffset
+		if max := req.StartOffset + uint64(s.config.SegmentSize); max < end {
+			end = max
+		}
+		pdu, err := s.fileDataPDU(req.StartOffset, end)
+		if err != nil {
+			return nil, false, err
+		}
+		if end < req.EndOffset {
+			s.resend[0].StartOffset = end
+		} else {
+			s.resend = s.resend[1:]
+		}
+		return pdu, true, nil
 	}
 
 	if s.state == StateSendingData {
@@ -426,13 +443,19 @@ func (s *Sender) HandlePDU(pdu *PDU) error {
 		if err != nil {
 			return err
 		}
+		// Clause 5.2.6: a NAK is the receiver's complete current statement of
+		// what is still missing, so it replaces the outstanding requests
+		// rather than adding to them. Otherwise a NAK delivered twice (or
+		// replayed) would queue -- and retransmit -- the same octets twice.
+		resend := s.resend[:0:0] // fresh slice; do not alias the old one
 		for _, req := range nak.Requests {
 			if req.IsMetadataRequest() {
 				s.metadataResend = true
 				continue
 			}
-			s.resend = append(s.resend, req)
+			resend = append(resend, req)
 		}
+		s.resend = resend
 		// Fresh data may already be exhausted; NextPDU serves the resend queue
 		// regardless of state, so nothing else is needed here.
 
