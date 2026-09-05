@@ -17,7 +17,7 @@ evidence of conformance.
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
 | `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 13 | — |
-| `csts` | CCSDS 921.1-B-2 (specification framework) | 10 | — |
+| `csts` | CCSDS 921.1-B-2 (specification framework) | 22 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `keywrap` | RFC 3394 (AES Key Wrap) | 6 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
@@ -40,9 +40,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **400** | **138** |
+| **Total** | | **412** | **138** |
 
-400 vectors and 138 referenced corpus files across 32 packages.
+412 vectors and 138 referenced corpus files across 32 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -137,6 +137,20 @@ derivation from annex F octet by octet in its note, which is the most a
 reader can be given: it lets the derivation be checked against the
 module rather than against this package. What they pin hardest is the
 implicit tagging, where a mistake round-trips perfectly against itself.
+
+**GET, NOTIFY, TRANSFER-DATA and PROCESS-DATA carry an unpinned field.**
+Each has one or more fields documented as "the encoded" CHOICE or type —
+`GetInvocation.ListOfParameters`, `NotifyInvocation.EventTime` /
+`EventName` / `EventValue`, `TransferDataInvocation.GenerationTime` /
+`Data`, `ProcessDataInvocation.Data`. Decoding one of these operations
+keeps only the field's content octets, with its own tag and length
+already stripped by the BER reader, while encoding appends the field
+assuming it is still a complete tag-length-value element. A decoded
+value therefore does not reproduce the original octets if re-encoded.
+The vectors for these four operations pin every other field and
+deliberately leave that one unasserted rather than encode the mismatch
+as expected behaviour; see each vector's note. This is an implementation
+defect, not a corpus gap, and is tracked for a fix outside this corpus.
 
 ## Values not established against a standard
 
