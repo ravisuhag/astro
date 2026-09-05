@@ -142,15 +142,17 @@ func readCombinedChildren(d *xml.Decoder, c *CombinedXML) error {
 
 		switch t := token.(type) {
 		case xml.StartElement:
+			// t is a direct child of <ndm>, at depth 1: the root itself is
+			// depth 0, read outside this function by nextStart.
 			if t.Name.Local == KeywordComment {
-				comment, err := readElement(d, t)
+				comment, err := readElement(d, t, 1)
 				if err != nil {
 					return err
 				}
 				c.Comments = append(c.Comments, comment.Value)
 				continue
 			}
-			message, err := decodeMessage(d, t)
+			message, err := decodeMessage(d, t, 1)
 			if err != nil {
 				return err
 			}
