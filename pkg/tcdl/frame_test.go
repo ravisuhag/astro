@@ -116,6 +116,34 @@ func TestTCFrame_NewAndEncode(t *testing.T) {
 	}
 }
 
+// TestTCFrame_EncodeRefreshesFrameLengthAfterMutation reproduces B2:
+// DataField is exported, so a caller can grow or shrink it after
+// construction. Encode must recompute Header.FrameLength from what is
+// actually there, not reuse the value NewTCTransferFrame set once, or the
+// receiver reads the CRC from the wrong offset and rejects the frame.
+func TestTCFrame_EncodeRefreshesFrameLengthAfterMutation(t *testing.T) {
+	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("short"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	frame.DataField = []byte("a much longer command data field than before")
+
+	encoded, err := frame.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode: %v (FrameLength = %d, encoded length = %d)",
+			err, frame.Header.FrameLength, len(encoded))
+	}
+	if !bytes.Equal(decoded.DataField, frame.DataField) {
+		t.Errorf("DataField = %q, want %q", decoded.DataField, frame.DataField)
+	}
+}
+
 func TestTCFrame_RoundTrip(t *testing.T) {
 	data := []byte("telecommand payload")
 	frame, _ := tcdl.NewTCTransferFrame(42, 5, data,

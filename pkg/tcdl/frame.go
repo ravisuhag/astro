@@ -301,11 +301,24 @@ func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOptio
 
 // Encode converts the TC Transfer Frame to a byte slice including CRC.
 //
-// The Frame Error Control Field is computed from the frame's current
-// contents on every call, so header or data changes made after construction
-// are always covered. Use EncodeWithoutFEC to build a frame with a
-// deliberately invalid CRC.
+// The Frame Length field and the Frame Error Control Field are both
+// refreshed from the frame's current contents on every call, so header or
+// data changes made after construction (DataField and SegmentHeader are
+// exported) cannot produce a declared length that disagrees with what is
+// actually on the wire: decodeTCFrame trusts the header's Frame Length to
+// find the CRC, so a stale value there gets the frame rejected at the
+// other end. Use EncodeWithoutFEC to build a frame with a deliberately
+// invalid CRC.
 func (tf *TCTransferFrame) Encode() ([]byte, error) {
+	totalLen := PrimaryHeaderSize + len(tf.DataField) + FECSize
+	if tf.SegmentHeader != nil {
+		totalLen++
+	}
+	if totalLen > MaxFrameLength {
+		return nil, ErrDataTooLarge
+	}
+	tf.Header.FrameLength = uint16(totalLen - 1)
+
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
 		return nil, err
