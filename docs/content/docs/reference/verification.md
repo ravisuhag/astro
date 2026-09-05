@@ -17,7 +17,7 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 
 | | |
 |---|---|
-| Test functions | 2014 |
+| Test functions | 2016 |
 | Wire test vectors | 400, across 32 packages |
 | Fuzz targets | 77 |
 | Benchmarks | 33 |
