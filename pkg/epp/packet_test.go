@@ -3,6 +3,7 @@ package epp_test
 import (
 	"bytes"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -536,6 +537,33 @@ func TestPacketSizerTruncatedHeader(t *testing.T) {
 	data := []byte{0xFA} // PVN=7, PID=6, LoL='10'
 	if got := epp.PacketSizer(data); got != -1 {
 		t.Errorf("PacketSizer(truncated 4-octet header) = %d, want -1", got)
+	}
+}
+
+func TestPacketSizerRejectsHugeLoL4PacketLength(t *testing.T) {
+	// An 8-octet header (LoL '11') only requires PacketLength >= HeaderSize8;
+	// nothing caps it below the full 32-bit range, so a peer can declare
+	// MaxPacketLength8 (0xFFFFFFFF). On a 32-bit build (int is 32 bits),
+	// that value cannot be represented as an int, so PacketSizer must
+	// report indeterminate (-1) rather than a spurious wrapped negative.
+	// On a 64-bit build the value fits, so PacketSizer must return it
+	// unchanged. Either way, the result must never be a negative value
+	// other than the -1 sentinel.
+	data := make([]byte, epp.HeaderSize8)
+	data[0] = (epp.PVN << 5) | (epp.ProtocolIDMission << 2) | epp.LoL4Octet
+	data[4], data[5], data[6], data[7] = 0xFF, 0xFF, 0xFF, 0xFF
+
+	got := epp.PacketSizer(data)
+	if got < -1 {
+		t.Fatalf("PacketSizer(huge LoL4 length) = %d, is a wrapped negative, not the -1 sentinel", got)
+	}
+
+	want := -1
+	if strconv.IntSize == 64 {
+		want = epp.MaxPacketLength8
+	}
+	if got != want {
+		t.Errorf("PacketSizer(huge LoL4 length) = %d, want %d", got, want)
 	}
 }
 
