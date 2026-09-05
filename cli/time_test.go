@@ -109,6 +109,22 @@ func TestTimeNow(t *testing.T) {
 	}
 }
 
+// TestTimeNowSingleCodec covers encodeSingleNow, the --codec branch
+// TestTimeNow's all-formats call never takes.
+func TestTimeNowSingleCodec(t *testing.T) {
+	for _, codec := range []string{"cuc", "cds", "ccs", "ascii-a", "ascii-b"} {
+		t.Run(codec, func(t *testing.T) {
+			out, err := runCLI(t, nil, "time", "now", "--codec", codec)
+			if err != nil {
+				t.Fatalf("time now --codec %s failed: %v", codec, err)
+			}
+			if len(strings.TrimSpace(out)) == 0 {
+				t.Fatal("expected output")
+			}
+		})
+	}
+}
+
 func TestTimeInspect(t *testing.T) {
 	encoded, err := runCLI(t, nil, "time", "encode",
 		"--codec", "cuc", "--time", testTimestamp, "--format", "hex")
@@ -130,5 +146,102 @@ func TestTimeDecodeUnknownCodec(t *testing.T) {
 		"--codec", "sundial", "--input", "hex")
 	if err == nil {
 		t.Fatal("expected an error for an unknown codec, got nil")
+	}
+}
+
+// TestTimeEncodeUnknownCodec mirrors TestTimeDecodeUnknownCodec for the
+// encode side, whose "unknown codec" branch is otherwise never reached by a
+// test.
+func TestTimeEncodeUnknownCodec(t *testing.T) {
+	_, err := runCLI(t, nil, "time", "encode", "--codec", "sundial", "--time", testTimestamp)
+	if err == nil {
+		t.Fatal("expected an error for an unknown codec, got nil")
+	}
+}
+
+// TestTimeASCIIRoundTrip covers encodeASCII, decodeASCII, asciiToJSON and
+// readRawInput, none of which any test reached before: the ASCII codecs
+// take text input and output rather than hex/binary, so they fall outside
+// TestTimeRoundTripCodecs' loop over cuc/cds/ccs.
+func TestTimeASCIIRoundTrip(t *testing.T) {
+	for _, codec := range []string{"ascii-a", "ascii-b"} {
+		t.Run(codec, func(t *testing.T) {
+			encoded, err := runCLI(t, nil, "time", "encode",
+				"--codec", codec, "--time", testTimestamp, "--format", "hex")
+			if err != nil {
+				t.Fatalf("encode failed: %v", err)
+			}
+			text := strings.TrimSpace(encoded)
+			if text == "" {
+				t.Fatal("encode produced no output")
+			}
+
+			out, err := runCLI(t, []byte(text), "time", "decode",
+				"--codec", codec, "--format", "json")
+			if err != nil {
+				t.Fatalf("decode failed: %v", err)
+			}
+
+			var decoded struct {
+				Format string `json:"format"`
+				Time   string `json:"time"`
+				ASCII  string `json:"ascii"`
+			}
+			if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+				t.Fatalf("unmarshal %q: %v", out, err)
+			}
+			if decoded.Time != testTimestamp {
+				t.Errorf("time = %q, want %q", decoded.Time, testTimestamp)
+			}
+			if decoded.Format != "ASCII" {
+				t.Errorf("format = %q, want ASCII", decoded.Format)
+			}
+			if decoded.ASCII != text {
+				t.Errorf("ascii = %q, want %q", decoded.ASCII, text)
+			}
+		})
+	}
+}
+
+// TestTimeInspectCDS and TestTimeInspectCCS cover inspectCDS and inspectCCS,
+// which TestTimeInspect never reaches: it only exercises the auto-detected
+// CUC path.
+func TestTimeInspectCDS(t *testing.T) {
+	encoded, err := runCLI(t, nil, "time", "encode",
+		"--codec", "cds", "--time", testTimestamp, "--format", "hex")
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+
+	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "time", "inspect",
+		"--codec", "cds", "--input", "hex")
+	if err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if !strings.Contains(out, "CDS T-Field") {
+		t.Errorf("inspect output does not show the CDS T-field breakdown:\n%s", out)
+	}
+	if !strings.Contains(out, "Day ") {
+		t.Errorf("inspect output does not show the day field:\n%s", out)
+	}
+}
+
+func TestTimeInspectCCS(t *testing.T) {
+	encoded, err := runCLI(t, nil, "time", "encode",
+		"--codec", "ccs", "--time", testTimestamp, "--format", "hex")
+	if err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+
+	out, err := runCLI(t, []byte(strings.TrimSpace(encoded)), "time", "inspect",
+		"--codec", "ccs", "--input", "hex")
+	if err != nil {
+		t.Fatalf("inspect failed: %v", err)
+	}
+	if !strings.Contains(out, "CCS T-Field") {
+		t.Errorf("inspect output does not show the CCS T-field breakdown:\n%s", out)
+	}
+	if !strings.Contains(out, "Day of Year") {
+		t.Errorf("inspect output does not show the day-of-year variant:\n%s", out)
 	}
 }
