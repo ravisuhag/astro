@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -125,9 +126,9 @@ func pusDecodeCmd() *cobra.Command {
 
 			switch strings.ToLower(direction) {
 			case "tm":
-				return decodePUSTM(data, profile, outputFmt)
+				return decodePUSTM(cmd.OutOrStdout(), data, profile, outputFmt)
 			case "tc":
-				return decodePUSTC(data, profile, outputFmt)
+				return decodePUSTC(cmd.OutOrStdout(), data, profile, outputFmt)
 			default:
 				return fmt.Errorf("unknown --direction %q (use 'tm' or 'tc')", direction)
 			}
@@ -214,14 +215,15 @@ func pusEncodeCmd() *cobra.Command {
 
 			message := append(header, body...)
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(message))
+				fmt.Fprintln(out, hex.EncodeToString(message))
 			case "text":
-				fmt.Printf("PUS %s[%d,%d], %d octets (%d header, %d body)\n",
+				fmt.Fprintf(out, "PUS %s[%d,%d], %d octets (%d header, %d body)\n",
 					strings.ToUpper(direction), service, subtype,
 					len(message), len(header), len(body))
-				fmt.Println(hex.EncodeToString(message))
+				fmt.Fprintln(out, hex.EncodeToString(message))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'hex')", outputFmt)
 			}
@@ -274,7 +276,7 @@ func pusServicesCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(cmd.OutOrStdout(), string(b))
 			case "text":
 				out := cmd.OutOrStdout()
 				printNames(out, "Requests (TC)", requests)
@@ -318,7 +320,7 @@ type pusMessageJSON struct {
 	BodyError  string `json:"body_error,omitempty"`
 }
 
-func decodePUSTM(data []byte, profile pus.MissionProfile, outputFmt string) error {
+func decodePUSTM(out io.Writer, data []byte, profile pus.MissionProfile, outputFmt string) error {
 	header := &pus.TMHeader{Profile: profile}
 	if err := header.Decode(data); err != nil {
 		return fmt.Errorf("decoding the TM header: %w", err)
@@ -344,10 +346,10 @@ func decodePUSTM(data []byte, profile pus.MissionProfile, outputFmt string) erro
 		message.BodyError = err.Error()
 	}
 
-	return printPUSMessage(header.Humanize(), message, outputFmt)
+	return printPUSMessage(out, header.Humanize(), message, outputFmt)
 }
 
-func decodePUSTC(data []byte, profile pus.MissionProfile, outputFmt string) error {
+func decodePUSTC(out io.Writer, data []byte, profile pus.MissionProfile, outputFmt string) error {
 	header := &pus.TCHeader{Profile: profile}
 	if err := header.Decode(data); err != nil {
 		return fmt.Errorf("decoding the TC header: %w", err)
@@ -373,7 +375,7 @@ func decodePUSTC(data []byte, profile pus.MissionProfile, outputFmt string) erro
 		message.BodyError = err.Error()
 	}
 
-	return printPUSMessage(header.Humanize(), message, outputFmt)
+	return printPUSMessage(out, header.Humanize(), message, outputFmt)
 }
 
 // humanizer is the optional interface the decoded bodies carry. Not every
@@ -387,32 +389,32 @@ func humanizeOrEmpty(value any) string {
 	return ""
 }
 
-func printPUSMessage(headerText string, message pusMessageJSON, outputFmt string) error {
+func printPUSMessage(out io.Writer, headerText string, message pusMessageJSON, outputFmt string) error {
 	switch outputFmt {
 	case "json":
 		b, err := json.MarshalIndent(message, "", "  ")
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Println(string(b))
+		fmt.Fprintln(out, string(b))
 
 	case "text":
-		fmt.Printf("PUS %s[%d,%d]\n",
+		fmt.Fprintf(out, "PUS %s[%d,%d]\n",
 			strings.ToUpper(message.Direction), message.Service, message.Subtype)
-		fmt.Println(headerText)
+		fmt.Fprintln(out, headerText)
 
-		fmt.Printf("Body: %d octets\n", len(message.Body)/2)
+		fmt.Fprintf(out, "Body: %d octets\n", len(message.Body)/2)
 		switch {
 		case message.BodyDetail != "":
-			fmt.Println(message.BodyDetail)
+			fmt.Fprintln(out, message.BodyDetail)
 		case message.BodyKnown:
 			// Decoded, but the type has nothing to say beyond its fields.
-			fmt.Printf("  %s\n", message.Body)
+			fmt.Fprintf(out, "  %s\n", message.Body)
 		default:
 			// Not implemented, so the octets are all that can honestly be
 			// shown. Say why rather than printing them as if understood.
-			fmt.Printf("  %s\n", message.Body)
-			fmt.Printf("  [not decoded: %s]\n", message.BodyError)
+			fmt.Fprintf(out, "  %s\n", message.Body)
+			fmt.Fprintf(out, "  [not decoded: %s]\n", message.BodyError)
 		}
 
 	default:
