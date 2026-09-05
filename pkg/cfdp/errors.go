@@ -95,4 +95,11 @@ var (
 	// defined, and reading the rest of the field out from under it would be a
 	// guess.
 	ErrReservedBitsSet = errors.New("a field reserved for future use is not zero")
+
+	// ErrFileTooLarge indicates a write whose offset plus data would grow a
+	// filestore file past its size ceiling, or whose offset overflows when
+	// added to the data length. Nothing in the standard bounds a file
+	// offset; this is what keeps a filestore from being told to allocate an
+	// unreasonable or impossible amount of memory.
+	ErrFileTooLarge = errors.New("file write past the filestore's size ceiling")
 )
