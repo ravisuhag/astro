@@ -91,11 +91,11 @@ When `SyncFlag` is true the FHP is undefined. Astro sends `0x07FF` and a receive
 import "github.com/ravisuhag/astro/pkg/tmdl"
 
 // Create and encode a TM Transfer Frame
-frame, _ := tmdl.NewTMTransferFrame(0x1A, 1, []byte("telemetry"), nil, nil)
+frame, _ := tmdl.NewTransferFrame(0x1A, 1, []byte("telemetry"), nil, nil)
 encoded, _ := frame.Encode()
 
 // Decode a received frame
-decoded, _ := tmdl.DecodeTMTransferFrame(encoded)
+decoded, _ := tmdl.DecodeTransferFrame(encoded)
 fmt.Println(decoded.Header.Humanize())
 ```
 
@@ -134,13 +134,13 @@ The `TMTransferFrame` is the fundamental data unit. Each frame has a fixed lengt
 
 ```go
 // Basic frame with SCID=0x1A, VCID=1
-frame, err := tmdl.NewTMTransferFrame(0x1A, 1, data, nil, nil)
+frame, err := tmdl.NewTransferFrame(0x1A, 1, data, nil, nil)
 
 // Frame with a secondary header
-frame, err := tmdl.NewTMTransferFrame(0x1A, 1, data, secondaryHeaderBytes, nil)
+frame, err := tmdl.NewTransferFrame(0x1A, 1, data, secondaryHeaderBytes, nil)
 
 // Frame with Operational Control Field (4 bytes)
-frame, err := tmdl.NewTMTransferFrame(0x1A, 1, data, nil, ocfBytes)
+frame, err := tmdl.NewTransferFrame(0x1A, 1, data, nil, ocfBytes)
 
 // Idle (OID) frame: PN-filled data field, FHP=0x07FE
 idle, err := tmdl.NewIdleFrame(0x1A, 7, config)
@@ -160,7 +160,7 @@ encoded, err := frame.Encode()
 raw, err := frame.EncodeWithoutFEC()
 
 // Decode bytes back to a frame (validates CRC)
-frame, err := tmdl.DecodeTMTransferFrame(encoded)
+frame, err := tmdl.DecodeTransferFrame(encoded)
 
 // Check if a frame is idle
 if tmdl.IsIdleFrame(frame) { ... }
@@ -424,7 +424,7 @@ cadu := tmsc.WrapCADU(encoded, nil, true) // nil=default ASM, true=randomize
 
 // Receive: unwrap CADU, then decode frame
 unwrapped, _ := tmsc.UnwrapCADU(cadu, nil, true) // nil=default ASM, true=derandomize
-frame, _ := tmdl.DecodeTMTransferFrame(unwrapped)
+frame, _ := tmdl.DecodeTransferFrame(unwrapped)
 ```
 
 ## Service manager
@@ -510,7 +510,7 @@ pc.AddMasterChannel(mc, 1)
 unwrapped, err := tmsc.UnwrapCADU(cadu, nil, true) // nil=default ASM, true=derandomize
 if err != nil { /* handle sync marker or data errors */ }
 
-frame, err := tmdl.DecodeTMTransferFrame(unwrapped)
+frame, err := tmdl.DecodeTransferFrame(unwrapped)
 if err != nil { /* handle CRC or frame errors */ }
 
 // 3. Route to Master Channel -> Virtual Channel

@@ -255,7 +255,7 @@ frameData, corrections, err := tcsc.UnwrapCLTU(cltu, nil, nil, true)
 if err != nil { /* handle errors */ }
 
 // 3. Decode the TC Transfer Frame
-frame, err := tcdl.DecodeTCTransferFrame(frameData)
+frame, err := tcdl.DecodeTransferFrame(frameData)
 if err != nil { /* handle CRC errors */ }
 ```
 
