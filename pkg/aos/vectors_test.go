@@ -137,7 +137,7 @@ func TestFrameVectors(t *testing.T) {
 				return vectors.Fields{"fhec": fhec}, nil
 			}
 
-			frame, err := aos.DecodeFrame(input, c)
+			frame, err := aos.DecodeTransferFrameWithConfig(input, c)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +192,7 @@ func TestFHECDetectsHeaderCorruption(t *testing.T) {
 	good, _ := hex.DecodeString("6aea00010243ce8edeadbeef3934")
 	config := aos.ChannelConfig{HasFHEC: true, HasFECF: true}
 
-	if _, err := aos.DecodeFrame(good, config); err != nil {
+	if _, err := aos.DecodeTransferFrameWithConfig(good, config); err != nil {
 		t.Fatalf("the good frame must decode: %v", err)
 	}
 
@@ -202,7 +202,7 @@ func TestFHECDetectsHeaderCorruption(t *testing.T) {
 	bad[len(bad)-2] = byte(sum >> 8)
 	bad[len(bad)-1] = byte(sum)
 
-	if _, err := aos.DecodeFrame(bad, config); err != aos.ErrFHECMismatch {
+	if _, err := aos.DecodeTransferFrameWithConfig(bad, config); err != aos.ErrFHECMismatch {
 		t.Errorf("corrupted protected header: got %v, want ErrFHECMismatch", err)
 	}
 }
