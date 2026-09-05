@@ -82,7 +82,9 @@ func init() {
 // as one, which matters because clause 3.4.3.2 encodes everything transmitted as a
 // single stream, PLTUs and idle data alike.
 //
-// A ViterbiDecoder is not safe for concurrent use.
+// A ViterbiDecoder is not safe for concurrent use, and Decode must not be
+// called re-entrantly: it reuses the decoder's own scratch buffer, so a
+// second call nested inside the first would corrupt it.
 type ViterbiDecoder struct {
 	// metrics is the cost of the cheapest path reaching each state.
 	metrics [numStates]uint32
@@ -105,6 +107,10 @@ type ViterbiDecoder struct {
 	// pending holds decoded bits not yet packed into an octet.
 	pending    uint8
 	pendingLen int
+
+	// soft is scratch space Decode expands hard decisions into, kept between
+	// calls so a stream of frames does not allocate it fresh every time.
+	soft []int8
 }
 
 // unreachable is the metric of a state no path has reached. It is large enough
@@ -149,7 +155,13 @@ func (d *ViterbiDecoder) Decode(symbols []byte) ([]byte, error) {
 
 	// Two coded bits per input bit.
 	pairs := len(symbols) * 8 / 2
-	soft := make([]int8, 0, pairs*2)
+	// Reuse the scratch buffer across calls: reslicing to zero length keeps
+	// the backing array, so a stream of frames stops paying for this after
+	// the first one grows it to the largest frame seen.
+	soft := d.soft[:0]
+	if cap(soft) < pairs*2 {
+		soft = make([]int8, 0, pairs*2)
+	}
 
 	for _, b := range symbols {
 		for i := 7; i >= 0; i-- {
@@ -161,6 +173,7 @@ func (d *ViterbiDecoder) Decode(symbols []byte) ([]byte, error) {
 			}
 		}
 	}
+	d.soft = soft
 	return d.decodeSoft(soft)
 }
 
@@ -182,7 +195,8 @@ func (d *ViterbiDecoder) DecodeSoft(symbols []int8) ([]byte, error) {
 
 // decodeSoft runs the trellis over pairs of soft symbols.
 func (d *ViterbiDecoder) decodeSoft(symbols []int8) ([]byte, error) {
-	var out []byte
+	// Two soft symbols per input bit, eight input bits per output octet.
+	out := make([]byte, 0, len(symbols)/16)
 
 	for i := 0; i+1 < len(symbols); i += 2 {
 		d.step(symbols[i], symbols[i+1])
@@ -354,7 +368,9 @@ func (d *ViterbiDecoder) emit(out []byte, bit uint8) []byte {
 // the usual convergence argument no longer applies. The final few bits are
 // the least reliable in the stream.
 func (d *ViterbiDecoder) Flush() []byte {
-	var out []byte
+	// At most tracebackDepth bits are ever still pending here, since Decode
+	// emits everything beyond that as it goes.
+	out := make([]byte, 0, (tracebackDepth+7)/8)
 
 	for d.count > 0 {
 		bit := d.traceback()

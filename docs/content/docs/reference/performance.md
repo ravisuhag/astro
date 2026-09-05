@@ -5,7 +5,7 @@ description: Measured throughput and allocations for every layer, so you can siz
 order: 3
 ---
 
-Every frame protocol, both compressors, the Reed-Solomon and BCH coders and the checksums are benchmarked. Run them:
+Every frame protocol, both compressors, the Reed-Solomon, Viterbi, and BCH coders, the SDLS security layer, and the checksums are benchmarked. Run them:
 
 ```bash
 make bench
@@ -25,24 +25,27 @@ One machine, one architecture, single-threaded, warm cache, no I/O. Treat them a
 
 Figures are rounded to two significant figures, because they move by 10 to 15 percent between runs on the same machine. A difference of a few percent between two rows here means nothing; a factor of two means something.
 
-## The bottleneck is Reed-Solomon
+## The bottleneck is Reed-Solomon (Viterbi, on Proximity-1)
 
 | Operation | Throughput | Allocations |
 |---|---|---|
-| RS(255,223) encode | 30 MB/s | 3 |
-| RS(255,239) encode | 56 MB/s | 3 |
-| RS decode, no errors | 30 MB/s | 3 |
-| RS decode, 1 error | 7.4 MB/s | 9 |
-| RS decode, 8 errors | 7.2 MB/s | 23 |
-| RS decode, 16 errors | 6.5 MB/s | 40 |
+| RS(255,223) encode | 38 MB/s | 3 |
+| RS(255,239) encode | 73 MB/s | 3 |
+| RS decode, no errors | 34 MB/s | 3 |
+| RS decode, 1 error | 7.7 MB/s | 8 |
+| RS decode, 8 errors | 7.1 MB/s | 8 |
+| RS decode, 16 errors | 7.1 MB/s | 9 |
+| Viterbi decode, 4096-octet frame | 0.73 MB/s | 3 |
 
-Two things to plan around.
+Three things to plan around.
 
-**Decoding costs 4.7× more once it is actually correcting.** A clean link decodes at about 30 MB/s and a link near the correction limit at about 6.5 MB/s. Size for the bad case, because the bad case is when you need the data.
+**Decoding costs about 4.4× more once it is actually correcting.** A clean link decodes at about 34 MB/s and a link near the correction limit at about 7.1 MB/s. Size for the bad case, because the bad case is when you need the data.
 
-**The stronger code is half the speed.** RS(255,223) corrects 16 symbols at about 30 MB/s; RS(255,239) corrects 8 at about 56 MB/s. That is the trade, in numbers.
+**The stronger code is nearly half the speed.** RS(255,223) corrects 16 symbols at about 38 MB/s; RS(255,239) corrects 8 at about 73 MB/s. That is the trade, in numbers.
 
-The cost here is inherent Galois-field arithmetic rather than anything redundant, so it is unlikely to improve much.
+**On a Proximity-1 link, Viterbi is the actual bottleneck, not Reed-Solomon.** Decoding the rate-1/2, constraint-length-7 convolutional code of CCSDS 211.2-B-3 runs at 0.73 MB/s, about 10 times slower than RS decode even at its worst. `pkg/pxsc` was missing from `make bench` and its one benchmark reported no allocation figures, so this number was simply never in the picture before. "Reed-Solomon is the bottleneck" is true for a TM, AOS, or USLP downlink; a Proximity-1 link is bottlenecked by Viterbi instead.
+
+The time here is inherent Galois-field arithmetic rather than anything redundant, so it is unlikely to improve much — but that is only true of the time, not of the allocations. Berlekamp-Massey used to allocate a fresh scratch buffer on every non-zero discrepancy, which is why the 1/8/16-error rows above used to show 9, 23, and 40 allocations; they now show a flat 8, 8, and 9, because that buffer is allocated once and reused. Viterbi decode got the same kind of cleanup: allocations dropped from 14 per call to 3. Its time did not measurably change, because the trellis update dominates it, not allocation.
 
 ## Everything else is far cheaper
 
@@ -103,13 +106,28 @@ RHC is measured per cycle over a small housekeeping vector, so its MB/s figure i
 
 BCH correction is 29× slower than the clean path, but an uplink is kilobits per second, so this never matters. It is listed for completeness.
 
+## SDLS security
+
+Measured over a 1115-octet TM frame data field, the same frame size the tables above use, for the clause E1/E3/E4 AES-256-GCM baseline (authenticated encryption), GMAC (GCM's authentication-only companion), and the clause E2 AES-CMAC telecommand baseline (authentication-only):
+
+| Operation | Throughput | Allocations |
+|---|---|---|
+| `ApplySecurity`, AES-256-GCM | 1400 MB/s | 6 |
+| `ApplySecurity`, GMAC | 1200 MB/s | 7 |
+| `ApplySecurity`, AES-CMAC | 540 MB/s | 9 |
+| `ProcessSecurity`, AES-256-GCM | 1100 MB/s | 7 |
+| `ProcessSecurity`, GMAC | 1300 MB/s | 7 |
+| `ProcessSecurity`, AES-CMAC | 530 MB/s | 10 |
+
+`pkg/sdls` had no benchmarks at all until now, and was absent from `make bench`, even though it runs on the same per-frame path as the Reed-Solomon and Viterbi coders above. All six numbers land comfortably above either coder, so SDLS is not what limits a protected downlink or Proximity-1 link; it was just never checked. AES-CMAC runs at a bit under half the speed of the AES-GCM paths here, which is worth knowing if you are choosing between the clause E2 and clause E1/E3/E4 baselines on throughput alone.
+
 ## What is not measured
 
 No end-to-end pipeline benchmark, no concurrent throughput, and nothing for `pkg/sle`, `pkg/cfdp`, `pkg/bp`, `pkg/ltp`, `pkg/pus` or `pkg/xtce`. Those are caller-pumped state machines and parsers whose cost depends far more on how you drive them than on the library, so a single number would mislead.
 
 ## Things that will bite you
 
-**A 300 MB/s frame layer does not mean a 300 MB/s link.** The chain is packet, frame, then Reed-Solomon, and the slowest stage sets the rate. On a downlink with RS(255,223) that is about 30 MB/s clean and about 6.5 MB/s while correcting.
+**A 300 MB/s frame layer does not mean a 300 MB/s link.** The chain is packet, frame, then Reed-Solomon (or, on Proximity-1, Viterbi), and the slowest stage sets the rate. On a downlink with RS(255,223) that is about 34 MB/s clean and about 7.1 MB/s while correcting; on a Proximity-1 link, Viterbi decode at 0.73 MB/s sets the rate instead.
 
 **These numbers are single-threaded.** A `Sender` is not safe for concurrent use, and neither are the frame services, because a downlink is one ordered stream. Scaling means one pipeline per physical channel, not one per core.
 
