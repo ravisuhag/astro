@@ -68,6 +68,11 @@ was added once the runner existed. Before that, sequence vectors were data no te
 them", so COP-1's ten sat in the corpus and in this table's counts
 without ever running against `pkg/cop`. They run now, and so do the rest.
 
+These vectors pin specific values; they say nothing about arbitrary
+input. `pkg/cop`'s `CLCW.Decode` and `FARM.ProcessFrame` are separately
+fuzzed (`FuzzCLCWDecode`, `FuzzFARMProcessFrame`), which is the check
+that matters for octets a vector never thought to write down.
+
 `ltp/session.json` drives a sender and receiver across a link that drops
 segments: the clean run, a lost data segment recovering with no timer,
 the lost *checkpoint* that recovers with nothing until the caller resends
