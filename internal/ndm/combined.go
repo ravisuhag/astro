@@ -2,6 +2,7 @@ package ndm
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -132,7 +133,7 @@ func DecodeCombinedXML(data []byte) (*CombinedXML, error) {
 func readCombinedChildren(d *xml.Decoder, c *CombinedXML) error {
 	for {
 		token, err := d.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			// The root never closed.
 			return ErrMalformedXML
 		}
