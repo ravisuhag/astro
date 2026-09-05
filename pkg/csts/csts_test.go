@@ -80,7 +80,8 @@ func TestEncodeUnbindInvocation(t *testing.T) {
 		Type: csts.OpUnbindInvocation,
 		Unbind: &csts.UnbindInvocation{
 			Header: csts.InvocationHeader{
-				InvokeID: 7,
+				InvokerCredentials: csts.Unused(),
+				InvokeID:           7,
 				Procedure: csts.ProcedureName{
 					Type: csts.OIDAssociationControl,
 					Role: csts.RoleAssociationControl,
@@ -174,6 +175,96 @@ func TestReturnHeaderIsNotDoubleWrapped(t *testing.T) {
 		if encoded[2] == 0x30 {
 			t.Errorf("%s: a SEQUENCE was written inside the context tag: %x", operation, encoded)
 		}
+	}
+}
+
+// A BIND return, from annex F3.5:
+//
+//	BindReturn ::= SEQUENCE
+//	{ standardReturnHeader StandardReturnHeader
+//	, responderIdentifier  AuthorityIdentifier }
+//
+//	a1 11                     [1] constructed, 17 octets
+//	   30 09                  standardReturnHeader, SEQUENCE
+//	      80 00               performerCredentials, 'unused' [0]
+//	      02 01 07            invokeId, INTEGER 7
+//	      a0 02               result, 'positive' [0]
+//	         81 00            Extended, 'notUsed' [1]
+//	   1a 04 43 4e 45 53       responderIdentifier, VisibleString "CNES"
+//
+// BindReturn is the one return in the framework that is a genuine SEQUENCE of
+// a header field and something else, rather than being StandardReturnHeader
+// itself. So unlike UnbindReturn and StartReturn, the header here keeps its
+// own universal SEQUENCE tag (0x30) nested inside the [1] alternative.
+const bindReturnHex = "a11130098000020107a00281001a04434e4553"
+
+func TestEncodeBindReturn(t *testing.T) {
+	pdu := &csts.PDU{
+		Type: csts.OpBindReturn,
+		BindReturn: &csts.BindReturn{
+			Header:              csts.ReturnHeader{InvokeID: 7, Positive: true},
+			ResponderIdentifier: "CNES",
+		},
+	}
+	assertEncodes(t, pdu, bindReturnHex)
+
+	back := mustDecode(t, bindReturnHex)
+	if back.BindReturn == nil {
+		t.Fatalf("decoded as %s", back.Type)
+	}
+	if back.BindReturn.ResponderIdentifier != "CNES" {
+		t.Errorf("responder identifier = %q", back.BindReturn.ResponderIdentifier)
+	}
+	header, ok := back.ReturnHeader()
+	if !ok {
+		t.Fatal("a BIND return should carry a standard return header")
+	}
+	if !header.Positive || header.InvokeID != 7 {
+		t.Errorf("return header = %+v", header)
+	}
+}
+
+// This is the trap the package's own appendReturnHeader doc comment warns
+// about: appendReturnHeader nests the header in its own SEQUENCE, and
+// appendReturnHeaderContent does not. BindReturn is the one operation that
+// must use the nesting form, because clause 3.4 and annex F3.5 define it as
+// a SEQUENCE holding a StandardReturnHeader field alongside
+// responderIdentifier — not as StandardReturnHeader renamed. Getting the two
+// helpers backwards produces a PDU one level too deep (or too shallow), which
+// round-trips against this package's own reader and against nobody else's.
+func TestBindReturnHeaderIsWrapped(t *testing.T) {
+	pdu := &csts.PDU{
+		Type: csts.OpBindReturn,
+		BindReturn: &csts.BindReturn{
+			Header:              csts.ReturnHeader{InvokeID: 7, Positive: true},
+			ResponderIdentifier: "CNES",
+		},
+	}
+	encoded, err := pdu.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	// Past the outer [1] tag and its length, the header field must start with
+	// a universal SEQUENCE tag (0x30) — the opposite of
+	// TestReturnHeaderIsNotDoubleWrapped, where the same position must NOT be
+	// 0x30 because those operations are the header rather than containing it.
+	if len(encoded) < 3 {
+		t.Fatalf("encoded to %d octets", len(encoded))
+	}
+	if encoded[2] != 0x30 {
+		t.Errorf("BindReturn's header field was not wrapped in its own SEQUENCE: %x", encoded)
+	}
+
+	// The header's own length must match the header content exactly — a
+	// StandardReturnHeader here, not the whole BindReturn.
+	headerLen := int(encoded[3])
+	if 4+headerLen >= len(encoded) {
+		t.Fatalf("header length %d overruns the %d-octet PDU", headerLen, len(encoded))
+	}
+	// What follows the nested header SEQUENCE is responderIdentifier's own
+	// VisibleString tag (0x1a), not more header content.
+	if got := encoded[4+headerLen]; got != 0x1a {
+		t.Errorf("expected responderIdentifier's VisibleString tag 0x1a after the header, got %#x", got)
 	}
 }
 

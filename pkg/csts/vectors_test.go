@@ -90,6 +90,108 @@ func pduFromFields(f vectors.Fields) (*csts.PDU, error) {
 		}
 		pdu.Return = &csts.StandardReturn{Header: header}
 		return pdu, nil
+
+	case csts.OpBindReturn:
+		header, err := returnHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		responder, err := f.Str("responder_identifier")
+		if err != nil {
+			return nil, err
+		}
+		pdu.BindReturn = &csts.BindReturn{Header: header, ResponderIdentifier: responder}
+		return pdu, nil
+
+	case csts.OpStopInvocation:
+		header, err := invocationHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		pdu.Stop = &csts.StopInvocation{Header: header}
+		return pdu, nil
+
+	case csts.OpGetInvocation:
+		header, err := invocationHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		listOfParameters, err := f.Hex("list_of_parameters")
+		if err != nil {
+			return nil, err
+		}
+		pdu.Get = &csts.GetInvocation{Header: header, ListOfParameters: listOfParameters}
+		return pdu, nil
+
+	case csts.OpNotifyInvocation:
+		header, err := invocationHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		eventTime, err := f.Hex("event_time")
+		if err != nil {
+			return nil, err
+		}
+		eventName, err := f.Hex("event_name")
+		if err != nil {
+			return nil, err
+		}
+		eventValue, err := f.Hex("event_value")
+		if err != nil {
+			return nil, err
+		}
+		pdu.Notify = &csts.NotifyInvocation{
+			Header:     header,
+			EventTime:  eventTime,
+			EventName:  eventName,
+			EventValue: eventValue,
+		}
+		return pdu, nil
+
+	case csts.OpTransferDataInvocation:
+		header, err := invocationHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		generationTime, err := f.Hex("generation_time")
+		if err != nil {
+			return nil, err
+		}
+		sequenceCounter, err := f.Uint("sequence_counter")
+		if err != nil {
+			return nil, err
+		}
+		data, err := f.Hex("data")
+		if err != nil {
+			return nil, err
+		}
+		pdu.TransferData = &csts.TransferDataInvocation{
+			Header:          header,
+			GenerationTime:  generationTime,
+			SequenceCounter: uint32(sequenceCounter),
+			Data:            data,
+		}
+		return pdu, nil
+
+	case csts.OpProcessDataInvocation:
+		header, err := invocationHeaderFromFields(f)
+		if err != nil {
+			return nil, err
+		}
+		dataUnitID, err := f.Uint("data_unit_id")
+		if err != nil {
+			return nil, err
+		}
+		data, err := f.Hex("data")
+		if err != nil {
+			return nil, err
+		}
+		pdu.ProcessData = &csts.ProcessDataInvocation{
+			Header:     header,
+			DataUnitID: uint32(dataUnitID),
+			Data:       data,
+		}
+		return pdu, nil
 	}
 	return nil, errUnknownVectorOperation
 }
@@ -198,6 +300,26 @@ func pduFields(p *csts.PDU) vectors.Fields {
 		f["peer_abort_diagnostic"] = uint64(p.PeerAbort.Diagnostic)
 		f["peer_abort_name"] = p.PeerAbort.Diagnostic.String()
 		f["peer_abort_origin"] = p.PeerAbort.Diagnostic.Origin().String()
+	}
+	if p.BindReturn != nil {
+		f["responder_identifier"] = p.BindReturn.ResponderIdentifier
+	}
+	if p.Get != nil {
+		f["list_of_parameters"] = p.Get.ListOfParameters
+	}
+	if p.Notify != nil {
+		f["event_time"] = p.Notify.EventTime
+		f["event_name"] = p.Notify.EventName
+		f["event_value"] = p.Notify.EventValue
+	}
+	if p.TransferData != nil {
+		f["generation_time"] = p.TransferData.GenerationTime
+		f["sequence_counter"] = uint64(p.TransferData.SequenceCounter)
+		f["data"] = p.TransferData.Data
+	}
+	if p.ProcessData != nil {
+		f["data_unit_id"] = uint64(p.ProcessData.DataUnitID)
+		f["data"] = p.ProcessData.Data
 	}
 	return f
 }
