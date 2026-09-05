@@ -130,6 +130,17 @@ func (r RoutingID) String() string {
 // of "continuing" segments that never ends would grow without limit.
 const DefaultMaxPacketSize = 64 << 10
 
+// DefaultMaxPending bounds how many routing IDs may have a partial packet
+// open at once when Reassembler leaves MaxPending at zero: 32.
+//
+// PCID (1 bit), Port ID (3 bits) and Pseudo Packet ID (6 bits) together name
+// 1024 distinct routing IDs, clause 3.2.3.3.2 c)'s own key, and every bit of it is
+// chosen by the peer. MaxPacketSize alone bounds one buffer; nothing bounded
+// the set of them. A peer that opens every routing ID and finishes none would
+// otherwise pin MaxPacketSize octets per key at once: 64 MiB at the defaults,
+// proportionally more if a mission raises MaxPacketSize.
+const DefaultMaxPending = 32
+
 // Reassembler rebuilds packets from the segments arriving on a link, per
 // Clause 3.2.3.3.3.
 //
@@ -146,7 +157,18 @@ type Reassembler struct {
 	// DefaultMaxPacketSize.
 	MaxPacketSize int
 
+	// MaxPending bounds how many routing IDs may have a partial packet open
+	// at once. Zero selects DefaultMaxPending. Admitting one more than the
+	// limit evicts the oldest partial still open, which is safe: clause
+	// 3.2.3.3.4 delivers only complete packets, so one that never completes
+	// was already lost.
+	MaxPending int
+
 	partial map[RoutingID][]byte
+	// order lists the routing IDs currently in partial, oldest first, so
+	// eviction knows what to drop. Kept in lockstep with partial: every
+	// insertion appends here, every removal removes here.
+	order []RoutingID
 }
 
 // NewReassembler returns an empty reassembler.
@@ -160,6 +182,57 @@ func (r *Reassembler) maxSize() int {
 		return r.MaxPacketSize
 	}
 	return DefaultMaxPacketSize
+}
+
+// maxPending returns the effective ceiling on concurrently open partials.
+func (r *Reassembler) maxPending() int {
+	if r.MaxPending > 0 {
+		return r.MaxPending
+	}
+	return DefaultMaxPending
+}
+
+// admit installs buf as the partial for id, evicting the oldest open partial
+// first if id is new and the reassembler is already at maxPending.
+//
+// id already being open (a restart per clause 3.2.3.3.5 b, or a continuing
+// segment updating its own buffer) never evicts anything: it is not a new
+// entrant into the open set, just a value update.
+func (r *Reassembler) admit(id RoutingID, buf []byte) {
+	if _, open := r.partial[id]; !open {
+		for len(r.partial) >= r.maxPending() {
+			r.evictOldest()
+		}
+		r.order = append(r.order, id)
+	}
+	r.partial[id] = buf
+}
+
+// evictOldest drops the oldest partial still open. A partial that never
+// completes was already lost, per clause 3.2.3.3.4, so dropping it early loses
+// nothing a peer that finishes its packets would notice.
+func (r *Reassembler) evictOldest() {
+	if len(r.order) == 0 {
+		return
+	}
+	oldest := r.order[0]
+	r.order = r.order[1:]
+	delete(r.partial, oldest)
+}
+
+// forget discards id's partial, if any, and removes it from the eviction
+// queue so that queue never grows past what is actually open.
+func (r *Reassembler) forget(id RoutingID) {
+	if _, open := r.partial[id]; !open {
+		return
+	}
+	delete(r.partial, id)
+	for i, o := range r.order {
+		if o == id {
+			r.order = append(r.order[:i], r.order[i+1:]...)
+			break
+		}
+	}
 }
 
 // Accept folds one segment into the reassembler.
@@ -180,7 +253,7 @@ func (r *Reassembler) Accept(pcid, portID uint8, seg *Segment) ([]byte, error) {
 	case SegmentUnsegmented:
 		// A whole packet in one segment. Any partial buffer for this routing
 		// ID was never completed, so drop it.
-		delete(r.partial, id)
+		r.forget(id)
 		out := make([]byte, len(seg.Data))
 		copy(out, seg.Data)
 		return out, nil
@@ -190,10 +263,10 @@ func (r *Reassembler) Accept(pcid, portID uint8, seg *Segment) ([]byte, error) {
 		buf := make([]byte, len(seg.Data))
 		copy(buf, seg.Data)
 		if len(buf) > r.maxSize() {
-			delete(r.partial, id)
+			r.forget(id)
 			return nil, ErrReassemblyTooLarge
 		}
-		r.partial[id] = buf
+		r.admit(id, buf)
 		return nil, nil
 
 	case SegmentContinuing, SegmentLast:
@@ -204,13 +277,13 @@ func (r *Reassembler) Accept(pcid, portID uint8, seg *Segment) ([]byte, error) {
 			return nil, ErrSegmentOutOfOrder
 		}
 		if len(buf)+len(seg.Data) > r.maxSize() {
-			delete(r.partial, id)
+			r.forget(id)
 			return nil, ErrReassemblyTooLarge
 		}
 		buf = append(buf, seg.Data...)
 
 		if seg.Header.SequenceFlags == SegmentLast {
-			delete(r.partial, id)
+			r.forget(id)
 			return buf, nil
 		}
 		r.partial[id] = buf
@@ -245,7 +318,10 @@ func (r *Reassembler) AcceptFrame(f *TransferFrame) ([]byte, error) {
 func (r *Reassembler) Pending() int { return len(r.partial) }
 
 // Reset discards every partial packet.
-func (r *Reassembler) Reset() { r.partial = make(map[RoutingID][]byte) }
+func (r *Reassembler) Reset() {
+	r.partial = make(map[RoutingID][]byte)
+	r.order = nil
+}
 
 // Segmentize cuts a packet into segments whose data fields are at most
 // maxSegmentData octets each, tagged with the given pseudo packet ID.
