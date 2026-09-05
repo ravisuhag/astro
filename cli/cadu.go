@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/tmsc"
@@ -52,6 +51,7 @@ func caduWrapCmd() *cobra.Command {
   astro tm encode --scid 26 --vcid 1 --data 0102030405 | astro cadu wrap --input hex --randomize`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -61,19 +61,19 @@ func caduWrapCmd() *cobra.Command {
 
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(cadu))
+				fmt.Fprintln(out, hex.EncodeToString(cadu))
 			case "json":
 				j := caduToJSON(cadu, randomize)
 				b, err := json.MarshalIndent(j, "", "  ")
 				if err != nil {
 					return err
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Printf("CADU (%d bytes)\n", len(cadu))
-				fmt.Printf("  ASM: %s\n", hex.EncodeToString(cadu[:4]))
-				fmt.Printf("  Frame Data: %d bytes\n", len(cadu)-4)
-				fmt.Printf("  Randomized: %v\n", randomize)
+				fmt.Fprintf(out, "CADU (%d bytes)\n", len(cadu))
+				fmt.Fprintf(out, "  ASM: %s\n", hex.EncodeToString(cadu[:4]))
+				fmt.Fprintf(out, "  Frame Data: %d bytes\n", len(cadu)-4)
+				fmt.Fprintf(out, "  Randomized: %v\n", randomize)
 			default:
 				return fmt.Errorf("unknown format: %s", outputFmt)
 			}
@@ -106,6 +106,7 @@ func caduUnwrapCmd() *cobra.Command {
   cat cadu.hex | astro cadu unwrap --input hex --derandomize`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -118,7 +119,7 @@ func caduUnwrapCmd() *cobra.Command {
 
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(frame))
+				fmt.Fprintln(out, hex.EncodeToString(frame))
 			case "json":
 				j := map[string]any{
 					"frame_data":   hex.EncodeToString(frame),
@@ -129,11 +130,11 @@ func caduUnwrapCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Printf("Extracted Frame (%d bytes)\n", len(frame))
-				fmt.Printf("  Derandomized: %v\n", derandomize)
-				fmt.Print(hexDump(frame, "  "))
+				fmt.Fprintf(out, "Extracted Frame (%d bytes)\n", len(frame))
+				fmt.Fprintf(out, "  Derandomized: %v\n", derandomize)
+				fmt.Fprint(out, hexDump(frame, "  "))
 			default:
 				return fmt.Errorf("unknown format: %s", outputFmt)
 			}
@@ -164,7 +165,7 @@ func caduInspectCmd() *cobra.Command {
 				return err
 			}
 
-			printCADUInspect(data)
+			printCADUInspect(cmd.OutOrStdout(), data)
 			return nil
 		},
 	}
@@ -205,7 +206,7 @@ func caduSyncCmd() *cobra.Command {
 			}
 			defer func() { _ = closer.Close() }()
 
-			return syncCADUs(source, frameLen, outputFmt)
+			return syncCADUs(cmd.OutOrStdout(), cmd.ErrOrStderr(), source, frameLen, outputFmt)
 		},
 	}
 
@@ -234,38 +235,38 @@ func caduToJSON(cadu []byte, randomized bool) caduJSON {
 	}
 }
 
-func printCADUInspect(data []byte) {
+func printCADUInspect(out io.Writer, data []byte) {
 	asm := tmsc.DefaultASM()
 
-	fmt.Println("CADU Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Fprintln(out, "CADU Inspector")
+	fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// ASM
 	if len(data) >= 4 {
 		asmMatch := bytes.Equal(data[:4], asm)
-		fmt.Printf("Attached Sync Marker (4 bytes): %s", hex.EncodeToString(data[:4]))
+		fmt.Fprintf(out, "Attached Sync Marker (4 bytes): %s", hex.EncodeToString(data[:4]))
 		if asmMatch {
-			fmt.Println(" [VALID]")
+			fmt.Fprintln(out, " [VALID]")
 		} else {
-			fmt.Println(" [MISMATCH, expected 1acffc1d]")
+			fmt.Fprintln(out, " [MISMATCH, expected 1acffc1d]")
 		}
 	} else {
-		fmt.Println("Data too short for ASM")
+		fmt.Fprintln(out, "Data too short for ASM")
 		return
 	}
 
 	// Frame data
 	frameData := data[4:]
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Frame Data (%d bytes)\n", len(frameData))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "Frame Data (%d bytes)\n", len(frameData))
 	if len(frameData) > 0 {
-		fmt.Print(hexDump(frameData, "  "))
+		fmt.Fprint(out, hexDump(frameData, "  "))
 	}
 
 	// Full dump
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw CADU (%d bytes)\n", len(data))
-	fmt.Print(hexDump(data, "  "))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "Raw CADU (%d bytes)\n", len(data))
+	fmt.Fprint(out, hexDump(data, "  "))
 }
 
 // syncCADUs finds frame alignment in a raw stream and extracts each CADU.
@@ -276,7 +277,7 @@ func printCADUInspect(data []byte) {
 // marker when alignment is lost. The reading is incremental: a live pipe
 // never reaches EOF, and a pass-length capture should not have to be resident
 // to be scanned.
-func syncCADUs(source io.Reader, frameLen int, outputFmt string) error {
+func syncCADUs(out, errOut io.Writer, source io.Reader, frameLen int, outputFmt string) error {
 	asm := tmsc.DefaultASM()
 
 	found := 0
@@ -297,13 +298,13 @@ func syncCADUs(source io.Reader, frameLen int, outputFmt string) error {
 			if err != nil {
 				return fmt.Errorf("encoding JSON output: %w", err)
 			}
-			fmt.Println(string(b))
+			fmt.Fprintln(out, string(b))
 		case "hex":
-			fmt.Println(hex.EncodeToString(cadu))
+			fmt.Fprintln(out, hex.EncodeToString(cadu))
 		case "text":
-			fmt.Printf("--- CADU #%d (offset %d, %d bytes) ---\n", found, offset, frameLen)
-			fmt.Printf("  ASM: %s\n", hex.EncodeToString(cadu[:len(asm)]))
-			fmt.Printf("  Frame: %d bytes\n", frameLen-len(asm))
+			fmt.Fprintf(out, "--- CADU #%d (offset %d, %d bytes) ---\n", found, offset, frameLen)
+			fmt.Fprintf(out, "  ASM: %s\n", hex.EncodeToString(cadu[:len(asm)]))
+			fmt.Fprintf(out, "  Frame: %d bytes\n", frameLen-len(asm))
 		}
 
 		return nil
@@ -316,7 +317,7 @@ func syncCADUs(source io.Reader, frameLen int, outputFmt string) error {
 	}
 
 	truncated := func(offset int64, n int) {
-		fmt.Fprintf(os.Stderr,
+		fmt.Fprintf(errOut,
 			"Warning: sync marker at offset %d but only %d of %d octets follow, ignored\n",
 			offset, n, frameLen)
 	}
@@ -326,9 +327,9 @@ func syncCADUs(source io.Reader, frameLen int, outputFmt string) error {
 	}
 
 	if outputFmt == "text" {
-		fmt.Printf("\nFound %d CADU(s).\n", found)
+		fmt.Fprintf(out, "\nFound %d CADU(s).\n", found)
 		if skipped > 0 {
-			fmt.Printf("%d octet(s) outside any CADU were skipped.\n", skipped)
+			fmt.Fprintf(out, "%d octet(s) outside any CADU were skipped.\n", skipped)
 		}
 	}
 
