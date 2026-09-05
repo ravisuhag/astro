@@ -415,12 +415,16 @@ func TestUplinkDuplicateIsRejectedNotFailed(t *testing.T) {
 // checks that every one of them still arrives once FARM-1's Wait state and a
 // retransmission round have run their course.
 func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
+	// A window generous enough that FOP-1's sliding window is never what
+	// holds a frame back (100 is comfortably under cop.MaxWindow, the
+	// COP-1 ceiling: any wider and a lost CLCW could not be told apart
+	// from a wrap of the 8-bit sequence number), paired with a small
+	// explicit buffer so that buffer, not the window, is the only limit
+	// this test means to hit.
+	channel := stack.UplinkVC{ID: 0, Window: 100, Buffer: 8}
 	config := stack.Uplink{
 		SpacecraftID: 42,
-		// A window well past the total command count, so FOP-1's sliding
-		// window is never what holds a frame back: the virtual channel's
-		// buffer (DefaultBuffer) is the only limit this test means to hit.
-		Channels: []stack.UplinkVC{{ID: 0, Window: 200}},
+		Channels:     []stack.UplinkVC{channel},
 	}
 
 	commander, err := stack.NewCommander(config)
@@ -432,7 +436,7 @@ func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
 		t.Fatalf("NewOnboard: %v", err)
 	}
 
-	total := stack.DefaultBuffer + 2
+	total := channel.Buffer + 2
 	var sent []string
 	for i := 0; i < total; i++ {
 		text := fmt.Sprintf("CMD%d", i)
@@ -501,9 +505,13 @@ func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
 // buffer is exhausted and clear once the application drains enough to free
 // one.
 func TestUplinkCLCWReportsWaitWhileBufferIsFull(t *testing.T) {
+	// Same reasoning as TestUplinkOverfillingTheBufferDoesNotDropCommands:
+	// a window under cop.MaxWindow so FOP-1 never throttles, and a small
+	// explicit buffer so the buffer is what fills.
+	channel := stack.UplinkVC{ID: 0, Window: 100, Buffer: 8}
 	config := stack.Uplink{
 		SpacecraftID: 42,
-		Channels:     []stack.UplinkVC{{ID: 0, Window: 200}},
+		Channels:     []stack.UplinkVC{channel},
 	}
 
 	commander, err := stack.NewCommander(config)
@@ -517,7 +525,7 @@ func TestUplinkCLCWReportsWaitWhileBufferIsFull(t *testing.T) {
 
 	// One more command than the buffer holds, so the last one has nowhere
 	// to go.
-	total := stack.DefaultBuffer + 1
+	total := channel.Buffer + 1
 	for i := 0; i < total; i++ {
 		if err := commander.Send(0, command(t, 100, uint16(i), fmt.Sprintf("CMD%d", i))); err != nil {
 			t.Fatalf("Send %d: %v", i, err)
@@ -597,6 +605,12 @@ func TestUplinkConfigValidation(t *testing.T) {
 			SpacecraftID: 42,
 			Channels:     []stack.UplinkVC{{ID: 0, Buffer: -1}},
 		},
+		"window above the COP-1 maximum": {
+			SpacecraftID: 42,
+			// One past cop.MaxWindow (127): the smallest value that must be
+			// refused.
+			Channels: []stack.UplinkVC{{ID: 0, Window: 128}},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := config.Validate(); !errors.Is(err, stack.ErrInvalidConfig) {
@@ -607,6 +621,32 @@ func TestUplinkConfigValidation(t *testing.T) {
 			}
 			if _, err := stack.NewOnboard(config); !errors.Is(err, stack.ErrInvalidConfig) {
 				t.Errorf("NewOnboard() = %v, want ErrInvalidConfig", err)
+			}
+		})
+	}
+}
+
+// The window ceiling is exactly cop.MaxWindow: at that value a channel is
+// still legal, and zero (meaning "unset") takes DefaultWindow rather than
+// being rejected as if it were an oversized window.
+func TestUplinkWindowAtTheCeilingIsValid(t *testing.T) {
+	for name, window := range map[string]uint8{
+		"at MaxWindow":           cop.MaxWindow,
+		"zero takes the default": 0,
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := stack.Uplink{
+				SpacecraftID: 42,
+				Channels:     []stack.UplinkVC{{ID: 0, Window: window}},
+			}
+			if err := config.Validate(); err != nil {
+				t.Errorf("Validate() = %v, want nil", err)
+			}
+			if _, err := stack.NewCommander(config); err != nil {
+				t.Errorf("NewCommander() = %v, want nil", err)
+			}
+			if _, err := stack.NewOnboard(config); err != nil {
+				t.Errorf("NewOnboard() = %v, want nil", err)
 			}
 		})
 	}
