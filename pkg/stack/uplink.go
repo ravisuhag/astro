@@ -110,6 +110,10 @@ func (u Uplink) Validate() error {
 			return fmt.Errorf("%w: virtual channel %d has a negative buffer",
 				ErrInvalidConfig, channel.ID)
 		}
+		if channel.Window > cop.MaxWindow {
+			return fmt.Errorf("%w: virtual channel %d has window %d, above the COP-1 maximum of %d",
+				ErrInvalidConfig, channel.ID, channel.Window, cop.MaxWindow)
+		}
 	}
 	return nil
 }
