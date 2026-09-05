@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -184,7 +185,7 @@ func streamUnits(source io.Reader, sizer UnitSizer, minimum int, handle func(uni
 
 		for want := minimum; want <= maxUnitHeader; want++ {
 			header, err = peekAtLeast(reader, want)
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				if len(header) > 0 && trailing != nil {
 					trailing(len(header))
 				}
@@ -206,7 +207,7 @@ func streamUnits(source io.Reader, sizer UnitSizer, minimum int, handle func(uni
 		}
 
 		unit, err := peekAtLeast(reader, size)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			// The stream ended part way through a unit.
 			if trailing != nil {
 				trailing(len(unit))
@@ -234,7 +235,7 @@ func streamUnits(source io.Reader, sizer UnitSizer, minimum int, handle func(uni
 // rather than ignored.
 func peekAtLeast(reader *bufio.Reader, n int) ([]byte, error) {
 	data, err := reader.Peek(n)
-	if err == bufio.ErrBufferFull {
+	if errors.Is(err, bufio.ErrBufferFull) {
 		return data, fmt.Errorf("unit of %d octets does not fit the read buffer", n)
 	}
 	return data, err
@@ -358,12 +359,12 @@ func streamMarked(source io.Reader, marker []byte, size int, handle markedHandle
 // arrives, and never before.
 func peekUpTo(reader *bufio.Reader, n int) (data []byte, atEOF bool, err error) {
 	data, err = reader.Peek(n)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, false, nil
-	case io.EOF:
+	case errors.Is(err, io.EOF):
 		return data, true, nil
-	case bufio.ErrBufferFull:
+	case errors.Is(err, bufio.ErrBufferFull):
 		return nil, false, fmt.Errorf("unit of %d octets does not fit the read buffer", n)
 	default:
 		return nil, false, err
