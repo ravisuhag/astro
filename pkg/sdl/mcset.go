@@ -1,5 +1,7 @@
 package sdl
 
+import "sync"
+
 // MasterChannelSink is a master channel a set can route frames to.
 //
 // It extends MCSource with the receiving half: a set both pulls frames out of
@@ -25,10 +27,11 @@ type MasterChannelSink[F any] interface {
 // AOS's idle frame counter or TM's OID fill generator. This holds only the part
 // that was identical.
 //
-// A MasterChannelSet is safe for concurrent use, because MCMultiplexer is and
-// the registry is written only through Add.
+// A MasterChannelSet is safe for concurrent use: MCMultiplexer guards its own
+// state, and mu guards the registry.
 type MasterChannelSet[F any, MC MasterChannelSink[F]] struct {
 	mux      *MCMultiplexer[F]
+	mu       sync.RWMutex
 	channels map[uint16]MC
 }
 
@@ -46,12 +49,18 @@ func NewMasterChannelSet[F any, MC MasterChannelSink[F]]() *MasterChannelSet[F, 
 // gets three consecutive turns for every one a channel weighted 1 gets, and no
 // channel starves another. See MCMultiplexer.
 func (s *MasterChannelSet[F, MC]) Add(mc MC, priority int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.channels[mc.SCID()] = mc
 	s.mux.Add(mc, priority)
 }
 
 // Get returns the master channel for a Spacecraft ID.
 func (s *MasterChannelSet[F, MC]) Get(scid uint16) (MC, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	mc, ok := s.channels[scid]
 	return mc, ok
 }
@@ -62,7 +71,10 @@ func (s *MasterChannelSet[F, MC]) Get(scid uint16) (MC, bool) {
 // ErrMasterChannelNotFound rather than delivered to whichever channel happens
 // to be registered.
 func (s *MasterChannelSet[F, MC]) Route(scid uint16, frame F) error {
+	s.mu.RLock()
 	mc, ok := s.channels[scid]
+	s.mu.RUnlock()
+
 	if !ok {
 		return ErrMasterChannelNotFound
 	}
@@ -80,6 +92,9 @@ func (s *MasterChannelSet[F, MC]) Route(scid uint16, frame F) error {
 // the fill deterministic, which is what a receiver counting frames on a
 // channel needs.
 func (s *MasterChannelSet[F, MC]) Lowest() (MC, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var (
 		chosen MC
 		found  bool
@@ -99,5 +114,10 @@ func (s *MasterChannelSet[F, MC]) Next() (F, error) { return s.mux.Next() }
 // HasPending reports whether any master channel has a frame ready.
 func (s *MasterChannelSet[F, MC]) HasPending() bool { return s.mux.HasPending() }
 
-// Len returns the number of frames waiting across every master channel.
-func (s *MasterChannelSet[F, MC]) Len() int { return s.mux.Len() }
+// Len returns the number of registered master channels.
+func (s *MasterChannelSet[F, MC]) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.mux.Len()
+}

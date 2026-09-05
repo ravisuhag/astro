@@ -214,6 +214,61 @@ func TestServiceManagerConcurrentRegistration(t *testing.T) {
 	wg.Wait()
 }
 
+// TestMasterChannelSetConcurrentAddAndRoute drives one MasterChannelSet from
+// many goroutines, some registering fresh master channels while others route
+// frames to and look up channels already registered.
+//
+// Before the mutex, Add wrote the channels map with no lock while Get, Route,
+// and Lowest read it unlocked, so registering a channel while another
+// goroutine routed a frame raced: "fatal error: concurrent map read and map
+// write", which no recover catches. Run with -race.
+func TestMasterChannelSetConcurrentAddAndRoute(t *testing.T) {
+	const preRegistered = 8
+	const added = 32
+
+	set := sdl.NewMasterChannelSet[int, *mcSource]()
+	for s := range preRegistered {
+		ch := sdl.NewChannel[int](0, 64)
+		set.Add(&mcSource{scid: uint16(s), ch: ch}, 1)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// Registers fresh master channels, disjoint from the pre-registered and
+	// routed SCIDs.
+	go func() {
+		defer wg.Done()
+		for s := range added {
+			ch := sdl.NewChannel[int](0, 4)
+			set.Add(&mcSource{scid: uint16(preRegistered + s), ch: ch}, 1)
+		}
+	}()
+
+	// Routes frames to the pre-registered channels.
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			scid := uint16(i % preRegistered)
+			if err := set.Route(scid, i); err != nil {
+				t.Errorf("Route(%d): %v", scid, err)
+			}
+		}
+	}()
+
+	// Looks channels up while the other two goroutines add and route.
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			_, _ = set.Get(uint16(i % preRegistered))
+			_, _ = set.Lowest()
+			_ = set.Len()
+		}
+	}()
+
+	wg.Wait()
+}
+
 type noopService struct{}
 
 func (noopService) Send([]byte) error        { return nil }
