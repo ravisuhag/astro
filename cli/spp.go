@@ -185,11 +185,11 @@ func sppDecodeCmd() *cobra.Command {
 				return fmt.Errorf("decoding packet: %w", err)
 			}
 
-			out, err := formatPacket(pkt, data, outputFmt)
+			formatted, err := formatPacket(pkt, data, outputFmt)
 			if err != nil {
 				return err
 			}
-			fmt.Println(out)
+			fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -261,11 +261,11 @@ func sppEncodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding packet: %w", err)
 			}
 
-			out, err := formatPacket(pkt, encoded, outputFmt)
+			formatted, err := formatPacket(pkt, encoded, outputFmt)
 			if err != nil {
 				return err
 			}
-			fmt.Println(out)
+			fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -311,7 +311,7 @@ func sppInspectCmd() *cobra.Command {
 				return fmt.Errorf("decoding packet: %w", err)
 			}
 
-			printInspect(pkt, data)
+			printInspect(cmd.OutOrStdout(), pkt, data)
 			return nil
 		},
 	}
@@ -322,44 +322,44 @@ func sppInspectCmd() *cobra.Command {
 	return cmd
 }
 
-func printInspect(pkt *spp.SpacePacket, raw []byte) {
+func printInspect(out io.Writer, pkt *spp.SpacePacket, raw []byte) {
 	h := pkt.PrimaryHeader
 	totalLen := spp.PrimaryHeaderSize + int(h.PacketLength) + 1
 
-	fmt.Println("Space Packet Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Fprintln(out, "Space Packet Inspector")
+	fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Primary Header
-	fmt.Println("Primary Header (6 bytes)")
-	fmt.Printf("  Version .............. %d\n", h.Version)
-	fmt.Printf("  Type ................. %d (%s)\n", h.Type, typeName(h.Type))
-	fmt.Printf("  Secondary Header Flag  %d\n", h.SecondaryHeaderFlag)
-	fmt.Printf("  APID ................. %d (0x%03X)\n", h.APID, h.APID)
-	fmt.Printf("  Sequence Flags ....... %d (%s)\n", h.SequenceFlags, seqFlagsName(h.SequenceFlags))
-	fmt.Printf("  Sequence Count ....... %d\n", h.SequenceCount)
-	fmt.Printf("  Packet Data Length ... %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
+	fmt.Fprintln(out, "Primary Header (6 bytes)")
+	fmt.Fprintf(out, "  Version .............. %d\n", h.Version)
+	fmt.Fprintf(out, "  Type ................. %d (%s)\n", h.Type, typeName(h.Type))
+	fmt.Fprintf(out, "  Secondary Header Flag  %d\n", h.SecondaryHeaderFlag)
+	fmt.Fprintf(out, "  APID ................. %d (0x%03X)\n", h.APID, h.APID)
+	fmt.Fprintf(out, "  Sequence Flags ....... %d (%s)\n", h.SequenceFlags, seqFlagsName(h.SequenceFlags))
+	fmt.Fprintf(out, "  Sequence Count ....... %d\n", h.SequenceCount)
+	fmt.Fprintf(out, "  Packet Data Length ... %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
 
 	if pkt.IsIdle() {
-		fmt.Println("  [IDLE PACKET]")
+		fmt.Fprintln(out, "  [IDLE PACKET]")
 	}
 
 	// User Data
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("User Data (%d bytes)\n", len(pkt.UserData))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "User Data (%d bytes)\n", len(pkt.UserData))
 	if len(pkt.UserData) > 0 {
-		fmt.Print(hexDump(pkt.UserData, "  "))
+		fmt.Fprint(out, hexDump(pkt.UserData, "  "))
 	}
 
 	// Error Control
 	if pkt.ErrorControl != nil {
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Printf("Error Control: 0x%04X (CRC-16-CCITT)\n", *pkt.ErrorControl)
+		fmt.Fprintln(out, strings.Repeat("─", 60))
+		fmt.Fprintf(out, "Error Control: 0x%04X (CRC-16-CCITT)\n", *pkt.ErrorControl)
 	}
 
 	// Full hex dump
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw Packet (%d bytes)\n", len(raw[:totalLen]))
-	fmt.Print(hexDump(raw[:totalLen], "  "))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "Raw Packet (%d bytes)\n", len(raw[:totalLen]))
+	fmt.Fprint(out, hexDump(raw[:totalLen], "  "))
 }
 
 // hexDump produces a classic hex dump with offset, hex bytes, and ASCII.
@@ -430,12 +430,13 @@ func sppValidateCmd() *cobra.Command {
 				return fmt.Errorf("validation failed: %w", err)
 			}
 
-			fmt.Println("Packet is valid.")
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Packet is valid.")
 			h := pkt.PrimaryHeader
-			fmt.Printf("  Type: %s, APID: %d, SeqCount: %d, Data: %d bytes\n",
+			fmt.Fprintf(out, "  Type: %s, APID: %d, SeqCount: %d, Data: %d bytes\n",
 				typeName(h.Type), h.APID, h.SequenceCount, len(pkt.UserData))
 			if crcFlag && pkt.ErrorControl != nil {
-				fmt.Printf("  CRC: 0x%04X (OK)\n", *pkt.ErrorControl)
+				fmt.Fprintf(out, "  CRC: 0x%04X (OK)\n", *pkt.ErrorControl)
 			}
 			return nil
 		},
@@ -468,6 +469,7 @@ func sppStreamCmd() *cobra.Command {
 			}
 			defer closer.Close() //nolint:errcheck // read-only
 
+			out := cmd.OutOrStdout()
 			count := 0
 			offset := 0
 
@@ -484,19 +486,19 @@ func sppStreamCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
-					fmt.Println(string(b))
+					fmt.Fprintln(out, string(b))
 				case "hex":
-					fmt.Println(hex.EncodeToString(pktData))
+					fmt.Fprintln(out, hex.EncodeToString(pktData))
 				case "text":
-					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
+					fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.PrimaryHeader
-					fmt.Printf("  Type: %s  APID: %d  SeqFlags: %s  SeqCount: %d  DataLen: %d\n",
+					fmt.Fprintf(out, "  Type: %s  APID: %d  SeqFlags: %s  SeqCount: %d  DataLen: %d\n",
 						typeName(h.Type), h.APID, seqFlagsName(h.SequenceFlags), h.SequenceCount,
 						len(pkt.UserData))
 					if len(pkt.UserData) <= 32 {
-						fmt.Printf("  Data: %s\n", hex.EncodeToString(pkt.UserData))
+						fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.UserData))
 					} else {
-						fmt.Printf("  Data: %s... (%d bytes)\n",
+						fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
 							hex.EncodeToString(pkt.UserData[:32]), len(pkt.UserData))
 					}
 				}
@@ -506,7 +508,7 @@ func sppStreamCmd() *cobra.Command {
 			}
 
 			trailing := func(n int) {
-				fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", n)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
 			}
 
 			// DeclaredPacketSize, not PacketSizer: the stream reader has to
@@ -517,7 +519,7 @@ func sppStreamCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Printf("\nDecoded %d packet(s), %d bytes total.\n", count, offset)
+				fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
 			}
 			return nil
 		},
