@@ -1,6 +1,9 @@
 package ltp
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 // SessionState is where a transmission session has got to.
 type SessionState int
@@ -44,37 +47,45 @@ type spanSet struct {
 	spans []span
 }
 
-// add folds a range into the set, merging it with any neighbours.
+// add folds a range into the set, merging it with any neighbours it touches
+// or overlaps. The set stays sorted, merged and non-overlapping.
 func (s *spanSet) add(start, end uint64) {
 	if end <= start {
 		return
 	}
-	merged := make([]span, 0, len(s.spans)+1)
-	added := false
 
-	for _, existing := range s.spans {
-		switch {
-		case existing.end < start:
-			merged = append(merged, existing)
-		case existing.start > end:
-			if !added {
-				merged = append(merged, span{start, end})
-				added = true
-			}
-			merged = append(merged, existing)
-		default:
-			if existing.start < start {
-				start = existing.start
-			}
-			if existing.end > end {
-				end = existing.end
-			}
+	// Spans are sorted and non-overlapping, so an existing span's end is
+	// monotonically increasing across the slice. lo is the first index whose
+	// span cannot lie entirely below the new range: the first with an end at
+	// or past start. Every earlier span stays untouched.
+	lo, _ := slices.BinarySearchFunc(s.spans, start, func(sp span, start uint64) int {
+		if sp.end < start {
+			return -1
 		}
+		return 1
+	})
+
+	// Absorb every span from lo onward that touches or overlaps [start, end),
+	// growing the new range to cover them.
+	hi := lo
+	for hi < len(s.spans) && s.spans[hi].start <= end {
+		if s.spans[hi].start < start {
+			start = s.spans[hi].start
+		}
+		if s.spans[hi].end > end {
+			end = s.spans[hi].end
+		}
+		hi++
 	}
-	if !added {
-		merged = append(merged, span{start, end})
+
+	if lo == hi {
+		s.spans = slices.Insert(s.spans, lo, span{start, end})
+		return
 	}
-	s.spans = merged
+	s.spans[lo] = span{start, end}
+	if hi-lo > 1 {
+		s.spans = slices.Delete(s.spans, lo+1, hi)
+	}
 }
 
 // gaps returns the ranges missing below limit.
@@ -427,15 +438,38 @@ func (s *Sender) HandleSegment(seg *Segment) error {
 // handleReport folds a reception report into the session and queues whatever
 // the gaps demand.
 func (s *Sender) handleReport(r *ReportSegment) error {
-	// Clause 3.2.3: every report is acknowledged.
+	// Clause 3.2.3: every report is acknowledged, even one rejected below -
+	// refusing the ack would just make a conformant peer retransmit the same
+	// report forever.
 	s.pendingReportAcks = append(s.pendingReportAcks, r.ReportSerial)
 
-	// Claim offsets are relative to the report's lower bound.
-	for _, c := range r.ClaimedRanges() {
+	// LTP has no authentication of its own (RFC 5326 defers that to a
+	// security extension), but the sender knows the true length of the red
+	// part it is sending, and a report cannot claim more of it than exists.
+	// Check every number in the report against that bound before folding
+	// anything in: past this point s.acknowledged is trusted to decide
+	// whether the block is done and whether the retransmit queue gets
+	// discarded, so a spoofed or corrupt report claiming full coverage must
+	// not reach it.
+	red := s.config.RedPartLength
+	if r.UpperBound > red {
+		return ErrReportOutOfRange
+	}
+	claims := r.ClaimedRanges()
+	for _, c := range claims {
+		end := c.Offset + c.Length
+		if c.Length == 0 || end < c.Offset || end > red {
+			// end < c.Offset catches both an overflowing sum and a claim
+			// ClaimedRanges saturated to math.MaxUint64 because LowerBound
+			// plus its own offset had already overflowed.
+			return ErrReportOutOfRange
+		}
+	}
+
+	for _, c := range claims {
 		s.acknowledged.add(c.Offset, c.Offset+c.Length)
 	}
 
-	red := s.config.RedPartLength
 	if s.acknowledged.covers(red) {
 		s.state = StateClosed
 		s.retransmit = nil
@@ -444,12 +478,8 @@ func (s *Sender) handleReport(r *ReportSegment) error {
 	}
 
 	// Anything below the report's upper bound that is not claimed must go
-	// again.
-	limit := r.UpperBound
-	if limit > red {
-		limit = red
-	}
-	s.retransmit = append(s.retransmit, s.acknowledged.gaps(limit)...)
+	// again. UpperBound is already checked to be no more than red, above.
+	s.retransmit = append(s.retransmit, s.acknowledged.gaps(r.UpperBound)...)
 	// Clause 3.2.1: the checkpoint closing this retransmission cycle carries the
 	// serial of the report that prompted it.
 	s.respondingTo = r.ReportSerial

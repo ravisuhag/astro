@@ -3,6 +3,7 @@ package ltp_test
 import (
 	"bytes"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/ltp"
@@ -745,5 +746,125 @@ func TestReceiverDefaultBlockSizeCap(t *testing.T) {
 	}
 	if err := receiver.HandleSegment(seg); !errors.Is(err, ltp.ErrBlockTooLarge) {
 		t.Errorf("error = %v, want ErrBlockTooLarge", err)
+	}
+}
+
+func TestSenderRejectsReportClaimingCoverageBeyondTheBlock(t *testing.T) {
+	// B10: a corrupt or spoofed report claiming full coverage must not make
+	// the sender close the session and discard the retransmit queue it still
+	// owes. Must fail without the bounds check (Step 2).
+	block := testBlock(300)
+	sender, err := ltp.NewSender(block, ltp.SenderConfig{
+		SessionID:             testSession(),
+		SegmentSize:           100,
+		RedPartLength:         uint64(len(block)),
+		FirstCheckpointSerial: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, ok, _ := sender.NextSegment(); !ok {
+			break
+		}
+	}
+
+	// A genuine report leaves an interior gap outstanding: [100, 200).
+	good := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeReport, SessionID: testSession()},
+		Report: &ltp.ReportSegment{
+			ReportSerial: 10, CheckpointSerial: 1, UpperBound: 300,
+			Claims: []ltp.ReceptionClaim{
+				{Offset: 0, Length: 100},
+				{Offset: 200, Length: 100},
+			},
+		},
+	}
+	if err := sender.HandleSegment(good); err != nil {
+		t.Fatalf("genuine report: %v", err)
+	}
+	if sender.State() != ltp.StateActive {
+		t.Fatalf("state = %s after the genuine report, want active", sender.State())
+	}
+
+	// A bogus report claims coverage past the end of the block entirely.
+	bogus := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeReport, SessionID: testSession()},
+		Report: &ltp.ReportSegment{
+			ReportSerial: 11, UpperBound: 1000,
+			Claims: []ltp.ReceptionClaim{{Offset: 0, Length: 1000}},
+		},
+	}
+	if err := sender.HandleSegment(bogus); !errors.Is(err, ltp.ErrReportOutOfRange) {
+		t.Errorf("error = %v, want ErrReportOutOfRange", err)
+	}
+	if sender.State() == ltp.StateClosed {
+		t.Error("the bogus report closed the session")
+	}
+
+	// Both reports are still acknowledged, per clause 3.2.3 - a conformant
+	// peer must not be left retransmitting either forever just because the
+	// sender distrusted its content.
+	for _, wantSerial := range []uint64{10, 11} {
+		seg, ok, err := sender.NextSegment()
+		if err != nil || !ok || seg.Header.Type != ltp.TypeReportAck {
+			t.Fatalf("expected a report ack for %d, got %v (ok=%t, err=%v)", wantSerial, seg, ok, err)
+		}
+		if seg.ReportAck.ReportSerial != wantSerial {
+			t.Errorf("acknowledged serial = %d, want %d", seg.ReportAck.ReportSerial, wantSerial)
+		}
+	}
+
+	// The gap the genuine report exposed still goes out: the bogus report
+	// must not have discarded it.
+	seg, ok, err := sender.NextSegment()
+	if err != nil || !ok {
+		t.Fatalf("retransmit queue was discarded (ok=%t, err=%v)", ok, err)
+	}
+	if seg.Data == nil || seg.Data.Offset != 100 || len(seg.Data.Data) != 100 {
+		t.Fatalf("retransmitted segment = %+v, want offset 100 length 100", seg.Data)
+	}
+}
+
+func TestSenderRejectsOverflowingClaimWithoutPanic(t *testing.T) {
+	// A claim's absolute offset is LowerBound + the claim's own offset, both
+	// wire-chosen SDNVs that can each reach 2^64. A conformant peer's report
+	// always passes ReportSegment.Validate first, which makes this
+	// combination impossible over the wire - but HandleSegment does not
+	// re-validate, so a report built by hand (as this test does) can still
+	// reach the sender with numbers Validate would have refused. Rejecting it
+	// cleanly, without panicking on the wraparound, is what's under test.
+	block := testBlock(100)
+	sender, err := ltp.NewSender(block, ltp.SenderConfig{
+		SessionID:             testSession(),
+		SegmentSize:           100,
+		RedPartLength:         uint64(len(block)),
+		FirstCheckpointSerial: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, ok, _ := sender.NextSegment(); !ok {
+			break
+		}
+	}
+
+	report := &ltp.Segment{
+		Header: &ltp.Header{Type: ltp.TypeReport, SessionID: testSession()},
+		Report: &ltp.ReportSegment{
+			ReportSerial: 7,
+			UpperBound:   100, // within the red part on its own
+			LowerBound:   math.MaxUint64 - 2,
+			Claims:       []ltp.ReceptionClaim{{Offset: 5, Length: 1}},
+		},
+	}
+
+	err = sender.HandleSegment(report) // must not panic
+	if !errors.Is(err, ltp.ErrReportOutOfRange) {
+		t.Errorf("error = %v, want ErrReportOutOfRange", err)
+	}
+	if sender.State() == ltp.StateClosed {
+		t.Error("an overflowing claim closed the session")
 	}
 }
