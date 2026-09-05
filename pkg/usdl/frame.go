@@ -676,15 +676,31 @@ func (f *TransferFrame) Encode() ([]byte, error) {
 
 // DecodeTransferFrame parses a byte slice into a USLP Transfer Frame.
 //
-// fecSize is the managed FECF presence for the physical channel: 0
-// (absent) or FECSize16 (clause 4.1.6.2.2: the FECF, when present, is the last
-// 16 bits of the frame). insertZoneLen is the managed insert zone length
-// (0 if none). OCF presence is signaled in-band by the OCF Flag.
-// Truncated frames (EndOfFPH set) carry no insert zone, OCF, or FECF,
-// regardless of the managed parameters.
+// Deprecated: use DecodeTransferFrameWithConfig, which is the name every
+// data-link package now uses. This forwarder will be removed in v1.0.
 func DecodeTransferFrame(data []byte, fecSize int, insertZoneLen int) (*TransferFrame, error) {
 	if fecSize != 0 && fecSize != FECSize16 {
 		return nil, ErrInvalidFECSize
+	}
+	return DecodeTransferFrameWithConfig(data, ChannelConfig{
+		HasFECF:       fecSize == FECSize16,
+		InsertZoneLen: insertZoneLen,
+	})
+}
+
+// DecodeTransferFrameWithConfig parses a byte slice into a USLP Transfer Frame.
+//
+// config.HasFECF selects the managed FECF presence for the physical channel
+// (clause 4.1.6.2.2: the FECF, when present, is the last 16 bits of the frame).
+// config.InsertZoneLen is the managed insert zone length (0 if none). OCF
+// presence is signaled in-band by the OCF Flag. Truncated frames (EndOfFPH
+// set) carry no insert zone, OCF, or FECF, regardless of the managed
+// parameters.
+func DecodeTransferFrameWithConfig(data []byte, config ChannelConfig) (*TransferFrame, error) {
+	insertZoneLen := config.InsertZoneLen
+	var fecSize int
+	if config.HasFECF {
+		fecSize = FECSize16
 	}
 
 	var header PrimaryHeader

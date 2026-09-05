@@ -134,7 +134,7 @@ func TestFrameVectorsFromCorpus(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			frame, err := usdl.DecodeTransferFrame(input, fec, 0)
+			frame, err := usdl.DecodeTransferFrameWithConfig(input, usdl.ChannelConfig{HasFECF: fec == usdl.FECSize16})
 			if err != nil {
 				return nil, err
 			}
