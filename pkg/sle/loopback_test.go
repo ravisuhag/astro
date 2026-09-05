@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravisuhag/astro/pkg/cop"
 	"github.com/ravisuhag/astro/pkg/sle"
 	"github.com/ravisuhag/astro/pkg/tcsc"
 	"github.com/ravisuhag/astro/pkg/tmdl"
@@ -262,6 +263,476 @@ func isClosed(err error) bool {
 		errors.Is(err, io.ErrUnexpectedEOF) ||
 		errors.Is(err, io.ErrClosedPipe) ||
 		errors.Is(err, net.ErrClosed)
+}
+
+// TestRCFLoopbackDeliversAFrame runs a whole RCF session over net.Pipe, the
+// same shape as TestRAFLoopbackDeliversACADU. RCF differs from RAF in two
+// ways this test exercises: START names a GVCID (one channel to filter on)
+// rather than a frame quality, and RCFProvider has no HandlePDU of its own —
+// unlike RAFProvider and FCLTUProvider — so the provider goroutine below
+// decodes each inbound PDU by hand, which is what a real integration of the
+// RCF provider side has to do too.
+func TestRCFLoopbackDeliversAFrame(t *testing.T) {
+	now := testTime
+
+	frame, err := tmdl.NewTMTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x55}, 80), nil, nil)
+	if err != nil {
+		t.Fatalf("NewTMTransferFrame() = %v", err)
+	}
+	frameBytes, err := frame.Encode()
+	if err != nil {
+		t.Fatalf("frame.Encode() = %v", err)
+	}
+	cadu := tmsc.WrapCADU(frameBytes, tmsc.DefaultASM(), true)
+
+	userAssoc, providerAssoc := association(t, false)
+	instance := sle.ServiceInstanceIdentifier{{Identifier: "rcf", Value: "onlc1"}}
+	config := sle.ServiceConfig{
+		DeliveryMode:  sle.DeliveryReturnCompleteOnline,
+		Version:       5,
+		ResponderPort: "GROUND-PORT",
+		Instance:      instance,
+	}
+	userConfig, providerConfig := config, config
+	userConfig.Association = userAssoc
+	providerConfig.Association = providerAssoc
+
+	user, err := sle.NewRCFUser(userConfig)
+	if err != nil {
+		t.Fatalf("NewRCFUser() = %v", err)
+	}
+	provider, err := sle.NewRCFProvider(providerConfig)
+	if err != nil {
+		t.Fatalf("NewRCFProvider() = %v", err)
+	}
+
+	userConn, providerConn := tmlPair(t)
+	channel := sle.GVCID{SpacecraftID: 42, VersionNumber: sle.FrameVersionTM, VirtualChannelID: 1}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runRCFProvider(provider, providerConn, cadu, now)
+	}()
+
+	// BIND.
+	if err := user.Bind(now, 1); err != nil {
+		t.Fatalf("Bind() = %v", err)
+	}
+	if err := drainRCF(user, userConn); err != nil {
+		t.Fatalf("sending BIND: %v", err)
+	}
+	if _, err := readIntoRCF(t, user, userConn, now); err != nil {
+		t.Fatalf("BIND return: %v", err)
+	}
+	if user.State() != sle.ServiceReady {
+		t.Fatalf("state after BIND = %s, want ready", user.State())
+	}
+
+	// START, naming one channel rather than a frame quality.
+	if _, err := user.Start(now, 2, sle.ConditionalTime{}, sle.ConditionalTime{}, channel); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	if err := drainRCF(user, userConn); err != nil {
+		t.Fatalf("sending START: %v", err)
+	}
+	if _, err := readIntoRCF(t, user, userConn, now); err != nil {
+		t.Fatalf("START return: %v", err)
+	}
+	if user.State() != sle.ServiceActive {
+		t.Fatalf("state after START = %s, want active", user.State())
+	}
+
+	// The frame arrives unprompted, in a transfer buffer.
+	event, err := readIntoRCF(t, user, userConn, now)
+	if err != nil {
+		t.Fatalf("transfer buffer: %v", err)
+	}
+	frames := event.TransferBuffer.Frames()
+	if len(frames) != 1 {
+		t.Fatalf("received %d frames, want 1", len(frames))
+	}
+
+	recovered, err := tmsc.UnwrapCADU(frames[0].Data, tmsc.DefaultASM(), true)
+	if err != nil {
+		t.Fatalf("UnwrapCADU() = %v", err)
+	}
+	if !bytes.Equal(recovered, frameBytes) {
+		t.Errorf("the frame did not survive the session: %d octets back, want %d",
+			len(recovered), len(frameBytes))
+	}
+
+	// STOP, then UNBIND.
+	if _, err := user.Stop(now, 3); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+	if err := drainRCF(user, userConn); err != nil {
+		t.Fatalf("sending STOP: %v", err)
+	}
+	if _, err := readIntoRCF(t, user, userConn, now); err != nil {
+		t.Fatalf("STOP return: %v", err)
+	}
+	if user.State() != sle.ServiceReady {
+		t.Fatalf("state after STOP = %s, want ready", user.State())
+	}
+
+	if err := user.Unbind(now, 4, sle.UnbindEnd); err != nil {
+		t.Fatalf("Unbind() = %v", err)
+	}
+	if err := drainRCF(user, userConn); err != nil {
+		t.Fatalf("sending UNBIND: %v", err)
+	}
+	if _, err := readIntoRCF(t, user, userConn, now); err != nil {
+		t.Fatalf("UNBIND return: %v", err)
+	}
+	if user.State() != sle.ServiceUnbound {
+		t.Errorf("state after UNBIND = %s, want unbound", user.State())
+	}
+
+	_ = userConn.Close()
+	if err := <-done; err != nil && !isClosed(err) {
+		t.Errorf("provider side: %v", err)
+	}
+}
+
+// drainRCF writes every PDU the RCF user machine has queued.
+func drainRCF(user *sle.RCFUser, conn net.Conn) error {
+	for {
+		pdu, ok := user.NextPDU()
+		if !ok {
+			return nil
+		}
+		if err := sendPDU(conn, pdu); err != nil {
+			return err
+		}
+	}
+}
+
+// readIntoRCF reads one PDU and feeds it to the RCF user machine.
+func readIntoRCF(t *testing.T, user *sle.RCFUser, conn net.Conn, now time.Time) (*sle.RCFUserEvent, error) {
+	t.Helper()
+	pdu, err := recvPDU(conn)
+	if err != nil {
+		return nil, err
+	}
+	return user.HandlePDU(pdu, now)
+}
+
+// runRCFProvider answers a user's session, sending one frame once started.
+// RCFProvider has no HandlePDU, so this decodes each inbound PDU itself
+// rather than delegating to one — the shape a real RCF provider integration
+// has to take.
+func runRCFProvider(provider *sle.RCFProvider, conn net.Conn, cadu []byte, now time.Time) error {
+	random := int32(100)
+	for {
+		raw, err := recvPDU(conn)
+		if err != nil {
+			return err
+		}
+		pdu, err := sle.DecodePDU(raw, sle.ServiceRCF)
+		if err != nil {
+			return err
+		}
+		random++
+
+		switch pdu.Operation {
+		case sle.OpBindInvocation:
+			invocation, err := sle.DecodeBindInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleBindInvocation(invocation, now, random); err != nil {
+				return err
+			}
+		case sle.OpStartInvocation:
+			invocation, err := sle.DecodeRCFStartInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			err = provider.HandleStartInvocation(
+				invocation, &sle.RCFStartReturn{Positive: true}, now, random)
+			if err != nil {
+				return err
+			}
+			// Answer the START, then deliver.
+			if err := drainRCFProvider(provider, conn); err != nil {
+				return err
+			}
+			buffer := sle.RCFTransferBuffer{{Frame: &sle.RCFTransferDataInvocation{
+				EarthReceiveTime:   mustTimeOrZero(now),
+				AntennaId:          sle.AntennaId{Local: []byte("DSS-25")},
+				DataLinkContinuity: -1,
+				Data:               cadu,
+			}}}
+			if err := provider.SendTransferBuffer(buffer, now); err != nil {
+				return err
+			}
+		case sle.OpStopInvocation:
+			invocation, err := sle.DecodeStopInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleStopInvocation(invocation, true, 0, now, random); err != nil {
+				return err
+			}
+		case sle.OpUnbindInvocation:
+			invocation, err := sle.DecodeUnbindInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleUnbindInvocation(invocation, now, random); err != nil {
+				return err
+			}
+		}
+
+		if err := drainRCFProvider(provider, conn); err != nil {
+			return err
+		}
+	}
+}
+
+// drainRCFProvider writes every PDU the RCF provider has queued.
+func drainRCFProvider(provider *sle.RCFProvider, conn net.Conn) error {
+	for {
+		pdu, ok := provider.NextPDU()
+		if !ok {
+			return nil
+		}
+		if err := sendPDU(conn, pdu); err != nil {
+			return err
+		}
+	}
+}
+
+// TestROCFLoopbackDeliversAnOCF runs a whole ROCF session over net.Pipe: the
+// operational control field it carries is a real CLCW that pkg/cop builds,
+// which is ROCF's whole point (clause overview in rocf.go). Like RCF, START
+// here adds a control-word-type filter on top of the GVCID, and ROCFProvider
+// has no HandlePDU either, so the provider goroutine decodes by hand again.
+func TestROCFLoopbackDeliversAnOCF(t *testing.T) {
+	now := testTime
+
+	clcw := &cop.CLCW{COPInEffect: 1, VirtualChannelID: 3, ReportValue: 5}
+	ocf, err := clcw.Encode()
+	if err != nil {
+		t.Fatalf("CLCW.Encode() = %v", err)
+	}
+
+	userAssoc, providerAssoc := association(t, false)
+	instance := sle.ServiceInstanceIdentifier{{Identifier: "rocf", Value: "onlc1"}}
+	config := sle.ServiceConfig{
+		DeliveryMode:  sle.DeliveryReturnCompleteOnline,
+		Version:       5,
+		ResponderPort: "GROUND-PORT",
+		Instance:      instance,
+	}
+	userConfig, providerConfig := config, config
+	userConfig.Association = userAssoc
+	providerConfig.Association = providerAssoc
+
+	user, err := sle.NewROCFUser(userConfig)
+	if err != nil {
+		t.Fatalf("NewROCFUser() = %v", err)
+	}
+	provider, err := sle.NewROCFProvider(providerConfig)
+	if err != nil {
+		t.Fatalf("NewROCFProvider() = %v", err)
+	}
+
+	userConn, providerConn := tmlPair(t)
+	channel := sle.GVCID{SpacecraftID: 42, VersionNumber: sle.FrameVersionTM, VirtualChannelID: 1}
+	control := sle.ControlWordType{Kind: sle.ControlWordCLCW}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runROCFProvider(provider, providerConn, ocf, now)
+	}()
+
+	// BIND.
+	if err := user.Bind(now, 1); err != nil {
+		t.Fatalf("Bind() = %v", err)
+	}
+	if err := drainROCF(user, userConn); err != nil {
+		t.Fatalf("sending BIND: %v", err)
+	}
+	if _, err := readIntoROCF(t, user, userConn, now); err != nil {
+		t.Fatalf("BIND return: %v", err)
+	}
+	if user.State() != sle.ServiceReady {
+		t.Fatalf("state after BIND = %s, want ready", user.State())
+	}
+
+	// START, naming a channel and asking for CLCWs only.
+	_, err = user.Start(now, 2, sle.ConditionalTime{}, sle.ConditionalTime{},
+		channel, control, sle.UpdateContinuous)
+	if err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	if err := drainROCF(user, userConn); err != nil {
+		t.Fatalf("sending START: %v", err)
+	}
+	if _, err := readIntoROCF(t, user, userConn, now); err != nil {
+		t.Fatalf("START return: %v", err)
+	}
+	if user.State() != sle.ServiceActive {
+		t.Fatalf("state after START = %s, want active", user.State())
+	}
+
+	// The control field arrives unprompted, in a transfer buffer.
+	event, err := readIntoROCF(t, user, userConn, now)
+	if err != nil {
+		t.Fatalf("transfer buffer: %v", err)
+	}
+	ocfs := event.TransferBuffer.OCFs()
+	if len(ocfs) != 1 {
+		t.Fatalf("received %d control fields, want 1", len(ocfs))
+	}
+
+	var recovered cop.CLCW
+	if err := recovered.Decode(ocfs[0].Data); err != nil {
+		t.Fatalf("CLCW.Decode() = %v", err)
+	}
+	if recovered.ReportValue != 5 || recovered.VirtualChannelID != 3 {
+		t.Errorf("the CLCW did not survive the session: %+v", recovered)
+	}
+
+	// STOP, then UNBIND.
+	if _, err := user.Stop(now, 3); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+	if err := drainROCF(user, userConn); err != nil {
+		t.Fatalf("sending STOP: %v", err)
+	}
+	if _, err := readIntoROCF(t, user, userConn, now); err != nil {
+		t.Fatalf("STOP return: %v", err)
+	}
+	if user.State() != sle.ServiceReady {
+		t.Fatalf("state after STOP = %s, want ready", user.State())
+	}
+
+	if err := user.Unbind(now, 4, sle.UnbindEnd); err != nil {
+		t.Fatalf("Unbind() = %v", err)
+	}
+	if err := drainROCF(user, userConn); err != nil {
+		t.Fatalf("sending UNBIND: %v", err)
+	}
+	if _, err := readIntoROCF(t, user, userConn, now); err != nil {
+		t.Fatalf("UNBIND return: %v", err)
+	}
+	if user.State() != sle.ServiceUnbound {
+		t.Errorf("state after UNBIND = %s, want unbound", user.State())
+	}
+
+	_ = userConn.Close()
+	if err := <-done; err != nil && !isClosed(err) {
+		t.Errorf("provider side: %v", err)
+	}
+}
+
+// drainROCF writes every PDU the ROCF user machine has queued.
+func drainROCF(user *sle.ROCFUser, conn net.Conn) error {
+	for {
+		pdu, ok := user.NextPDU()
+		if !ok {
+			return nil
+		}
+		if err := sendPDU(conn, pdu); err != nil {
+			return err
+		}
+	}
+}
+
+// readIntoROCF reads one PDU and feeds it to the ROCF user machine.
+func readIntoROCF(t *testing.T, user *sle.ROCFUser, conn net.Conn, now time.Time) (*sle.ROCFUserEvent, error) {
+	t.Helper()
+	pdu, err := recvPDU(conn)
+	if err != nil {
+		return nil, err
+	}
+	return user.HandlePDU(pdu, now)
+}
+
+// runROCFProvider answers a user's session, sending one control field once
+// started. Like RCFProvider, ROCFProvider has no HandlePDU.
+func runROCFProvider(provider *sle.ROCFProvider, conn net.Conn, ocf []byte, now time.Time) error {
+	random := int32(100)
+	for {
+		raw, err := recvPDU(conn)
+		if err != nil {
+			return err
+		}
+		pdu, err := sle.DecodePDU(raw, sle.ServiceROCF)
+		if err != nil {
+			return err
+		}
+		random++
+
+		switch pdu.Operation {
+		case sle.OpBindInvocation:
+			invocation, err := sle.DecodeBindInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleBindInvocation(invocation, now, random); err != nil {
+				return err
+			}
+		case sle.OpStartInvocation:
+			invocation, err := sle.DecodeROCFStartInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			err = provider.HandleStartInvocation(
+				invocation, &sle.ROCFStartReturn{Positive: true}, now, random)
+			if err != nil {
+				return err
+			}
+			// Answer the START, then deliver.
+			if err := drainROCFProvider(provider, conn); err != nil {
+				return err
+			}
+			buffer := sle.ROCFTransferBuffer{{OCF: &sle.ROCFTransferDataInvocation{
+				EarthReceiveTime:   mustTimeOrZero(now),
+				AntennaId:          sle.AntennaId{Local: []byte("DSS-25")},
+				DataLinkContinuity: -1,
+				Data:               ocf,
+			}}}
+			if err := provider.SendTransferBuffer(buffer, now); err != nil {
+				return err
+			}
+		case sle.OpStopInvocation:
+			invocation, err := sle.DecodeStopInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleStopInvocation(invocation, true, 0, now, random); err != nil {
+				return err
+			}
+		case sle.OpUnbindInvocation:
+			invocation, err := sle.DecodeUnbindInvocation(pdu.Content)
+			if err != nil {
+				return err
+			}
+			if err := provider.HandleUnbindInvocation(invocation, now, random); err != nil {
+				return err
+			}
+		}
+
+		if err := drainROCFProvider(provider, conn); err != nil {
+			return err
+		}
+	}
+}
+
+// drainROCFProvider writes every PDU the ROCF provider has queued.
+func drainROCFProvider(provider *sle.ROCFProvider, conn net.Conn) error {
+	for {
+		pdu, ok := provider.NextPDU()
+		if !ok {
+			return nil
+		}
+		if err := sendPDU(conn, pdu); err != nil {
+			return err
+		}
+	}
 }
 
 // TestFCLTULoopbackRadiatesACLTU runs the forward service the other way: the
