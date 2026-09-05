@@ -78,56 +78,56 @@ conditional.
 
 | Item | Feature | Keyword | Status | Support |
 |--:|---|---|:-:|---|
-| 1 | OPM Header | N/A | M | Y |
-| 2 | OPM Version | `CCSDS_OPM_VERS` | M | Y: the value is carried as written, not checked against "3.0" |
-| 3 | Comment | `COMMENT` | O | Y: header comments only immediately after the version keyword, per clause 7.8.7 |
-| 4 | Message classification | `CLASSIFICATION` | O | Y |
-| 5 | Message creation date and time | `CREATION_DATE` | M | Y: UTC, per clause 7.5.11, whatever `TIME_SYSTEM` says |
-| 6 | Message originator | `ORIGINATOR` | M | Y: not checked against the SANA registry |
-| 7 | Unique message identifier | `MESSAGE_ID` | O | Y |
-| 8 | OPM Metadata | N/A | M | Y |
-| 9 | Comment | `COMMENT` | O | Y |
-| 10 | Name of space object | `OBJECT_NAME` | M | Y |
-| 11 | Identifier of space object | `OBJECT_ID` | M | Y: not checked against the UN designator index |
-| 12 | Orbit center | `CENTER_NAME` | M | Y: not checked against annex B |
-| 13 | Reference frame | `REF_FRAME` | M | Y: clause 3.2.3.3 values not enforced, see A2.6 |
-| 14 | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y: read and written when present; the condition is a property of the frame definition, which this package does not model |
-| 15 | Time system | `TIME_SYSTEM` | M | Y: clause 3.2.3.2 values not enforced, see A2.6 |
-| 16 | OPM Data | N/A | M | Y |
-| 17 | State Vector logical block | N/A | M | Y |
-| 18 | Comment | `COMMENT` | O | Y |
-| 19 | Epoch of the state vector | `EPOCH` | M | Y: both time formats of clause 7.5.10 |
-| 20–22 | Position components | `X`, `Y`, `Z` | M | Y |
-| 23–25 | Velocity components | `X_DOT`, `Y_DOT`, `Z_DOT` | M | Y |
-| 26 | Keplerian Elements block | N/A | O | Y |
-| 27 | Comment | `COMMENT` | O | Y |
-| 28 | Semi-major axis | `SEMI_MAJOR_AXIS` | C | Y |
-| 29 | Eccentricity | `ECCENTRICITY` | C | Y |
-| 30 | Inclination | `INCLINATION` | C | Y |
-| 31 | Right ascension of ascending node | `RA_OF_ASC_NODE` | C | Y |
-| 32 | Argument of pericenter | `ARG_OF_PERICENTER` | C | Y |
-| 33 | True or mean anomaly | `TRUE_ANOMALY` or `MEAN_ANOMALY` | C | Y: giving both is refused with `ErrBothAnomalies` |
-| 34 | Gravitational coefficient | `GM` | C | Y |
-| 35 | Spacecraft Parameters block | N/A | O | Y |
-| 36 | Comment | `COMMENT` | O | Y |
-| 37 | Mass | `MASS` | C | Y: presence tracked separately from a zero value, since clause 3.2.4.9 makes it mandatory once a manoeuvre is present |
-| 38 | Solar radiation area | `SOLAR_RAD_AREA` | C | Y |
-| 39 | Solar radiation coefficient | `SOLAR_RAD_COEFF` | C | Y: zero preserved, per clause 3.2.4.5 |
-| 40 | Drag area | `DRAG_AREA` | C | Y |
-| 41 | Drag coefficient | `DRAG_COEFF` | C | Y: zero preserved, per clause 3.2.4.6 |
-| 42 | Position/velocity covariance block | N/A | O | Y |
-| 43 | Comment | `COMMENT` | O | Y |
-| 44 | Covariance reference frame | `COV_REF_FRAME` | C | Y: omitted when the same as `REF_FRAME`, as table 3-3 allows |
-| 45–65 | Covariance matrix, 21 lower triangular elements | `CX_X` … `CZ_DOT_Z_DOT` | C | Y: written in the order clause 3.2.4.10 fixes; the symmetric upper triangle is filled in on decode |
-| 66 | Maneuver Parameters block | N/A | O | Y: repeats, per clause 3.2.4.8 |
-| 67 | Comment | `COMMENT` | O | Y |
-| 68 | Time of maneuver start | `MAN_EPOCH_IGNITION` | O | Y: also what starts a new maneuver block |
-| 69 | Duration of maneuver | `MAN_DURATION` | O | Y: zero read as impulsive, per clause 3.2.4.7 |
-| 70 | Change of mass | `MAN_DELTA_MASS` | O | Y: a non-negative value is refused, per clause 3.2.4.7 |
-| 71 | Maneuver reference frame | `MAN_REF_FRAME` | O | Y: clause 3.2.4.11 values not enforced, see A2.6 |
-| 72–74 | Velocity increment components | `MAN_DV_1`, `MAN_DV_2`, `MAN_DV_3` | O | Y |
-| 75 | User-Defined Parameters block | N/A | O | Y |
-| 76 | User-defined parameter | `USER_DEFINED_x` | O | Y: carried as a name and a raw value; the meaning is an ICD matter |
+| ODM-1 | OPM Header | N/A | M | Y |
+| ODM-2 | OPM Version | `CCSDS_OPM_VERS` | M | Y: the value is carried as written, not checked against "3.0" |
+| ODM-3 | Comment | `COMMENT` | O | Y: header comments only immediately after the version keyword, per clause 7.8.7 |
+| ODM-4 | Message classification | `CLASSIFICATION` | O | Y |
+| ODM-5 | Message creation date and time | `CREATION_DATE` | M | Y: UTC, per clause 7.5.11, whatever `TIME_SYSTEM` says |
+| ODM-6 | Message originator | `ORIGINATOR` | M | Y: not checked against the SANA registry |
+| ODM-7 | Unique message identifier | `MESSAGE_ID` | O | Y |
+| ODM-8 | OPM Metadata | N/A | M | Y |
+| ODM-9 | Comment | `COMMENT` | O | Y |
+| ODM-10 | Name of space object | `OBJECT_NAME` | M | Y |
+| ODM-11 | Identifier of space object | `OBJECT_ID` | M | Y: not checked against the UN designator index |
+| ODM-12 | Orbit center | `CENTER_NAME` | M | Y: not checked against annex B |
+| ODM-13 | Reference frame | `REF_FRAME` | M | Y: clause 3.2.3.3 values not enforced, see A2.6 |
+| ODM-14 | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y: read and written when present; the condition is a property of the frame definition, which this package does not model |
+| ODM-15 | Time system | `TIME_SYSTEM` | M | Y: clause 3.2.3.2 values not enforced, see A2.6 |
+| ODM-16 | OPM Data | N/A | M | Y |
+| ODM-17 | State Vector logical block | N/A | M | Y |
+| ODM-18 | Comment | `COMMENT` | O | Y |
+| ODM-19 | Epoch of the state vector | `EPOCH` | M | Y: both time formats of clause 7.5.10 |
+| ODM-20 | Position components | `X`, `Y`, `Z` | M | Y |
+| ODM-21 | Velocity components | `X_DOT`, `Y_DOT`, `Z_DOT` | M | Y |
+| ODM-22 | Keplerian Elements block | N/A | O | Y |
+| ODM-23 | Comment | `COMMENT` | O | Y |
+| ODM-24 | Semi-major axis | `SEMI_MAJOR_AXIS` | C | Y |
+| ODM-25 | Eccentricity | `ECCENTRICITY` | C | Y |
+| ODM-26 | Inclination | `INCLINATION` | C | Y |
+| ODM-27 | Right ascension of ascending node | `RA_OF_ASC_NODE` | C | Y |
+| ODM-28 | Argument of pericenter | `ARG_OF_PERICENTER` | C | Y |
+| ODM-29 | True or mean anomaly | `TRUE_ANOMALY` or `MEAN_ANOMALY` | C | Y: giving both is refused with `ErrBothAnomalies` |
+| ODM-30 | Gravitational coefficient | `GM` | C | Y |
+| ODM-31 | Spacecraft Parameters block | N/A | O | Y |
+| ODM-32 | Comment | `COMMENT` | O | Y |
+| ODM-33 | Mass | `MASS` | C | Y: presence tracked separately from a zero value, since clause 3.2.4.9 makes it mandatory once a manoeuvre is present |
+| ODM-34 | Solar radiation area | `SOLAR_RAD_AREA` | C | Y |
+| ODM-35 | Solar radiation coefficient | `SOLAR_RAD_COEFF` | C | Y: zero preserved, per clause 3.2.4.5 |
+| ODM-36 | Drag area | `DRAG_AREA` | C | Y |
+| ODM-37 | Drag coefficient | `DRAG_COEFF` | C | Y: zero preserved, per clause 3.2.4.6 |
+| ODM-38 | Position/velocity covariance block | N/A | O | Y |
+| ODM-39 | Comment | `COMMENT` | O | Y |
+| ODM-40 | Covariance reference frame | `COV_REF_FRAME` | C | Y: omitted when the same as `REF_FRAME`, as table 3-3 allows |
+| ODM-41 | Covariance matrix, 21 lower triangular elements | `CX_X` … `CZ_DOT_Z_DOT` | C | Y: written in the order clause 3.2.4.10 fixes; the symmetric upper triangle is filled in on decode |
+| ODM-42 | Maneuver Parameters block | N/A | O | Y: repeats, per clause 3.2.4.8 |
+| ODM-43 | Comment | `COMMENT` | O | Y |
+| ODM-44 | Time of maneuver start | `MAN_EPOCH_IGNITION` | O | Y: also what starts a new maneuver block |
+| ODM-45 | Duration of maneuver | `MAN_DURATION` | O | Y: zero read as impulsive, per clause 3.2.4.7 |
+| ODM-46 | Change of mass | `MAN_DELTA_MASS` | O | Y: a non-negative value is refused, per clause 3.2.4.7 |
+| ODM-47 | Maneuver reference frame | `MAN_REF_FRAME` | O | Y: clause 3.2.4.11 values not enforced, see A2.6 |
+| ODM-48 | Velocity increment components | `MAN_DV_1`, `MAN_DV_2`, `MAN_DV_3` | O | Y |
+| ODM-49 | User-Defined Parameters block | N/A | O | Y |
+| ODM-50 | User-defined parameter | `USER_DEFINED_x` | O | Y: carried as a name and a raw value; the meaning is an ICD matter |
 
 ---
 
@@ -165,37 +165,37 @@ rule that `TEME` may be used for nothing else is enforced too.
 
 | Item | Feature | Keyword | Status | Support |
 |--:|---|---|:-:|---|
-| 1 | OEM Header | N/A | M | Y |
-| 2 | OEM Version | `CCSDS_OEM_VERS` | M | Y |
-| 3 | Comment | `COMMENT` | O | Y: header comments only immediately after the version keyword |
-| 4 | Message classification | `CLASSIFICATION` | O | Y |
-| 5 | Message creation date and time | `CREATION_DATE` | M | Y |
-| 6 | Message originator | `ORIGINATOR` | M | Y |
-| 7 | Unique message identifier | `MESSAGE_ID` | O | Y |
-| 8 | Metadata logical block | N/A | M | Y: several per message, per clause 5.2.3.3 |
-| 9 | Start of OEM Metadata | `META_START` | M | Y |
-| 10 | Comment | `COMMENT` | O | Y |
-| 11 | Name of space object | `OBJECT_NAME` | M | Y |
-| 12 | Identifier of space object | `OBJECT_ID` | M | Y |
-| 13 | Orbit center | `CENTER_NAME` | M | Y: may be a spacecraft, which table 5-3 allows and the OPM's table does not |
-| 14 | Reference frame | `REF_FRAME` | M | Y: clause 3.2.3.3 values not enforced, see A2.6 |
-| 15 | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y |
-| 16 | Time system | `TIME_SYSTEM` | M | Y: a change between groups is refused, per clause 5.2.4.5 |
-| 17 | Start of TOTAL time span | `START_TIME` | M | Y |
-| 18 | Start of useable span | `USEABLE_START_TIME` | O | Y: read and preserved, never used to trim, see A2.6 |
-| 19 | End of useable span | `USEABLE_STOP_TIME` | O | Y: as above |
-| 20 | End of TOTAL time span | `STOP_TIME` | M | Y |
-| 21 | Recommended interpolation method | `INTERPOLATION` | O | Y: carried, not acted on, see A2.6 |
-| 22 | Recommended interpolation degree | `INTERPOLATION_DEGREE` | C | Y: absence alongside a method is refused, per table 5-3 |
-| 23 | End of OEM Metadata | `META_STOP` | M | Y |
-| 24 | OEM Data logical block | N/A | M | Y |
-| 25 | Ephemeris data lines | positional | M | Y: 7 or 10 fields, per clauses 5.2.4.1 and 5.2.4.2 |
-| 26 | OEM Covariance logical block | N/A | O | Y |
-| 27 | Start of OEM Covariance | `COVARIANCE_START` | M | Y |
-| 28 | Epoch of the covariance | `EPOCH` | C | Y: required, since it is what separates one matrix from the next |
-| 29 | Reference frame of the covariance | `COV_REF_FRAME` | C | Y: omitted when the same as the ephemeris frame |
-| 30 | Covariance matrix lines | positional | O | Y: 21 lower triangular values, over any number of lines |
-| 31 | End of OEM Covariance | `COVARIANCE_STOP` | M | Y |
+| ODM-51 | OEM Header | N/A | M | Y |
+| ODM-52 | OEM Version | `CCSDS_OEM_VERS` | M | Y |
+| ODM-53 | Comment | `COMMENT` | O | Y: header comments only immediately after the version keyword |
+| ODM-54 | Message classification | `CLASSIFICATION` | O | Y |
+| ODM-55 | Message creation date and time | `CREATION_DATE` | M | Y |
+| ODM-56 | Message originator | `ORIGINATOR` | M | Y |
+| ODM-57 | Unique message identifier | `MESSAGE_ID` | O | Y |
+| ODM-58 | Metadata logical block | N/A | M | Y: several per message, per clause 5.2.3.3 |
+| ODM-59 | Start of OEM Metadata | `META_START` | M | Y |
+| ODM-60 | Comment | `COMMENT` | O | Y |
+| ODM-61 | Name of space object | `OBJECT_NAME` | M | Y |
+| ODM-62 | Identifier of space object | `OBJECT_ID` | M | Y |
+| ODM-63 | Orbit center | `CENTER_NAME` | M | Y: may be a spacecraft, which table 5-3 allows and the OPM's table does not |
+| ODM-64 | Reference frame | `REF_FRAME` | M | Y: clause 3.2.3.3 values not enforced, see A2.6 |
+| ODM-65 | Epoch of reference frame | `REF_FRAME_EPOCH` | C | Y |
+| ODM-66 | Time system | `TIME_SYSTEM` | M | Y: a change between groups is refused, per clause 5.2.4.5 |
+| ODM-67 | Start of TOTAL time span | `START_TIME` | M | Y |
+| ODM-68 | Start of useable span | `USEABLE_START_TIME` | O | Y: read and preserved, never used to trim, see A2.6 |
+| ODM-69 | End of useable span | `USEABLE_STOP_TIME` | O | Y: as above |
+| ODM-70 | End of TOTAL time span | `STOP_TIME` | M | Y |
+| ODM-71 | Recommended interpolation method | `INTERPOLATION` | O | Y: carried, not acted on, see A2.6 |
+| ODM-72 | Recommended interpolation degree | `INTERPOLATION_DEGREE` | C | Y: absence alongside a method is refused, per table 5-3 |
+| ODM-73 | End of OEM Metadata | `META_STOP` | M | Y |
+| ODM-74 | OEM Data logical block | N/A | M | Y |
+| ODM-75 | Ephemeris data lines | positional | M | Y: 7 or 10 fields, per clauses 5.2.4.1 and 5.2.4.2 |
+| ODM-76 | OEM Covariance logical block | N/A | O | Y |
+| ODM-77 | Start of OEM Covariance | `COVARIANCE_START` | M | Y |
+| ODM-78 | Epoch of the covariance | `EPOCH` | C | Y: required, since it is what separates one matrix from the next |
+| ODM-79 | Reference frame of the covariance | `COV_REF_FRAME` | C | Y: omitted when the same as the ephemeris frame |
+| ODM-80 | Covariance matrix lines | positional | O | Y: 21 lower triangular values, over any number of lines |
+| ODM-81 | End of OEM Covariance | `COVARIANCE_STOP` | M | Y |
 
 ---
 
