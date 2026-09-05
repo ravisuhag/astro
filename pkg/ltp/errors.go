@@ -50,4 +50,9 @@ var (
 	// ErrRedGreenOrder indicates green-part data below a red-part offset, or
 	// red-part data above a green-part offset, which clause 3.2.4 calls MISCOLORED.
 	ErrRedGreenOrder = errors.New("miscolored block: red and green parts overlap out of order")
+
+	// ErrTooManyOutstandingReports indicates a receiver has reached
+	// MaxOutstandingReports: reportsByCheckpoint, awaitingAck or pending is
+	// full. The session cancels rather than tracking one more report.
+	ErrTooManyOutstandingReports = errors.New("too many outstanding reports: receiver cancelled the session")
 )
