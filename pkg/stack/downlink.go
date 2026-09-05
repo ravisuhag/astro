@@ -401,7 +401,7 @@ func (r *Receiver) Accept(cadu []byte) error {
 	// error control field when the channel carries one. The plain decoder
 	// assumes both, so a channel without a FECF would fail its CRC check
 	// against two octets of data field.
-	frame, err := tmdl.DecodeTMTransferFrameWithConfig(frameData, r.config.channelConfig())
+	frame, err := tmdl.DecodeTransferFrameWithConfig(frameData, r.config.channelConfig())
 	if err != nil {
 		return fmt.Errorf("decoding frame: %w", err)
 	}

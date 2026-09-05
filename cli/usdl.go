@@ -93,16 +93,6 @@ func toUSDLFrameJSON(f *usdl.TransferFrame) usdlFrameJSON {
 	return j
 }
 
-// usdlFECSize maps the decode flags to the managed FECF size. The USLP
-// FECF, when present, is always the 16-bit CRC (CCSDS 732.1-B-3
-// Clause 4.1.6.2.2).
-func usdlFECSize(noFECF bool) int {
-	if noFECF {
-		return 0
-	}
-	return usdl.FECSize16
-}
-
 func usdlDecodeCmd() *cobra.Command {
 	var inputFmt, outputFmt string
 	var noFECF bool
@@ -124,7 +114,7 @@ func usdlDecodeCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(noFECF), insertZoneLen)
+			frame, err := usdl.DecodeTransferFrameWithConfig(data, usdl.ChannelConfig{HasFECF: !noFECF, InsertZoneLen: insertZoneLen})
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -243,7 +233,7 @@ func usdlInspectCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := usdl.DecodeTransferFrame(data, usdlFECSize(noFECF), insertZoneLen)
+			frame, err := usdl.DecodeTransferFrameWithConfig(data, usdl.ChannelConfig{HasFECF: !noFECF, InsertZoneLen: insertZoneLen})
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}

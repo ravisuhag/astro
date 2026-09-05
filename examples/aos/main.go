@@ -254,7 +254,7 @@ func insertZone() {
 		log.Fatalf("encoding the frame: %v", err)
 	}
 
-	decoded, err := aos.DecodeFrame(encoded, config)
+	decoded, err := aos.DecodeTransferFrameWithConfig(encoded, config)
 	if err != nil {
 		log.Fatalf("decoding the frame: %v", err)
 	}
@@ -364,7 +364,7 @@ func cross(send, receive *aos.VirtualChannel) int {
 				len(encoded), config.FrameLength)
 		}
 
-		decoded, err := aos.DecodeFrame(encoded, config)
+		decoded, err := aos.DecodeTransferFrameWithConfig(encoded, config)
 		if err != nil {
 			log.Fatalf("decoding a frame: %v", err)
 		}

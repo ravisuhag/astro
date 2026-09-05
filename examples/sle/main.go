@@ -182,7 +182,7 @@ func missionControl(conn net.Conn, expected []byte, now time.Time) error {
 		if err != nil {
 			return fmt.Errorf("unwrapping the delivered CADU: %w", err)
 		}
-		decoded, err := tmdl.DecodeTMTransferFrame(recovered)
+		decoded, err := tmdl.DecodeTransferFrame(recovered)
 		if err != nil {
 			return fmt.Errorf("decoding the delivered frame: %w", err)
 		}
@@ -336,7 +336,7 @@ func groundStation(listener net.Listener, cadu []byte, now time.Time) error {
 // recoveredCADU builds what a ground station would have off the antenna: a TM
 // transfer frame wrapped as a CADU, randomized, with a sync marker in front.
 func recoveredCADU() []byte {
-	frame, err := tmdl.NewTMTransferFrame(spacecraftID, vcid,
+	frame, err := tmdl.NewTransferFrame(spacecraftID, vcid,
 		bytes.Repeat([]byte{0x42}, frameLength-6), nil, nil)
 	if err != nil {
 		log.Fatalf("building the frame: %v", err)

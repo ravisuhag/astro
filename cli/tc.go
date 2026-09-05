@@ -102,7 +102,7 @@ func tcDecodeCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := tcdl.DecodeTCTransferFrame(data)
+			frame, err := tcdl.DecodeTransferFrame(data)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -160,7 +160,7 @@ func tcEncodeCmd() *cobra.Command {
 				opts = append(opts, tcdl.WithSequenceNumber(seqNum))
 			}
 
-			frame, err := tcdl.NewTCTransferFrame(scid, vcid, userData, opts...)
+			frame, err := tcdl.NewTransferFrame(scid, vcid, userData, opts...)
 			if err != nil {
 				return fmt.Errorf("building frame: %w", err)
 			}
@@ -206,7 +206,7 @@ func tcInspectCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := tcdl.DecodeTCTransferFrame(data)
+			frame, err := tcdl.DecodeTransferFrame(data)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
