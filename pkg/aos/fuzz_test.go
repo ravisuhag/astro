@@ -21,6 +21,19 @@ func FuzzDecodeTransferFrame(f *testing.F) {
 			for _, ocf := range []bool{false, true} {
 				for _, fecf := range []bool{false, true} {
 					_, _ = aos.DecodeTransferFrame(data, izLen, ocf, fecf)
+					// DecodeFrame shares decodeFrame's body with
+					// DecodeTransferFrame but adds the Frame Header Error
+					// Control branch, which izLen/ocf/fecf alone never
+					// reach since DecodeTransferFrame always passes
+					// hasFHEC = false.
+					for _, fhec := range []bool{false, true} {
+						_, _ = aos.DecodeFrame(data, aos.ChannelConfig{
+							InsertZoneLen: izLen,
+							HasOCF:        ocf,
+							HasFHEC:       fhec,
+							HasFECF:       fecf,
+						})
+					}
 				}
 			}
 		}
