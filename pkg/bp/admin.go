@@ -86,19 +86,23 @@ func appendStatusItem(dst []byte, item StatusItem, includeTime bool) []byte {
 	return cbor.AppendBool(dst, item.Asserted)
 }
 
-// statusItem reads one assertion.
-func decodeStatusItem(d *cbor.Decoder) (StatusItem, error) {
+// statusItem reads one assertion. The second return says whether it was a
+// two-element array, which is how a reader recovers StatusReport.IncludeTime:
+// an asserted status legitimately carries DTNTimeUnknown (RFC 9171 clause
+// 4.2.6) when the reporting node has no clock, so the time's value cannot
+// tell time-inclusion apart from its absence — only the arity can.
+func decodeStatusItem(d *cbor.Decoder) (StatusItem, bool, error) {
 	n, indefinite, err := d.ArrayHeader()
 	if err != nil {
-		return StatusItem{}, err
+		return StatusItem{}, false, err
 	}
 	if indefinite || n < 1 || n > 2 {
-		return StatusItem{}, ErrMalformedStatusReport
+		return StatusItem{}, false, ErrMalformedStatusReport
 	}
 
 	asserted, err := d.Boolean()
 	if err != nil {
-		return StatusItem{}, err
+		return StatusItem{}, false, err
 	}
 	item := StatusItem{Asserted: asserted}
 
@@ -106,15 +110,15 @@ func decodeStatusItem(d *cbor.Decoder) (StatusItem, error) {
 		// A time on an unasserted status is meaningless: clause 6.1.1 permits
 		// the second element only when the indicator is 1.
 		if !asserted {
-			return StatusItem{}, ErrStatusTimeWithoutAssertion
+			return StatusItem{}, false, ErrStatusTimeWithoutAssertion
 		}
 		t, err := d.Uint()
 		if err != nil {
-			return StatusItem{}, err
+			return StatusItem{}, false, err
 		}
 		item.Time = DTNTime(t)
 	}
-	return item, nil
+	return item, n == 2, nil
 }
 
 // Encode writes the status report as a complete administrative record: the
@@ -199,17 +203,17 @@ func DecodeStatusReport(data []byte) (*StatusReport, error) {
 
 	r := &StatusReport{}
 	for _, into := range []*StatusItem{&r.Received, &r.Forwarded, &r.Delivered, &r.Deleted} {
-		item, err := decodeStatusItem(d)
+		item, twoElement, err := decodeStatusItem(d)
 		if err != nil {
 			return nil, err
 		}
 		*into = item
-		if item.Asserted && item.Time != 0 {
+		if twoElement {
 			r.IncludeTime = true
 		}
 	}
 	for i := uint64(4); i < statusCount; i++ {
-		if _, err := decodeStatusItem(d); err != nil {
+		if _, _, err := decodeStatusItem(d); err != nil {
 			return nil, err
 		}
 	}
@@ -257,6 +261,9 @@ func NewStatusReportBundle(primary *PrimaryBlock, report *StatusReport, extensio
 // StatusReport reads the status report a bundle carries, or reports that it
 // carries none.
 func (b *Bundle) StatusReport() (*StatusReport, error) {
+	if b.Primary == nil {
+		return nil, ErrNoPrimaryBlock
+	}
 	if !b.Primary.Flags.Has(FlagAdminRecord) {
 		return nil, ErrNotAnAdminRecord
 	}
