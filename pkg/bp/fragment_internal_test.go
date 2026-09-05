@@ -3,6 +3,7 @@ package bp
 import (
 	"bytes"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -180,6 +181,38 @@ func TestReassembleRejects(t *testing.T) {
 	mixed := []*Bundle{fragments[0], otherFragments[1], fragments[2], fragments[3]}
 	if _, err := Reassemble(mixed); !errors.Is(err, ErrFragmentsDoNotMatch) {
 		t.Errorf("mixed originals: err = %v, want ErrFragmentsDoNotMatch", err)
+	}
+}
+
+// A declared total past MaxReassembledADU must be rejected before Reassemble
+// tries to allocate anything that large.
+func TestReassembleRejectsHugeTotal(t *testing.T) {
+	original := fragmentableBundle(t, "abcdefghijklmnop")
+	fragments, err := original.Fragment(4)
+	if err != nil {
+		t.Fatalf("Fragment: %v", err)
+	}
+
+	fragments[0].Primary.TotalADULength = 1 << 48
+	if _, err := Reassemble(fragments[:1]); !errors.Is(err, ErrADUTooLarge) {
+		t.Errorf("huge total: err = %v, want ErrADUTooLarge", err)
+	}
+}
+
+// A fragment offset near the top of uint64 must not wrap the range check's
+// addition into passing; it must be rejected outright rather than panicking
+// on the later slice into adu.
+func TestReassembleRejectsOverflowingOffset(t *testing.T) {
+	original := fragmentableBundle(t, "abcdefghijklmnop")
+	fragments, err := original.Fragment(4)
+	if err != nil {
+		t.Fatalf("Fragment: %v", err)
+	}
+
+	fragments[0].Primary.FragmentOffset = math.MaxUint64 - 4
+	fragments[0].PayloadBlock().Data = make([]byte, 16)
+	if _, err := Reassemble(fragments[:1]); !errors.Is(err, ErrFragmentPastEnd) {
+		t.Errorf("overflowing offset: err = %v, want ErrFragmentPastEnd", err)
 	}
 }
 

@@ -59,6 +59,38 @@ func FuzzDecodeBundle(f *testing.F) {
 	})
 }
 
+// FuzzReassemble asserts one property: no pair of decodable bundles makes
+// Reassemble panic, however their fragment offsets and total lengths
+// disagree with each other or with reality. Errors are the expected outcome
+// for almost everything; only a well-formed matching pair reassembles.
+func FuzzReassemble(f *testing.F) {
+	// Two real fragments of the same bundle, so the fuzzer starts from a
+	// pair that reassembles cleanly rather than from random noise.
+	for _, seed := range []string{
+		"9f8b070102820282010282028202018202820201821b000000b057824800011a0036ee8000182b44907f714185010100005474686520717569636b2062726f776e20666f7820ff",
+		"9f8b070102820282010282028202018202820201821b000000b057824800011a0036ee8014182b443514fa988501010000546a756d7073206f76657220746865206c617a7920ff",
+	} {
+		if b, err := hex.DecodeString(seed); err == nil {
+			f.Add(b, b)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, a, b []byte) {
+		first, err := bp.Decode(a)
+		if err != nil {
+			return
+		}
+		second, err := bp.Decode(b)
+		if err != nil {
+			return
+		}
+
+		// Anything that decoded must survive Reassemble without panicking,
+		// no matter how its fragment fields disagree with each other.
+		_, _ = bp.Reassemble([]*bp.Bundle{first, second})
+	})
+}
+
 // FuzzDecodeStatusReport covers the administrative record path, which Decode
 // only reaches through a bundle carrying the right flag.
 func FuzzDecodeStatusReport(f *testing.F) {

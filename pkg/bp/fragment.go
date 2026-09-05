@@ -2,6 +2,12 @@ package bp
 
 import "sort"
 
+// MaxReassembledADU bounds the application data unit Reassemble will build.
+// TotalADULength arrives on the wire, so without a ceiling one small
+// fragment declaring a huge total would make Reassemble allocate it.
+// RFC 9171 sets no limit; 64 MiB matches ltp.DefaultMaxBlockSize.
+const MaxReassembledADU = 64 << 20
+
 // Fragment splits a bundle into pieces whose payloads are at most maxPayload
 // octets each (RFC 9171 clause 5.8).
 //
@@ -113,6 +119,9 @@ func Reassemble(fragments []*Bundle) (*Bundle, error) {
 			first = f
 			total = f.Primary.TotalADULength
 			haveTotal = true
+			if total > MaxReassembledADU {
+				return nil, ErrADUTooLarge
+			}
 		} else if f.Primary.Source != first.Primary.Source ||
 			f.Primary.Timestamp != first.Primary.Timestamp {
 			// Clause 5.9 keys reassembly on source node ID and creation
@@ -124,7 +133,7 @@ func Reassemble(fragments []*Bundle) (*Bundle, error) {
 
 		payload := f.Payload()
 		off := f.Primary.FragmentOffset
-		if off+uint64(len(payload)) > total {
+		if off > total || uint64(len(payload)) > total-off {
 			return nil, ErrFragmentPastEnd
 		}
 		if off == 0 {
@@ -137,18 +146,25 @@ func Reassemble(fragments []*Bundle) (*Bundle, error) {
 	// agree with earlier ones by construction: clause 5.8 requires every
 	// fragment's payload to be the original's bytes at that offset.
 	adu := make([]byte, total)
-	covered := make([]bool, total)
 	sort.Slice(extents, func(i, j int) bool { return extents[i].offset < extents[j].offset })
+
+	// Coverage is tracked by walking the sorted extents rather than a
+	// byte-per-byte bitmap: each extent must start at or before the offset
+	// already covered, which extends that covered end. A gap anywhere, or a
+	// covered end short of total once every extent is consumed, means the
+	// application data unit is not yet complete.
+	var coveredEnd uint64
 	for _, e := range extents {
-		copy(adu[e.offset:], e.data)
-		for i := e.offset; i < e.offset+uint64(len(e.data)); i++ {
-			covered[i] = true
-		}
-	}
-	for _, ok := range covered {
-		if !ok {
+		if e.offset > coveredEnd {
 			return nil, ErrIncompleteReassembly
 		}
+		copy(adu[e.offset:], e.data)
+		if end := e.offset + uint64(len(e.data)); end > coveredEnd {
+			coveredEnd = end
+		}
+	}
+	if coveredEnd < total {
+		return nil, ErrIncompleteReassembly
 	}
 
 	if zeroOffset == nil {
