@@ -253,6 +253,12 @@ func (rs *RSCodec) berlekampMassey(syndromes []byte) ([]byte, int, error) {
 
 	L := 0 // current number of assumed errors
 
+	// T is pure scratch inside the loop below: written from sigma, read back
+	// into B, and dead by the next iteration. Allocating it once here rather
+	// than per non-zero discrepancy avoids up to nroots allocations per
+	// codeword decode.
+	T := make([]byte, n+1)
+
 	for k := range n {
 		// Compute discrepancy Δ
 		delta := syndromes[k]
@@ -265,7 +271,6 @@ func (rs *RSCodec) berlekampMassey(syndromes []byte) ([]byte, int, error) {
 		B[0] = 0
 
 		if delta != 0 {
-			T := make([]byte, n+1)
 			copy(T, sigma)
 
 			// σ(x) = σ(x) - Δ * B(x)
