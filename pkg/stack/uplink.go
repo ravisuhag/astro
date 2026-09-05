@@ -439,6 +439,12 @@ type Onboard struct {
 	master   *tcdl.MasterChannel
 	services map[uint8]*tcdl.MAPPacketService
 	farms    map[uint8]*cop.FARM
+
+	// channels gives Next a way to see how many frames a virtual channel is
+	// holding, so it can tell how many FARM buffers a call to Receive just
+	// freed. Both services and channels are keyed by VCID and built from
+	// the same *tcdl.VirtualChannel; this just keeps a handle to it.
+	channels map[uint8]*tcdl.VirtualChannel
 }
 
 // NewOnboard builds the spacecraft side of an uplink.
@@ -454,11 +460,13 @@ func NewOnboard(config Uplink) (*Onboard, error) {
 		master:   tcdl.NewMasterChannel(config.SpacecraftID),
 		services: make(map[uint8]*tcdl.MAPPacketService, len(config.Channels)),
 		farms:    make(map[uint8]*cop.FARM, len(config.Channels)),
+		channels: make(map[uint8]*tcdl.VirtualChannel, len(config.Channels)),
 	}
 
 	for _, channel := range config.Channels {
 		virtual := tcdl.NewVirtualChannel(channel.ID, channel.buffer())
 		onboard.master.AddVirtualChannel(virtual, 1)
+		onboard.channels[channel.ID] = virtual
 		counter := tcdl.NewFrameCounter()
 
 		service := tcdl.NewMAPPacketService(
@@ -466,7 +474,13 @@ func NewOnboard(config Uplink) (*Onboard, error) {
 		service.SetPacketSizer(spp.PacketSizer)
 		onboard.services[channel.ID] = service
 
-		onboard.farms[channel.ID] = cop.NewFARM(channel.ID, channel.window())
+		farm := cop.NewFARM(channel.ID, channel.window())
+		// The FARM's buffer count mirrors the virtual channel's frame
+		// buffer: a frame FARM-1 accepts must have somewhere to go, or
+		// V(R) advances past data that was dropped and the loss is
+		// invisible to the ground (the Wait flag exists for exactly this).
+		farm.SetBuffers(channel.buffer())
+		onboard.farms[channel.ID] = farm
 	}
 
 	return onboard, nil
@@ -522,13 +536,36 @@ func (o *Onboard) Next(vcid uint8) ([]byte, bool, error) {
 		return nil, false, fmt.Errorf("%w: virtual channel %d is not configured", ErrUnknownChannel, vcid)
 	}
 
+	// A packet may span several frames (MAP packet service reassembly), so
+	// one buffer per packet would under-release and drift the FARM into
+	// permanent Wait. Release one buffer per frame Receive actually took
+	// off the channel instead, measured by the drop in queue length: that
+	// covers the error path too, where a frame can be consumed and the
+	// call still fail on an incomplete segment.
+	before := o.channelLen(vcid)
 	packet, err := service.Receive()
+	consumed := before - o.channelLen(vcid)
+	if farm := o.farms[vcid]; farm != nil {
+		for range consumed {
+			farm.ReleaseBuffer()
+		}
+	}
 	if err != nil {
 		// The service reports an empty buffer as an error; here that is a
 		// normal end of stream.
 		return nil, false, nil
 	}
 	return packet, true, nil
+}
+
+// channelLen reports how many frames a virtual channel is currently
+// holding, or 0 if the channel is not configured.
+func (o *Onboard) channelLen(vcid uint8) int {
+	virtual, ok := o.channels[vcid]
+	if !ok {
+		return 0
+	}
+	return virtual.Len()
 }
 
 // Packets iterates the whole Space Packets waiting on a virtual channel.
