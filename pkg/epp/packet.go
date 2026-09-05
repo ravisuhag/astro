@@ -1,6 +1,7 @@
 package epp
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -358,7 +359,9 @@ func (ep *EncapsulationPacket) Humanize() string {
 }
 
 // PacketSizer returns the total length in bytes of the Encapsulation Packet
-// starting at data[0], or -1 if the data is too short to determine length.
+// starting at data[0], or -1 if the data is too short to determine length,
+// or if the declared length cannot be represented as an int on this
+// platform.
 // This implements the sdl.PacketSizer signature for use with data link services.
 func PacketSizer(data []byte) int {
 	hdrSize := HeaderSize(data)
@@ -378,6 +381,19 @@ func PacketSizer(data []byte) int {
 	// Read packet length from the header
 	var h Header
 	if err := h.Decode(data[:hdrSize]); err != nil {
+		return -1
+	}
+
+	// Bound before narrowing: h.PacketLength is a uint32 and, for the LoL
+	// '11' 8-octet header, the only validation is >= HeaderSize8 (see
+	// Header.Validate), so a peer can declare up to MaxPacketLength8
+	// (0xFFFFFFFF). On a 32-bit build (GOARCH=386, arm, wasm) int is 32
+	// bits, so a value above math.MaxInt would wrap to a negative int once
+	// narrowed. Report the length as indeterminate (the same sentinel used
+	// for "too short") instead of returning a spurious negative total; on a
+	// 64-bit build this branch is never taken, since MaxPacketLength8
+	// always fits in a 64-bit int.
+	if uint64(h.PacketLength) > math.MaxInt {
 		return -1
 	}
 
