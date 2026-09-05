@@ -21,11 +21,27 @@ type ReceiverConfig struct {
 	// receiver try to allocate that much memory. Set it to what the mission
 	// actually sends.
 	MaxBlockSize uint64
+
+	// MaxOutstandingReports caps how many reports the receiver keeps track of
+	// at once, across reportsByCheckpoint, awaitingAck and pending. Zero
+	// selects DefaultMaxOutstandingReports.
+	//
+	// This cap is not in RFC 5326 either: the standard puts no ceiling on how
+	// many checkpoints a sender may raise, and reportsByCheckpoint is keyed
+	// by a wire-chosen checkpoint serial that is never removed - clause 6.11
+	// needs the old report kept around to answer a retransmitted checkpoint.
+	// Without a limit, a stream of small checkpoint segments carrying fresh
+	// serials would mint and keep one report per checkpoint forever.
+	MaxOutstandingReports uint64
 }
 
 // DefaultMaxBlockSize bounds a received block when ReceiverConfig leaves
 // MaxBlockSize at zero: 64 MiB.
 const DefaultMaxBlockSize = 64 << 20
+
+// DefaultMaxOutstandingReports bounds the receiver's outstanding reports when
+// ReceiverConfig leaves MaxOutstandingReports at zero.
+const DefaultMaxOutstandingReports = 1024
 
 // Receiver drives one incoming LTP session.
 //
@@ -72,6 +88,9 @@ type Receiver struct {
 
 	// maxBlockSize caps the assembled block.
 	maxBlockSize uint64
+
+	// maxOutstandingReports caps reportsByCheckpoint, awaitingAck and pending.
+	maxOutstandingReports uint64
 }
 
 // NewReceiver prepares a session to receive one block.
@@ -83,13 +102,18 @@ func NewReceiver(config ReceiverConfig) (*Receiver, error) {
 	if maxBlock == 0 {
 		maxBlock = DefaultMaxBlockSize
 	}
+	maxReports := config.MaxOutstandingReports
+	if maxReports == 0 {
+		maxReports = DefaultMaxOutstandingReports
+	}
 	return &Receiver{
-		config:              config,
-		state:               StateActive,
-		nextReportSerial:    config.FirstReportSerial,
-		awaitingAck:         make(map[uint64]bool),
-		reportsByCheckpoint: make(map[uint64]*ReportSegment),
-		maxBlockSize:        maxBlock,
+		config:                config,
+		state:                 StateActive,
+		nextReportSerial:      config.FirstReportSerial,
+		awaitingAck:           make(map[uint64]bool),
+		reportsByCheckpoint:   make(map[uint64]*ReportSegment),
+		maxBlockSize:          maxBlock,
+		maxOutstandingReports: maxReports,
 	}, nil
 }
 
@@ -199,7 +223,9 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 
 	// Clause 6.13: a checkpoint prompts a report.
 	if t.IsCheckpoint() {
-		r.queueReport(d.CheckpointSerial, end)
+		if err := r.queueReport(d.CheckpointSerial, end); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -207,7 +233,17 @@ func (r *Receiver) handleData(t SegmentType, d *DataSegment) error {
 // queueReport builds a report covering the red part and queues it. segEnd is
 // the end offset of the checkpoint segment that prompted it, or zero for an
 // asynchronous report.
-func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
+func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) error {
+	// A wire-chosen checkpoint serial that has never been seen before always
+	// grows reportsByCheckpoint, awaitingAck and pending together, and a
+	// repeated one still grows pending. Check before touching any of them:
+	// a silent drop here would look like completion to maybeClose, which
+	// keys on len(awaitingAck) == 0.
+	if r.reportStateFull() {
+		r.cancelWithReason(ReasonSystemCancelled)
+		return ErrTooManyOutstandingReports
+	}
+
 	// Clause 6.11: a retransmitted checkpoint gets the same report again, not a
 	// fresh one, otherwise every timer expiry mints a new report serial and
 	// the two engines chase each other's acknowledgments.
@@ -215,7 +251,7 @@ func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
 		if prior, ok := r.reportsByCheckpoint[checkpointSerial]; ok {
 			r.awaitingAck[prior.ReportSerial] = true
 			r.pending = append(r.pending, &Segment{Header: r.header(TypeReport), Report: prior})
-			return
+			return nil
 		}
 	}
 
@@ -259,7 +295,7 @@ func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
 
 	if err := report.Validate(); err != nil {
 		// A report with nothing worth claiming is not sent.
-		return
+		return nil
 	}
 
 	r.awaitingAck[report.ReportSerial] = true
@@ -268,6 +304,19 @@ func (r *Receiver) queueReport(checkpointSerial, segEnd uint64) {
 		r.reportsByCheckpoint[checkpointSerial] = report
 	}
 	r.pending = append(r.pending, &Segment{Header: r.header(TypeReport), Report: report})
+	return nil
+}
+
+// reportStateFull reports whether reportsByCheckpoint, awaitingAck or pending
+// has reached maxOutstandingReports. reportsByCheckpoint is never pruned
+// (clause 6.11 needs the old report to answer a retransmitted checkpoint), so
+// this is the only thing stopping a stream of fresh checkpoint serials from
+// growing it, awaitingAck and pending forever.
+func (r *Receiver) reportStateFull() bool {
+	max := r.maxOutstandingReports
+	return uint64(len(r.reportsByCheckpoint)) >= max ||
+		uint64(len(r.awaitingAck)) >= max ||
+		uint64(len(r.pending)) >= max
 }
 
 // maybeClose closes the session once the red part is fully received and no
@@ -314,7 +363,10 @@ func (r *Receiver) NextSegment() (*Segment, bool, error) {
 func (r *Receiver) RequestReport() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.queueReport(0, 0)
+	// This is the caller's own timer, not peer-controlled, so the cap this
+	// guards against does not apply in practice; there is nothing more
+	// useful to do with the error than what cancelWithReason already did.
+	_ = r.queueReport(0, 0)
 }
 
 // Cancel abandons the session from the receiver's end.
