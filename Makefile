@@ -107,3 +107,9 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzCompressRoundTrip -fuzztime $(FUZZTIME) ./pkg/ldc/
 	go test -run '^$$' -fuzz FuzzDecompressPacket -fuzztime $(FUZZTIME) ./pkg/rhc/
 	go test -run '^$$' -fuzz FuzzCompressRoundTrip -fuzztime $(FUZZTIME) ./pkg/rhc/
+	go test -run '^$$' -fuzz FuzzCLCWDecode -fuzztime $(FUZZTIME) ./pkg/cop/
+	go test -run '^$$' -fuzz FuzzFARMProcessFrame -fuzztime $(FUZZTIME) ./pkg/cop/
+	go test -run '^$$' -fuzz FuzzRSDecode -fuzztime $(FUZZTIME) ./pkg/tmsc/
+	go test -run '^$$' -fuzz FuzzRSDecodeShortened -fuzztime $(FUZZTIME) ./pkg/tmsc/
+	go test -run '^$$' -fuzz FuzzUnwrapCLTU -fuzztime $(FUZZTIME) ./pkg/tcsc/
+	go test -run '^$$' -fuzz FuzzBCHDecode -fuzztime $(FUZZTIME) ./pkg/tcsc/
