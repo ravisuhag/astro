@@ -742,6 +742,50 @@ func TestUnmodelledAlternativesKeepTheirOctets(t *testing.T) {
 	}
 }
 
+// The four data-moving operations carry opaque fields — ListOfParameters,
+// EventTime/EventName/EventValue, GenerationTime/Data, Data — whose content is
+// a CHOICE or a type this package leaves to a service specification. Decoding
+// one and re-encoding it without touching it must reproduce the original
+// octets exactly: nothing about a value this package does not interpret
+// should change underneath a caller that only relays it.
+//
+// Each hex string here is one of the vectors/csts/framework.json decode
+// vectors byte for byte, so a derivation of the octets is documented there
+// rather than repeated here.
+func TestDataMovingOperationsRoundTripByteExact(t *testing.T) {
+	tests := []struct {
+		name string
+		hex  string
+	}{
+		{"GET invocation", "bf281a3013800002010b300c06082b7004040101030182000401018100"},
+		{"NOTIFY invocation", "bf32233016800002010c300f060a2b7004040101030201018101020401020401030401048100"},
+		{"TRANSFER-DATA invocation", "bf46213013800002010d300c06082b700404010103038000040105020109040268698100"},
+		{"PROCESS-DATA invocation", "bf3c1e3013800002010e300c06082b7004040101030182000201150402676f8100"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			original, err := hex.DecodeString(tc.hex)
+			if err != nil {
+				t.Fatalf("bad test constant: %v", err)
+			}
+
+			back, err := csts.Decode(original)
+			if err != nil {
+				t.Fatalf("Decode: %v", err)
+			}
+
+			again, err := back.Encode()
+			if err != nil {
+				t.Fatalf("Encode: %v", err)
+			}
+			if !bytes.Equal(again, original) {
+				t.Errorf("re-encoding changed the octets:\n got %x\nwant %x", again, original)
+			}
+		})
+	}
+}
+
 func TestHumanize(t *testing.T) {
 	back := mustDecode(t, unbindInvocationHex)
 	text := back.Humanize()

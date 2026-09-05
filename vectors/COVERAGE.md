@@ -143,20 +143,6 @@ reader can be given: it lets the derivation be checked against the
 module rather than against this package. What they pin hardest is the
 implicit tagging, where a mistake round-trips perfectly against itself.
 
-**GET, NOTIFY, TRANSFER-DATA and PROCESS-DATA carry an unpinned field.**
-Each has one or more fields documented as "the encoded" CHOICE or type —
-`GetInvocation.ListOfParameters`, `NotifyInvocation.EventTime` /
-`EventName` / `EventValue`, `TransferDataInvocation.GenerationTime` /
-`Data`, `ProcessDataInvocation.Data`. Decoding one of these operations
-keeps only the field's content octets, with its own tag and length
-already stripped by the BER reader, while encoding appends the field
-assuming it is still a complete tag-length-value element. A decoded
-value therefore does not reproduce the original octets if re-encoded.
-The vectors for these four operations pin every other field and
-deliberately leave that one unasserted rather than encode the mismatch
-as expected behaviour; see each vector's note. This is an implementation
-defect, not a corpus gap, and is tracked for a fix outside this corpus.
-
 ## Values not established against a standard
 
 None. Every vector cites a clause or a published corpus.
