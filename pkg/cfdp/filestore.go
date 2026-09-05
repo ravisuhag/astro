@@ -1,6 +1,7 @@
 package cfdp
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -248,11 +249,25 @@ func (f *MemoryFilestore) Read(name string) ([]byte, error) {
 }
 
 // WriteAt writes data at offset, zero-filling any gap.
+//
+// MemoryFilestore is a public type that a caller other than Receiver can use
+// directly, so it must not rely on a caller having already bounded offset.
+// Nothing in CCSDS 727.0-B-5 bounds a file offset, so without a check here a
+// single write naming a huge offset would grow the in-memory file to match,
+// which is an easy way to exhaust memory.
 func (f *MemoryFilestore) WriteAt(name string, offset uint64, data []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	end := offset + uint64(len(data))
+	if end < offset {
+		// offset+len(data) wrapped past 2^64.
+		return ErrFileTooLarge
+	}
+	if end > DefaultMaxFileSize {
+		return ErrFileTooLarge
+	}
+
 	buf := f.files[name]
 	if uint64(len(buf)) < end {
 		grown := make([]byte, end)
@@ -353,6 +368,13 @@ func (f *OSFilestore) Read(name string) ([]byte, error) {
 
 // WriteAt writes data at offset, creating the file and any parent directories.
 func (f *OSFilestore) WriteAt(name string, offset uint64, data []byte) error {
+	// Nothing in the standard bounds a file offset. An offset that does not
+	// fit int64 would wrap to negative once converted below, which is not an
+	// offset at all; reject it rather than hand the OS a nonsensical write.
+	if offset > math.MaxInt64 {
+		return ErrFileTooLarge
+	}
+
 	path, err := f.resolve(name)
 	if err != nil {
 		return err
