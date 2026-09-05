@@ -427,15 +427,38 @@ func (s *Sender) HandleSegment(seg *Segment) error {
 // handleReport folds a reception report into the session and queues whatever
 // the gaps demand.
 func (s *Sender) handleReport(r *ReportSegment) error {
-	// Clause 3.2.3: every report is acknowledged.
+	// Clause 3.2.3: every report is acknowledged, even one rejected below -
+	// refusing the ack would just make a conformant peer retransmit the same
+	// report forever.
 	s.pendingReportAcks = append(s.pendingReportAcks, r.ReportSerial)
 
-	// Claim offsets are relative to the report's lower bound.
-	for _, c := range r.ClaimedRanges() {
+	// LTP has no authentication of its own (RFC 5326 defers that to a
+	// security extension), but the sender knows the true length of the red
+	// part it is sending, and a report cannot claim more of it than exists.
+	// Check every number in the report against that bound before folding
+	// anything in: past this point s.acknowledged is trusted to decide
+	// whether the block is done and whether the retransmit queue gets
+	// discarded, so a spoofed or corrupt report claiming full coverage must
+	// not reach it.
+	red := s.config.RedPartLength
+	if r.UpperBound > red {
+		return ErrReportOutOfRange
+	}
+	claims := r.ClaimedRanges()
+	for _, c := range claims {
+		end := c.Offset + c.Length
+		if c.Length == 0 || end < c.Offset || end > red {
+			// end < c.Offset catches both an overflowing sum and a claim
+			// ClaimedRanges saturated to math.MaxUint64 because LowerBound
+			// plus its own offset had already overflowed.
+			return ErrReportOutOfRange
+		}
+	}
+
+	for _, c := range claims {
 		s.acknowledged.add(c.Offset, c.Offset+c.Length)
 	}
 
-	red := s.config.RedPartLength
 	if s.acknowledged.covers(red) {
 		s.state = StateClosed
 		s.retransmit = nil
@@ -444,12 +467,8 @@ func (s *Sender) handleReport(r *ReportSegment) error {
 	}
 
 	// Anything below the report's upper bound that is not claimed must go
-	// again.
-	limit := r.UpperBound
-	if limit > red {
-		limit = red
-	}
-	s.retransmit = append(s.retransmit, s.acknowledged.gaps(limit)...)
+	// again. UpperBound is already checked to be no more than red, above.
+	s.retransmit = append(s.retransmit, s.acknowledged.gaps(r.UpperBound)...)
 	// Clause 3.2.1: the checkpoint closing this retransmission cycle carries the
 	// serial of the report that prompted it.
 	s.respondingTo = r.ReportSerial
