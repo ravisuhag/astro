@@ -179,6 +179,10 @@ func (r *layoutResolver) entry(c *SequenceContainer, entry Entry, containerStart
 // The decode is what makes the walk work: a later field's width or position
 // may name this parameter, and only a decoded value can answer that.
 func (r *layoutResolver) parameter(c *SequenceContainer, entry Entry) error {
+	if len(r.layout.Fields) >= MaxFields {
+		return fmt.Errorf("%w: the layout has grown past %d fields", ErrUnsupportedEntry, MaxFields)
+	}
+
 	param, err := c.owner.ResolveParameter(entry.Ref)
 	if err != nil {
 		return fmt.Errorf("entry %s of container %q: %w", entry, c.Name, err)
@@ -208,7 +212,14 @@ func (r *layoutResolver) parameter(c *SequenceContainer, entry Entry) error {
 	// Decode it now, so a later dynamic reference can read it. A field that
 	// will not decode is not fatal here: Extract reports per-field errors,
 	// and only a field another field depends on actually blocks the walk.
-	if uint(len(r.packet))*8 >= field.BitOffset+field.BitSize {
+	//
+	// Written in subtraction form rather than field.BitOffset+field.BitSize
+	// >= packetBits: a width taken from the packet (a dynamically-sized
+	// binary field) is otherwise unchecked here, and an addition that
+	// overflows could wrap past a small packet's bit length and make this
+	// look safe when it is not.
+	packetBits := uint(len(r.packet)) * 8
+	if field.BitOffset <= packetBits && field.BitSize <= packetBits-field.BitOffset {
 		r.values[param] = extractField(bitReader{data: r.packet}, field)
 	}
 
@@ -246,6 +257,17 @@ func (r *layoutResolver) fieldWidth(c *SequenceContainer, param *Parameter, para
 		if bits < 0 {
 			return 0, fmt.Errorf("%w: parameter %q was given a width of %d bits",
 				ErrDynamicSize, param.Name, bits)
+		}
+		// An integer or float field is capped at 64 bits by bitReader.read.
+		// A binary field has no such fixed cap -- a blob can legitimately be
+		// far wider -- so instead it is capped against the one packet it is
+		// being sized from. Two such fields side by side could otherwise
+		// each carry a huge, non-overflowing width whose sum still overflows
+		// the cursor that places the next entry.
+		packetBits := uint64(len(r.packet)) * 8
+		if uint64(bits) > packetBits {
+			return 0, fmt.Errorf("%w: parameter %q was given a width of %d bits, more than the %d-bit packet holds",
+				ErrPacketTooShort, param.Name, bits, packetBits)
 		}
 		return uint(bits), nil
 
@@ -342,6 +364,25 @@ func (r *layoutResolver) repeatCount(c *SequenceContainer, entry Entry) (uint, e
 	}
 	if count < 0 {
 		return 0, fmt.Errorf("%w: a repeat count of %d", ErrUnsupportedEntry, count)
+	}
+	if count > MaxRepeatCount {
+		return 0, fmt.Errorf("%w: a repeat count of %d exceeds the limit of %d",
+			ErrUnsupportedEntry, count, MaxRepeatCount)
+	}
+
+	// A repetition takes up at least one bit, so a count above what is left
+	// of the packet cannot possibly be right. Checking this before the loop
+	// that places each repetition is what keeps a huge count from appending
+	// one Field per repetition regardless of whether the packet could ever
+	// hold that many.
+	packetBits := uint(len(r.packet)) * 8
+	var remaining uint
+	if r.cursor < packetBits {
+		remaining = packetBits - r.cursor
+	}
+	if uint(count) > remaining {
+		return 0, fmt.Errorf("%w: a repeat count of %d needs more bits than the %d left in the packet",
+			ErrUnsupportedEntry, count, remaining)
 	}
 	return uint(count), nil
 }

@@ -76,3 +76,86 @@ func FuzzLoad(f *testing.F) {
 		})
 	})
 }
+
+// FuzzExtractDynamic throws arbitrary packet bytes at the packet-derived
+// layout path.
+//
+// FuzzLoad covers the database (XML) side of this package; nothing fuzzes the
+// packet side, where a RepeatEntry's count and a binary field's width can both
+// come straight out of the bytes being parsed rather than the database. The
+// fixture below names both from packet fields wide enough (32 bits) to name a
+// count or a width in the billions, which is exactly the shape MaxRepeatCount,
+// MaxFields and the binary width cap exist to survive. The property is the
+// same as FuzzLoad's: never panic, never hang, whatever the packet holds.
+func FuzzExtractDynamic(f *testing.F) {
+	db, err := xtce.Load(strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<SpaceSystem xmlns="` + xtce.Namespace + `" name="Sat">
+  <TelemetryMetaData>
+    <ParameterTypeSet>
+      <IntegerParameterType name="U32" signed="false">
+        <IntegerDataEncoding sizeInBits="32" encoding="unsigned"/>
+      </IntegerParameterType>
+      <IntegerParameterType name="U8" signed="false">
+        <IntegerDataEncoding sizeInBits="8" encoding="unsigned"/>
+      </IntegerParameterType>
+      <BinaryParameterType name="Blob">
+        <BinaryDataEncoding>
+          <SizeInBits>
+            <DynamicValue><ParameterInstanceRef parameterRef="Length"/></DynamicValue>
+          </SizeInBits>
+        </BinaryDataEncoding>
+      </BinaryParameterType>
+    </ParameterTypeSet>
+    <ParameterSet>
+      <Parameter name="Count" parameterTypeRef="U32"/>
+      <Parameter name="Sample" parameterTypeRef="U8"/>
+      <Parameter name="Length" parameterTypeRef="U32"/>
+      <Parameter name="Data" parameterTypeRef="Blob"/>
+    </ParameterSet>
+    <ContainerSet>
+      <SequenceContainer name="C">
+        <EntryList>
+          <ParameterRefEntry parameterRef="Count"/>
+          <ParameterRefEntry parameterRef="Sample">
+            <RepeatEntry>
+              <Count><DynamicValue><ParameterInstanceRef parameterRef="Count"/></DynamicValue></Count>
+            </RepeatEntry>
+          </ParameterRefEntry>
+          <ParameterRefEntry parameterRef="Length"/>
+          <ParameterRefEntry parameterRef="Data"/>
+        </EntryList>
+      </SequenceContainer>
+    </ContainerSet>
+  </TelemetryMetaData>
+</SpaceSystem>`))
+	if err != nil {
+		f.Fatalf("loading the fixture database: %v", err)
+	}
+
+	container, err := db.FindContainer("/Sat/C")
+	if err != nil {
+		f.Fatalf("FindContainer: %v", err)
+	}
+
+	f.Add([]byte{})
+	f.Add([]byte{0, 0, 0, 0})
+	f.Add([]byte{0, 0, 0, 4, 1, 2, 3, 4, 0, 0, 0, 16, 0xAA, 0xBB})
+	// A repeat count near 2^32, which the loop over count must refuse
+	// without appending a Field per repetition.
+	f.Add([]byte{0xFF, 0xFF, 0xFF, 0xFF})
+	// Count zero, then a binary width near 2^32 bits.
+	f.Add([]byte{0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF})
+	f.Add([]byte{0x7F, 0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF})
+
+	f.Fuzz(func(t *testing.T, packet []byte) {
+		layout, err := container.ResolveLayout(packet)
+		if err != nil {
+			return
+		}
+		if layout == nil {
+			t.Fatal("ResolveLayout returned no error and no layout")
+		}
+		_, _ = layout.Extract(packet)
+		_, _ = container.ExtractDynamic(packet)
+	})
+}
