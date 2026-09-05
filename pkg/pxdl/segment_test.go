@@ -320,3 +320,145 @@ func TestAcceptFrameRejectsWrongDFCID(t *testing.T) {
 		t.Errorf("error = %v, want ErrInvalidDFCID", err)
 	}
 }
+
+func TestReassemblerBoundsPendingCount(t *testing.T) {
+	// A peer that opens every routing ID and finishes none must not pin one
+	// buffer per routing ID forever: MaxPending caps how many are open at
+	// once, and admitting one more evicts the oldest.
+	r := pxdl.NewReassembler()
+	r.MaxPending = 4
+
+	for id := uint8(0); id < 6; id++ {
+		first := &pxdl.Segment{
+			Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentFirst, PseudoPacketID: id},
+			Data:   []byte{1, 2, 3},
+		}
+		if _, err := r.Accept(0, 0, first); err != nil {
+			t.Fatalf("routing id %d: %v", id, err)
+		}
+	}
+
+	if r.Pending() != 4 {
+		t.Fatalf("pending = %d, want 4 (bounded by MaxPending)", r.Pending())
+	}
+
+	// Eviction drops the oldest first, so the most recently opened routing ID
+	// (5) must have survived and still reassembles correctly.
+	last := &pxdl.Segment{
+		Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentLast, PseudoPacketID: 5},
+		Data:   []byte{4, 5},
+	}
+	out, err := r.Accept(0, 0, last)
+	if err != nil {
+		t.Fatalf("completing routing id 5: %v", err)
+	}
+	if want := []byte{1, 2, 3, 4, 5}; !bytes.Equal(out, want) {
+		t.Errorf("reassembled = %v, want %v", out, want)
+	}
+}
+
+func TestReassemblerInterleavedStillWorksUnderMaxPending(t *testing.T) {
+	// Two packets interleaved on different ports, with MaxPending set right
+	// at the number of routing IDs actually open: neither may be evicted to
+	// make room for the other, since neither is a new entrant once both are
+	// open.
+	r := pxdl.NewReassembler()
+	r.MaxPending = 2
+
+	first, err := pxdl.Segmentize([]byte("packet one contents"), 1, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := pxdl.Segmentize([]byte("packet two contents"), 2, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotFirst, gotSecond []byte
+	maxLen := len(first)
+	if len(second) > maxLen {
+		maxLen = len(second)
+	}
+	for i := 0; i < maxLen; i++ {
+		if i < len(first) {
+			out, err := r.Accept(0, 1, first[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out != nil {
+				gotFirst = out
+			}
+		}
+		if i < len(second) {
+			out, err := r.Accept(0, 2, second[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out != nil {
+				gotSecond = out
+			}
+		}
+	}
+
+	if string(gotFirst) != "packet one contents" {
+		t.Errorf("first packet = %q", gotFirst)
+	}
+	if string(gotSecond) != "packet two contents" {
+		t.Errorf("second packet = %q", gotSecond)
+	}
+}
+
+func TestReassemblerCompletionFreesPendingSlot(t *testing.T) {
+	// Finishing a packet must free its slot in MaxPending's budget, and must
+	// not leave a stale entry that later causes a still-live partial to be
+	// evicted in its place.
+	r := pxdl.NewReassembler()
+	r.MaxPending = 2
+
+	for _, id := range []uint8{0, 1} {
+		seg := &pxdl.Segment{
+			Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentFirst, PseudoPacketID: id},
+			Data:   []byte{9},
+		}
+		if _, err := r.Accept(0, 0, seg); err != nil {
+			t.Fatalf("opening routing id %d: %v", id, err)
+		}
+	}
+
+	out, err := r.Accept(0, 0, &pxdl.Segment{
+		Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentLast, PseudoPacketID: 0},
+		Data:   []byte{10},
+	})
+	if err != nil {
+		t.Fatalf("completing routing id 0: %v", err)
+	}
+	if want := []byte{9, 10}; !bytes.Equal(out, want) {
+		t.Fatalf("routing id 0 reassembled = %v, want %v", out, want)
+	}
+	if r.Pending() != 1 {
+		t.Fatalf("pending = %d, want 1 after completion", r.Pending())
+	}
+
+	// Completing routing id 0 freed a slot, so opening id 2 now must not
+	// evict the still-open id 1.
+	if _, err := r.Accept(0, 0, &pxdl.Segment{
+		Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentFirst, PseudoPacketID: 2},
+		Data:   []byte{1},
+	}); err != nil {
+		t.Fatalf("opening routing id 2: %v", err)
+	}
+	if r.Pending() != 2 {
+		t.Fatalf("pending = %d, want 2", r.Pending())
+	}
+
+	out, err = r.Accept(0, 0, &pxdl.Segment{
+		Header: pxdl.SegmentHeader{SequenceFlags: pxdl.SegmentLast, PseudoPacketID: 1},
+		Data:   []byte{2},
+	})
+	if err != nil {
+		t.Fatalf("routing id 1 should still be live: %v", err)
+	}
+	if want := []byte{9, 2}; !bytes.Equal(out, want) {
+		t.Errorf("routing id 1 reassembled = %v, want %v", out, want)
+	}
+}
