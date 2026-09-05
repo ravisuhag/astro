@@ -108,6 +108,44 @@ func BenchmarkRSDecodeWithErrors(b *testing.B) {
 	}
 }
 
+// With errors to correct, at the interleave depth (5) a CADU actually uses.
+// DecodeInterleaved calls Decode once per interleave, so this is the number
+// that reflects what a degraded frame actually costs, not just one codeword.
+func BenchmarkRSDecodeInterleaved(b *testing.B) {
+	codec := tmsc.NewRS255_223()
+	const depth = 5
+
+	for _, errors := range []int{1, 8, 16} {
+		b.Run(errorName(errors), func(b *testing.B) {
+			clean, err := codec.EncodeInterleaved(benchData(depth*codec.DataLen()), depth)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			// Corrupt distinct octets per sub-codeword, spread out so they do
+			// not land in one burst.
+			corrupted := make([]byte, len(clean))
+			copy(corrupted, clean)
+			for d := 0; d < depth; d++ {
+				for e := 0; e < errors; e++ {
+					pos := (e*13 % 255) * depth
+					corrupted[pos+d] ^= 0xFF
+				}
+			}
+
+			b.SetBytes(int64(len(corrupted)))
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				if _, _, err := codec.DecodeInterleaved(corrupted, depth); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkWrapCADU(b *testing.B) {
 	frame := benchData(1115)
 
