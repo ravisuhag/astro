@@ -450,7 +450,7 @@ func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CLTUs: %v", err)
 		}
-		onboard.Accept(cltu)
+		_, _ = onboard.Accept(cltu) // deliberately ignored: see comment above.
 	}
 
 	var got []string
@@ -482,7 +482,7 @@ func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CLTUs: %v", err)
 		}
-		onboard.Accept(cltu)
+		_, _ = onboard.Accept(cltu) // deliberately ignored: a store failure here is the bug itself.
 	}
 	drain()
 
@@ -527,7 +527,7 @@ func TestUplinkCLCWReportsWaitWhileBufferIsFull(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CLTUs: %v", err)
 		}
-		onboard.Accept(cltu)
+		_, _ = onboard.Accept(cltu) // deliberately ignored: a store failure here is the bug itself.
 	}
 
 	if clcw := decodeCLCW(t, onboard, 0); !clcw.WaitFlag {
