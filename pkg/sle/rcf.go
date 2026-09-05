@@ -716,7 +716,7 @@ func NewRCFProvider(config ServiceConfig) (*RCFProvider, error) {
 func (p *RCFProvider) HandleStartInvocation(
 	s *RCFStartInvocation, answer *RCFStartReturn, now time.Time, randomNumber int32,
 ) error {
-	err := p.respond(OpStartReturn, ServiceReady, now, randomNumber,
+	err := p.respond(OpStartReturn, s.InvokeId, ServiceReady, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			answer.Credentials = creds
 			answer.InvokeId = s.InvokeId

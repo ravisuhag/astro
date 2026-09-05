@@ -290,6 +290,16 @@ func (u *ServiceUser) invoke(
 	}
 
 	id := u.nextInvokeId
+	if _, busy := u.awaiting[id]; busy {
+		// nextInvokeId has wrapped (InvokeId is 16 bits) all the way back to
+		// an identifier this user is still waiting on a return for: more
+		// than 65536 confirmed operations are outstanding at once. Refuse
+		// locally, with a diagnosable cause, rather than sending a PDU the
+		// provider will bounce as 'duplicate invoke ID' for a reason the
+		// caller cannot see.
+		return 0, ErrInvokeIdExhausted
+	}
+
 	content, err := build(id, creds)
 	if err != nil {
 		return 0, err
@@ -516,11 +526,34 @@ func (u *ServiceUser) startAccepted() { u.state = ServiceActive }
 type ServiceProvider struct {
 	*serviceCore
 
-	// seenInvokeIds records every invoke identifier used since the BIND, so
-	// a reused one draws the 'duplicate invoke ID' diagnostic rather than a
-	// second execution. An InvokeId is 16 bits, so the map stays small.
-	seenInvokeIds map[InvokeId]bool
+	// outstandingInvokeIds holds invoke identifiers that have been accepted
+	// (registerInvokeId returned true) but whose return the provider has not
+	// yet queued. A second invocation under one of these is a genuine
+	// duplicate: the first is still being worked.
+	outstandingInvokeIds map[InvokeId]bool
+
+	// answeredInvokeIds and answeredInvokeIdOrder together are a bounded,
+	// most-recently-answered window: settleInvokeId moves an identifier
+	// here when its return is queued, so a retransmission of an invocation
+	// already answered still draws the 'duplicate invoke ID' diagnostic
+	// instead of running twice.
+	//
+	// The window is capped (answeredInvokeIdWindow) rather than kept
+	// forever, because an InvokeId is only 16 bits (CCSDS 911.1-B-5 clause
+	// 3.1.4 and its siblings) and a confirmed operation such as FCLTU
+	// TRANSFER-DATA burns one per CLTU: an ordinary long pass wraps the
+	// identifier space many times over within one association. A set that
+	// remembered every identifier ever answered would eventually treat every
+	// legitimate new invocation as a collision with its own distant past.
+	answeredInvokeIds     map[InvokeId]struct{}
+	answeredInvokeIdOrder []InvokeId
 }
+
+// answeredInvokeIdWindow bounds how many recently-answered invoke
+// identifiers the provider remembers, so it stays small (a few hundred
+// entries at most) no matter how long the association runs or how many
+// times the 16-bit identifier space has wrapped.
+const answeredInvokeIdWindow = 256
 
 // NewServiceProvider prepares the provider half of a service instance.
 func NewServiceProvider(config ServiceConfig) (*ServiceProvider, error) {
@@ -531,19 +564,53 @@ func NewServiceProvider(config ServiceConfig) (*ServiceProvider, error) {
 	return &ServiceProvider{serviceCore: core}, nil
 }
 
+// resetInvokeIdTracking drops all outstanding and recently-answered invoke
+// identifiers. A fresh association starts a fresh invoke identifier space.
+// The lock must already be held.
+func (p *ServiceProvider) resetInvokeIdTracking() {
+	p.outstandingInvokeIds = nil
+	p.answeredInvokeIds = nil
+	p.answeredInvokeIdOrder = nil
+}
+
 // registerInvokeId records an inbound invocation's identifier, reporting
-// false when it has already been used on this association.
+// false when it is still outstanding or was recently answered on this
+// association — either means the invocation must not run again.
 func (p *ServiceProvider) registerInvokeId(id InvokeId) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.seenInvokeIds == nil {
-		p.seenInvokeIds = make(map[InvokeId]bool)
+	if p.outstandingInvokeIds == nil {
+		p.outstandingInvokeIds = make(map[InvokeId]bool)
 	}
-	if p.seenInvokeIds[id] {
+	if p.outstandingInvokeIds[id] {
 		return false
 	}
-	p.seenInvokeIds[id] = true
+	if _, answered := p.answeredInvokeIds[id]; answered {
+		return false
+	}
+	p.outstandingInvokeIds[id] = true
 	return true
+}
+
+// settleInvokeId retires an invoke identifier once the provider has queued
+// its return: it stops being outstanding and enters the bounded
+// recently-answered window. The lock must already be held.
+func (p *ServiceProvider) settleInvokeId(id InvokeId) {
+	delete(p.outstandingInvokeIds, id)
+
+	if p.answeredInvokeIds == nil {
+		p.answeredInvokeIds = make(map[InvokeId]struct{})
+	}
+	if _, ok := p.answeredInvokeIds[id]; ok {
+		return
+	}
+	if len(p.answeredInvokeIdOrder) >= answeredInvokeIdWindow {
+		oldest := p.answeredInvokeIdOrder[0]
+		p.answeredInvokeIdOrder = p.answeredInvokeIdOrder[1:]
+		delete(p.answeredInvokeIds, oldest)
+	}
+	p.answeredInvokeIds[id] = struct{}{}
+	p.answeredInvokeIdOrder = append(p.answeredInvokeIdOrder, id)
 }
 
 // queueDuplicateAnswer queues an already-encoded negative return carrying
@@ -564,9 +631,13 @@ func (p *ServiceProvider) queueDuplicateAnswer(op OperationType, content []byte,
 }
 
 // respond builds and queues one provider PDU, holding the lock across the
-// whole step.
+// whole step, and retires id from the outstanding set into the
+// recently-answered window: this is the single settle point every confirmed
+// operation's return passes through, so it is where an invoke identifier
+// becomes free to recycle.
 func (p *ServiceProvider) respond(
 	op OperationType,
+	id InvokeId,
 	allowed ServiceState,
 	now time.Time,
 	randomNumber int32,
@@ -590,6 +661,7 @@ func (p *ServiceProvider) respond(
 		return err
 	}
 	p.config.Association.RecordSent(now)
+	p.settleInvokeId(id)
 	return nil
 }
 
@@ -617,8 +689,7 @@ func (p *ServiceProvider) HandleBindInvocation(b *BindInvocation, now time.Time,
 	}
 	if answer.Positive {
 		p.state = ServiceReady
-		// A fresh association starts a fresh invoke identifier space.
-		p.seenInvokeIds = nil
+		p.resetInvokeIdTracking()
 	}
 	return err
 }
@@ -643,7 +714,7 @@ func (p *ServiceProvider) HandleUnbindInvocation(u *UnbindInvocation, now time.T
 		return err
 	}
 	p.state = ServiceUnbound
-	p.seenInvokeIds = nil
+	p.resetInvokeIdTracking()
 	return nil
 }
 
@@ -651,7 +722,7 @@ func (p *ServiceProvider) HandleUnbindInvocation(u *UnbindInvocation, now time.T
 func (p *ServiceProvider) HandleStopInvocation(
 	s *StopInvocation, accept bool, diagnostic Diagnostics, now time.Time, randomNumber int32,
 ) error {
-	err := p.respond(OpStopReturn, ServiceActive, now, randomNumber,
+	err := p.respond(OpStopReturn, s.InvokeId, ServiceActive, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			return (&Acknowledgement{
 				Credentials: creds,
@@ -682,7 +753,7 @@ func (p *ServiceProvider) HandleScheduleStatusReportInvocation(
 	if state == ServiceUnbound {
 		return ErrNotBound
 	}
-	return p.respond(OpScheduleStatusReportReturn, state, now, randomNumber,
+	return p.respond(OpScheduleStatusReportReturn, s.InvokeId, state, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			return (&ScheduleStatusReportReturn{
 				Credentials:        creds,
@@ -709,7 +780,7 @@ func (p *ServiceProvider) HandleGetParameterInvocation(
 	if state == ServiceUnbound {
 		return ErrNotBound
 	}
-	return p.respond(OpGetParameterReturn, state, now, randomNumber,
+	return p.respond(OpGetParameterReturn, g.InvokeId, state, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			answer := &GetParameterReturn{
 				Credentials:        creds,

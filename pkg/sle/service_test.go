@@ -419,6 +419,33 @@ func TestOutstandingTracksConfirmedOperations(t *testing.T) {
 	}
 }
 
+// TestServiceUserRefusesInvokeIdStillOutstanding covers the user side of B5:
+// InvokeId is 16 bits, so nextInvokeId wraps after 65,536 confirmed
+// operations. If the identifier it would assign next is still awaiting its
+// return, invoke must refuse locally with a diagnosable cause rather than
+// send a PDU the provider would answer with the (misleadingly remote-looking)
+// 'duplicate invoke ID' diagnostic.
+func TestServiceUserRefusesInvokeIdStillOutstanding(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	bindTo(t, user, provider, now)
+	startTo(t, user, provider, now)
+
+	// STOP is valid throughout state 3 and invoking it does not itself change
+	// state, so it can be invoked repeatedly. Never handling its return keeps
+	// every identifier in `awaiting`, so the 65,537th invocation reuses
+	// identifier 0, which is still outstanding from the very first call.
+	const wrapAt = 65536
+	for i := 0; i < wrapAt; i++ {
+		if _, err := user.Stop(now, 1); err != nil {
+			t.Fatalf("Stop() at iteration %d = %v, want nil", i, err)
+		}
+	}
+	if _, err := user.Stop(now, 1); !errors.Is(err, sle.ErrInvokeIdExhausted) {
+		t.Fatalf("Stop() at iteration %d = %v, want ErrInvokeIdExhausted", wrapAt, err)
+	}
+}
+
 // TestServiceRejectsMismatchedRole catches the wiring mistake of handing a
 // provider association to a user machine.
 func TestServiceRejectsMismatchedRole(t *testing.T) {
