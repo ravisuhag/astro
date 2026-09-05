@@ -1,6 +1,10 @@
 package cfdp
 
-import "sync"
+import (
+	"slices"
+	"sort"
+	"sync"
+)
 
 // segment is one contiguous run of received file data, half-open [start, end).
 type segment struct {
@@ -40,11 +44,26 @@ type ReceiverConfig struct {
 	// that much memory. Zero means DefaultMaxFileSize. Set it to what the
 	// mission actually transfers.
 	MaxFileSize uint64
+
+	// MaxSegments bounds how many distinct, non-adjacent byte ranges this
+	// receiver will track in its received-data set at once. Two ranges that
+	// touch or overlap merge into one and never count against this; only a
+	// genuinely new, separate range does. Nothing in the standard bounds how
+	// many such ranges a peer can force the receiver to hold -- file data
+	// arriving with a lost octet between every segment never merges -- so
+	// without a cap recordSegment's work and the eventual NAK would both
+	// grow without bound. Zero means DefaultMaxSegments.
+	MaxSegments int
 }
 
 // DefaultMaxFileSize bounds a transfer when ReceiverConfig leaves MaxFileSize
 // at zero: 64 MiB, matching ltp.DefaultMaxBlockSize.
 const DefaultMaxFileSize = 64 << 20
+
+// DefaultMaxSegments bounds a transfer when ReceiverConfig leaves MaxSegments
+// at zero: 65536, comfortably above what an ordinary lossy transfer
+// fragments into while keeping the received-data set cheap to search.
+const DefaultMaxSegments = 65536
 
 // Receiver drives one incoming CFDP transaction.
 //
@@ -125,6 +144,9 @@ func NewReceiver(fs Filestore, config ReceiverConfig) *Receiver {
 	if config.MaxFileSize == 0 {
 		config.MaxFileSize = DefaultMaxFileSize
 	}
+	if config.MaxSegments == 0 {
+		config.MaxSegments = DefaultMaxSegments
+	}
 	return &Receiver{
 		config:    config,
 		fs:        fs,
@@ -166,43 +188,54 @@ func (r *Receiver) matchesTransaction(h *PDUHeader) bool {
 }
 
 // recordSegment folds a new byte range into the received set, merging it with
-// any neighbours so the set stays sorted and non-overlapping.
-func (r *Receiver) recordSegment(start, end uint64) {
+// any neighbours that touch or overlap it. r.received stays sorted by start
+// (and, since entries never touch or overlap each other, by end too), so a
+// binary search finds the run of neighbours to merge in O(log n), and
+// slices.Delete/slices.Insert splice the result in without rebuilding the
+// whole slice the way the previous implementation did on every call.
+//
+// A range that touches or overlaps something already held only ever shrinks
+// or holds steady the number of distinct entries. Only a genuinely new,
+// separate range grows it -- that is the case MaxSegments bounds, since
+// nothing in the standard stops a peer sending only non-adjacent ranges
+// (S10) and making this list grow without limit.
+func (r *Receiver) recordSegment(start, end uint64) error {
 	if end <= start {
-		return
+		return nil
 	}
 
-	merged := make([]segment, 0, len(r.received)+1)
-	added := false
+	// lo is the first existing segment that could touch or overlap
+	// [start, end) from the left: the first whose end reaches at least as
+	// far as start.
+	lo := sort.Search(len(r.received), func(i int) bool {
+		return r.received[i].end >= start
+	})
+	// hi is the first segment past that run: the first, at or after lo,
+	// whose start is beyond end.
+	hi := lo + sort.Search(len(r.received)-lo, func(i int) bool {
+		return r.received[lo+i].start > end
+	})
 
-	for _, s := range r.received {
-		switch {
-		case s.end < start:
-			merged = append(merged, s)
-		case s.start > end:
-			if !added {
-				merged = append(merged, segment{start, end})
-				added = true
-			}
-			merged = append(merged, s)
-		default:
-			// Overlapping or touching: widen the range being inserted.
-			if s.start < start {
-				start = s.start
-			}
-			if s.end > end {
-				end = s.end
-			}
+	for _, s := range r.received[lo:hi] {
+		if s.start < start {
+			start = s.start
+		}
+		if s.end > end {
+			end = s.end
 		}
 	}
-	if !added {
-		merged = append(merged, segment{start, end})
+
+	if hi == lo && len(r.received) >= r.config.MaxSegments {
+		return r.fault(CondFilestoreRejection)
 	}
 
-	r.received = merged
+	r.received = slices.Delete(r.received, lo, hi)
+	r.received = slices.Insert(r.received, lo, segment{start, end})
+
 	if end > r.highWater {
 		r.highWater = end
 	}
+	return nil
 }
 
 // missingWithin returns the sub-ranges of [start, end) not yet received, so a
@@ -564,7 +597,9 @@ func (r *Receiver) storeFileData(fd *FileDataPDU) error {
 		if r.checksum != nil {
 			r.checksum.Update(m.start, chunk)
 		}
-		r.recordSegment(m.start, m.end)
+		if err := r.recordSegment(m.start, m.end); err != nil {
+			return err
+		}
 	}
 	return nil
 }
