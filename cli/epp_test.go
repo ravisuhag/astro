@@ -17,6 +17,7 @@ func encodeEPP(t *testing.T, pid, data string) string {
 }
 
 func TestEPPRoundTripJSON(t *testing.T) {
+	t.Parallel()
 	encoded := encodeEPP(t, "2", "616161")
 
 	out, err := runCLI(t, []byte(encoded), "epp", "decode", "--input", "hex", "--format", "json")
@@ -40,6 +41,7 @@ func TestEPPRoundTripJSON(t *testing.T) {
 }
 
 func TestEPPValidate(t *testing.T) {
+	t.Parallel()
 	encoded := encodeEPP(t, "2", "616161")
 
 	out, err := runCLI(t, []byte(encoded), "epp", "validate", "--input", "hex")
@@ -52,6 +54,7 @@ func TestEPPValidate(t *testing.T) {
 }
 
 func TestEPPStreamThreePackets(t *testing.T) {
+	t.Parallel()
 	stream := encodeEPP(t, "2", "616161") + encodeEPP(t, "6", "626262") + encodeEPP(t, "2", "636363")
 
 	out, err := runCLI(t, []byte(stream), "epp", "stream", "--input", "hex", "--format", "json")
@@ -81,6 +84,7 @@ func TestEPPStreamThreePackets(t *testing.T) {
 }
 
 func TestEPPStreamEmptyInput(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, []byte(""), "epp", "stream", "--input", "hex", "--format", "json")
 	if err != nil {
 		t.Fatalf("stream on empty input failed: %v", err)
@@ -91,6 +95,7 @@ func TestEPPStreamEmptyInput(t *testing.T) {
 }
 
 func TestEPPIdlePacket(t *testing.T) {
+	t.Parallel()
 	// pid 0 is the idle protocol ID; encoding with no --data yields an idle packet.
 	out, err := runCLI(t, nil, "epp", "encode", "--pid", "0", "--format", "hex")
 	if err != nil {
@@ -113,6 +118,7 @@ func TestEPPIdlePacket(t *testing.T) {
 }
 
 func TestEPPInspect(t *testing.T) {
+	t.Parallel()
 	encoded := encodeEPP(t, "2", "616161")
 
 	out, err := runCLI(t, []byte(encoded), "epp", "inspect", "--input", "hex")

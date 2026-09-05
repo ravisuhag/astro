@@ -24,6 +24,7 @@ func housekeeping(cycles int) []byte {
 
 // The property that matters: compress and decompress here are inverses.
 func TestRHCRoundTripIsExact(t *testing.T) {
+	t.Parallel()
 	original := housekeeping(40)
 
 	listing, err := runCLI(t, []byte(hex.EncodeToString(original)), "rhc", "compress",
@@ -55,6 +56,7 @@ func TestRHCRoundTripIsExact(t *testing.T) {
 // Housekeeping that barely changes should compress hard, or the coder is not
 // doing what it exists to do.
 func TestRHCCompressesStaticHousekeeping(t *testing.T) {
+	t.Parallel()
 	listing, err := runCLI(t, []byte(hex.EncodeToString(housekeeping(40))), "rhc", "compress",
 		"--input", "hex", "--vector-bits", "64")
 	if err != nil {
@@ -84,6 +86,7 @@ func TestRHCCompressesStaticHousekeeping(t *testing.T) {
 // The vector length has to match on both sides. It is not in the listing,
 // because the standard defines no container that would carry it.
 func TestRHCVectorBitsMustMatch(t *testing.T) {
+	t.Parallel()
 	listing, err := runCLI(t, []byte(hex.EncodeToString(housekeeping(8))), "rhc", "compress",
 		"--input", "hex", "--vector-bits", "64")
 	if err != nil {
@@ -105,6 +108,7 @@ func TestRHCVectorBitsMustMatch(t *testing.T) {
 // Input that is not a whole number of vectors means the flag and the data
 // disagree about the vector length.
 func TestRHCRejectsPartialVector(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("a5000000"), "rhc", "compress",
 		"--input", "hex", "--vector-bits", "64"); err == nil {
 		t.Error("compress accepted four octets as 64-bit vectors")
@@ -112,6 +116,7 @@ func TestRHCRejectsPartialVector(t *testing.T) {
 }
 
 func TestRHCRejectsBadFlags(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][]string{
 		"no vector bits":      {"rhc", "compress", "--input", "hex", "--vector-bits", "0"},
 		"robustness too high": {"rhc", "compress", "--input", "hex", "--vector-bits", "64", "--robustness", "9"},
@@ -125,6 +130,7 @@ func TestRHCRejectsBadFlags(t *testing.T) {
 }
 
 func TestRHCEmptyInput(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte(""), "rhc", "compress",
 		"--input", "hex", "--vector-bits", "64"); err == nil {
 		t.Error("compress accepted empty input")
@@ -133,6 +139,7 @@ func TestRHCEmptyInput(t *testing.T) {
 
 // A malformed listing is reported rather than fed to the decompressor.
 func TestRHCDecompressRejectsMalformedListing(t *testing.T) {
+	t.Parallel()
 	for name, listing := range map[string]string{
 		"no bit length":           "a5b6c7\n",
 		"bit length not a number": "many a5b6c7\n",
@@ -152,6 +159,7 @@ func TestRHCDecompressRejectsMalformedListing(t *testing.T) {
 // parseListingLine is the listing parser, so its contract is worth pinning
 // directly as well as through the commands.
 func TestParseListingLine(t *testing.T) {
+	t.Parallel()
 	bitLen, octets, err := parseListingLine("18 f14280")
 	if err != nil {
 		t.Fatalf("parseListingLine: %v", err)

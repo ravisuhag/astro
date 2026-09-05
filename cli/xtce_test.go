@@ -78,6 +78,7 @@ func writeXTCE(t *testing.T, content string) string {
 }
 
 func TestXTCEValidate(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, nil, "xtce", "validate", path)
@@ -98,6 +99,7 @@ func TestXTCEValidate(t *testing.T) {
 // A database that breaks a semantic rule the schema cannot express must fail
 // rather than load quietly.
 func TestXTCEValidateRejectsBadDatabase(t *testing.T) {
+	t.Parallel()
 	broken := strings.Replace(testXTCE,
 		`<Parameter name="Type" parameterTypeRef="U8"/>`,
 		`<Parameter name="Type" parameterTypeRef="NoSuchType"/>`, 1)
@@ -109,6 +111,7 @@ func TestXTCEValidateRejectsBadDatabase(t *testing.T) {
 }
 
 func TestXTCEValidateMissingFile(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, nil, "xtce", "validate", "no-such-file.xml"); err == nil {
 		t.Error("validate accepted a missing file")
 	}
@@ -117,6 +120,7 @@ func TestXTCEValidateMissingFile(t *testing.T) {
 // The names list prints must be the qualified ones the other subcommands
 // take, or the output cannot be used as input.
 func TestXTCEListPrintsQualifiedNames(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, nil, "xtce", "list", path, "--kind", "containers")
@@ -135,6 +139,7 @@ func TestXTCEListPrintsQualifiedNames(t *testing.T) {
 }
 
 func TestXTCEListJSON(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, nil, "xtce", "list", path, "--format", "json")
@@ -155,6 +160,7 @@ func TestXTCEListJSON(t *testing.T) {
 }
 
 func TestXTCEListKindFilter(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, nil, "xtce", "list", path, "--kind", "parameters")
@@ -167,6 +173,7 @@ func TestXTCEListKindFilter(t *testing.T) {
 }
 
 func TestXTCEListRejectsUnknownKind(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, nil, "xtce", "list", path, "--kind", "widgets"); err == nil {
@@ -177,6 +184,7 @@ func TestXTCEListRejectsUnknownKind(t *testing.T) {
 // The layout is the field map a decode reads against, so the offsets and
 // widths have to be right.
 func TestXTCELayout(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, nil, "xtce", "layout", path, "/Sat/Housekeeping", "--format", "json")
@@ -219,6 +227,7 @@ func TestXTCELayout(t *testing.T) {
 }
 
 func TestXTCELayoutUnknownContainer(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, nil, "xtce", "layout", path, "/Sat/Nope"); err == nil {
@@ -229,6 +238,7 @@ func TestXTCELayoutUnknownContainer(t *testing.T) {
 // Decoding gives the engineering values by default: a calibrated number and
 // an enumeration label rather than the counts on the wire.
 func TestXTCEDecodeCalibrated(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	// Type 1, Mode 1 (NOMINAL), Battery 250 -> 25.0 volts.
@@ -249,6 +259,7 @@ func TestXTCEDecodeCalibrated(t *testing.T) {
 
 // With --raw the same packet gives the counts instead.
 func TestXTCEDecodeRaw(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, []byte("0101fa"), "xtce", "decode", path,
@@ -267,6 +278,7 @@ func TestXTCEDecodeRaw(t *testing.T) {
 }
 
 func TestXTCEDecodeText(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, []byte("0101fa"), "xtce", "decode", path,
@@ -283,6 +295,7 @@ func TestXTCEDecodeText(t *testing.T) {
 }
 
 func TestXTCEDecodeRequiresContainer(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, []byte("0101fa"), "xtce", "decode", path, "--input", "hex"); err == nil {
@@ -293,6 +306,7 @@ func TestXTCEDecodeRequiresContainer(t *testing.T) {
 // A packet too short for the container is reported rather than decoded into
 // whatever happens to be there.
 func TestXTCEDecodeShortPacket(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, []byte("01"), "xtce", "decode", path,
@@ -304,6 +318,7 @@ func TestXTCEDecodeShortPacket(t *testing.T) {
 // match is the ground station's job: work out what the packet is from its
 // own contents.
 func TestXTCEMatchPicksTheContainer(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	for _, tc := range []struct {
@@ -325,6 +340,7 @@ func TestXTCEMatchPicksTheContainer(t *testing.T) {
 }
 
 func TestXTCEMatchDecodes(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	out, err := runCLI(t, []byte("0101fa"), "xtce", "match", path,
@@ -343,6 +359,7 @@ func TestXTCEMatchDecodes(t *testing.T) {
 // A packet that satisfies nothing is reported. It is a normal thing for a
 // ground station to see, but the caller has to be told.
 func TestXTCEMatchNoMatch(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, []byte("09ff"), "xtce", "match", path,
@@ -352,6 +369,7 @@ func TestXTCEMatchNoMatch(t *testing.T) {
 }
 
 func TestXTCEMatchRequiresRoot(t *testing.T) {
+	t.Parallel()
 	path := writeXTCE(t, testXTCE)
 
 	if _, err := runCLI(t, []byte("0101fa"), "xtce", "match", path, "--input", "hex"); err == nil {

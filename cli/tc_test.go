@@ -7,6 +7,7 @@ import (
 )
 
 func TestTCRoundTripJSON(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "tc", "encode",
 		"--scid", "42", "--vcid", "3", "--seq-num", "7", "--data", "0102030405")
 	if err != nil {
@@ -38,6 +39,7 @@ func TestTCRoundTripJSON(t *testing.T) {
 }
 
 func TestTCBypassAndControlFlags(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		flags       []string
@@ -81,6 +83,7 @@ func TestTCBypassAndControlFlags(t *testing.T) {
 }
 
 func TestTCInspect(t *testing.T) {
+	t.Parallel()
 	encoded := encodeTCFrameHex(t)
 
 	out, err := runCLI(t, []byte(encoded), "tc", "inspect", "--input", "hex")

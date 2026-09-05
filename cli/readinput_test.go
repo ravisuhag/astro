@@ -13,6 +13,7 @@ import (
 const validSPPHex = "0064c000000468656c6c6f"
 
 func TestReadInputHexVariants(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		stdin   string
@@ -51,6 +52,7 @@ func TestReadInputHexVariants(t *testing.T) {
 }
 
 func TestReadInputBinary(t *testing.T) {
+	t.Parallel()
 	raw, err := hex.DecodeString(validSPPHex)
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +67,7 @@ func TestReadInputBinary(t *testing.T) {
 }
 
 func TestReadInputFromFileArg(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	hexPath := filepath.Join(dir, "packet.hex")
@@ -97,6 +100,7 @@ func TestReadInputFromFileArg(t *testing.T) {
 }
 
 func TestReadInputMissingFile(t *testing.T) {
+	t.Parallel()
 	_, err := runCLI(t, nil, "spp", "decode", filepath.Join(t.TempDir(), "nope.hex"))
 	if err == nil {
 		t.Fatal("expected an error for a missing file, got nil")

@@ -7,6 +7,7 @@ import (
 )
 
 func TestUSDLRoundTripWithOCF(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "usdl", "encode",
 		"--scid", "42", "--data", "0102030405", "--ocf", "deadbeef", "--format", "hex")
 	if err != nil {
@@ -37,6 +38,7 @@ func TestUSDLRoundTripWithOCF(t *testing.T) {
 }
 
 func TestUSDLRoundTripCRC16FECF(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "usdl", "encode",
 		"--scid", "42", "--data", "0102030405", "--format", "hex")
 	if err != nil {
@@ -64,6 +66,7 @@ func TestUSDLRoundTripCRC16FECF(t *testing.T) {
 }
 
 func TestUSDLRoundTripVCFCount(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "usdl", "encode",
 		"--scid", "42", "--data", "0102", "--vcf-len", "2", "--vcf-count", "258", "--format", "hex")
 	if err != nil {
@@ -86,6 +89,7 @@ func TestUSDLRoundTripVCFCount(t *testing.T) {
 }
 
 func TestUSDLInspect(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "usdl", "encode",
 		"--scid", "42", "--data", "0102030405", "--format", "hex")
 	if err != nil {

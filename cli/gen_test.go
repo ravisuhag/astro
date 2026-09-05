@@ -6,6 +6,7 @@ import (
 )
 
 func TestGenNegativeSize(t *testing.T) {
+	t.Parallel()
 	// Used to panic with a raw Go stack trace from make([]byte, -1).
 	_, err := runCLI(t, nil, "spp", "gen", "--size=-1")
 	if err == nil {
@@ -17,6 +18,7 @@ func TestGenNegativeSize(t *testing.T) {
 }
 
 func TestGenOversize(t *testing.T) {
+	t.Parallel()
 	_, err := runCLI(t, nil, "spp", "gen", "--size", "20000000")
 	if err == nil {
 		t.Fatal("expected an error for oversized --size, got nil")
@@ -27,6 +29,7 @@ func TestGenOversize(t *testing.T) {
 }
 
 func TestGenNegativeCount(t *testing.T) {
+	t.Parallel()
 	_, err := runCLI(t, nil, "spp", "gen", "--count=-1")
 	if err == nil {
 		t.Fatal("expected an error for negative --count, got nil")
@@ -37,6 +40,7 @@ func TestGenNegativeCount(t *testing.T) {
 }
 
 func TestGenTypeCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	// spp encode accepted --type TM while spp gen rejected it.
 	out, err := runCLI(t, nil, "spp", "gen", "--type", "TM", "--count", "1", "--format", "hex")
 	if err != nil {
@@ -48,6 +52,7 @@ func TestGenTypeCaseInsensitive(t *testing.T) {
 }
 
 func TestGenOutputIsDecodable(t *testing.T) {
+	t.Parallel()
 	// Each gen command emits one hex unit per line; feed every line back
 	// through that protocol's own decoder.
 	tests := []struct {
@@ -90,6 +95,7 @@ func TestGenOutputIsDecodable(t *testing.T) {
 }
 
 func TestGenCADUAndCLTUUnwrap(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		gen    []string
@@ -124,6 +130,7 @@ func TestGenCADUAndCLTUUnwrap(t *testing.T) {
 }
 
 func TestGenUnknownOutputFormat(t *testing.T) {
+	t.Parallel()
 	// writeGenOutput rejects anything but bin and hex.
 	_, err := runCLI(t, nil, "spp", "gen", "--count", "1", "--format", "yaml")
 	if err == nil {
@@ -135,6 +142,7 @@ func TestGenUnknownOutputFormat(t *testing.T) {
 }
 
 func TestGenZeroCount(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "spp", "gen", "--count", "0", "--format", "hex")
 	if err != nil {
 		t.Fatalf("gen --count 0 failed: %v", err)

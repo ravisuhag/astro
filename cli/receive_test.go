@@ -64,6 +64,7 @@ func frame(vcid, count, cycle byte, usage bool) []byte {
 // A frame that will not decode is reported and skipped, and the scan carries
 // on. One corrupt frame in a long capture must not end the run.
 func TestGapScannerSkipsUndecodableFrames(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0)
 	out, errOut := scan(t, proto,
 		frame(0, 0, 0, false),
@@ -86,6 +87,7 @@ func TestGapScannerSkipsUndecodableFrames(t *testing.T) {
 // not report a gap. A receiver joining a pass in progress would otherwise
 // report the whole counter as missing.
 func TestGapScannerFirstFrameIsNotAGap(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0)
 	out, _ := scan(t, proto, frame(0, 200, 0, false))
 
@@ -97,6 +99,7 @@ func TestGapScannerFirstFrameIsNotAGap(t *testing.T) {
 // Each virtual channel counts separately, so interleaving two channels is not
 // a gap on either.
 func TestGapScannerTracksChannelsApart(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0)
 	out, _ := scan(t, proto,
 		frame(1, 0, 0, false),
@@ -112,6 +115,7 @@ func TestGapScannerTracksChannelsApart(t *testing.T) {
 
 // The gap is a count of missing frames, measured modulo the field width.
 func TestGapScannerSizesTheGap(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0)
 	out, _ := scan(t, proto,
 		frame(1, 10, 0, false),
@@ -129,6 +133,7 @@ func TestGapScannerSizesTheGap(t *testing.T) {
 // With the cycle in use the count and cycle behave as one wider counter, so a
 // wrap of the count with the cycle stepping is contiguous rather than a gap.
 func TestGapScannerFoldsTheCycleOnWrap(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0x0F)
 	out, _ := scan(t, proto,
 		frame(1, 254, 0, true),
@@ -146,6 +151,7 @@ func TestGapScannerFoldsTheCycleOnWrap(t *testing.T) {
 // a count that repeats after the cycle steps must read as a full lap missing,
 // which is what proves the cycle is actually in the arithmetic.
 func TestGapScannerCycleWidensTheCounter(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0x0F)
 	out, _ := scan(t, proto,
 		frame(1, 5, 0, true),
@@ -164,6 +170,7 @@ func TestGapScannerCycleWidensTheCounter(t *testing.T) {
 // whose usage flag flips mid-pass is reported and the counter restarted,
 // rather than a gap being measured against the wrong modulus.
 func TestGapScannerReportsCycleUsageChange(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0x0F)
 	out, errOut := scan(t, proto,
 		frame(1, 10, 0, false),
@@ -184,6 +191,7 @@ func TestGapScannerReportsCycleUsageChange(t *testing.T) {
 // A protocol with no master channel count must not report master channel
 // gaps. AOS is the case: its header has no such field.
 func TestGapScannerSkipsMasterChannelWhenAbsent(t *testing.T) {
+	t.Parallel()
 	proto := testProtocol(0xFF, 0, 0)
 	out, _ := scan(t, proto,
 		frame(1, 10, 0, false),

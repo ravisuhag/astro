@@ -46,6 +46,7 @@ func tmStream(t *testing.T, frames ...[]byte) (string, int) {
 }
 
 func TestTMRoundTripJSON(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "tm", "encode",
 		"--scid", "42", "--vcid", "1", "--data", "68656c6c6f")
 	if err != nil {
@@ -71,6 +72,7 @@ func TestTMRoundTripJSON(t *testing.T) {
 }
 
 func TestTMGapsContiguous(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	stream, frameLen := tmStream(t,
 		buildTMFrame(t, 42, 0, 0, 0, payload),
@@ -89,6 +91,7 @@ func TestTMGapsContiguous(t *testing.T) {
 }
 
 func TestTMGapsDetectsSkippedFrame(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	// Counters jump 1 -> 3 on both the master and virtual channel.
 	stream, frameLen := tmStream(t,
@@ -122,6 +125,7 @@ func TestTMGapsDetectsSkippedFrame(t *testing.T) {
 // forward, not the long way round. sdl.GapCounter does the modular
 // arithmetic; this checks the CLI actually routes through it.
 func TestTMGapsCountsMissingFramesAcrossWrap(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	// 254 -> 255 -> 1 loses only the frame numbered 0.
 	stream, frameLen := tmStream(t,
@@ -143,6 +147,7 @@ func TestTMGapsCountsMissingFramesAcrossWrap(t *testing.T) {
 // Counts from two spacecraft are unrelated, so they must be tracked apart.
 // Interleaving them used to read as a gap on every frame.
 func TestTMGapsSeparatesSpacecraft(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	stream, frameLen := tmStream(t,
 		buildTMFrame(t, 42, 0, 0, 0, payload),
@@ -168,6 +173,7 @@ func TestTMGapsSeparatesSpacecraft(t *testing.T) {
 // variable-length packets gives up after 64 octets of header probing, so
 // fixed-length frames take their own reader.
 func TestTMGapsLongFrames(t *testing.T) {
+	t.Parallel()
 	payload := make([]byte, 300)
 	stream, frameLen := tmStream(t,
 		buildTMFrame(t, 42, 0, 0, 0, payload),
@@ -188,6 +194,7 @@ func TestTMGapsLongFrames(t *testing.T) {
 }
 
 func TestTMDemuxFiltersByVCID(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	// Two frames on VC 1, one on VC 2, interleaved.
 	stream, frameLen := tmStream(t,
@@ -218,6 +225,7 @@ func TestTMDemuxFiltersByVCID(t *testing.T) {
 }
 
 func TestTMDemuxNoMatches(t *testing.T) {
+	t.Parallel()
 	payload := []byte("frame-payload")
 	stream, frameLen := tmStream(t, buildTMFrame(t, 42, 1, 0, 0, payload))
 
@@ -232,6 +240,7 @@ func TestTMDemuxNoMatches(t *testing.T) {
 }
 
 func TestTMSplitFramesNonMultipleLength(t *testing.T) {
+	t.Parallel()
 	// Documents today's behavior: a partial trailing frame is dropped with a
 	// stderr warning and the command still succeeds.
 	payload := []byte("frame-payload")
@@ -251,6 +260,7 @@ func TestTMSplitFramesNonMultipleLength(t *testing.T) {
 }
 
 func TestTMGapsEmptyInput(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, []byte(""), "tm", "gaps", "--input", "hex", "--frame-len", "128")
 	if err != nil {
 		t.Fatalf("gaps on empty input failed: %v", err)

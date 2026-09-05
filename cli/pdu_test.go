@@ -58,6 +58,7 @@ func cfdpPDU(t *testing.T, data []byte, withCRC bool) string {
 
 // An EOF directive is decoded down to its fields, not left as octets.
 func TestCFDPDecodeEOFDirective(t *testing.T) {
+	t.Parallel()
 	eof := &cfdp.EOFPDU{
 		ConditionCode: cfdp.CondNoError,
 		FileChecksum:  0xDEADBEEF,
@@ -89,6 +90,7 @@ func TestCFDPDecodeEOFDirective(t *testing.T) {
 }
 
 func TestCFDPDecodeNAKDirective(t *testing.T) {
+	t.Parallel()
 	nak := &cfdp.NAKPDU{
 		StartOfScope: 0,
 		EndOfScope:   500,
@@ -117,6 +119,7 @@ func TestCFDPDecodeNAKDirective(t *testing.T) {
 // File data is not a directive, so it is reported as octets, and labelled as
 // uninterpreted rather than left looking decoded.
 func TestCFDPDecodeFileData(t *testing.T) {
+	t.Parallel()
 	pdu := &cfdp.PDU{
 		Header: &cfdp.PDUHeader{
 			IsFileData:     true,
@@ -151,6 +154,7 @@ func TestCFDPDecodeFileData(t *testing.T) {
 // fails rather than decoding to something plausible. Clause 4.1.2 requires the
 // receiver to discard it.
 func TestCFDPDecodeRejectsABadCRC(t *testing.T) {
+	t.Parallel()
 	eof := &cfdp.EOFPDU{ConditionCode: cfdp.CondNoError, FileChecksum: 1, FileSize: 8}
 	body, err := eof.Encode(false)
 	if err != nil {
@@ -176,6 +180,7 @@ func TestCFDPDecodeRejectsABadCRC(t *testing.T) {
 }
 
 func TestCFDPDecodeRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("00"), "cfdp", "decode", "--input", "hex"); err == nil {
 		t.Error("decode accepted one octet as a PDU")
 	}
@@ -183,6 +188,7 @@ func TestCFDPDecodeRejectsRubbish(t *testing.T) {
 
 // LTP: each segment type has its own content, and the header says which.
 func TestLTPDecodeSegments(t *testing.T) {
+	t.Parallel()
 	for name, segment := range map[string]*ltp.Segment{
 		"red data": {
 			Header: &ltp.Header{Type: ltp.TypeRedData, SessionID: ltp.SessionID{EngineID: 1, SessionNumber: 9}},
@@ -229,6 +235,7 @@ func TestLTPDecodeSegments(t *testing.T) {
 // The session identifier has to survive into the summary, or the decode is
 // not telling the operator which session they are looking at.
 func TestLTPDecodeCarriesTheSession(t *testing.T) {
+	t.Parallel()
 	segment := &ltp.Segment{
 		Header: &ltp.Header{Type: ltp.TypeRedData, SessionID: ltp.SessionID{EngineID: 42, SessionNumber: 77}},
 		Data:   &ltp.DataSegment{ClientServiceID: 1, Offset: 0, Data: []byte("x")},
@@ -248,6 +255,7 @@ func TestLTPDecodeCarriesTheSession(t *testing.T) {
 }
 
 func TestLTPDecodeRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("ff"), "ltp", "decode", "--input", "hex"); err == nil {
 		t.Error("decode accepted one octet as a segment")
 	}
@@ -255,6 +263,7 @@ func TestLTPDecodeRejectsRubbish(t *testing.T) {
 
 // BP: a bundle round trips through the CLI decoder.
 func TestBPDecodeBundle(t *testing.T) {
+	t.Parallel()
 	primary := &bp.PrimaryBlock{
 		CRCType:     bp.CRC32C,
 		Destination: bp.IPN(2, 1),
@@ -292,6 +301,7 @@ func TestBPDecodeBundle(t *testing.T) {
 }
 
 func TestBPDecodeRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("ffffff"), "bp", "decode", "--input", "hex"); err == nil {
 		t.Error("decode accepted rubbish as a bundle")
 	}
@@ -301,6 +311,7 @@ func TestBPDecodeRejectsRubbish(t *testing.T) {
 // service has to be given. Decoding the same octets as two services must
 // give two different answers, which is the whole reason the flag exists.
 func TestSLEDecodeNeedsTheService(t *testing.T) {
+	t.Parallel()
 	// A transfer-buffer PDU tag under RAF.
 	content := []byte{0x00}
 	encoded := sle.AppendPDU(nil, 8, content)
@@ -333,6 +344,7 @@ func TestSLEDecodeNeedsTheService(t *testing.T) {
 }
 
 func TestSLEDecodeRequiresService(t *testing.T) {
+	t.Parallel()
 	encoded := sle.AppendPDU(nil, 8, []byte{0x00})
 
 	if _, err := runCLI(t, []byte(hex.EncodeToString(encoded)), "sle", "decode",
@@ -342,6 +354,7 @@ func TestSLEDecodeRequiresService(t *testing.T) {
 }
 
 func TestSLEDecodeRejectsUnknownService(t *testing.T) {
+	t.Parallel()
 	encoded := sle.AppendPDU(nil, 8, []byte{0x00})
 
 	if _, err := runCLI(t, []byte(hex.EncodeToString(encoded)), "sle", "decode",
@@ -351,6 +364,7 @@ func TestSLEDecodeRejectsUnknownService(t *testing.T) {
 }
 
 func TestSLEDecodeRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("00"), "sle", "decode",
 		"--service", "raf", "--input", "hex"); err == nil {
 		t.Error("decode accepted one octet as an SLE PDU")
@@ -360,6 +374,7 @@ func TestSLEDecodeRejectsRubbish(t *testing.T) {
 // Every one of these commands takes the same two flags, so an unknown output
 // format has to fail the same way in all of them.
 func TestPDUCommandsRejectUnknownFormat(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][]string{
 		"cfdp": {"cfdp", "decode", "--input", "hex", "--format", "yaml"},
 		"ltp":  {"ltp", "decode", "--input", "hex", "--format", "yaml"},

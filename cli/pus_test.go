@@ -29,6 +29,7 @@ func decodePUSJSON(t *testing.T, out string) pusMessage {
 }
 
 func TestPUSTCRoundTrip(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tc", "--service", "3", "--subtype", "1", "--data", "0a0b0c")
 	if err != nil {
@@ -55,6 +56,7 @@ func TestPUSTCRoundTrip(t *testing.T) {
 
 // A TM report is time tagged, so the tag has to survive the round trip.
 func TestPUSTMRoundTripKeepsTheTimeTag(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tm", "--service", "1", "--subtype", "1",
 		"--time-tag", "2026-09-01T12:00:00Z", "--data", "0064c000")
@@ -75,6 +77,7 @@ func TestPUSTMRoundTripKeepsTheTimeTag(t *testing.T) {
 // The point of going through the registry: a body whose service is
 // implemented is decoded, not just shown as octets.
 func TestPUSDecodesAKnownBody(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tm", "--service", "1", "--subtype", "1",
 		"--time-tag", "2026-09-01T12:00:00Z", "--data", "0064c000")
@@ -105,6 +108,7 @@ func TestPUSDecodesAKnownBody(t *testing.T) {
 // reason, not guessed at. Silently showing octets as if understood is the
 // failure worth avoiding.
 func TestPUSUnknownBodyIsReportedNotGuessed(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tc", "--service", "200", "--subtype", "9", "--data", "deadbeef")
 	if err != nil {
@@ -132,6 +136,7 @@ func TestPUSUnknownBodyIsReportedNotGuessed(t *testing.T) {
 // The text output says outright that a body was not decoded, so nobody reads
 // the octets as an interpretation.
 func TestPUSUnknownBodySaysSoInText(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tc", "--service", "200", "--subtype", "9", "--data", "deadbeef")
 	if err != nil {
@@ -151,6 +156,7 @@ func TestPUSUnknownBodySaysSoInText(t *testing.T) {
 // The mission-tailorable widths change the header size, so a profile
 // mismatch has to be expressible on the command line.
 func TestPUSProfileChangesHeaderSize(t *testing.T) {
+	t.Parallel()
 	plain, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tc", "--service", "3", "--subtype", "1", "--data", "00")
 	if err != nil {
@@ -173,6 +179,7 @@ func TestPUSProfileChangesHeaderSize(t *testing.T) {
 
 // A TM header with no time field is shorter, and both ends have to agree.
 func TestPUSTimeNone(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tm", "--service", "1", "--subtype", "1",
 		"--time", "none", "--data", "0064c000")
@@ -195,6 +202,7 @@ func TestPUSTimeNone(t *testing.T) {
 // Decoding with the wrong time format reads the body from the wrong offset,
 // which is exactly why the flags exist.
 func TestPUSTimeFormatMismatchChangesTheBody(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pus", "encode",
 		"--direction", "tm", "--service", "1", "--subtype", "1",
 		"--time", "none", "--data", "0064c000")
@@ -216,6 +224,7 @@ func TestPUSTimeFormatMismatchChangesTheBody(t *testing.T) {
 }
 
 func TestPUSServices(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "pus", "services")
 	if err != nil {
 		t.Fatalf("services failed: %v", err)
@@ -233,6 +242,7 @@ func TestPUSServices(t *testing.T) {
 }
 
 func TestPUSServicesJSON(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "pus", "services", "--format", "json")
 	if err != nil {
 		t.Fatalf("services failed: %v", err)
@@ -251,6 +261,7 @@ func TestPUSServicesJSON(t *testing.T) {
 }
 
 func TestPUSRejectsBadFlags(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][]string{
 		"unknown direction": {"pus", "decode", "--direction", "sideways", "--input", "hex"},
 		"unknown time":      {"pus", "decode", "--time", "sundial", "--input", "hex"},
@@ -266,6 +277,7 @@ func TestPUSRejectsBadFlags(t *testing.T) {
 
 // Too few octets for the header is reported rather than read past the end.
 func TestPUSDecodeShortInput(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("20"), "pus", "decode",
 		"--direction", "tc", "--input", "hex"); err == nil {
 		t.Error("decode accepted an input too short for the header")

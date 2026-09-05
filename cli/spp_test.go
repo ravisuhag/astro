@@ -7,6 +7,7 @@ import (
 )
 
 func TestSPPRoundTripJSON(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "spp", "encode",
 		"--apid", "100", "--type", "tm", "--data", "68656c6c6f")
 	if err != nil {
@@ -35,6 +36,7 @@ func TestSPPRoundTripJSON(t *testing.T) {
 }
 
 func TestSPPValidateWithCRC(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "spp", "encode",
 		"--apid", "100", "--type", "tm", "--data", "616161", "--crc")
 	if err != nil {
@@ -65,6 +67,7 @@ func encodeSPP(t *testing.T, apid, data string) string {
 }
 
 func TestSPPStreamThreePackets(t *testing.T) {
+	t.Parallel()
 	stream := encodeSPP(t, "100", "616161") + encodeSPP(t, "200", "626262") + encodeSPP(t, "300", "636363")
 
 	out, err := runCLI(t, []byte(stream), "spp", "stream", "--input", "hex", "--format", "json")
@@ -94,6 +97,7 @@ func TestSPPStreamThreePackets(t *testing.T) {
 }
 
 func TestSPPStreamTrailingBytes(t *testing.T) {
+	t.Parallel()
 	// Documents today's behavior: whole packets are emitted, leftover bytes
 	// produce a warning on stderr and exit 0, not an error. If streaming ever
 	// becomes incremental, this expectation is meant to be revisited.
@@ -109,6 +113,7 @@ func TestSPPStreamTrailingBytes(t *testing.T) {
 }
 
 func TestSPPStreamTruncatedFinalPacket(t *testing.T) {
+	t.Parallel()
 	// A final packet cut mid-body is dropped with a stderr warning, same as
 	// trailing garbage. Observed behavior, frozen deliberately.
 	full := encodeSPP(t, "300", "636363")
@@ -124,6 +129,7 @@ func TestSPPStreamTruncatedFinalPacket(t *testing.T) {
 }
 
 func TestSPPStreamEmptyInput(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, []byte(""), "spp", "stream", "--input", "hex", "--format", "json")
 	if err != nil {
 		t.Fatalf("stream on empty input failed: %v", err)
@@ -134,6 +140,7 @@ func TestSPPStreamEmptyInput(t *testing.T) {
 }
 
 func TestSPPInspect(t *testing.T) {
+	t.Parallel()
 	encoded := encodeSPP(t, "100", "616161")
 
 	out, err := runCLI(t, []byte(encoded), "spp", "inspect", "--input", "hex")

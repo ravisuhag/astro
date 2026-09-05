@@ -14,6 +14,7 @@ func fixedSizer(n int) UnitSizer {
 }
 
 func TestStreamUnitsSplitsFixedLengthUnits(t *testing.T) {
+	t.Parallel()
 	input := bytes.Repeat([]byte{0xAA, 0xBB, 0xCC, 0xDD}, 5)
 
 	var got [][]byte
@@ -37,6 +38,7 @@ func TestStreamUnitsSplitsFixedLengthUnits(t *testing.T) {
 }
 
 func TestStreamUnitsReportsTrailingOctets(t *testing.T) {
+	t.Parallel()
 	// Two whole units and three octets left over.
 	input := append(bytes.Repeat([]byte{0x01, 0x02, 0x03, 0x04}, 2), 0xFF, 0xFE, 0xFD)
 
@@ -57,6 +59,7 @@ func TestStreamUnitsReportsTrailingOctets(t *testing.T) {
 }
 
 func TestStreamUnitsEmptyInput(t *testing.T) {
+	t.Parallel()
 	called := false
 	trailingCalled := false
 	err := streamUnits(bytes.NewReader(nil), fixedSizer(4), 4,
@@ -76,6 +79,7 @@ func TestStreamUnitsEmptyInput(t *testing.T) {
 // TestStreamUnitsGrowsToFindLength covers a variable-length header: the sizer
 // cannot answer from one octet and needs a second.
 func TestStreamUnitsGrowsToFindLength(t *testing.T) {
+	t.Parallel()
 	// The second octet carries the length.
 	sizer := func(data []byte) int {
 		if len(data) < 2 {
@@ -98,6 +102,7 @@ func TestStreamUnitsGrowsToFindLength(t *testing.T) {
 }
 
 func TestStreamUnitsRejectsOversizedUnit(t *testing.T) {
+	t.Parallel()
 	sizer := func([]byte) int { return maxStreamUnit + 1 }
 
 	err := streamUnits(bytes.NewReader([]byte{1, 2, 3, 4}), sizer, 1,
@@ -108,6 +113,7 @@ func TestStreamUnitsRejectsOversizedUnit(t *testing.T) {
 }
 
 func TestStreamUnitsPropagatesHandlerError(t *testing.T) {
+	t.Parallel()
 	input := bytes.Repeat([]byte{0x01, 0x02}, 4)
 
 	err := streamUnits(bytes.NewReader(input), fixedSizer(2), 2,
@@ -123,6 +129,7 @@ func TestStreamUnitsPropagatesHandlerError(t *testing.T) {
 // The reader below never reaches EOF until the test allows it, so a
 // read-everything implementation would block here forever.
 func TestStreamUnitsIsIncremental(t *testing.T) {
+	t.Parallel()
 	pipeReader, pipeWriter := io.Pipe()
 	delivered := make(chan int, 4)
 
@@ -162,6 +169,7 @@ func TestStreamUnitsIsIncremental(t *testing.T) {
 }
 
 func TestStreamFixedSplitsOnLength(t *testing.T) {
+	t.Parallel()
 	input := []byte{1, 1, 2, 2, 3, 3}
 	var got [][]byte
 
@@ -182,6 +190,7 @@ func TestStreamFixedSplitsOnLength(t *testing.T) {
 }
 
 func TestStreamFixedReportsTrailingOctets(t *testing.T) {
+	t.Parallel()
 	input := []byte{1, 1, 2}
 	trailing := 0
 
@@ -200,6 +209,7 @@ func TestStreamFixedReportsTrailingOctets(t *testing.T) {
 // most maxUnitHeader octets for a length, which a fixed frame length routinely
 // exceeds; streamFixed is not allowed to inherit that ceiling.
 func TestStreamFixedAcceptsFramesLongerThanAHeader(t *testing.T) {
+	t.Parallel()
 	const size = maxUnitHeader * 4
 	input := bytes.Repeat([]byte{0xA5}, size*2)
 	units := 0
@@ -221,6 +231,7 @@ func TestStreamFixedAcceptsFramesLongerThanAHeader(t *testing.T) {
 }
 
 func TestStreamFixedEmptyInput(t *testing.T) {
+	t.Parallel()
 	err := streamFixed(bytes.NewReader(nil), 4,
 		func([]byte) error {
 			t.Error("a handler ran on empty input")
@@ -235,6 +246,7 @@ func TestStreamFixedEmptyInput(t *testing.T) {
 // moment its last octet arrives, not when the input ends. A
 // read-everything implementation blocks here forever.
 func TestStreamFixedIsIncremental(t *testing.T) {
+	t.Parallel()
 	pipeReader, pipeWriter := io.Pipe()
 	delivered := make(chan int, 2)
 
@@ -277,6 +289,7 @@ func markedStream(noise []byte, size, count int) []byte {
 }
 
 func TestStreamMarkedFindsEveryUnit(t *testing.T) {
+	t.Parallel()
 	const size = 8
 	var offsets []int64
 
@@ -302,6 +315,7 @@ func TestStreamMarkedFindsEveryUnit(t *testing.T) {
 // are not a unit are skipped rather than failed, and the offsets stay
 // absolute.
 func TestStreamMarkedSkipsLeadingNoise(t *testing.T) {
+	t.Parallel()
 	const size = 8
 	noise := []byte{0xDE, 0xAD, 0xBE}
 	var offsets []int64
@@ -331,6 +345,7 @@ func TestStreamMarkedSkipsLeadingNoise(t *testing.T) {
 // Alignment is reacquired at the next marker: junk in the middle of a stream
 // costs the units it overwrote and nothing more.
 func TestStreamMarkedResyncsAfterJunk(t *testing.T) {
+	t.Parallel()
 	const size = 8
 	stream := markedStream(nil, size, 1)
 	stream = append(stream, bytes.Repeat([]byte{0x00}, 5)...)
@@ -353,6 +368,7 @@ func TestStreamMarkedResyncsAfterJunk(t *testing.T) {
 // A marker split across two reads must still be found. The reader keeps the
 // last few octets of each window for exactly this.
 func TestStreamMarkedFindsAMarkerAcrossAReadBoundary(t *testing.T) {
+	t.Parallel()
 	const size = 6
 	// Noise whose length leaves the marker straddling a window edge.
 	stream := markedStream(bytes.Repeat([]byte{0x00}, size-2), size, 1)
@@ -372,6 +388,7 @@ func TestStreamMarkedFindsAMarkerAcrossAReadBoundary(t *testing.T) {
 }
 
 func TestStreamMarkedReportsATruncatedUnit(t *testing.T) {
+	t.Parallel()
 	const size = 8
 	stream := append([]byte{}, testMarker...)
 	stream = append(stream, 0x01)
@@ -392,6 +409,7 @@ func TestStreamMarkedReportsATruncatedUnit(t *testing.T) {
 }
 
 func TestStreamMarkedNoMarkerAtAll(t *testing.T) {
+	t.Parallel()
 	err := streamMarked(bytes.NewReader(bytes.Repeat([]byte{0x00}, 32)), testMarker, 8,
 		func([]byte, int64) error {
 			t.Error("a unit was found in a stream with no marker")
@@ -403,6 +421,7 @@ func TestStreamMarkedNoMarkerAtAll(t *testing.T) {
 }
 
 func TestStreamMarkedRejectsBadArguments(t *testing.T) {
+	t.Parallel()
 	nop := func([]byte, int64) error { return nil }
 
 	if err := streamMarked(bytes.NewReader(nil), nil, 8, nop, nil, nil); err == nil {
@@ -418,6 +437,7 @@ func TestStreamMarkedRejectsBadArguments(t *testing.T) {
 
 // The live-pipe property for marker framing.
 func TestStreamMarkedIsIncremental(t *testing.T) {
+	t.Parallel()
 	const size = 8
 	pipeReader, pipeWriter := io.Pipe()
 	delivered := make(chan int64, 2)
@@ -446,6 +466,7 @@ func TestStreamMarkedIsIncremental(t *testing.T) {
 }
 
 func TestHexFilterStripsLayout(t *testing.T) {
+	t.Parallel()
 	source := strings.NewReader("de ad\nbe\tef\r\n")
 
 	got, err := io.ReadAll(newHexFilter(source))
@@ -460,6 +481,7 @@ func TestHexFilterStripsLayout(t *testing.T) {
 // TestHexFilterHandlesAWholeWhitespaceRead guards the loop that would
 // otherwise return (0, nil), which io.ReadAll treats as no progress.
 func TestHexFilterHandlesAWholeWhitespaceRead(t *testing.T) {
+	t.Parallel()
 	source := strings.NewReader(strings.Repeat(" ", 100) + "abcd")
 
 	got, err := io.ReadAll(newHexFilter(source))
@@ -471,13 +493,24 @@ func TestHexFilterHandlesAWholeWhitespaceRead(t *testing.T) {
 	}
 }
 
+// TestOpenInputRejectsUnknownFormat and TestOpenInputMissingFile call
+// openInput directly rather than through runCLI, but openInput reads the
+// package-global os.Stdin unconditionally on entry (even when it goes on to
+// use a named file instead), so they still take stdinMu to stay race-free
+// against any other test's os.Stdin swap.
 func TestOpenInputRejectsUnknownFormat(t *testing.T) {
+	t.Parallel()
+	stdinMu.Lock()
+	defer stdinMu.Unlock()
 	if _, _, err := openInput(nil, "base64"); err == nil {
 		t.Error("openInput accepted an unknown format")
 	}
 }
 
 func TestOpenInputMissingFile(t *testing.T) {
+	t.Parallel()
+	stdinMu.Lock()
+	defer stdinMu.Unlock()
 	if _, _, err := openInput([]string{"no-such-file.bin"}, "bin"); err == nil {
 		t.Error("openInput accepted a missing file")
 	}

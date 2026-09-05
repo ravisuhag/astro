@@ -9,6 +9,7 @@ import (
 const testTimestamp = "2026-07-12T10:30:00Z"
 
 func TestTimeRoundTripCodecs(t *testing.T) {
+	t.Parallel()
 	// Each binary codec encodes to hex and decodes back to the same instant.
 	for _, codec := range []string{"cuc", "cds", "ccs"} {
 		t.Run(codec, func(t *testing.T) {
@@ -50,6 +51,7 @@ func TestTimeRoundTripCodecs(t *testing.T) {
 }
 
 func TestTimeCUCFineBytes(t *testing.T) {
+	t.Parallel()
 	// Adding fine-time octets must lengthen the code.
 	coarse, err := runCLI(t, nil, "time", "encode",
 		"--codec", "cuc", "--time", testTimestamp, "--fine-bytes", "0", "--format", "hex")
@@ -70,6 +72,7 @@ func TestTimeCUCFineBytes(t *testing.T) {
 }
 
 func TestTimeCCSMonthDayVariant(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "time", "encode",
 		"--codec", "ccs", "--time", testTimestamp, "--month-day", "--format", "hex")
 	if err != nil {
@@ -98,6 +101,7 @@ func TestTimeCCSMonthDayVariant(t *testing.T) {
 }
 
 func TestTimeNow(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "time", "now")
 	if err != nil {
 		t.Fatalf("time now failed: %v", err)
@@ -110,6 +114,7 @@ func TestTimeNow(t *testing.T) {
 }
 
 func TestTimeInspect(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "time", "encode",
 		"--codec", "cuc", "--time", testTimestamp, "--format", "hex")
 	if err != nil {
@@ -126,6 +131,7 @@ func TestTimeInspect(t *testing.T) {
 }
 
 func TestTimeDecodeUnknownCodec(t *testing.T) {
+	t.Parallel()
 	_, err := runCLI(t, []byte("1c80e5cb28"), "time", "decode",
 		"--codec", "sundial", "--input", "hex")
 	if err == nil {

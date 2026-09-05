@@ -17,6 +17,7 @@ func encodeTMFrameHex(t *testing.T) string {
 }
 
 func TestCADUWrapUnwrapRoundTrip(t *testing.T) {
+	t.Parallel()
 	frame := encodeTMFrameHex(t)
 
 	wrapped, err := runCLI(t, []byte(frame), "cadu", "wrap", "--input", "hex")
@@ -40,6 +41,7 @@ func TestCADUWrapUnwrapRoundTrip(t *testing.T) {
 }
 
 func TestCADURandomizeRoundTrip(t *testing.T) {
+	t.Parallel()
 	frame := encodeTMFrameHex(t)
 
 	wrapped, err := runCLI(t, []byte(frame), "cadu", "wrap", "--input", "hex", "--randomize")
@@ -75,6 +77,7 @@ func wrapCADU(t *testing.T) (string, int) {
 }
 
 func TestCADUSyncFindsAllCADUs(t *testing.T) {
+	t.Parallel()
 	cadu, caduLen := wrapCADU(t)
 
 	out, err := runCLI(t, []byte(cadu+cadu), "cadu", "sync",
@@ -94,6 +97,7 @@ func TestCADUSyncFindsAllCADUs(t *testing.T) {
 }
 
 func TestCADUSyncSkipsLeadingJunk(t *testing.T) {
+	t.Parallel()
 	cadu, caduLen := wrapCADU(t)
 
 	// 4 junk bytes before the first ASM; sync must report offset 4.
@@ -111,6 +115,7 @@ func TestCADUSyncSkipsLeadingJunk(t *testing.T) {
 }
 
 func TestCADUSyncJunkOnly(t *testing.T) {
+	t.Parallel()
 	_, caduLen := wrapCADU(t)
 
 	out, err := runCLI(t, []byte("deadbeefdeadbeef"), "cadu", "sync",
@@ -124,6 +129,7 @@ func TestCADUSyncJunkOnly(t *testing.T) {
 }
 
 func TestCADUSyncEmptyInput(t *testing.T) {
+	t.Parallel()
 	_, caduLen := wrapCADU(t)
 
 	out, err := runCLI(t, []byte(""), "cadu", "sync",
@@ -137,6 +143,7 @@ func TestCADUSyncEmptyInput(t *testing.T) {
 }
 
 func TestCADUInspect(t *testing.T) {
+	t.Parallel()
 	cadu, _ := wrapCADU(t)
 
 	out, err := runCLI(t, []byte(cadu), "cadu", "inspect", "--input", "hex")
