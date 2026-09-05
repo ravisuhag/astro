@@ -55,4 +55,15 @@ var (
 	// ErrInvalidPadLength indicates the Pad Length field describes more fill
 	// bytes than the recovered plaintext contains.
 	ErrInvalidPadLength = errors.New("pad length exceeds the recovered data field")
+
+	// ErrInvalidIVCounter indicates a value passed to SetIVCounter does not
+	// match the SA's configured IV width.
+	ErrInvalidIVCounter = errors.New("invalid IV counter: length does not match FieldLengths.IV")
+
+	// ErrNoAntiReplayCounter indicates an SA requests anti-replay protection
+	// (SeqWindow > 0) but carries no counter a receiver could check: both the
+	// IV and the Sequence Number fields are zero octets wide. Such an SA
+	// would authenticate every frame yet enforce nothing, per CCSDS 355.0-B-2
+	// clause 2.3.2.3.
+	ErrNoAntiReplayCounter = errors.New("anti-replay requested but the SA carries no IV or sequence number field to check")
 )
