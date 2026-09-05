@@ -19,7 +19,7 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 |---|---|
 | Test functions | 1559 |
 | Wire test vectors | 246, across 23 packages |
-| Fuzz targets | 58 |
+| Fuzz targets | 77 |
 | Benchmarks | 33 |
 | Numbered PICS items | 500 |
 | Statement coverage | 88.7% mean across 28 packages, 69.4% lowest |
@@ -96,13 +96,13 @@ Two variations are worth naming:
 
 ## Fuzzing
 
-Every decoder has a fuzz target: 57 of them across 20 packages. The property is that arbitrary octets never panic and never allocate from an attacker-controlled length field.
+Every decoder has a fuzz target: 77 of them across 29 packages (`grep -rc '^func Fuzz' --include='*_test.go'` summed over the tree). The property is that arbitrary octets never panic and never allocate from an attacker-controlled length field.
 
 ```bash
 make fuzz-smoke
 ```
 
-runs a short burst over the six frame and packet decoders that see untrusted input first. The other 51 targets run with `go test -fuzz`. See [security](/docs/reference/security) for the resource limits this pairs with.
+runs a short burst (15 seconds each) over 67 of them, covering every frame and packet decoder. The other 10 (extra targets in `pkg/pus`, `pkg/pxsc` and `pkg/xtce`) run only with `go test -fuzz` directly. See [security](/docs/reference/security) for the resource limits this pairs with.
 
 ## What "derived" means in a conformance table
 

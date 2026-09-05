@@ -19,13 +19,13 @@ So the decoders are the attack surface, and this page is what is done about that
 
 ## Every decoder is fuzzed
 
-57 fuzz targets across 20 packages. The property each one asserts is that arbitrary input never panics and never allocates from a length field the input controls.
+77 fuzz targets across 29 packages. The property each one asserts is that arbitrary input never panics and never allocates from a length field the input controls.
 
 ```bash
 make fuzz-smoke
 ```
 
-runs a short burst over the six decoders that see untrusted octets first: `spp`, `epp`, `tcdl`, `tmdl`, `aos`, `usdl`. The remaining 51 run under `go test -fuzz`. A new decoder is expected to arrive with a target, per [the contributing guide](/docs/contribute/adding-a-protocol).
+runs a short burst (15 seconds each) over 67 of them, covering every frame and packet decoder plus most everything else that parses untrusted octets. The remaining 10 (extra targets in `pkg/pus`, `pkg/pxsc` and `pkg/xtce`) run only under `go test -fuzz` directly. A new decoder is expected to arrive with a target, per [the contributing guide](/docs/contribute/adding-a-protocol).
 
 ## Resource limits
 
