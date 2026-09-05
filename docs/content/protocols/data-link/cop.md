@@ -337,7 +337,7 @@ fop := cop.NewFOP(0x1A, 1, 10)
 fop.Initialize(0)
 
 // 2. Build and queue TC frames
-frame, _ := tcdl.NewTCTransferFrame(0x1A, 1, commandData,
+frame, _ := tcdl.NewTransferFrame(0x1A, 1, commandData,
     tcdl.WithSequenceNumber(fop.VS()),
 )
 encoded, _ := frame.Encode()

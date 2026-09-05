@@ -26,7 +26,7 @@ packet, _ := spp.NewTMPacket(100, []byte("temperature=22.5"))
 encoded, _ := packet.Encode()
 
 // Framed for the downlink: spacecraft 42, virtual channel 0.
-frame, _ := tmdl.NewTMTransferFrame(42, 0, encoded, nil, nil)
+frame, _ := tmdl.NewTransferFrame(42, 0, encoded, nil, nil)
 frameBytes, _ := frame.Encode()
 
 // Sync marker attached, ready for the radio.

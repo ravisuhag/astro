@@ -103,14 +103,15 @@ encoded, err := frame.Encode()
 ```
 
 ```go
-// fecSize, insertZoneLen. OCF presence is read from the in-band flag.
-back, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+// OCF presence is read from the in-band flag, so the config only needs
+// to say whether the channel carries a FECF and how long its insert zone is.
+back, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 
 fmt.Println(back.Header.SCID, back.Header.VCID, back.Header.MAPID, back.Header.VCFCount)
 // 100 1 0 42
 ```
 
-Decoding takes two configuration arguments, not three, USLP signals OCF presence with a header flag, so the decoder works that one out for itself. That is a real improvement over [AOS](/protocols/data-link/aos).
+USLP signals OCF presence with a header flag, so the decoder works that one out for itself and the config only carries FECF presence and insert zone length. `DecodeTransferFrame(data, fecSize, insertZoneLen)` still works as a deprecated positional form of the same call.
 
 ## Construction rules
 
