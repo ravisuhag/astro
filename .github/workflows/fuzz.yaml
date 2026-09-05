@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build/fuzz
-          key: fuzz-corpus-${{ github.sha }}
+          key: fuzz-corpus-${{ github.run_id }}
           restore-keys: |
             fuzz-corpus-
 
