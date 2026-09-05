@@ -140,6 +140,55 @@ func TestVerifyRejectsBadTagLengths(t *testing.T) {
 	if c.Verify(message, make([]byte, cmac.BlockSize+1)) {
 		t.Error("Verify accepted an oversized tag")
 	}
+
+	// A genuinely correct 1-octet prefix of the real tag must still be
+	// rejected: Verify requires the caller's own full-width expectation, not
+	// whatever length the tag on the wire happens to be. An attacker who
+	// could choose the comparison length could forge a short tag by guessing
+	// one octet at a time; that is exactly what a truncated caller must go
+	// through VerifyTruncated to accept deliberately.
+	full := c.Sum(message)
+	if c.Verify(message, full[:1]) {
+		t.Error("Verify accepted a 1-octet tag, even though it was a correct prefix")
+	}
+}
+
+// TestVerifyTruncated checks the explicit-length truncated comparison: it
+// accepts a tag SumTruncated produced at the same length, and rejects a
+// length mismatch or a tampered tag.
+func TestVerifyTruncated(t *testing.T) {
+	c, err := cmac.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := []byte("telecommand frame contents")
+
+	for n := 1; n <= cmac.BlockSize; n++ {
+		tag, err := c.SumTruncated(message, n)
+		if err != nil {
+			t.Fatalf("length %d: %v", n, err)
+		}
+		if !c.VerifyTruncated(message, tag, n) {
+			t.Errorf("length %d: VerifyTruncated rejected a tag SumTruncated produced", n)
+		}
+		// The length the caller asks for must match the tag's actual length.
+		if c.VerifyTruncated(message, tag, n+1) {
+			t.Errorf("length %d: VerifyTruncated accepted a tag shorter than the requested length", n)
+		}
+
+		bad := append([]byte(nil), tag...)
+		bad[len(bad)-1] ^= 0x01
+		if c.VerifyTruncated(message, bad, n) {
+			t.Errorf("length %d: VerifyTruncated accepted a tampered tag", n)
+		}
+	}
+
+	if c.VerifyTruncated(message, nil, 0) {
+		t.Error("VerifyTruncated accepted length 0")
+	}
+	if c.VerifyTruncated(message, make([]byte, cmac.BlockSize+1), cmac.BlockSize+1) {
+		t.Error("VerifyTruncated accepted a length beyond BlockSize")
+	}
 }
 
 func TestSumTruncated(t *testing.T) {
