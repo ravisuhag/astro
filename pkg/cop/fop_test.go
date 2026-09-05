@@ -209,6 +209,35 @@ func TestFOP_AckPrunesWaitQueue(t *testing.T) {
 	}
 }
 
+// TestFOP_AckPrunesLargeWindow reproduces B1: with a sliding window wider
+// than the 128 the old hardcoded half-window heuristic assumed, a CLCW
+// acknowledging less than half the outstanding frames must still drain
+// the acknowledged prefix from the queue rather than leaving it stuck
+// there forever. K=200 with 199 outstanding and N(R)=150 acknowledges
+// sequence numbers 0..149 (150 frames), leaving 150..198 (49 frames)
+// outstanding.
+func TestFOP_AckPrunesLargeWindow(t *testing.T) {
+	fop := cop.NewFOP(42, 1, 200)
+	fop.Initialize(0)
+
+	for range 199 {
+		if err := fop.TransmitFrame([]byte("frame")); err != nil {
+			t.Fatalf("TransmitFrame: %v", err)
+		}
+	}
+	if fop.PendingCount() != 199 {
+		t.Fatalf("PendingCount before ack = %d, want 199", fop.PendingCount())
+	}
+
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: 150}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+
+	if got := fop.PendingCount(); got != 49 {
+		t.Errorf("PendingCount after ack = %d, want 49 (queue failed to drain)", got)
+	}
+}
+
 // TestFOP_T1Expiry_RetransmitThenAlertT1 walks both halves of the T1
 // timer rule in CCSDS 232.1-B-2 5.1.9.1: an expiry below the transmission
 // limit starts recovery, and an expiry at the limit generates Alert[T1].

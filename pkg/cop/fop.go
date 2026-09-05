@@ -502,8 +502,8 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	// Acknowledge frames up to (but excluding) N(R).
 	if ackCount > 0 {
 		f.nnr = nr
-		f.sentQueue = pruneAcked(f.sentQueue, nr)
-		f.waitQueue = pruneAcked(f.waitQueue, nr)
+		f.sentQueue = pruneAcked(f.sentQueue, nr, ackCount)
+		f.waitQueue = pruneAcked(f.waitQueue, nr, ackCount)
 		// New frames acknowledged: reset the retransmission budget and
 		// restart T1 for the frames still outstanding.
 		f.txCount = 1
@@ -606,12 +606,22 @@ func (f *FOP) retransmitting() bool {
 }
 
 // pruneAcked removes every frame acknowledged by N(R) from q.
-func pruneAcked(q []SentFrame, nr uint8) []SentFrame {
+//
+// ackCount is (nr - previous N(R)) & 0xFF: the number of sequence numbers
+// this CLCW has just acknowledged. A frame is dropped only when its
+// distance behind N(R) falls within that count, i.e. it is one of the
+// frames this CLCW just confirmed; a fixed half-window can't tell that
+// apart from a frame still legitimately outstanding once the sliding
+// window K exceeds it (CCSDS 232.1-B-2 lets K run up to 255), so the
+// bound has to be the real acknowledgement count rather than a constant.
+func pruneAcked(q []SentFrame, nr uint8, ackCount uint8) []SentFrame {
 	var remaining []SentFrame
 	for _, sf := range q {
 		diff := (nr - sf.SequenceNum) & 0xFF
-		if diff == 0 || diff > 128 {
-			// Not yet acknowledged (seq >= N(R) in modular arithmetic).
+		if diff == 0 || diff > ackCount {
+			// Not yet acknowledged: sf.SequenceNum is N(R) itself (the next
+			// frame expected) or further ahead in sequence, not one of the
+			// ackCount frames this CLCW just confirmed.
 			remaining = append(remaining, sf)
 		}
 	}
