@@ -295,3 +295,41 @@ func TestElementCopyDoesNotAlias(t *testing.T) {
 		t.Errorf("Copy aliased the decoder's buffer: %q", copied)
 	}
 }
+
+// Copy and Raw serve two different callers and must keep disagreeing: Copy is
+// for a caller that re-wraps the value with its own Append*, Raw is for a
+// caller that stores the element opaquely and appends it back verbatim. A
+// future simplification that merges the two would silently reintroduce the
+// pkg/csts decode/encode asymmetry documented on Element.Raw.
+func TestElementRawReturnsCompleteEncoding(t *testing.T) {
+	// 04 01 01 — a universal OCTET STRING, content 0x01. This is the element
+	// annex F3.4's ListOfParametersEvents CHOICE stands in for in the GET
+	// invocation vector.
+	original := ber.AppendOctetString(nil, []byte{0x01})
+	e, err := ber.NewDecoder(original).Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if raw := e.Raw(); !bytes.Equal(raw, original) {
+		t.Errorf("Raw() = % X, want % X (the tag and length back)", raw, original)
+	}
+	if content := e.Copy(); !bytes.Equal(content, []byte{0x01}) {
+		t.Errorf("Copy() = % X, want 01 (content only)", content)
+	}
+
+	// A context-specific, constructed, high-tag-number element too, so Raw
+	// is checked against more than the simplest case.
+	inner := ber.AppendInteger(nil, 9)
+	original = ber.AppendElement(nil, ber.ClassContext, true, 40, inner)
+	e, err = ber.NewDecoder(original).Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw := e.Raw(); !bytes.Equal(raw, original) {
+		t.Errorf("Raw() = % X, want % X", raw, original)
+	}
+	if content := e.Copy(); !bytes.Equal(content, inner) {
+		t.Errorf("Copy() = % X, want % X (content only)", content, inner)
+	}
+}

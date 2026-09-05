@@ -106,6 +106,7 @@
       "fields": {
         "credentials_used": false,
         "invoke_id": 11,
+        "list_of_parameters": "040101",
         "operation": 40,
         "operation_name": "GET invocation",
         "procedure_name": "Association Control",
@@ -114,12 +115,15 @@
       },
       "input": "bf281a3013800002010b300c06082b7004040101030182000401018100",
       "name": "get-invocation-decode",
-      "note": "The same octets read back. A GET invocation asking for parameters under the Association Control procedure. Clause 3.12 and annex F3.4 define GET as a header, the ListOfParametersEvents CHOICE, and an unused extension. bf 28 is the [40] alternative's two-octet tag — annex F3.15 numbers this operation past 30, past what a single tag octet's five low bits can hold, so a second tag octet carries the value — and 1a is the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0b the invoke id 11, and 30 0c the procedure name for Association Control with 82 00 for its dedicated role alternative [2]; 04 01 01 is an OCTET STRING standing in for the ListOfParametersEvents CHOICE, carried as opaque octets because six of its eight alternatives are built from SANA-registered identifiers outside this document; 81 00 is the unused extension. list_of_parameters is deliberately not pinned: decodeGetInvocation keeps only the element's content octets (its tag and length already stripped by the BER reader), while GetInvocation.encode appends the field assuming it is still a complete tag-length-value element, so a decoded value does not reproduce the original octets if re-encoded. That asymmetry is a real decode/encode defect, reported separately rather than patched here."
+      "note": "The same octets read back. A GET invocation asking for parameters under the Association Control procedure. Clause 3.12 and annex F3.4 define GET as a header, the ListOfParametersEvents CHOICE, and an unused extension. bf 28 is the [40] alternative's two-octet tag — annex F3.15 numbers this operation past 30, past what a single tag octet's five low bits can hold, so a second tag octet carries the value — and 1a is the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0b the invoke id 11, and 30 0c the procedure name for Association Control with 82 00 for its dedicated role alternative [2]; 04 01 01 is an OCTET STRING standing in for the ListOfParametersEvents CHOICE, carried as opaque octets because six of its eight alternatives are built from SANA-registered identifiers outside this document; 81 00 is the unused extension. list_of_parameters is pinned as the complete element 04 01 01, tag and length included: decodeGetInvocation keeps the whole tag-length-value, which is what GetInvocation.encode appends verbatim."
     },
     {
       "clause": "F3.4",
       "fields": {
         "credentials_used": false,
+        "event_name": "040103",
+        "event_time": "040102",
+        "event_value": "040104",
         "invoke_id": 12,
         "operation": 50,
         "operation_name": "NOTIFY invocation",
@@ -130,12 +134,14 @@
       },
       "input": "bf32233016800002010c300f060a2b7004040101030201018101020401020401030401048100",
       "name": "notify-invocation-decode",
-      "note": "The same octets read back. A NOTIFY invocation reporting an event under a secondary instance of the Cyclic Report procedure. Clause 3.11 and annex F3.4 define NOTIFY as a header followed by an EventTime, an EventName and an EventValue, then an unused extension. bf 32 is the [50] alternative's two-octet tag, 23 the length; inside, 30 16 is the header holding 80 00 credentials 'unused', 02 01 0c the invoke id 12, and 30 0f the procedure name for Cyclic Report with 81 01 02 for the secondary alternative [1] carrying instance number 2; the three OCTET STRINGs 04 01 02, 04 01 03 and 04 01 04 stand in for EventTime, EventName and EventValue, each opaque here because its content is a Time, a Name or an EventValue CHOICE this document leaves to a service specification; 81 00 is the unused extension. event_time, event_name and event_value are deliberately not pinned: decodeNotifyInvocation keeps only each element's content octets, while NotifyInvocation.encode appends each field assuming it is still a complete tag-length-value element, so a decoded value does not reproduce the original octets if re-encoded. That asymmetry is a real decode/encode defect, reported separately rather than patched here."
+      "note": "The same octets read back. A NOTIFY invocation reporting an event under a secondary instance of the Cyclic Report procedure. Clause 3.11 and annex F3.4 define NOTIFY as a header followed by an EventTime, an EventName and an EventValue, then an unused extension. bf 32 is the [50] alternative's two-octet tag, 23 the length; inside, 30 16 is the header holding 80 00 credentials 'unused', 02 01 0c the invoke id 12, and 30 0f the procedure name for Cyclic Report with 81 01 02 for the secondary alternative [1] carrying instance number 2; the three OCTET STRINGs 04 01 02, 04 01 03 and 04 01 04 stand in for EventTime, EventName and EventValue, each opaque here because its content is a Time, a Name or an EventValue CHOICE this document leaves to a service specification; 81 00 is the unused extension. event_time, event_name and event_value are each pinned as the complete element, tag and length included: decodeNotifyInvocation keeps the whole tag-length-value, which is what NotifyInvocation.encode appends verbatim."
     },
     {
       "clause": "F3.4",
       "fields": {
         "credentials_used": false,
+        "data": "04026869",
+        "generation_time": "040105",
         "invoke_id": 13,
         "operation": 70,
         "operation_name": "TRANSFER-DATA invocation",
@@ -146,12 +152,13 @@
       },
       "input": "bf46213013800002010d300c06082b700404010103038000040105020109040268698100",
       "name": "transfer-data-invocation-decode",
-      "note": "The same octets read back. A TRANSFER-DATA invocation moving one data unit under the prime instance of Buffered Data Delivery. Clause 3.9 and annex F3.4 define TRANSFER-DATA as a header, a GenerationTime, a SequenceCounter and Data, then an unused extension. bf 46 is the [70] alternative's two-octet tag, 21 the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0d the invoke id 13, and 30 0c the procedure name for Buffered Data Delivery (1.3.112.4.4.1.1.3.3) with 80 00 for the 'prime' role; 04 01 05 stands in for GenerationTime, opaque for the same reason EventTime is; 02 01 09 is SequenceCounter, INTEGER 9, which decodes correctly since it is a real INTEGER rather than an opaque field; 04 02 68 69 is Data, an OCTET STRING carrying 'hi'; 81 00 is the unused extension. generation_time and data are deliberately not pinned: decodeTransferDataInvocation keeps only each element's content octets, while TransferDataInvocation.encode appends each field assuming it is still a complete tag-length-value element, so a decoded value does not reproduce the original octets if re-encoded. That asymmetry is a real decode/encode defect, reported separately rather than patched here."
+      "note": "The same octets read back. A TRANSFER-DATA invocation moving one data unit under the prime instance of Buffered Data Delivery. Clause 3.9 and annex F3.4 define TRANSFER-DATA as a header, a GenerationTime, a SequenceCounter and Data, then an unused extension. bf 46 is the [70] alternative's two-octet tag, 21 the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0d the invoke id 13, and 30 0c the procedure name for Buffered Data Delivery (1.3.112.4.4.1.1.3.3) with 80 00 for the 'prime' role; 04 01 05 stands in for GenerationTime, opaque for the same reason EventTime is; 02 01 09 is SequenceCounter, INTEGER 9, which decodes correctly since it is a real INTEGER rather than an opaque field; 04 02 68 69 is Data, an OCTET STRING carrying 'hi'; 81 00 is the unused extension. generation_time and data are each pinned as the complete element, tag and length included: decodeTransferDataInvocation keeps the whole tag-length-value, which is what TransferDataInvocation.encode appends verbatim."
     },
     {
       "clause": "F3.4",
       "fields": {
         "credentials_used": false,
+        "data": "0402676f",
         "data_unit_id": 21,
         "invoke_id": 14,
         "operation": 60,
@@ -162,7 +169,7 @@
       },
       "input": "bf3c1e3013800002010e300c06082b7004040101030182000201150402676f8100",
       "name": "process-data-invocation-decode",
-      "note": "The same octets read back. A PROCESS-DATA invocation moving one data unit under Association Control. Clause 3.10 and annex F3.4 define PROCESS-DATA as a header, a DataUnitID and Data, then an unused extension — the one data-moving operation with no GenerationTime, because it travels user to provider rather than provider to user. bf 3c is the [60] alternative's two-octet tag, 1e the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0e the invoke id 14, and 30 0c the procedure name for Association Control with 82 00 for its role; 02 01 15 is DataUnitID, INTEGER 21, which decodes correctly since it is a real INTEGER rather than an opaque field, and which a confirmed PROCESS-DATA return would echo back; 04 02 67 6f is Data, an OCTET STRING carrying 'go'; 81 00 is the unused extension. data is deliberately not pinned: decodeProcessDataInvocation keeps only the element's content octets, while ProcessDataInvocation.encode appends the field assuming it is still a complete tag-length-value element, so a decoded value does not reproduce the original octets if re-encoded. That asymmetry is a real decode/encode defect, reported separately rather than patched here."
+      "note": "The same octets read back. A PROCESS-DATA invocation moving one data unit under Association Control. Clause 3.10 and annex F3.4 define PROCESS-DATA as a header, a DataUnitID and Data, then an unused extension — the one data-moving operation with no GenerationTime, because it travels user to provider rather than provider to user. bf 3c is the [60] alternative's two-octet tag, 1e the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0e the invoke id 14, and 30 0c the procedure name for Association Control with 82 00 for its role; 02 01 15 is DataUnitID, INTEGER 21, which decodes correctly since it is a real INTEGER rather than an opaque field, and which a confirmed PROCESS-DATA return would echo back; 04 02 67 6f is Data, an OCTET STRING carrying 'go'; 81 00 is the unused extension. data is pinned as the complete element, tag and length included: decodeProcessDataInvocation keeps the whole tag-length-value, which is what ProcessDataInvocation.encode appends verbatim."
     }
   ],
   "encode": [
