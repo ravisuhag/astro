@@ -302,3 +302,50 @@ func TestIVIsExcludedFromMACRegardlessOfMask(t *testing.T) {
 		t.Errorf("round trip failed with an all-ones mask: %v", err)
 	}
 }
+
+// TestValidateRejectsUncheckableAntiReplay is the S2 regression test. An SA
+// that asks for anti-replay (SeqWindow > 0) but carries neither an IV nor a
+// Sequence Number field has nothing checkAndAdvanceSequence could ever
+// compare, so it would authenticate every frame and replay forever with no
+// signal to the caller. This is reachable through the clause E2 CMAC baseline,
+// whose IV is forced to zero, if the Sequence Number is also left at zero.
+func TestValidateRejectsUncheckableAntiReplay(t *testing.T) {
+	sa := &sdls.SecurityAssociation{
+		SPI:           7,
+		Mode:          sdls.Authentication,
+		AuthAlgorithm: sdls.AuthCMAC,
+		Key:           testKey,
+		FieldLengths:  sdls.FieldLengths{IV: 0, SeqNum: 0, MAC: 16},
+		SeqWindow:     100,
+	}
+	if err := sa.Validate(); !errors.Is(err, sdls.ErrNoAntiReplayCounter) {
+		t.Errorf("Validate() = %v, want ErrNoAntiReplayCounter", err)
+	}
+
+	// The same shape with SeqWindow left at its documented no-replay default
+	// (zero) is a deliberate opt-out, not a defect, and must still validate.
+	sa.SeqWindow = 0
+	if err := sa.Validate(); err != nil {
+		t.Errorf("Validate() = %v, want nil for SeqWindow == 0 (documented opt-out)", err)
+	}
+}
+
+// TestReplayProtected checks the predicate reports the state Validate now
+// enforces: false for the documented SeqWindow == 0 opt-out, true once a
+// counter field backs a positive window.
+func TestReplayProtected(t *testing.T) {
+	sa := newCMACSA(t) // SeqWindow: 100, SeqNum: 4 (tcBaselineLengths)
+	if !sa.ReplayProtected() {
+		t.Error("ReplayProtected() = false, want true for a CMAC SA with a sequence number and SeqWindow > 0")
+	}
+
+	sa.SeqWindow = 0
+	if sa.ReplayProtected() {
+		t.Error("ReplayProtected() = true with SeqWindow == 0, the documented no-replay opt-out")
+	}
+
+	gcmSA := newTestSA(t, sdls.AuthenticatedEncryption) // SeqWindow: 100, IV: 12
+	if !gcmSA.ReplayProtected() {
+		t.Error("ReplayProtected() = false, want true for a GCM SA with an IV and SeqWindow > 0")
+	}
+}

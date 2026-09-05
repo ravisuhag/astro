@@ -146,16 +146,32 @@ func (c *CMAC) SumTruncated(message []byte, length int) ([]byte, error) {
 	return c.Sum(message)[:length], nil
 }
 
-// Verify reports whether tag authenticates message.
+// Verify reports whether tag authenticates message. tag must be a full
+// 16-octet CMAC tag; a caller checking a truncated tag must use
+// VerifyTruncated, which takes the expected length from the caller rather
+// than from the tag it was handed.
 //
 // The comparison is constant time. Comparing tags with bytes.Equal would leak
 // how many leading octets a forgery got right, which is enough to find the
 // rest one octet at a time.
 func (c *CMAC) Verify(message, tag []byte) bool {
-	if len(tag) < 1 || len(tag) > BlockSize {
+	if len(tag) != BlockSize {
 		return false
 	}
-	return subtle.ConstantTimeCompare(c.Sum(message)[:len(tag)], tag) == 1
+	return subtle.ConstantTimeCompare(c.Sum(message), tag) == 1
+}
+
+// VerifyTruncated reports whether tag authenticates message when message was
+// tagged with an n-octet truncated CMAC (SP 800-38B clause 6.4), as SumTruncated
+// produces. n is supplied by the caller, from the SA's own configuration, not
+// inferred from len(tag): accepting whatever length the tag on the wire
+// happens to be would let an attacker choose a 1-octet comparison and forge a
+// tag by guessing.
+func (c *CMAC) VerifyTruncated(message, tag []byte, n int) bool {
+	if n < 1 || n > BlockSize || len(tag) != n {
+		return false
+	}
+	return subtle.ConstantTimeCompare(c.Sum(message)[:n], tag) == 1
 }
 
 // xorInto XORs src into dst.
