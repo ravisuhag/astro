@@ -59,4 +59,8 @@ var (
 	// ErrSampleCountMismatch indicates a coded stream that did not yield the
 	// number of samples its header promised.
 	ErrSampleCountMismatch = errors.New("the coded data did not yield the promised number of samples")
+
+	// ErrOutputTooLarge indicates an unbounded Decompress produced more
+	// samples than its ceiling allows, per WithMaxSamples.
+	ErrOutputTooLarge = errors.New("decompressed output exceeds the configured sample ceiling")
 )
