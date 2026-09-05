@@ -14,7 +14,7 @@ import (
 // virtual-channel counters, which the CLI's encode command cannot set.
 func buildTMFrame(t *testing.T, scid uint16, vcid, mcCount, vcCount uint8, data []byte) []byte {
 	t.Helper()
-	frame, err := tmdl.NewTMTransferFrame(scid, vcid, data, nil, nil)
+	frame, err := tmdl.NewTransferFrame(scid, vcid, data, nil, nil)
 	if err != nil {
 		t.Fatalf("building frame: %v", err)
 	}

@@ -270,7 +270,7 @@ func main() {
 			log.Printf("Warning: failed to unwrap CADU: %v", err)
 			continue
 		}
-		frame, err := tmdl.DecodeTMTransferFrame(frameData)
+		frame, err := tmdl.DecodeTransferFrame(frameData)
 		if err != nil {
 			log.Printf("Warning: failed to decode frame: %v", err)
 			continue

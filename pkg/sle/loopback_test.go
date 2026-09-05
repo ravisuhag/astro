@@ -56,9 +56,9 @@ func recvPDU(conn net.Conn) ([]byte, error) {
 func TestRAFLoopbackDeliversACADU(t *testing.T) {
 	now := testTime
 
-	frame, err := tmdl.NewTMTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x42}, 100), nil, nil)
+	frame, err := tmdl.NewTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x42}, 100), nil, nil)
 	if err != nil {
-		t.Fatalf("NewTMTransferFrame() = %v", err)
+		t.Fatalf("NewTransferFrame() = %v", err)
 	}
 	frameBytes, err := frame.Encode()
 	if err != nil {

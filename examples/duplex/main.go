@@ -467,7 +467,7 @@ func (l *link) groundReceive(cadu []byte) {
 		log.Fatalf("unwrapping the CADU: %v", err)
 	}
 
-	frame, err := tmdl.DecodeTMTransferFrameWithConfig(frameBytes, downlinkConfig)
+	frame, err := tmdl.DecodeTransferFrameWithConfig(frameBytes, downlinkConfig)
 	if err != nil {
 		log.Fatalf("decoding the TM frame: %v", err)
 	}

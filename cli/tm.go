@@ -98,7 +98,7 @@ func tmDecodeCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := tmdl.DecodeTMTransferFrame(data)
+			frame, err := tmdl.DecodeTransferFrame(data)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -151,7 +151,7 @@ func tmEncodeCmd() *cobra.Command {
 				}
 			}
 
-			frame, err := tmdl.NewTMTransferFrame(scid, vcid, userData, nil, ocf)
+			frame, err := tmdl.NewTransferFrame(scid, vcid, userData, nil, ocf)
 			if err != nil {
 				return fmt.Errorf("building frame: %w", err)
 			}
@@ -195,7 +195,7 @@ func tmInspectCmd() *cobra.Command {
 				return err
 			}
 
-			frame, err := tmdl.DecodeTMTransferFrame(data)
+			frame, err := tmdl.DecodeTransferFrame(data)
 			if err != nil {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
@@ -415,7 +415,7 @@ func tmProtocol() frameProtocol {
 		vcMask: 0xFF,
 		mcMask: 0xFF,
 		ident: func(raw []byte) (frameIdent, error) {
-			frame, err := tmdl.DecodeTMTransferFrame(raw)
+			frame, err := tmdl.DecodeTransferFrame(raw)
 			if err != nil {
 				return frameIdent{}, err
 			}
@@ -438,7 +438,7 @@ func tmProtocol() frameProtocol {
 // filtering one channel out of eight discards most of what it reads.
 func emitTMFrame(outputFmt string) func(raw []byte, index int, ident frameIdent) error {
 	return func(raw []byte, index int, ident frameIdent) error {
-		frame, err := tmdl.DecodeTMTransferFrame(raw)
+		frame, err := tmdl.DecodeTransferFrame(raw)
 		if err != nil {
 			return err
 		}
