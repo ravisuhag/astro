@@ -39,7 +39,7 @@ func (pc *PhysicalChannel) HasPendingFrames() bool {
 	return pc.channels.HasPending()
 }
 
-// Len returns the number of frames waiting across all Master Channels.
+// Len returns the number of registered Master Channels.
 func (pc *PhysicalChannel) Len() int {
 	return pc.channels.Len()
 }
