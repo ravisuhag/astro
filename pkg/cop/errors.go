@@ -94,8 +94,8 @@ var (
 	ErrFOPSuspended = errors.New("FOP-1: AD service suspended (timeout type 1)")
 
 	// ErrFOPInvalidWindow indicates an invalid FOP sliding window width
-	// (valid: 1..255).
-	ErrFOPInvalidWindow = errors.New("FOP-1: invalid sliding window width (valid 1-255)")
+	// (valid: 1..MaxWindow, i.e. 1-127).
+	ErrFOPInvalidWindow = errors.New("FOP-1: invalid sliding window width (valid 1-127)")
 
 	// ErrFOPInvalidLimit indicates an invalid transmission limit
 	// (valid: 1..255).
