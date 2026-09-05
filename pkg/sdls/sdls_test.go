@@ -274,6 +274,78 @@ func TestApplySecurityNeverRepeatsIV(t *testing.T) {
 	}
 }
 
+// TestIVCounterRoundTrip is the S1 regression test: a fresh SA restored from
+// a checkpointed IVCounter must never repeat an IV a previous SA instance
+// under the same key already sent. Without SetIVCounter, the fresh SA would
+// start again from counter value 1, colliding with the first SA's frames.
+func TestIVCounterRoundTrip(t *testing.T) {
+	first := newTestSA(t, sdls.AuthenticatedEncryption)
+	seen := make(map[string]bool)
+
+	recordIV := func(protected []byte) {
+		iv := string(protected[sdls.SPISize : sdls.SPISize+sdls.GCMIVSize])
+		if seen[iv] {
+			t.Fatalf("IV reused: %x", iv)
+		}
+		seen[iv] = true
+	}
+
+	for i := 0; i < 5; i++ {
+		protected, err := first.ApplySecurity(nil, []byte("payload"))
+		if err != nil {
+			t.Fatalf("first SA, call %d: %v", i, err)
+		}
+		recordIV(protected)
+	}
+
+	checkpoint := first.IVCounter()
+	if checkpoint == nil {
+		t.Fatal("IVCounter() returned nil after protecting frames")
+	}
+
+	// A brand new SA value, as a restarted process would build from
+	// configuration, restored from the checkpoint rather than starting over.
+	second := newTestSA(t, sdls.AuthenticatedEncryption)
+	if err := second.SetIVCounter(checkpoint); err != nil {
+		t.Fatalf("SetIVCounter: %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		protected, err := second.ApplySecurity(nil, []byte("payload"))
+		if err != nil {
+			t.Fatalf("second SA, call %d: %v", i, err)
+		}
+		recordIV(protected)
+	}
+}
+
+// TestIVCounterNilBeforeUse checks IVCounter returns nil until the SA has
+// protected a frame, and that a fresh SA reports it too.
+func TestIVCounterNilBeforeUse(t *testing.T) {
+	sa := newTestSA(t, sdls.AuthenticatedEncryption)
+	if got := sa.IVCounter(); got != nil {
+		t.Errorf("IVCounter() = %x before first use, want nil", got)
+	}
+}
+
+// TestSetIVCounterRejectsWrongWidth checks SetIVCounter refuses a value that
+// does not match the SA's configured IV width, per FieldLengths.IV.
+func TestSetIVCounterRejectsWrongWidth(t *testing.T) {
+	sa := newTestSA(t, sdls.AuthenticatedEncryption)
+
+	for _, width := range []int{0, sdls.GCMIVSize - 1, sdls.GCMIVSize + 1} {
+		err := sa.SetIVCounter(make([]byte, width))
+		if !errors.Is(err, sdls.ErrInvalidIVCounter) {
+			t.Errorf("width %d: SetIVCounter() = %v, want ErrInvalidIVCounter", width, err)
+		}
+	}
+
+	// The correct width is accepted.
+	if err := sa.SetIVCounter(make([]byte, sdls.GCMIVSize)); err != nil {
+		t.Errorf("SetIVCounter with the correct width: %v", err)
+	}
+}
+
 func TestApplySecurityRejectsEncryptionMode(t *testing.T) {
 	sa := &sdls.SecurityAssociation{
 		SPI: 1, Mode: sdls.Encryption, Key: testKey,
