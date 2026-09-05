@@ -1,8 +1,10 @@
 package stack
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/ravisuhag/astro/pkg/sdl"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tmdl"
 	"github.com/ravisuhag/astro/pkg/tmsc"
@@ -479,12 +481,18 @@ func (r *Receiver) Next(vcid uint8) ([]byte, bool, error) {
 		return nil, false, err
 	}
 
-	// The service reports "nothing more" as an error, which is how it
-	// distinguishes an empty buffer from a broken one. Here it is a normal
-	// end of stream, so it becomes false.
+	// The service reports an empty buffer the same way it reports a real
+	// reassembly failure: as an error. sdl.ErrNoFramesAvailable is the only
+	// one of those that means "nothing ready yet"; anything else (a
+	// misconfigured packet sizer, a data field too small to hold one, an
+	// incomplete segment) is a fault the caller needs to see rather than a
+	// silent empty read.
 	packet, err := service.Receive()
 	if err != nil {
-		return nil, false, nil
+		if errors.Is(err, sdl.ErrNoFramesAvailable) {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
 	return packet, true, nil
 }
