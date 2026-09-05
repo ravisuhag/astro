@@ -55,4 +55,12 @@ var (
 	// MaxOutstandingReports: reportsByCheckpoint, awaitingAck or pending is
 	// full. The session cancels rather than tracking one more report.
 	ErrTooManyOutstandingReports = errors.New("too many outstanding reports: receiver cancelled the session")
+
+	// ErrReportOutOfRange indicates a reception report claiming coverage
+	// beyond the red part the sender is actually sending, or a reception
+	// claim whose offset and length overflow uint64. LTP has no
+	// authentication of its own (RFC 5326 defers that to a security
+	// extension), but the sender knows its own block, so it checks a
+	// claim's numbers before trusting them.
+	ErrReportOutOfRange = errors.New("report segment claims coverage beyond the red part")
 )
