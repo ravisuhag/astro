@@ -79,12 +79,13 @@ func copCLCWEncodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding the CLCW: %w", err)
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(encoded))
+				fmt.Fprintln(out, hex.EncodeToString(encoded))
 			case "text":
-				fmt.Println(clcw.Humanize())
-				fmt.Println(hex.EncodeToString(encoded))
+				fmt.Fprintln(out, clcw.Humanize())
+				fmt.Fprintln(out, hex.EncodeToString(encoded))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'hex')", outputFmt)
 			}
@@ -150,9 +151,9 @@ func copCLCWDecodeCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(cmd.OutOrStdout(), string(b))
 			case "text":
-				fmt.Println(clcw.Humanize())
+				fmt.Fprintln(cmd.OutOrStdout(), clcw.Humanize())
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}
