@@ -276,8 +276,9 @@ func pusServicesCmd() *cobra.Command {
 				}
 				fmt.Println(string(b))
 			case "text":
-				printNames("Requests (TC)", requests)
-				printNames("Reports (TM)", reports)
+				out := cmd.OutOrStdout()
+				printNames(out, "Requests (TC)", requests)
+				printNames(out, "Reports (TM)", reports)
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}
