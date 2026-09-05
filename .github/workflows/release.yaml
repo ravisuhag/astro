@@ -20,7 +20,20 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: "go.mod"
+          # go.mod pins go 1.26.1, an exact patch with three stdlib
+          # advisories. go-version-file would install exactly that pinned
+          # patch, baking an unpatched stdlib into the binaries this
+          # workflow ships. Ask for the minor line instead and let
+          # check-latest pick its newest patch (1.26.8+ as of writing), the
+          # same treatment lint.yaml gives its vulnerability-scan job --
+          # release binaries carry more weight than a CI job's toolchain.
+          #
+          # test.yaml and fuzz.yaml deliberately stay on go-version-file:
+          # they are the check that the code still works on the project's
+          # declared minimum, and quietly floating them to a newer patch
+          # would weaken that signal.
+          go-version: "1.26.x"
+          check-latest: true
 
       # A tag that does not build, or whose tests fail, should not become a
       # release. The other workflows run on push and pull_request, which does
