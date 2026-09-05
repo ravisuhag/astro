@@ -1,4 +1,8 @@
-.PHONY: build test race lint vet cover bench fuzz-smoke vectors
+.PHONY: build test race lint vet cover bench fuzz-smoke vectors vuln check
+
+# One command that answers "is this ready to push": everything a pull
+# request needs green, short of the slower race/fuzz/vuln runs.
+check: build vet lint test vectors
 
 build:
 	go build ./...
@@ -37,6 +41,9 @@ bench:
 
 lint:
 	golangci-lint run
+
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 FUZZTIME ?= 15s
 fuzz-smoke:

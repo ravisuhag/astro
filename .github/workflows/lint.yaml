@@ -22,8 +22,22 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: "go.mod"
+          # go.mod pins go 1.26.1, an exact patch, as the project's
+          # declared minimum -- go-version-file would install exactly
+          # that, and check-latest cannot help because there is no range
+          # to resolve against. Ask for the minor line instead and let
+          # check-latest pick its newest patch (1.26.6+ as of writing),
+          # since a vulnerability scan on an unpatched toolchain reports
+          # upstream stdlib CVEs (net, encoding/xml) that say nothing
+          # about this repository's code.
+          go-version: "1.26.x"
+          check-latest: true
       - name: Run linter
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.10
+      - name: Vulnerability scan
+        # Blocking: the tree has no reachable advisories as of this commit
+        # (see plan 018 and the GO-2026-5320 goldmark fix). A future PR that
+        # introduces one should fail here rather than ship silently.
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

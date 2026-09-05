@@ -71,14 +71,14 @@ func LoadWithLimit(r io.Reader, maxSize int64) (*SpaceSystem, error) {
 		default:
 			var syntaxErr *xml.SyntaxError
 			if errors.As(err, &syntaxErr) {
-				return nil, fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
+				return nil, fmt.Errorf("%w: %w", ErrMalformedXML, syntaxErr)
 			}
 			// checkRoot already proved the root element is a SpaceSystem in
 			// the right namespace, so what remains is a value somewhere in
 			// the document that its schema type cannot hold. An attribute
 			// that should be a number and is not, say. Before the root check
 			// this case was misreported as ErrNotSpaceSystem.
-			return nil, fmt.Errorf("%w: %s", ErrInvalidValue, err)
+			return nil, fmt.Errorf("%w: %w", ErrInvalidValue, err)
 		}
 	}
 
@@ -116,13 +116,13 @@ func checkDepth(data []byte, maxDepth int) error {
 
 	for {
 		token, err := decoder.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
 			var syntaxErr *xml.SyntaxError
 			if errors.As(err, &syntaxErr) {
-				return fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
+				return fmt.Errorf("%w: %w", ErrMalformedXML, syntaxErr)
 			}
 			return err
 		}
@@ -151,13 +151,13 @@ func checkRoot(data []byte) error {
 
 	for {
 		token, err := decoder.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return fmt.Errorf("%w: document is empty", ErrNotSpaceSystem)
 		}
 		if err != nil {
 			var syntaxErr *xml.SyntaxError
 			if errors.As(err, &syntaxErr) {
-				return fmt.Errorf("%w: %s", ErrMalformedXML, syntaxErr)
+				return fmt.Errorf("%w: %w", ErrMalformedXML, syntaxErr)
 			}
 			return err
 		}

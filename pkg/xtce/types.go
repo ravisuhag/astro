@@ -2,6 +2,7 @@ package xtce
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -686,7 +687,7 @@ type entryPayload struct {
 func (l *EntryList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	for {
 		token, err := d.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return io.ErrUnexpectedEOF
 		}
 		if err != nil {
