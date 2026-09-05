@@ -86,7 +86,7 @@ func TestMAPPacketService_MultiplePacketsPerFrame(t *testing.T) {
 	encB, _ := pktB.Encode()
 
 	blocked := append(append([]byte(nil), encA...), encB...)
-	frame, err := tcdl.NewTCTransferFrame(42, 1, blocked,
+	frame, err := tcdl.NewTransferFrame(42, 1, blocked,
 		tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 0}))
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestMAPPacketService_SegmentGapReturnsIncompleteSegment(t *testing.T) {
 	svc.SetPacketSizer(spp.PacketSizer)
 
 	addSeg := func(flags uint8, data []byte) {
-		frame, err := tcdl.NewTCTransferFrame(42, 1, data,
+		frame, err := tcdl.NewTransferFrame(42, 1, data,
 			tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: flags, MAPID: 0}))
 		if err != nil {
 			t.Fatal(err)

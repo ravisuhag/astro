@@ -20,8 +20,8 @@ func TestPhysicalChannel_MCMultiplexing(t *testing.T) {
 	pc.AddMasterChannel(mc1, 1)
 	pc.AddMasterChannel(mc2, 1)
 
-	f1, _ := tcdl.NewTCTransferFrame(100, 1, []byte("sc100"))
-	f2, _ := tcdl.NewTCTransferFrame(200, 1, []byte("sc200"))
+	f1, _ := tcdl.NewTransferFrame(100, 1, []byte("sc100"))
+	f2, _ := tcdl.NewTransferFrame(200, 1, []byte("sc200"))
 	_ = vc1.Add(f1)
 	_ = vc2.Add(f2)
 

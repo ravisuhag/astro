@@ -100,7 +100,7 @@ func TestSegmentHeader_EncodeDecode(t *testing.T) {
 // --- Transfer Frame Tests ---
 
 func TestTCFrame_NewAndEncode(t *testing.T) {
-	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("command data"))
+	frame, err := tcdl.NewTransferFrame(42, 5, []byte("command data"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestTCFrame_NewAndEncode(t *testing.T) {
 // actually there, not reuse the value NewTCTransferFrame set once, or the
 // receiver reads the CRC from the wrong offset and rejects the frame.
 func TestTCFrame_EncodeRefreshesFrameLengthAfterMutation(t *testing.T) {
-	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("short"))
+	frame, err := tcdl.NewTransferFrame(42, 5, []byte("short"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestTCFrame_EncodeRefreshesFrameLengthAfterMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatalf("Decode: %v (FrameLength = %d, encoded length = %d)",
 			err, frame.Header.FrameLength, len(encoded))
@@ -146,11 +146,11 @@ func TestTCFrame_EncodeRefreshesFrameLengthAfterMutation(t *testing.T) {
 
 func TestTCFrame_RoundTrip(t *testing.T) {
 	data := []byte("telecommand payload")
-	frame, _ := tcdl.NewTCTransferFrame(42, 5, data,
+	frame, _ := tcdl.NewTransferFrame(42, 5, data,
 		tcdl.WithSequenceNumber(7),
 	)
 	encoded, _ := frame.Encode()
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestTCFrame_RoundTrip(t *testing.T) {
 
 func TestTCFrame_TypeBForcesZeroSequenceNumber(t *testing.T) {
 	// Per CCSDS 232.0-B-4 4.1.2.7, Type-B frames carry N(S) = all zeros.
-	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("x"),
+	frame, err := tcdl.NewTransferFrame(42, 5, []byte("x"),
 		tcdl.WithBypass(),
 		tcdl.WithSequenceNumber(7),
 	)
@@ -200,7 +200,7 @@ func TestTCFrame_RejectsInvalidType(t *testing.T) {
 
 func TestTCFrame_WithSegmentHeader(t *testing.T) {
 	sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}
-	frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("data"),
+	frame, err := tcdl.NewTransferFrame(42, 5, []byte("data"),
 		tcdl.WithSegmentHeader(sh),
 	)
 	if err != nil {
@@ -218,7 +218,7 @@ func TestTCFrame_WithSegmentHeader(t *testing.T) {
 func TestTCFrame_DecodeWithSegmentHeaderRoundTrip(t *testing.T) {
 	data := []byte("payload")
 	sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegFirst, MAPID: 7}
-	frame, err := tcdl.NewTCTransferFrame(100, 3, data,
+	frame, err := tcdl.NewTransferFrame(100, 3, data,
 		tcdl.WithSegmentHeader(sh),
 		tcdl.WithSequenceNumber(42),
 	)
@@ -263,10 +263,10 @@ func TestTCFrame_DecodeWithSegmentHeaderRoundTrip(t *testing.T) {
 func TestTCFrame_DecodeWithoutSegmentHeader(t *testing.T) {
 	// Ensure the original DecodeTCTransferFrame still works as before.
 	data := []byte("test")
-	frame, _ := tcdl.NewTCTransferFrame(42, 5, data)
+	frame, _ := tcdl.NewTransferFrame(42, 5, data)
 	encoded, _ := frame.Encode()
 
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,10 +279,10 @@ func TestTCFrame_DecodeWithoutSegmentHeader(t *testing.T) {
 }
 
 func TestTCFrame_CRCMismatch(t *testing.T) {
-	frame, _ := tcdl.NewTCTransferFrame(42, 5, []byte("test"))
+	frame, _ := tcdl.NewTransferFrame(42, 5, []byte("test"))
 	encoded, _ := frame.Encode()
 	encoded[6] ^= 0x01
-	_, err := tcdl.DecodeTCTransferFrame(encoded)
+	_, err := tcdl.DecodeTransferFrame(encoded)
 	if !errors.Is(err, tcdl.ErrCRCMismatch) {
 		t.Errorf("expected ErrCRCMismatch, got %v", err)
 	}
@@ -290,14 +290,14 @@ func TestTCFrame_CRCMismatch(t *testing.T) {
 
 func TestTCFrame_TooLarge(t *testing.T) {
 	data := make([]byte, 1020)
-	_, err := tcdl.NewTCTransferFrame(42, 5, data)
+	_, err := tcdl.NewTransferFrame(42, 5, data)
 	if !errors.Is(err, tcdl.ErrDataTooLarge) {
 		t.Errorf("expected ErrDataTooLarge, got %v", err)
 	}
 }
 
 func TestTCFrame_IsControlAndBypass(t *testing.T) {
-	frame, _ := tcdl.NewTCTransferFrame(42, 5, []byte{0x00},
+	frame, _ := tcdl.NewTransferFrame(42, 5, []byte{0x00},
 		tcdl.WithBypass(), tcdl.WithControlCommand())
 	if !tcdl.IsBypass(frame) {
 		t.Error("expected IsBypass=true")
@@ -322,7 +322,7 @@ func TestDecodeTCFrame_MalformedLengthDoesNotPanic(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := tcdl.DecodeTCTransferFrame(data); err == nil {
+			if _, err := tcdl.DecodeTransferFrame(data); err == nil {
 				t.Fatal("expected error for malformed frame, got nil")
 			}
 			if _, err := tcdl.DecodeTCTransferFrameWithSegmentHeader(data); err == nil {
@@ -333,7 +333,7 @@ func TestDecodeTCFrame_MalformedLengthDoesNotPanic(t *testing.T) {
 }
 
 func TestTCFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
-	frame, err := tcdl.NewTCTransferFrame(42, 1, []byte("payload"))
+	frame, err := tcdl.NewTransferFrame(42, 1, []byte("payload"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestTCFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatalf("re-encoded frame does not decode: %v", err)
 	}
