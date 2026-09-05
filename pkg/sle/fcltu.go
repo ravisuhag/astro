@@ -1805,7 +1805,7 @@ func (p *FCLTUProvider) ExpectedCltuIdentification() (CltuIdentification, bool) 
 func (p *FCLTUProvider) HandleStartInvocation(
 	s *FCLTUStartInvocation, answer *FCLTUStartReturn, now time.Time, randomNumber int32,
 ) error {
-	err := p.respond(OpStartReturn, ServiceReady, now, randomNumber,
+	err := p.respond(OpStartReturn, s.InvokeId, ServiceReady, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			answer.Credentials = creds
 			answer.InvokeId = s.InvokeId
@@ -1860,7 +1860,7 @@ func (p *FCLTUProvider) HandleTransferDataInvocation(
 		reported = t.CltuIdentification + 1
 	}
 
-	err := p.respond(OpTransferDataReturn, ServiceActive, now, randomNumber,
+	err := p.respond(OpTransferDataReturn, t.InvokeId, ServiceActive, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			return (&FCLTUTransferDataReturn{
 				Credentials:         creds,

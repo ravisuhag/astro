@@ -128,6 +128,15 @@ var (
 	// answer it with the 'duplicate invoke ID' diagnostic.
 	ErrDuplicateInvokeId = errors.New("invoke identifier already used on this association")
 
+	// ErrInvokeIdExhausted indicates that the next invoke identifier a user
+	// would assign is still awaiting its return. InvokeId is 16 bits, so
+	// this means more than 65536 confirmed operations (for example, FCLTU
+	// TRANSFER-DATA CLTUs) are outstanding at once: the identifier space has
+	// wrapped onto one still in flight. Refusing locally turns what would
+	// otherwise surface as a remote 'duplicate invoke ID' into a
+	// diagnosable local error.
+	ErrInvokeIdExhausted = errors.New("no invoke identifier available: too many confirmed operations are outstanding")
+
 	// ErrCltuOutOfSequence indicates a CLTU identification that is not the one
 	// the provider expects next, per CCSDS 912.1-B-5 clause 3.6.2.5.
 	ErrCltuOutOfSequence = errors.New("CLTU identification is out of sequence")

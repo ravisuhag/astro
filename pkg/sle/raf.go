@@ -895,7 +895,7 @@ func NewRAFProvider(config ServiceConfig) (*RAFProvider, error) {
 func (p *RAFProvider) HandleStartInvocation(
 	s *RAFStartInvocation, answer *RAFStartReturn, now time.Time, randomNumber int32,
 ) error {
-	err := p.respond(OpStartReturn, ServiceReady, now, randomNumber,
+	err := p.respond(OpStartReturn, s.InvokeId, ServiceReady, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			answer.Credentials = creds
 			answer.InvokeId = s.InvokeId
