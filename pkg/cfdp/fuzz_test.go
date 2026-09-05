@@ -144,6 +144,33 @@ func FuzzReceiverHandle(f *testing.F) {
 	if body, err := fd.Encode(false, false); err == nil {
 		f.Add(seedPDU(f, body, true, false))
 	}
+
+	// A File Data PDU naming a huge offset, the shape that once made
+	// MemoryFilestore.WriteAt try to allocate the declared offset in memory
+	// (see MaxFileSize on ReceiverConfig). This harness only feeds one PDU
+	// per iteration, with a fresh Receiver each time, so it cannot exercise
+	// the metadata-then-huge-offset sequence the real vulnerability needs;
+	// TestFileDataOffsetPastMaxFileSizeFaults and
+	// TestFileDataOffsetOverflowNoPanic in limits_test.go cover that path.
+	huge := &cfdp.FileDataPDU{Offset: 1 << 62, Data: []byte("seed")}
+	if body, err := huge.Encode(false, true); err == nil {
+		pdu := &cfdp.PDU{
+			Header: &cfdp.PDUHeader{
+				IsFileData:     true,
+				Direction:      cfdp.TowardReceiver,
+				Acknowledged:   true,
+				LargeFile:      true,
+				Source:         cfdp.EntityID{Value: 1, Width: 1},
+				TransactionSeq: cfdp.EntityID{Value: 1, Width: 1},
+				Destination:    cfdp.EntityID{Value: 2, Width: 1},
+			},
+			Data: body,
+		}
+		if encoded, err := pdu.Encode(); err == nil {
+			f.Add(encoded)
+		}
+	}
+
 	f.Add([]byte{})
 	f.Add(make([]byte, 8))
 

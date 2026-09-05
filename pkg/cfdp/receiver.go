@@ -32,7 +32,19 @@ type ReceiverConfig struct {
 	// Notice of Cancellation; fault handler override TLVs arriving in the
 	// Metadata PDU take precedence over both (clause 4.8).
 	FaultHandlers map[ConditionCode]FaultHandler
+
+	// MaxFileSize bounds the highest file offset this receiver will accept,
+	// counting the end of each File Data PDU (offset plus data length).
+	// The standard puts no ceiling on offsets, so without one a single
+	// crafted PDU naming a huge offset would make the receiver allocate
+	// that much memory. Zero means DefaultMaxFileSize. Set it to what the
+	// mission actually transfers.
+	MaxFileSize uint64
 }
+
+// DefaultMaxFileSize bounds a transfer when ReceiverConfig leaves MaxFileSize
+// at zero: 64 MiB, matching ltp.DefaultMaxBlockSize.
+const DefaultMaxFileSize = 64 << 20
 
 // Receiver drives one incoming CFDP transaction.
 //
@@ -61,6 +73,12 @@ type Receiver struct {
 	// early buffers File Data PDUs that arrive before the Metadata PDU makes
 	// them writable. They replay, in arrival order, once Metadata arrives.
 	early []*FileDataPDU
+
+	// earlyBytes is the running total of len(fd.Data) held in early, kept
+	// incrementally so a peer that never sends Metadata cannot make this
+	// buffer grow without bound: it is checked against MaxFileSize the same
+	// way a single segment's offset is.
+	earlyBytes uint64
 
 	// received tracks the byte ranges delivered so far, kept sorted and merged
 	// so gap detection is a linear scan.
@@ -104,6 +122,9 @@ type Receiver struct {
 
 // NewReceiver prepares a transaction to receive one file.
 func NewReceiver(fs Filestore, config ReceiverConfig) *Receiver {
+	if config.MaxFileSize == 0 {
+		config.MaxFileSize = DefaultMaxFileSize
+	}
 	return &Receiver{
 		config:    config,
 		fs:        fs,
@@ -296,6 +317,7 @@ func (r *Receiver) cancelReceive(cond ConditionCode) {
 	r.condition = cond
 	r.cancelled = true
 	r.early = nil
+	r.earlyBytes = 0
 
 	// A NAK already queued must not go out after the cancel.
 	kept := r.pending[:0]
@@ -440,6 +462,7 @@ func (r *Receiver) handleMetadata(pdu *PDU) error {
 	// Replay the file data that arrived before the metadata made it writable.
 	early := r.early
 	r.early = nil
+	r.earlyBytes = 0
 	for _, fd := range early {
 		if r.cancelled {
 			break
@@ -472,7 +495,21 @@ func (r *Receiver) handleFileData(pdu *PDU) error {
 	// as received either. That would silently drop it from the file. Buffer
 	// it and replay once metadata arrives.
 	if r.metadata == nil {
+		// No clause bounds a file offset, or how much a peer may send before
+		// Metadata ever arrives; without a cap here, a single huge offset
+		// would be buffered rather than written, and a peer withholding
+		// Metadata forever could buffer file data without limit. Apply the
+		// same MaxFileSize ceiling here that storeFileData applies once
+		// Metadata is in hand.
+		if fd.End() < fd.Offset || fd.End() > r.config.MaxFileSize ||
+			r.earlyBytes+uint64(len(fd.Data)) > r.config.MaxFileSize {
+			if err := r.fault(CondFileSizeError); err != nil {
+				return err
+			}
+			return nil
+		}
 		r.early = append(r.early, fd)
+		r.earlyBytes += uint64(len(fd.Data))
 		return nil
 	}
 
@@ -493,6 +530,17 @@ func (r *Receiver) handleFileData(pdu *PDU) error {
 // only the sub-ranges not already received, so overlapping retransmissions
 // never count twice (clause 4.2.1).
 func (r *Receiver) storeFileData(fd *FileDataPDU) error {
+	// No clause bounds a file offset; this ceiling is what keeps one crafted
+	// PDU from allocating the declared offset in memory. fd.End() wraps
+	// around for an offset near 2^64, so an end that comes out before the
+	// offset it was computed from is caught the same way as one past the cap.
+	if fd.End() < fd.Offset || fd.End() > r.config.MaxFileSize {
+		if err := r.fault(CondFileSizeError); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// Clause 4.6.1.2: file data past the size the EOF PDU declared is a file size
 	// error.
 	if r.eofSeen && fd.End() > r.declaredSize {
