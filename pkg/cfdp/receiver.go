@@ -133,15 +133,17 @@ func NewReceiver(fs Filestore, config ReceiverConfig) *Receiver {
 	}
 }
 
-// header builds a PDU header for a PDU heading back to the sender.
-func (r *Receiver) header(dataLen int) *PDUHeader {
+// header builds a PDU header for a PDU heading back to the sender. The data
+// field length is not set here: PDU.Encode computes and checks the real value
+// from the data actually supplied, so filling it in here would be redundant
+// and, since it truncates to 16 bits, potentially lossy and misleading.
+func (r *Receiver) header() *PDUHeader {
 	return &PDUHeader{
 		IsFileData:   false,
 		Direction:    TowardSender,
 		Acknowledged: r.config.Acknowledged,
 		CRCFlag:      r.config.CRCFlag,
 		LargeFile:    r.largeFile,
-		DataLength:   uint16(dataLen),
 		// The transaction is still named by its originator, so the source
 		// entity ID stays the sender's even on the return path (clause 5.1 note).
 		Source:         r.config.Source,
@@ -591,7 +593,7 @@ func (r *Receiver) handleEOF(pdu *PDU) error {
 		if err != nil {
 			return err
 		}
-		r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 	}
 
 	// Clause 4.11.2: an EOF with a fault condition code is an EOF (cancel). The
@@ -624,7 +626,7 @@ func (r *Receiver) handlePrompt(p *PromptPDU) error {
 		if err != nil {
 			return err
 		}
-		r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 		return nil
 	}
 	return r.queueNAK()
@@ -650,23 +652,67 @@ func (r *Receiver) queueNAK() error {
 		limit = r.highWater
 	}
 
-	nak := &NAKPDU{StartOfScope: 0, EndOfScope: limit}
+	var requests []SegmentRequest
 	if r.metadata == nil {
 		// A segment request of 0..0 asks for the Metadata PDU (table 5-11).
-		nak.Requests = append(nak.Requests, SegmentRequest{})
+		requests = append(requests, SegmentRequest{})
 	}
-	nak.Requests = append(nak.Requests, r.gaps(limit)...)
+	requests = append(requests, r.gaps(limit)...)
 
-	if len(nak.Requests) == 0 {
+	if len(requests) == 0 {
 		return nil
 	}
 
-	body, err := nak.Encode(r.largeFile)
-	if err != nil {
-		return err
+	// Each request costs 8 octets (16 in large-file mode; clause 5.1.10), and
+	// PDU.Encode refuses a data field over 0xFFFF octets. At roughly 8,000
+	// gaps (4,000 large-file) one NAK carrying every gap would not encode --
+	// and a NAK is the only way this receiver has to say what is missing, so
+	// without a split the transfer would stall behind a PDU it can never
+	// send. Clause 5.2.6 provides for exactly this: break the requests into
+	// as many NAK PDUs as necessary, each scoped to the range it covers.
+	maxPerNAK := maxNAKRequests(r.largeFile, r.config.CRCFlag)
+
+	start := uint64(0)
+	for len(requests) > 0 {
+		n := min(len(requests), maxPerNAK)
+		batch := requests[:n]
+		requests = requests[n:]
+
+		// The scope of this batch runs up to where the next batch's first
+		// request begins -- or, for the last batch, to the overall limit --
+		// so consecutive batches' scopes partition [0, limit) with no gap
+		// left undeclared.
+		end := limit
+		if len(requests) > 0 {
+			end = requests[0].StartOffset
+		}
+
+		nak := &NAKPDU{StartOfScope: start, EndOfScope: end, Requests: batch}
+		body, err := nak.Encode(r.largeFile)
+		if err != nil {
+			return err
+		}
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
+		start = end
 	}
-	r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
 	return nil
+}
+
+// maxNAKRequests returns how many segment requests fit in one NAK PDU's data
+// field without PDU.Encode's 0xFFFF ceiling refusing it: the directive code,
+// the two scope FSS fields, an optional trailing CRC, and as many
+// FSS-pair requests as remain.
+func maxNAKRequests(largeFile, crcFlag bool) int {
+	fssWidth := 4
+	if largeFile {
+		fssWidth = 8
+	}
+	overhead := 1 + 2*fssWidth // directive code + start-of-scope + end-of-scope
+	if crcFlag {
+		overhead += CRCSize
+	}
+	reqSize := 2 * fssWidth
+	return (0xFFFF - overhead) / reqSize
 }
 
 // evaluateCompletion checks the checksum once everything has arrived and
@@ -759,7 +805,7 @@ func (r *Receiver) queueFinished(delivery DeliveryCode, status FileStatus) {
 	if err != nil {
 		return
 	}
-	r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+	r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 	r.finishedSent = true
 
 	if r.config.Acknowledged {
