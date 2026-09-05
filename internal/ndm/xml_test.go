@@ -1,6 +1,7 @@
 package ndm
 
 import (
+	"encoding/xml"
 	"errors"
 	"strings"
 	"testing"
@@ -291,5 +292,75 @@ func TestXMLEscaping(t *testing.T) {
 	}
 	if got, _ := Find(back.Header, "ORIGINATOR"); got != `A & B <C> "D"` {
 		t.Errorf("ORIGINATOR round-tripped to %q", got)
+	}
+}
+
+// nestedTags returns n opened and closed <a> tags, well formed so the reader
+// does not need to guess at an implied close.
+func nestedTags(n int) string {
+	return strings.Repeat("<a>", n) + strings.Repeat("</a>", n)
+}
+
+// readElement recurses once per level of nesting, so without a cap a file of
+// repeated open tags would drive it past the goroutine stack limit. This
+// checks the cap lands exactly where maxXMLDepth says it should: the element
+// at maxXMLDepth is still read, and the one past it is refused.
+func TestReadElementDepthLimit(t *testing.T) {
+	// maxXMLDepth+1 opens put the outermost element at depth 0 and the
+	// innermost at depth maxXMLDepth, which the limit allows.
+	d := xml.NewDecoder(strings.NewReader(nestedTags(maxXMLDepth + 1)))
+	start, err := nextStart(d)
+	if err != nil {
+		t.Fatalf("nextStart: %v", err)
+	}
+	if _, err := readElement(d, start, 0); err != nil {
+		t.Errorf("at the depth limit: readElement = %v, want nil", err)
+	}
+
+	// One level deeper puts the innermost element at maxXMLDepth+1.
+	d = xml.NewDecoder(strings.NewReader(nestedTags(maxXMLDepth + 2)))
+	start, err = nextStart(d)
+	if err != nil {
+		t.Fatalf("nextStart: %v", err)
+	}
+	if _, err := readElement(d, start, 0); !errors.Is(err, ErrMalformedXML) {
+		t.Errorf("one past the depth limit: readElement = %v, want ErrMalformedXML", err)
+	}
+}
+
+// A file of far more than maxXMLDepth nested elements is what an attacker
+// sends, not what a navigation message ever does; DecodeXML must refuse it
+// rather than recurse until the goroutine stack runs out.
+func TestDecodeXMLRejectsDeepNesting(t *testing.T) {
+	input := `<?xml version="1.0"?><opm id="CCSDS_OPM_VERS" version="3.0">` +
+		`<header></header><body><segment><metadata></metadata><data>` +
+		nestedTags(maxXMLDepth+10) + `</data></segment></body></opm>`
+
+	if _, err := DecodeXML([]byte(input), "opm"); !errors.Is(err, ErrMalformedXML) {
+		t.Errorf("DecodeXML = %v, want an error wrapping ErrMalformedXML", err)
+	}
+}
+
+// A conforming message nests about six levels deep (ndm, message, segment,
+// data, block, element), far under the limit. This guards against an
+// off-by-one that would reject real input.
+func TestDecodeXMLStillAcceptsAConformingMessage(t *testing.T) {
+	if _, err := DecodeXML([]byte(opmXML), "opm"); err != nil {
+		t.Errorf("DecodeXML: %v", err)
+	}
+}
+
+// The combined instantiation reads its constituents through decodeMessage and
+// readChildren too, so the same depth limit has to apply there.
+func TestDecodeCombinedXMLRejectsDeepNesting(t *testing.T) {
+	input := `<?xml version="1.0"?>` +
+		`<ndm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"` +
+		` xsi:noNamespaceSchemaLocation="https://sanaregistry.org/r/ndmxml_unqualified/ndmxml-3.0.0-master-3.0.xsd">` +
+		`<opm id="CCSDS_OPM_VERS" version="3.0"><header></header><body><segment>` +
+		`<metadata></metadata><data>` + nestedTags(maxXMLDepth+10) + `</data>` +
+		`</segment></body></opm></ndm>`
+
+	if _, err := DecodeCombinedXML([]byte(input)); !errors.Is(err, ErrMalformedXML) {
+		t.Errorf("DecodeCombinedXML = %v, want an error wrapping ErrMalformedXML", err)
 	}
 }
