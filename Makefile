@@ -103,6 +103,7 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeROCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzDecodeFCLTUPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzLoad -fuzztime $(FUZZTIME) ./pkg/xtce/
+	go test -run '^$$' -fuzz FuzzExtractDynamic -fuzztime $(FUZZTIME) ./pkg/xtce/
 	go test -run '^$$' -fuzz FuzzDecompress -fuzztime $(FUZZTIME) ./pkg/ldc/
 	go test -run '^$$' -fuzz FuzzCompressRoundTrip -fuzztime $(FUZZTIME) ./pkg/ldc/
 	go test -run '^$$' -fuzz FuzzDecompressPacket -fuzztime $(FUZZTIME) ./pkg/rhc/
