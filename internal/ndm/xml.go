@@ -2,6 +2,7 @@ package ndm
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -412,7 +413,7 @@ func readBody(m *XMLMessage, children []Element) error {
 func nextStart(d *xml.Decoder) (xml.StartElement, error) {
 	for {
 		token, err := d.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return xml.StartElement{}, ErrMalformedXML
 		}
 		if err != nil {
@@ -437,7 +438,7 @@ func readChildren(d *xml.Decoder, depth int) ([]Element, error) {
 
 	for {
 		token, err := d.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil, ErrMalformedXML
 		}
 		if err != nil {
@@ -484,7 +485,7 @@ func readElement(d *xml.Decoder, start xml.StartElement, depth int) (Element, er
 
 	for {
 		token, err := d.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return e, ErrMalformedXML
 		}
 		if err != nil {
