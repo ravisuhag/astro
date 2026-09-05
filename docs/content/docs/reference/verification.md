@@ -17,12 +17,12 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 
 | | |
 |---|---|
-| Test functions | 1559 |
-| Wire test vectors | 246, across 23 packages |
-| Fuzz targets | 58 |
+| Test functions | 2016 |
+| Wire test vectors | 400, across 32 packages |
+| Fuzz targets | 77 |
 | Benchmarks | 33 |
 | Numbered PICS items | 500 |
-| Statement coverage | 88.7% mean across 28 packages, 69.4% lowest |
+| Statement coverage | 86.5% mean across 33 packages, 59.6% lowest |
 
 ## The vector corpus
 
@@ -36,11 +36,13 @@ and agreement between two independent implementations is the only thing
 that catches a clause misread the same way twice.
 
 Every vector carries the clause it comes from and the arithmetic that
-produced it. A vector without a derivation does not load. Three of the 246
-are marked `unverified` instead, which says plainly that agreeing with them
-proves an implementation matches the corpus rather than the standard.
+produced it. A vector without a derivation does not load, and one without a
+clause is marked `unverified` instead, which says plainly that agreeing with
+it proves an implementation matches the corpus rather than the standard.
+None of the 400 carry that marker today.
 [`COVERAGE.md`](https://github.com/ravisuhag/astro/blob/main/vectors/COVERAGE.md)
-lists those, alongside what the corpus does not cover at all.
+explains the one case that did, until the clause was found, alongside what
+the corpus does not cover at all.
 
 [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md)
 is what a consumer needs: field dictionaries per package, the hex and
