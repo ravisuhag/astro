@@ -854,7 +854,7 @@ func NewROCFProvider(config ServiceConfig) (*ROCFProvider, error) {
 func (p *ROCFProvider) HandleStartInvocation(
 	s *ROCFStartInvocation, answer *ROCFStartReturn, now time.Time, randomNumber int32,
 ) error {
-	err := p.respond(OpStartReturn, ServiceReady, now, randomNumber,
+	err := p.respond(OpStartReturn, s.InvokeId, ServiceReady, now, randomNumber,
 		func(creds *Credentials) ([]byte, error) {
 			answer.Credentials = creds
 			answer.InvokeId = s.InvokeId
