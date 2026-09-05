@@ -25,6 +25,30 @@ import (
 // Validate checks. This is what stops it recursing forever.
 const maxSpliceDepth = 64
 
+// MaxRepeatCount is the largest count a RepeatEntry may hold.
+//
+// On the dynamic path the count comes straight out of the packet being
+// parsed; on the static path it comes from a FixedValue in the database,
+// which a hostile or merely corrupt file can set just as freely. Either way,
+// nothing before this checks it against anything but its sign, and the loop
+// that follows appends one Field per repetition -- roughly a hundred octets
+// each -- before a too-short packet or a too-small layout is ever noticed. A
+// 32-bit count near its maximum would append billions of them: hundreds of
+// gigabytes and an unbounded loop. Real repeat counts describe things like
+// samples in a burst or rows in a table, which run from a handful to at most
+// a few thousand, so this is generous while staying far short of that.
+const MaxRepeatCount = 1 << 16
+
+// MaxFields caps how many fields a single Layout may hold.
+//
+// MaxRepeatCount bounds any one RepeatEntry, but a container that splices
+// several such entries, or nests them across BaseContainer inheritance, could
+// still accumulate more fields than any packet could plausibly carry. This is
+// the coarser, second ceiling that catches that: no real container comes
+// anywhere close to it, so it costs nothing to a legitimate database while
+// still bounding the worst case a hostile or corrupt one can reach.
+const MaxFields = 1 << 18
+
 // Field is one parameter at a known place in a packet.
 type Field struct {
 	// Name is the parameter's qualified name, so two fields from different
@@ -288,6 +312,10 @@ func repeatCount(entry Entry) (uint, error) {
 	}
 	if *count.FixedValue < 0 {
 		return 0, fmt.Errorf("%w: a repeat count of %d", ErrUnsupportedEntry, count.FixedValue.Int64())
+	}
+	if count.FixedValue.Int64() > MaxRepeatCount {
+		return 0, fmt.Errorf("%w: a repeat count of %d exceeds the limit of %d",
+			ErrUnsupportedEntry, count.FixedValue.Int64(), MaxRepeatCount)
 	}
 	if entry.RepeatEntry.Offset != nil {
 		// The gap between repetitions. Supporting it is easy enough, but only
