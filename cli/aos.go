@@ -284,11 +284,11 @@ func aosGenCmd() *cobra.Command {
 				if i == 0 {
 					frameSize = len(encoded)
 				}
-				if err := writeGenOutput(encoded, outputFmt); err != nil {
+				if err := writeGenOutput(cmd.OutOrStdout(), encoded, outputFmt); err != nil {
 					return err
 				}
 			}
-			fmt.Fprintf(os.Stderr, "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n",
+			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n",
 				count, scid, vcid, frameSize)
 			return nil
 		},
