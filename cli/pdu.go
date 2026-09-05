@@ -56,6 +56,7 @@ func newPDUDecodeCmd(use, short, long, example string, decode pduDecoder) *cobra
 		Example: example,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -72,15 +73,15 @@ func newPDUDecodeCmd(use, short, long, example string, decode pduDecoder) *cobra
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println(described.Kind)
-				fmt.Println(described.Summary)
+				fmt.Fprintln(out, described.Kind)
+				fmt.Fprintln(out, described.Summary)
 				if described.Body != "" {
-					fmt.Printf("Body: %d octets\n  %s\n", len(described.Body)/2, described.Body)
+					fmt.Fprintf(out, "Body: %d octets\n  %s\n", len(described.Body)/2, described.Body)
 				}
 				if described.Note != "" {
-					fmt.Printf("  [%s]\n", described.Note)
+					fmt.Fprintf(out, "  [%s]\n", described.Note)
 				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
@@ -426,6 +427,7 @@ func sleDecodeCmd() *cobra.Command {
   astro sle decode --service fcltu --input hex < pdu.hex`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			kind, err := sleServiceKind(service)
 			if err != nil {
 				return err
@@ -467,13 +469,13 @@ func sleDecodeCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println(described.Kind)
-				fmt.Println(described.Summary)
-				fmt.Printf("Content: %d octets\n  %s\n", len(pdu.Content), described.Body)
+				fmt.Fprintln(out, described.Kind)
+				fmt.Fprintln(out, described.Summary)
+				fmt.Fprintf(out, "Content: %d octets\n  %s\n", len(pdu.Content), described.Body)
 				if described.Note != "" {
-					fmt.Printf("  [%s]\n", described.Note)
+					fmt.Fprintf(out, "  [%s]\n", described.Note)
 				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
