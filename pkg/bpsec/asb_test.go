@@ -3,6 +3,7 @@ package bpsec_test
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/bp"
@@ -228,5 +229,43 @@ func TestDecodeASBRejectsHugeCounts(t *testing.T) {
 		if _, err := bpsec.DecodeASB(mustHex(t, input)); err == nil {
 			t.Errorf("DecodeASB(%s) accepted a length field larger than the input", input)
 		}
+	}
+}
+
+// S8: a count that is not astronomically large -- so a bound comparing it
+// only to the octets left would pass it -- must still be refused once it asks
+// for more elements than the real per-element minimum size allows. This is
+// the case TestDecodeASBRejectsHugeCounts does not cover: both inputs below
+// carry enough padding to satisfy "count <= octets remaining", and both must
+// still be rejected because a target costs 8 bytes of Go allocation apiece
+// (past maxTargets) and a parameter or result pair cannot be shorter than
+// three octets on the wire.
+func TestDecodeASBRejectsInflatedCounts(t *testing.T) {
+	// A target count of maxTargets+1 (1025), with 1025 filler octets
+	// following -- enough to satisfy a bound of one octet per element. Pinned
+	// to ErrMalformedASB specifically -- not just any error -- because a
+	// bound that only compared the count to the octets left would still fail
+	// this input eventually (it runs out of bytes reading the fields after
+	// the target list), just later and for an unrelated reason.
+	hugeTargets := "990401" + strings.Repeat("00", 1025)
+	if _, err := bpsec.DecodeASB(mustHex(t, hugeTargets)); !errors.Is(err, bpsec.ErrMalformedASB) {
+		t.Errorf("a target count past maxTargets: err = %v, want ErrMalformedASB", err)
+	}
+
+	// One target, context 1, flags 1 (parameters present), source ipn:2.1,
+	// then a parameters count of 10 with only 20 octets following -- enough
+	// for a bound of one octet per element, not enough for the real minimum
+	// of three.
+	inflatedPairs := "8101" + "01" + "01" + "8202820201" + "8a" + strings.Repeat("00", 20)
+	if _, err := bpsec.DecodeASB(mustHex(t, inflatedPairs)); err == nil {
+		t.Error("a parameter count past the true per-element minimum was accepted")
+	}
+
+	// The tightened bounds must not disturb a legitimately small ASB: reuse
+	// the A.1 vector, one target and two parameters.
+	small := "810101018202820201828201078203008181820158403bdc69b3a34a2b5d3a8554368bd1e808" +
+		"f606219d2a10a846eae3886ae4ecc83c4ee550fdfb1cc636b904e2f1a73e303dcd4b6ccece003e95e8164dcc89a156e1"
+	if _, err := bpsec.DecodeASB(mustHex(t, small)); err != nil {
+		t.Errorf("a legitimately small ASB was rejected: %v", err)
 	}
 }

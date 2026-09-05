@@ -227,6 +227,89 @@ func TestIntegrityWithWrappedKey(t *testing.T) {
 	}
 }
 
+// B6 regression: a primary block whose source is spelled in the ipn
+// three-element form of RFC 9758 clause 6.1.2, rather than the two-element
+// form this library prefers, must still verify. Before pkg/bp remembered
+// which spelling a bundle arrived with, Verify recomputed the IPPT over a
+// primary block Encode re-derived in the preferred form -- different octets
+// than the ones the BIB's keyed hash was actually taken over -- and the check
+// failed as if the bundle had been tampered with.
+//
+// The bundle: primary block [7,0,0, destination ipn:1.2, source ipn:2.1
+// spelled with an explicit (zero) allocator in the three-element form,
+// report-to ipn:2.1, timestamp [0,40], lifetime 1000000], a BIB (block 2,
+// HMAC-SHA-384, every scope flag set, key 1a2b...) over the payload, and the
+// payload of RFC 9173 appendix A.1.1.2. Generated once with this package
+// after the fix and pinned here; it must decode, verify, and round-trip its
+// primary block byte for byte.
+func TestIntegrityAcceptsIPNThreeElementSource(t *testing.T) {
+	const primaryHex = "8807000082028201028202830002018202820201820018281a000f4240"
+	bundle := decodeBundle(t, "9f"+primaryHex+
+		"850b0200005846810101018202820201828201068203078181820158308419fb10571c387747dbaa5c40e573b852"+
+		"911e8c547b8da2add5488939d8bab68dcf973678d2c227eac99f53027c400d"+
+		"85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff")
+
+	if got := bundle.Primary.Source.String(); got != "ipn:2.1" {
+		t.Fatalf("source = %s, want ipn:2.1", got)
+	}
+
+	bib := bundle.Block(2)
+	if bib == nil {
+		t.Fatal("no BIB block at number 2")
+	}
+	key := mustHex(t, "1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b")
+	if err := bpsec.Verify(bundle, bib, bpsec.Keys{Key: key}); err != nil {
+		t.Errorf("Verify: %v", err)
+	}
+
+	gotPrimary, err := bundle.Primary.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if want := mustHex(t, primaryHex); !bytes.Equal(gotPrimary, want) {
+		t.Errorf("primary block round trip =\n\t%x\nwant\n\t%x", gotPrimary, want)
+	}
+}
+
+// B6 regression, the dtn side: a primary block whose source is dtn:none
+// spelled as the text string "none" rather than the integer 0 must still
+// verify, for the same reason as TestIntegrityAcceptsIPNThreeElementSource.
+//
+// The bundle: primary block [7, must-not-fragment, 0, destination ipn:1.2,
+// source dtn:none spelled as text, report-to ipn:2.1, timestamp [0,40],
+// lifetime 1000000] -- must-not-fragment is set because clause 4.2.5.1.1
+// requires it of an anonymous bundle -- a BIB over the payload with the same
+// parameters as above, and the same RFC 9173 payload. Generated once with
+// this package after the fix and pinned here.
+func TestIntegrityAcceptsDTNNoneAsTextSource(t *testing.T) {
+	const primaryHex = "8807040082028201028201646e6f6e658202820201820018281a000f4240"
+	bundle := decodeBundle(t, "9f"+primaryHex+
+		"850b020000584681010101820282020182820106820307818182015830016e3f708af2170db83bdcf69f2cce994"+
+		"d9fb6a9e55ea023ed40e6058a5cd31d5968329e84eea0b0e541df2fea73f7e9"+
+		"85010100005823526561647920746f2067656e657261746520612033322d62797465207061796c6f6164ff")
+
+	if got := bundle.Primary.Source.String(); got != "dtn:none" {
+		t.Fatalf("source = %s, want dtn:none", got)
+	}
+
+	bib := bundle.Block(2)
+	if bib == nil {
+		t.Fatal("no BIB block at number 2")
+	}
+	key := mustHex(t, "1a2b1a2b1a2b1a2b1a2b1a2b1a2b1a2b")
+	if err := bpsec.Verify(bundle, bib, bpsec.Keys{Key: key}); err != nil {
+		t.Errorf("Verify: %v", err)
+	}
+
+	gotPrimary, err := bundle.Primary.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if want := mustHex(t, primaryHex); !bytes.Equal(gotPrimary, want) {
+		t.Errorf("primary block round trip =\n\t%x\nwant\n\t%x", gotPrimary, want)
+	}
+}
+
 // encodeBundle writes a bundle block by block.
 //
 // Bundle.Encode is not usable here. The example bundles in RFC 9173 have a

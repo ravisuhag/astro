@@ -74,6 +74,15 @@ type Result struct {
 	Value []byte
 }
 
+// maxTargets bounds how many entries decodeASB will pre-allocate for
+// Targets, ahead of reading them one at a time off the wire. Bounding a
+// target count by the octets remaining in the block does little on its own,
+// since a target is a single CBOR unsigned integer that can be as short as
+// one octet; a security block's targets name blocks of the bundle it rides
+// in, and a bundle's block count is realistically in the tens, so this is
+// generous headroom rather than a protocol limit.
+const maxTargets = 1024
+
 // ASB is the Abstract Security Block of RFC 9172 clause 3.6, the structure a
 // BIB and a BCB share.
 //
@@ -194,8 +203,12 @@ func decodeASB(d *cbor.Decoder) (*ASB, error) {
 		return nil, ErrMalformedASB
 	}
 	// A target is one CBOR unsigned integer, so it cannot be shorter than an
-	// octet. Checking the claimed count against what is left stops a huge
-	// length from driving a large allocation before the read fails.
+	// octet — checking the claimed count against what is left only stops a
+	// length longer than the whole block. maxTargets bounds the allocation
+	// directly, since RFC 9172 blocks have small, known shapes.
+	if n > maxTargets {
+		return nil, ErrMalformedASB
+	}
 	if n > uint64(d.Remaining()) {
 		return nil, cbor.ErrTruncated
 	}
@@ -301,9 +314,11 @@ func decodePairs(d *cbor.Decoder) (ids []uint64, values [][]byte, err error) {
 		return nil, nil, ErrMalformedASB
 	}
 	// The shortest possible pair is a two-item array head, an identifier and a
-	// value: three octets. Bounding the count by what is left stops a bogus
-	// length from driving a large allocation before the read fails.
-	if n > uint64(d.Remaining()) {
+	// value: three octets. Dividing the octets left by that minimum, rather
+	// than comparing against them directly, stops a bogus length from
+	// driving an allocation of up to three times what the input could
+	// actually contain before the read fails.
+	if n > uint64(d.Remaining())/3 {
 		return nil, nil, cbor.ErrTruncated
 	}
 
