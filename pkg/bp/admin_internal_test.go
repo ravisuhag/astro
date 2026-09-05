@@ -1,6 +1,7 @@
 package bp
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"testing"
@@ -69,6 +70,49 @@ func TestStatusItemLength(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("%s = %s, want %s", tt.name, got, tt.want)
 		}
+	}
+}
+
+// B8: DTNTimeUnknown (zero) is a legitimate time from a clockless node, so a
+// status item's Time cannot tell "asserted with a time" apart from "asserted
+// with no time wanted" -- only the arity can. IncludeTime must survive a
+// round trip even when every asserted status carries time zero.
+func TestStatusReportIncludeTimeSurvivesAllZeroTimes(t *testing.T) {
+	r := &StatusReport{
+		Received:         StatusItem{Asserted: true, Time: DTNTimeUnknown},
+		Forwarded:        StatusItem{Asserted: true, Time: DTNTimeUnknown},
+		Delivered:        StatusItem{Asserted: true, Time: DTNTimeUnknown},
+		Deleted:          StatusItem{Asserted: true, Time: DTNTimeUnknown},
+		Reason:           ReasonNoAdditionalInformation,
+		SubjectSource:    IPN(2, 1),
+		SubjectTimestamp: CreationTimestamp{Time: DTNTimeUnknown, Sequence: 40},
+		IncludeTime:      true,
+	}
+
+	encoded, err := r.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	// Byte 3 opens the four-assertions array; each status item follows as
+	// [true, 0] -- three octets, 0x82 0xf5 0x00 -- rather than collapsing to
+	// the one-octet form [true] a value-based IncludeTime would produce.
+	for i := 0; i < 4; i++ {
+		item := encoded[4+i*3 : 4+i*3+3]
+		if !bytes.Equal(item, []byte{0x82, 0xf5, 0x00}) {
+			t.Fatalf("status item %d = % x, want 82 f5 00", i, item)
+		}
+	}
+
+	back, err := DecodeStatusReport(encoded)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if !back.IncludeTime {
+		t.Error("IncludeTime was lost when every asserted time was zero")
+	}
+	if *back != *r {
+		t.Errorf("round trip = %+v, want %+v", *back, *r)
 	}
 }
 
@@ -184,5 +228,13 @@ func TestStatusReportRejects(t *testing.T) {
 	}
 	if _, err := b.StatusReport(); !errors.Is(err, ErrNotAnAdminRecord) {
 		t.Errorf("err = %v, want ErrNotAnAdminRecord", err)
+	}
+}
+
+// B9: a bundle with no primary block must report ErrNoPrimaryBlock, matching
+// every sibling method, rather than panicking on a nil dereference.
+func TestStatusReportNilPrimaryBlock(t *testing.T) {
+	if _, err := (&Bundle{}).StatusReport(); !errors.Is(err, ErrNoPrimaryBlock) {
+		t.Errorf("err = %v, want ErrNoPrimaryBlock", err)
 	}
 }
