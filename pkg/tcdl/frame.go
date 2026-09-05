@@ -251,11 +251,19 @@ func WithSequenceNumber(n uint8) FrameOption {
 }
 
 // NewTCTransferFrame creates a new TC Transfer Frame.
+//
+// Deprecated: use NewTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
+func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
+	return NewTransferFrame(scid, vcid, data, opts...)
+}
+
+// NewTransferFrame creates a new TC Transfer Frame.
 // The frame length is automatically computed. CRC is auto-calculated.
 // A VCID wider than the 6-bit field is stored as given and refused on
 // encode rather than masked: masking would route the frame to a different
 // virtual channel than the caller named.
-func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
+func NewTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
 	frame := &TCTransferFrame{
 		Header: PrimaryHeader{
 			VersionNumber:    0,
@@ -360,11 +368,19 @@ func (tf *TCTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 }
 
 // DecodeTCTransferFrame parses a byte slice into a TC Transfer Frame.
+//
+// Deprecated: use DecodeTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
+func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
+	return DecodeTransferFrame(data)
+}
+
+// DecodeTransferFrame parses a byte slice into a TC Transfer Frame.
 // Verifies CRC integrity. The segment header, if present, remains in
 // DataField because the primary header has no flag to indicate its
 // presence. Use DecodeTCTransferFrameWithSegmentHeader when the MAP
 // sublayer is known to be in use.
-func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
+func DecodeTransferFrame(data []byte) (*TCTransferFrame, error) {
 	return decodeTCFrame(data, false)
 }
 

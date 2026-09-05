@@ -52,12 +52,12 @@ func ParseControlCommand(data []byte) (ControlCommandType, uint8, error) {
 // NewUnlockFrame builds a Type-BC frame carrying the Unlock control
 // command (Bypass=1, Control Command=1, N(S)=0, no segment header).
 func NewUnlockFrame(scid uint16, vcid uint8) (*TCTransferFrame, error) {
-	return NewTCTransferFrame(scid, vcid, BuildUnlockCommand(), WithControlCommand())
+	return NewTransferFrame(scid, vcid, BuildUnlockCommand(), WithControlCommand())
 }
 
 // NewSetVRFrame builds a Type-BC frame carrying the Set V(R) control
 // command for the given V(R) value (Bypass=1, Control Command=1, N(S)=0,
 // no segment header).
 func NewSetVRFrame(scid uint16, vcid uint8, vr uint8) (*TCTransferFrame, error) {
-	return NewTCTransferFrame(scid, vcid, BuildSetVRCommand(vr), WithControlCommand())
+	return NewTransferFrame(scid, vcid, BuildSetVRCommand(vr), WithControlCommand())
 }
