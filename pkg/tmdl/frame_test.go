@@ -335,7 +335,7 @@ func TestNewTMTransferFrame(t *testing.T) {
 	secondaryHeader := []byte{0xAA, 0xBB}
 	ocf := []byte{0x00, 0x00, 0x00, 0xFF}
 
-	frame, err := tmdl.NewTMTransferFrame(933, 2, data, secondaryHeader, ocf)
+	frame, err := tmdl.NewTransferFrame(933, 2, data, secondaryHeader, ocf)
 	if err != nil {
 		t.Fatalf("Failed to create TM Transfer Frame: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestNewTMTransferFrame_SecondaryHeaderRoundTrip(t *testing.T) {
 	data := []byte("payload")
 	secondaryHeaderData := []byte{0xAA, 0xBB, 0xCC}
 
-	frame, err := tmdl.NewTMTransferFrame(933, 1, data, secondaryHeaderData, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, data, secondaryHeaderData, nil)
 	if err != nil {
 		t.Fatalf("Failed to create frame: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestNewTMTransferFrame_SecondaryHeaderRoundTrip(t *testing.T) {
 		t.Fatalf("Encode failed: %v", err)
 	}
 
-	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	decoded, err := tmdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatalf("Decode failed: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestFrameEncoding(t *testing.T) {
 	// 1285 does not fit the 10-bit spacecraft identifier; 261 is the value it
 	// used to be silently truncated to, and is a valid identifier in its own
 	// right. The refusal is asserted by TestNewTMTransferFrameRejectsAnOutOfRangeSCID.
-	frame, err := tmdl.NewTMTransferFrame(261, 3, data, nil, nil)
+	frame, err := tmdl.NewTransferFrame(261, 3, data, nil, nil)
 	if err != nil {
 		t.Fatalf("NewTMTransferFrame failed: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestFrameDecoding(t *testing.T) {
 	binary.BigEndian.PutUint16(crcBytes, crc)
 	encodedFrame = append(encodedFrame, crcBytes...)
 
-	frame, err := tmdl.DecodeTMTransferFrame(encodedFrame)
+	frame, err := tmdl.DecodeTransferFrame(encodedFrame)
 	if err != nil {
 		t.Fatalf("Failed to decode TM Transfer Frame: %v", err)
 	}
@@ -429,12 +429,12 @@ func TestCRCValidation(t *testing.T) {
 
 func TestFrameRoundTrip(t *testing.T) {
 	data := []byte("Round Trip Test  ")
-	frame, _ := tmdl.NewTMTransferFrame(933, 5, data, nil, nil)
+	frame, _ := tmdl.NewTransferFrame(933, 5, data, nil, nil)
 	encodedFrame, err := frame.Encode()
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
 	}
-	decodedFrame, err := tmdl.DecodeTMTransferFrame(encodedFrame)
+	decodedFrame, err := tmdl.DecodeTransferFrame(encodedFrame)
 	if err != nil {
 		t.Fatalf("Failed to decode frame in round-trip test: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestFrameRoundTrip(t *testing.T) {
 
 func TestMalformedFrame(t *testing.T) {
 	corruptFrame := []byte{0x68, 0x05}
-	_, err := tmdl.DecodeTMTransferFrame(corruptFrame)
+	_, err := tmdl.DecodeTransferFrame(corruptFrame)
 	if !errors.Is(err, tmdl.ErrDataTooShort) {
 		t.Errorf("Expected ErrDataTooShort, got %v", err)
 	}
@@ -465,7 +465,7 @@ func TestMalformedFrame(t *testing.T) {
 	}
 	validFrame[len(validFrame)-1] ^= 0xFF
 
-	_, err = tmdl.DecodeTMTransferFrame(validFrame)
+	_, err = tmdl.DecodeTransferFrame(validFrame)
 	if err == nil {
 		t.Error("Expected CRC error but decoding succeeded")
 	}
@@ -485,7 +485,7 @@ func TestMalformedFrame(t *testing.T) {
 // pkg/tmsc. Assert the octet, not the symmetry.
 func TestSecondaryHeaderLength_CCSDS(t *testing.T) {
 	shData := []byte{0xAA, 0xBB, 0xCC}
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("data"), shData, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("data"), shData, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestSetDataFieldDerivesLength(t *testing.T) {
 
 func TestMinimumFrameSize(t *testing.T) {
 	// 7 bytes: too short (need 6 header + 2 CRC minimum)
-	_, err := tmdl.DecodeTMTransferFrame([]byte{0x00, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00})
+	_, err := tmdl.DecodeTransferFrame([]byte{0x00, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00})
 	if !errors.Is(err, tmdl.ErrDataTooShort) {
 		t.Errorf("7-byte input: got %v, want ErrDataTooShort", err)
 	}
@@ -541,7 +541,7 @@ func TestMinimumFrameSize(t *testing.T) {
 	frame := make([]byte, 8)
 	copy(frame, header)
 	binary.BigEndian.PutUint16(frame[6:], crc)
-	if _, err := tmdl.DecodeTMTransferFrame(frame); err != nil {
+	if _, err := tmdl.DecodeTransferFrame(frame); err != nil {
 		t.Errorf("8-byte frame: got %v, want nil", err)
 	}
 }
@@ -550,7 +550,7 @@ func TestSecondaryHeaderDecodeSelfDescribing(t *testing.T) {
 	data := []byte("payload")
 	shData := []byte{0x01, 0x02}
 
-	frame, err := tmdl.NewTMTransferFrame(933, 1, data, shData, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, data, shData, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +558,7 @@ func TestSecondaryHeaderDecodeSelfDescribing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	decoded, err := tmdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -588,7 +588,7 @@ func TestOCFInsufficientData(t *testing.T) {
 	crc := ccsdscrc.ComputeCRC16(withoutCRC)
 	frame := binary.BigEndian.AppendUint16(withoutCRC, crc)
 
-	_, err = tmdl.DecodeTMTransferFrame(frame)
+	_, err = tmdl.DecodeTransferFrame(frame)
 	if !errors.Is(err, tmdl.ErrDataTooShort) {
 		t.Errorf("got %v, want ErrDataTooShort", err)
 	}
@@ -607,7 +607,7 @@ func TestSecondaryHeaderValidateConsistency(t *testing.T) {
 
 func TestFirstHeaderPtr_WithSecondaryHeader(t *testing.T) {
 	shData := []byte{0xAA, 0xBB, 0xCC}
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("payload"), shData, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("payload"), shData, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +621,7 @@ func TestFirstHeaderPtr_WithSecondaryHeader(t *testing.T) {
 }
 
 func TestDecodedFrameDoesNotAliasInput(t *testing.T) {
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("original"), nil, []byte{0x01, 0x02, 0x03, 0x04})
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("original"), nil, []byte{0x01, 0x02, 0x03, 0x04})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -630,7 +630,7 @@ func TestDecodedFrameDoesNotAliasInput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	decoded, err := tmdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +684,7 @@ func TestNewIdleFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+	if _, err := tmdl.DecodeTransferFrame(encoded); err != nil {
 		t.Errorf("Idle frame CRC invalid: %v", err)
 	}
 }
@@ -723,13 +723,13 @@ func TestIsIdleFrame(t *testing.T) {
 	}
 
 	// VCP frame should not be idle
-	vcpFrame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	vcpFrame, _ := tmdl.NewTransferFrame(933, 1, []byte("data"), nil, nil)
 	if tmdl.IsIdleFrame(vcpFrame) {
 		t.Error("Expected IsIdleFrame=false for VCP frame")
 	}
 
 	// VCA frame (SyncFlag=true, FHP=0x07FF) should not be idle
-	vcaFrame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	vcaFrame, _ := tmdl.NewTransferFrame(933, 1, []byte("data"), nil, nil)
 	vcaFrame.Header.SyncFlag = true
 	vcaFrame.Header.FirstHeaderPtr = 0x07FF
 	if tmdl.IsIdleFrame(vcaFrame) {
@@ -738,12 +738,12 @@ func TestIsIdleFrame(t *testing.T) {
 }
 
 func TestCRCMismatchRejection(t *testing.T) {
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("test data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(933, 1, []byte("test data"), nil, nil)
 	encoded, _ := frame.Encode()
 
 	encoded[8] ^= 0x01
 
-	_, err := tmdl.DecodeTMTransferFrame(encoded)
+	_, err := tmdl.DecodeTransferFrame(encoded)
 	if err == nil {
 		t.Error("Expected CRC mismatch error")
 	}
@@ -782,7 +782,7 @@ func TestFrameFlagCombinations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data := []byte("test payload")
-			frame, err := tmdl.NewTMTransferFrame(933, 1, data, tt.shData, tt.ocfData)
+			frame, err := tmdl.NewTransferFrame(933, 1, data, tt.shData, tt.ocfData)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -792,7 +792,7 @@ func TestFrameFlagCombinations(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+			decoded, err := tmdl.DecodeTransferFrame(encoded)
 			if err != nil {
 				t.Fatalf("Decode failed: %v", err)
 			}
@@ -839,7 +839,7 @@ func TestUninitializedFrame(t *testing.T) {
 }
 
 func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
-	frame, err := tmdl.NewTMTransferFrame(42, 1, []byte("payload"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(42, 1, []byte("payload"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -852,7 +852,7 @@ func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	decoded, err := tmdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatalf("re-encoded frame does not decode: %v", err)
 	}
@@ -879,7 +879,7 @@ func TestFECFOptionalUnderReedSolomon(t *testing.T) {
 	withFEC := tmdl.ChannelConfig{HasFEC: true}
 	noFEC := tmdl.ChannelConfig{HasFEC: false}
 
-	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 2, []byte("payload"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -899,7 +899,7 @@ func TestFECFOptionalUnderReedSolomon(t *testing.T) {
 	}
 
 	// Each decodes under its own configuration.
-	back, err := tmdl.DecodeTMTransferFrameWithConfig(withoutBytes, noFEC)
+	back, err := tmdl.DecodeTransferFrameWithConfig(withoutBytes, noFEC)
 	if err != nil {
 		t.Fatalf("decoding a frame with no FECF = %v", err)
 	}
@@ -907,7 +907,7 @@ func TestFECFOptionalUnderReedSolomon(t *testing.T) {
 		t.Errorf("data field = %q, want %q", back.DataField, "payload")
 	}
 
-	back, err = tmdl.DecodeTMTransferFrameWithConfig(withBytes, withFEC)
+	back, err = tmdl.DecodeTransferFrameWithConfig(withBytes, withFEC)
 	if err != nil {
 		t.Fatalf("decoding a frame with a FECF = %v", err)
 	}
@@ -930,7 +930,7 @@ func TestFECFOptionalUnderReedSolomon(t *testing.T) {
 func TestFECFMismatchIsDetected(t *testing.T) {
 	noFEC := tmdl.ChannelConfig{HasFEC: false}
 
-	frame, err := tmdl.NewTMTransferFrame(933, 2, []byte("payload"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 2, []byte("payload"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -941,7 +941,7 @@ func TestFECFMismatchIsDetected(t *testing.T) {
 
 	// The last two octets are payload, not a checksum, so verifying them
 	// should fail rather than quietly truncating the data field.
-	if _, err := tmdl.DecodeTMTransferFrame(raw); err == nil {
+	if _, err := tmdl.DecodeTransferFrame(raw); err == nil {
 		t.Error("a frame with no FECF decoded cleanly as though it had one")
 	}
 }
@@ -970,7 +970,7 @@ func TestChannelConfigValidate(t *testing.T) {
 // bits to the VCA service user as status, so neither side may rewrite them.
 func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	// Build a valid VCA-style frame (SyncFlag=1, FHP=0x7FF) and encode it.
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("vca-sdu"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("vca-sdu"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -990,7 +990,7 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 	binary.BigEndian.PutUint16(patched[len(patched)-2:],
 		ccsdscrc.ComputeCRC16(patched[:len(patched)-2]))
 
-	back, err := tmdl.DecodeTMTransferFrame(patched)
+	back, err := tmdl.DecodeTransferFrame(patched)
 	if err != nil {
 		t.Fatalf("Decode rejected SyncFlag=1 frame with FHP=0x123: %v", err)
 	}
@@ -1020,7 +1020,7 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 // representation; masking it to 261 would address the frame to a different
 // spacecraft than the caller named, with nothing on the wire to show it.
 func TestNewTMTransferFrameRejectsAnOutOfRangeSCID(t *testing.T) {
-	if _, err := tmdl.NewTMTransferFrame(1285, 3, []byte("x"), nil, nil); err == nil {
+	if _, err := tmdl.NewTransferFrame(1285, 3, []byte("x"), nil, nil); err == nil {
 		t.Error("NewTMTransferFrame accepted a spacecraft identifier above the 10-bit maximum")
 	}
 }
@@ -1028,7 +1028,7 @@ func TestNewTMTransferFrameRejectsAnOutOfRangeSCID(t *testing.T) {
 // TestNewTMTransferFrameRejectsAnOutOfRangeVCID is the same rule for the
 // 3-bit virtual channel identifier.
 func TestNewTMTransferFrameRejectsAnOutOfRangeVCID(t *testing.T) {
-	if _, err := tmdl.NewTMTransferFrame(261, 8, []byte("x"), nil, nil); err == nil {
+	if _, err := tmdl.NewTransferFrame(261, 8, []byte("x"), nil, nil); err == nil {
 		t.Error("NewTMTransferFrame accepted a virtual channel identifier above the 3-bit maximum")
 	}
 }
