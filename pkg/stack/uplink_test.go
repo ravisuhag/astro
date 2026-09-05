@@ -406,6 +406,161 @@ func TestUplinkDuplicateIsRejectedNotFailed(t *testing.T) {
 	}
 }
 
+// FARM-1 counts a frame as accepted the instant it arrives, before it knows
+// whether the virtual channel had room to store it. Without buffer
+// accounting, a full buffer means the store fails after the count already
+// advanced: the next CLCW reports the frame delivered, the ground prunes it
+// from FOP-1's sent queue, and the command is gone for good. This sends more
+// commands than the channel buffer holds, without draining in between, and
+// checks that every one of them still arrives once FARM-1's Wait state and a
+// retransmission round have run their course.
+func TestUplinkOverfillingTheBufferDoesNotDropCommands(t *testing.T) {
+	config := stack.Uplink{
+		SpacecraftID: 42,
+		// A window well past the total command count, so FOP-1's sliding
+		// window is never what holds a frame back: the virtual channel's
+		// buffer (DefaultBuffer) is the only limit this test means to hit.
+		Channels: []stack.UplinkVC{{ID: 0, Window: 200}},
+	}
+
+	commander, err := stack.NewCommander(config)
+	if err != nil {
+		t.Fatalf("NewCommander: %v", err)
+	}
+	onboard, err := stack.NewOnboard(config)
+	if err != nil {
+		t.Fatalf("NewOnboard: %v", err)
+	}
+
+	total := stack.DefaultBuffer + 2
+	var sent []string
+	for i := 0; i < total; i++ {
+		text := fmt.Sprintf("CMD%d", i)
+		sent = append(sent, text)
+		if err := commander.Send(0, command(t, 100, uint16(i), text)); err != nil {
+			t.Fatalf("Send %d: %v", i, err)
+		}
+	}
+
+	// Every produced CLTU, taken without draining Next in between: the
+	// application has not caught up, which is exactly when a buffer fills.
+	// A store failure here is the bug itself (FARM already counted the
+	// frame), so it is not fatal to the test.
+	for cltu, err := range commander.CLTUs() {
+		if err != nil {
+			t.Fatalf("CLTUs: %v", err)
+		}
+		_, _ = onboard.Accept(cltu) // deliberately ignored: see comment above.
+	}
+
+	var got []string
+	drain := func() {
+		for packet, err := range onboard.Packets(0) {
+			if err != nil {
+				t.Fatalf("Packets: %v", err)
+			}
+			decoded, err := spp.Decode(packet)
+			if err != nil {
+				t.Fatalf("decoding a command: %v", err)
+			}
+			got = append(got, string(decoded.UserData))
+		}
+	}
+	drain()
+
+	// Route the CLCW back so the ground learns what happened, and offer
+	// whatever that unblocks: with the buffer freed by the drain above, a
+	// retransmission round should recover anything FARM-1 held back.
+	clcw, err := onboard.CLCW(0)
+	if err != nil {
+		t.Fatalf("CLCW: %v", err)
+	}
+	if err := commander.AcceptCLCW(clcw); err != nil {
+		t.Fatalf("AcceptCLCW: %v", err)
+	}
+	for cltu, err := range commander.CLTUs() {
+		if err != nil {
+			t.Fatalf("CLTUs: %v", err)
+		}
+		_, _ = onboard.Accept(cltu) // deliberately ignored: a store failure here is the bug itself.
+	}
+	drain()
+
+	if len(got) != len(sent) {
+		t.Fatalf("delivered %d of %d commands sent", len(got), len(sent))
+	}
+	for i := range sent {
+		if got[i] != sent[i] {
+			t.Errorf("command %d = %q, want %q", i, got[i], sent[i])
+		}
+	}
+}
+
+// The Wait flag in the CLCW is how the ground learns a buffer, not the
+// sliding window, is why commands stopped moving. It should appear while the
+// buffer is exhausted and clear once the application drains enough to free
+// one.
+func TestUplinkCLCWReportsWaitWhileBufferIsFull(t *testing.T) {
+	config := stack.Uplink{
+		SpacecraftID: 42,
+		Channels:     []stack.UplinkVC{{ID: 0, Window: 200}},
+	}
+
+	commander, err := stack.NewCommander(config)
+	if err != nil {
+		t.Fatalf("NewCommander: %v", err)
+	}
+	onboard, err := stack.NewOnboard(config)
+	if err != nil {
+		t.Fatalf("NewOnboard: %v", err)
+	}
+
+	// One more command than the buffer holds, so the last one has nowhere
+	// to go.
+	total := stack.DefaultBuffer + 1
+	for i := 0; i < total; i++ {
+		if err := commander.Send(0, command(t, 100, uint16(i), fmt.Sprintf("CMD%d", i))); err != nil {
+			t.Fatalf("Send %d: %v", i, err)
+		}
+	}
+	for cltu, err := range commander.CLTUs() {
+		if err != nil {
+			t.Fatalf("CLTUs: %v", err)
+		}
+		_, _ = onboard.Accept(cltu) // deliberately ignored: a store failure here is the bug itself.
+	}
+
+	if clcw := decodeCLCW(t, onboard, 0); !clcw.WaitFlag {
+		t.Error("CLCW Wait flag is not set while the buffer is exhausted")
+	}
+
+	// Draining one packet frees exactly one buffer, which should be enough
+	// to clear the Wait flag.
+	if _, ok, err := onboard.Next(0); err != nil || !ok {
+		t.Fatalf("Next: ok=%v err=%v", ok, err)
+	}
+
+	if clcw := decodeCLCW(t, onboard, 0); clcw.WaitFlag {
+		t.Error("CLCW Wait flag is still set after draining a buffer's worth")
+	}
+}
+
+// decodeCLCW reads back the control word Onboard would send on the
+// telemetry link, decoded so a test can inspect its flags.
+func decodeCLCW(t *testing.T, onboard *stack.Onboard, vcid uint8) cop.CLCW {
+	t.Helper()
+
+	encoded, err := onboard.CLCW(vcid)
+	if err != nil {
+		t.Fatalf("CLCW: %v", err)
+	}
+	var clcw cop.CLCW
+	if err := clcw.Decode(encoded); err != nil {
+		t.Fatalf("decoding CLCW: %v", err)
+	}
+	return clcw
+}
+
 func TestUplinkUnknownChannel(t *testing.T) {
 	commander, err := stack.NewCommander(uplinkConfig())
 	if err != nil {
