@@ -211,6 +211,10 @@ var (
 	// application data unit length.
 	ErrFragmentPastEnd = errors.New("bpv7: fragment extends past the total application data unit length")
 
+	// ErrADUTooLarge indicates a declared total ADU length past
+	// MaxReassembledADU.
+	ErrADUTooLarge = errors.New("bpv7: declared ADU length exceeds the reassembly ceiling")
+
 	// ErrIncompleteReassembly indicates the fragments so far leave a gap, or
 	// none of them covers offset zero.
 	ErrIncompleteReassembly = errors.New("bpv7: fragments do not cover the whole application data unit")
