@@ -31,20 +31,25 @@ type StopInvocation struct {
 // document.
 type GetInvocation struct {
 	Header InvocationHeader
-	// ListOfParameters is the encoded ListOfParametersEvents CHOICE.
+	// ListOfParameters is the complete encoded ListOfParametersEvents CHOICE
+	// element: tag, length and content. encode appends it verbatim, so it
+	// must carry its own tag and length rather than content alone.
 	ListOfParameters []byte
 }
 
 // NotifyInvocation reports an event (clause 3.11).
 type NotifyInvocation struct {
 	Header InvocationHeader
-	// EventTime is the encoded Time CHOICE: a CCSDS day-segmented time code
-	// in either the millisecond or the picosecond resolution.
+	// EventTime is the complete encoded Time CHOICE element (tag, length and
+	// content): a CCSDS day-segmented time code in either the millisecond or
+	// the picosecond resolution. encode appends it verbatim.
 	EventTime []byte
-	// EventName is the encoded Name, which pairs a functional resource or
-	// procedure with a published identifier.
+	// EventName is the complete encoded Name element, which pairs a
+	// functional resource or procedure with a published identifier. encode
+	// appends it verbatim.
 	EventName []byte
-	// EventValue is the encoded EventValue CHOICE.
+	// EventValue is the complete encoded EventValue CHOICE element. encode
+	// appends it verbatim.
 	EventValue []byte
 }
 
@@ -52,11 +57,13 @@ type NotifyInvocation struct {
 // (clause 3.9).
 type TransferDataInvocation struct {
 	Header InvocationHeader
-	// GenerationTime is the encoded Time CHOICE.
+	// GenerationTime is the complete encoded Time CHOICE element (tag,
+	// length and content). encode appends it verbatim.
 	GenerationTime  []byte
 	SequenceCounter uint32
-	// Data is the encoded AbstractChoice: an opaque octet string, or a
-	// complex type a procedure defines.
+	// Data is the complete encoded AbstractChoice element: an opaque octet
+	// string, or a complex type a procedure defines. encode appends it
+	// verbatim.
 	Data []byte
 }
 
@@ -67,7 +74,8 @@ type ProcessDataInvocation struct {
 	// DataUnitID identifies the unit, so a confirmed PROCESS-DATA's return
 	// can name what it is answering about.
 	DataUnitID uint32
-	// Data is the encoded AbstractChoice.
+	// Data is the complete encoded AbstractChoice element (tag, length and
+	// content). encode appends it verbatim.
 	Data []byte
 }
 
@@ -147,7 +155,7 @@ func decodeGetInvocation(content []byte) (*GetInvocation, error) {
 	if err != nil {
 		return nil, err
 	}
-	g.ListOfParameters = list.Copy()
+	g.ListOfParameters = list.Raw()
 	return g, nil
 }
 
@@ -182,7 +190,7 @@ func decodeNotifyInvocation(content []byte) (*NotifyInvocation, error) {
 		if err != nil {
 			return nil, err
 		}
-		*into = element.Copy()
+		*into = element.Raw()
 	}
 	return n, nil
 }
@@ -217,7 +225,7 @@ func decodeTransferDataInvocation(content []byte) (*TransferDataInvocation, erro
 	if err != nil {
 		return nil, err
 	}
-	t.GenerationTime = generation.Copy()
+	t.GenerationTime = generation.Raw()
 
 	counter, err := d.Next()
 	if err != nil {
@@ -236,7 +244,7 @@ func decodeTransferDataInvocation(content []byte) (*TransferDataInvocation, erro
 	if err != nil {
 		return nil, err
 	}
-	t.Data = data.Copy()
+	t.Data = data.Raw()
 	return t, nil
 }
 
@@ -282,6 +290,6 @@ func decodeProcessDataInvocation(content []byte) (*ProcessDataInvocation, error)
 	if err != nil {
 		return nil, err
 	}
-	p.Data = data.Copy()
+	p.Data = data.Raw()
 	return p, nil
 }
