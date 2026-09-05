@@ -56,6 +56,13 @@ const (
 	XMLSchemaCDM = "ndmxml-2.0.0-master-2.0.xsd"
 )
 
+// maxXMLDepth bounds element nesting. Real navigation messages nest about six
+// levels (ndm, message, segment, data, block, element); the limit exists
+// because readElement recurses once per level, so without one a file of
+// repeated open tags exhausts the goroutine stack rather than failing
+// cleanly.
+const maxXMLDepth = 64
+
 // Element is one element of a message: either a leaf carrying a value or a
 // block carrying children. A block is a wrapper the key-value form has no
 // equivalent for.
@@ -295,7 +302,7 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 		return nil, ErrWrongMessageType
 	}
 
-	return decodeMessage(d, start)
+	return decodeMessage(d, start, 0)
 }
 
 // decodeMessage reads one message's attributes and content, the decoder having
@@ -305,7 +312,10 @@ func DecodeXML(data []byte, root string) (*XMLMessage, error) {
 // one. The difference is only the attributes: clause 4.11.5 gives a
 // constituent no schema location, so its Schema is left empty here and the
 // caller fills in the one the <ndm> root carried.
-func decodeMessage(d *xml.Decoder, start xml.StartElement) (*XMLMessage, error) {
+//
+// depth is the nesting depth of start itself: 0 for a standalone document's
+// root, or the depth of a constituent tag inside a combined instantiation.
+func decodeMessage(d *xml.Decoder, start xml.StartElement, depth int) (*XMLMessage, error) {
 	m := &XMLMessage{Root: start.Name.Local}
 	for _, attr := range start.Attr {
 		switch attr.Name.Local {
@@ -333,7 +343,7 @@ func decodeMessage(d *xml.Decoder, start xml.StartElement) (*XMLMessage, error) 
 		m.Schema = defaultSchema(m.Root)
 	}
 
-	children, err := readChildren(d)
+	children, err := readChildren(d, depth+1)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +429,10 @@ func nextStart(d *xml.Decoder) (xml.StartElement, error) {
 // An element with element children is a block and an element with text is a
 // leaf. Mixed content — text and elements together — is not something the
 // schema set produces, and is refused rather than half-read.
-func readChildren(d *xml.Decoder) ([]Element, error) {
+//
+// depth is the depth of the children it reads, i.e. one more than the
+// enclosing element's own depth.
+func readChildren(d *xml.Decoder, depth int) ([]Element, error) {
 	var out []Element
 
 	for {
@@ -433,7 +446,7 @@ func readChildren(d *xml.Decoder) ([]Element, error) {
 
 		switch t := token.(type) {
 		case xml.StartElement:
-			child, err := readElement(d, t)
+			child, err := readElement(d, t, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -445,7 +458,18 @@ func readChildren(d *xml.Decoder) ([]Element, error) {
 }
 
 // readElement reads one element, its attributes and its content.
-func readElement(d *xml.Decoder, start xml.StartElement) (Element, error) {
+//
+// depth is the nesting depth of start itself. It is checked against
+// maxXMLDepth before anything else is done with the element, so a file of
+// deeply nested open tags is refused instead of recursing until the
+// goroutine stack runs out — Go's own depth cap on encoding/xml applies only
+// to Unmarshal/Decode, not to a reader that drives Token directly, as this
+// one does.
+func readElement(d *xml.Decoder, start xml.StartElement, depth int) (Element, error) {
+	if depth > maxXMLDepth {
+		return Element{}, ErrMalformedXML
+	}
+
 	e := Element{Name: start.Name.Local}
 	for _, attr := range start.Attr {
 		switch attr.Name.Local {
@@ -471,7 +495,7 @@ func readElement(d *xml.Decoder, start xml.StartElement) (Element, error) {
 		case xml.CharData:
 			text.Write(t)
 		case xml.StartElement:
-			child, err := readElement(d, t)
+			child, err := readElement(d, t, depth+1)
 			if err != nil {
 				return e, err
 			}
