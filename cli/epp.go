@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -137,11 +137,11 @@ func eppDecodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding packet: %w", err)
 			}
 
-			out, err := formatEPPPacket(pkt, encoded, outputFmt)
+			formatted, err := formatEPPPacket(pkt, encoded, outputFmt)
 			if err != nil {
 				return err
 			}
-			fmt.Println(out)
+			fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -215,11 +215,11 @@ func eppEncodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding packet: %w", err)
 			}
 
-			out, err := formatEPPPacket(pkt, encoded, outputFmt)
+			formatted, err := formatEPPPacket(pkt, encoded, outputFmt)
 			if err != nil {
 				return err
 			}
-			fmt.Println(out)
+			fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -259,7 +259,7 @@ func eppInspectCmd() *cobra.Command {
 				return fmt.Errorf("decoding packet: %w", err)
 			}
 
-			printEPPInspect(pkt, data)
+			printEPPInspect(cmd.OutOrStdout(), pkt, data)
 			return nil
 		},
 	}
@@ -269,46 +269,46 @@ func eppInspectCmd() *cobra.Command {
 	return cmd
 }
 
-func printEPPInspect(pkt *epp.EncapsulationPacket, raw []byte) {
+func printEPPInspect(out io.Writer, pkt *epp.EncapsulationPacket, raw []byte) {
 	h := pkt.Header
 	hdrSize := h.Size()
 	totalLen := int(h.PacketLength)
 
-	fmt.Println("Encapsulation Packet Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Fprintln(out, "Encapsulation Packet Inspector")
+	fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Header
-	fmt.Printf("Header (%d bytes, LoL %d)\n", hdrSize, h.LengthOfLength)
-	fmt.Printf("  PVN .................. %d\n", h.PVN)
-	fmt.Printf("  Protocol ID .......... %d (%s)\n", h.ProtocolID, eppProtocolIDName(h.ProtocolID))
-	fmt.Printf("  Length of Length ...... %d\n", h.LengthOfLength)
+	fmt.Fprintf(out, "Header (%d bytes, LoL %d)\n", hdrSize, h.LengthOfLength)
+	fmt.Fprintf(out, "  PVN .................. %d\n", h.PVN)
+	fmt.Fprintf(out, "  Protocol ID .......... %d (%s)\n", h.ProtocolID, eppProtocolIDName(h.ProtocolID))
+	fmt.Fprintf(out, "  Length of Length ...... %d\n", h.LengthOfLength)
 
 	if hdrSize >= epp.HeaderSize4 {
-		fmt.Printf("  User Defined ......... %d (0x%X)\n", h.UserDefined, h.UserDefined)
-		fmt.Printf("  Protocol ID Ext ...... %d\n", h.ExtendedProtocolID)
+		fmt.Fprintf(out, "  User Defined ......... %d (0x%X)\n", h.UserDefined, h.UserDefined)
+		fmt.Fprintf(out, "  Protocol ID Ext ...... %d\n", h.ExtendedProtocolID)
 	}
 	if hdrSize == epp.HeaderSize8 {
-		fmt.Printf("  CCSDS Defined ........ %d (0x%04X)\n", h.CCSDSDefined, h.CCSDSDefined)
+		fmt.Fprintf(out, "  CCSDS Defined ........ %d (0x%04X)\n", h.CCSDSDefined, h.CCSDSDefined)
 	}
 
-	fmt.Printf("  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
+	fmt.Fprintf(out, "  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
 
 	if pkt.IsIdle() {
-		fmt.Println("  [IDLE PACKET]")
+		fmt.Fprintln(out, "  [IDLE PACKET]")
 	}
 
 	// Data Zone
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Data Zone (%d bytes)\n", len(pkt.Data))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "Data Zone (%d bytes)\n", len(pkt.Data))
 	if len(pkt.Data) > 0 {
-		fmt.Print(hexDump(pkt.Data, "  "))
+		fmt.Fprint(out, hexDump(pkt.Data, "  "))
 	}
 
 	// Full hex dump
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Fprintln(out, strings.Repeat("─", 60))
 	displayLen := min(totalLen, len(raw))
-	fmt.Printf("Raw Packet (%d bytes)\n", displayLen)
-	fmt.Print(hexDump(raw[:displayLen], "  "))
+	fmt.Fprintf(out, "Raw Packet (%d bytes)\n", displayLen)
+	fmt.Fprint(out, hexDump(raw[:displayLen], "  "))
 }
 
 func eppValidateCmd() *cobra.Command {
@@ -339,9 +339,10 @@ func eppValidateCmd() *cobra.Command {
 				return fmt.Errorf("validation failed: %w", err)
 			}
 
-			fmt.Println("Packet is valid.")
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Packet is valid.")
 			h := pkt.Header
-			fmt.Printf("  Protocol ID: %d (%s), Header: %d bytes, Data: %d bytes\n",
+			fmt.Fprintf(out, "  Protocol ID: %d (%s), Header: %d bytes, Data: %d bytes\n",
 				h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 			return nil
 		},
@@ -372,6 +373,7 @@ func eppStreamCmd() *cobra.Command {
 			}
 			defer closer.Close() //nolint:errcheck // read-only
 
+			out := cmd.OutOrStdout()
 			count := 0
 			offset := 0
 
@@ -388,18 +390,18 @@ func eppStreamCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
-					fmt.Println(string(b))
+					fmt.Fprintln(out, string(b))
 				case "hex":
-					fmt.Println(hex.EncodeToString(pktData))
+					fmt.Fprintln(out, hex.EncodeToString(pktData))
 				case "text":
-					fmt.Printf("--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
+					fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.Header
-					fmt.Printf("  PID: %d (%s)  Header: %d bytes  DataLen: %d\n",
+					fmt.Fprintf(out, "  PID: %d (%s)  Header: %d bytes  DataLen: %d\n",
 						h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 					if len(pkt.Data) <= 32 {
-						fmt.Printf("  Data: %s\n", hex.EncodeToString(pkt.Data))
+						fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.Data))
 					} else {
-						fmt.Printf("  Data: %s... (%d bytes)\n",
+						fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
 							hex.EncodeToString(pkt.Data[:32]), len(pkt.Data))
 					}
 				}
@@ -409,7 +411,7 @@ func eppStreamCmd() *cobra.Command {
 			}
 
 			trailing := func(n int) {
-				fmt.Fprintf(os.Stderr, "Warning: %d trailing bytes ignored\n", n)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
 			}
 
 			// An Encapsulation Packet's length is readable from its first
@@ -419,7 +421,7 @@ func eppStreamCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Printf("\nDecoded %d packet(s), %d bytes total.\n", count, offset)
+				fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
 			}
 			return nil
 		},
