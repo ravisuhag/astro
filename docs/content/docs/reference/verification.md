@@ -21,8 +21,19 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 | Wire test vectors | 412, across 32 packages |
 | Fuzz targets | 84 |
 | Benchmarks | 36 |
-| Numbered PICS items | 500 |
+| Numbered PICS items | 540 |
 | Statement coverage | 87.4% mean across 33 packages, 72.9% lowest |
+
+A numbered PICS item is a distinct identifier — `PREFIX-N` (`SLE-40`), or the
+standard's own terser `RN` / `PN` form where a page transcribes it directly
+(`rhc.md`'s `R1`, `P1`) — named anywhere in the Item column of a
+[conformance page](/conformance). It counts once per page no matter how
+many tables on that page mention it: a primary table, a "Non-Conformances"
+list and a "Fully Supported Items" summary can all name the same
+requirement, and it still counts once. A page whose Item column holds prose
+rather than an identifier, such as `tcf.md`'s "Not Implemented" table,
+contributes zero. `go test ./internal/conformance/...` recomputes this
+number from the pages themselves and fails if it disagrees.
 
 ## The vector corpus
 
