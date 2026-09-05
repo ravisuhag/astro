@@ -265,3 +265,47 @@ func (m *fopMachine) state() vectors.Fields {
 		"suspend_state": uint64(m.f.ss),
 	}
 }
+
+// --- pruneAcked, past what the public API can construct ---
+//
+// pruneAcked is unexported. TestFOP_AckPrunesAtMaxWindow in fop_test.go
+// exercises it through NewFOP and TransmitFrame, but MaxWindow bounds K at
+// 127, so no legally configured FOP can ever have an acknowledged frame
+// sitting more than 128 behind N(R) — the exact shape the old hardcoded
+// `diff > 128` heuristic got wrong (bug B1). That makes the old heuristic
+// correct for everything reachable through NewFOP today, so nothing at
+// the API level still proves pruneAcked's ackCount-based math is the
+// implementation doing the work. This test calls pruneAcked directly with
+// a queue shaped the way the old heuristic mishandled, so the invariant
+// stays pinned even though it is unconstructable through the public API —
+// worth keeping in case the ceiling ever moves, for instance if a future
+// standard revision widens the sequence field and MaxWindow moves with it.
+func TestPruneAckedUsesTheAcknowledgementCount(t *testing.T) {
+	// N(R) = 150, acknowledging sequence numbers 0..149 (ackCount = 150).
+	// The frame at sequence 10 is 140 behind N(R): under the old constant
+	// `diff > 128` check it would have been kept forever, mistaken for
+	// still outstanding, even though it is one of the 150 frames this
+	// CLCW just acknowledged and must be pruned.
+	q := []SentFrame{
+		{SequenceNum: 10},  // acknowledged, diff = 140: what B1 got wrong
+		{SequenceNum: 149}, // acknowledged, boundary case: diff = 1
+		{SequenceNum: 150}, // N(R) itself: not yet acknowledged, diff = 0
+		{SequenceNum: 200}, // ahead of N(R): not yet acknowledged
+	}
+
+	got := pruneAcked(q, 150, 150)
+
+	var remaining []uint8
+	for _, sf := range got {
+		remaining = append(remaining, sf.SequenceNum)
+	}
+	want := []uint8{150, 200}
+	if len(remaining) != len(want) {
+		t.Fatalf("pruneAcked(q, 150, 150) kept %v, want %v", remaining, want)
+	}
+	for i := range want {
+		if remaining[i] != want[i] {
+			t.Fatalf("pruneAcked(q, 150, 150) kept %v, want %v", remaining, want)
+		}
+	}
+}
