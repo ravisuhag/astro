@@ -252,7 +252,7 @@ func (s *VirtualChannelPacketService) Send(data []byte) error {
 	}
 
 	if s.config.FrameLength == 0 {
-		frame, err := NewTMTransferFrame(s.scid, s.vcid, data, nil, nil)
+		frame, err := NewTransferFrame(s.scid, s.vcid, data, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -346,7 +346,7 @@ func (s *VirtualChannelPacketService) emitFrame(dataField []byte, fhp uint16) er
 		return err
 	}
 
-	frame, err := NewTMTransferFrame(s.scid, s.vcid, dataField, fsh, ocf)
+	frame, err := NewTransferFrame(s.scid, s.vcid, dataField, fsh, ocf)
 	if err != nil {
 		return err
 	}
@@ -509,7 +509,7 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-	frame, err := DecodeTMTransferFrameWithConfig(data, s.config)
+	frame, err := DecodeTransferFrameWithConfig(data, s.config)
 	if err != nil {
 		return err
 	}
@@ -649,7 +649,7 @@ func (s *VirtualChannelAccessService) Send(data []byte) error {
 		return err
 	}
 
-	frame, err := NewTMTransferFrame(s.scid, s.vcid, data, fsh, ocf)
+	frame, err := NewTransferFrame(s.scid, s.vcid, data, fsh, ocf)
 	if err != nil {
 		return err
 	}

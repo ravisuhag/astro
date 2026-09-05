@@ -49,7 +49,7 @@ func BenchmarkEncodeFrame(b *testing.B) {
 	config := benchConfig()
 	data := payload(config)
 
-	frame, err := tmdl.NewTMTransferFrame(42, 1, data, nil, nil)
+	frame, err := tmdl.NewTransferFrame(42, 1, data, nil, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func BenchmarkNewAndEncodeFrame(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		frame, err := tmdl.NewTMTransferFrame(42, 1, data, nil, nil)
+		frame, err := tmdl.NewTransferFrame(42, 1, data, nil, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -89,7 +89,7 @@ func BenchmarkNewAndEncodeFrame(b *testing.B) {
 func BenchmarkDecodeFrame(b *testing.B) {
 	config := benchConfig()
 
-	frame, err := tmdl.NewTMTransferFrame(42, 1, payload(config), nil, nil)
+	frame, err := tmdl.NewTransferFrame(42, 1, payload(config), nil, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func BenchmarkDecodeFrame(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+		if _, err := tmdl.DecodeTransferFrame(encoded); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -114,7 +114,7 @@ func BenchmarkDecodeFrame(b *testing.B) {
 func BenchmarkDecodeHeader(b *testing.B) {
 	config := benchConfig()
 
-	frame, err := tmdl.NewTMTransferFrame(42, 1, payload(config), nil, nil)
+	frame, err := tmdl.NewTransferFrame(42, 1, payload(config), nil, nil)
 	if err != nil {
 		b.Fatal(err)
 	}

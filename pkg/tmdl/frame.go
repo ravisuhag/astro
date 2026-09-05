@@ -254,10 +254,18 @@ type TMTransferFrame struct {
 }
 
 // NewTMTransferFrame initializes a new TM Transfer Frame.
+//
+// Deprecated: use NewTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
+func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
+	return NewTransferFrame(scid, vcid, data, secondaryHeaderData, ocf)
+}
+
+// NewTransferFrame initializes a new TM Transfer Frame.
 // A VCID wider than the 3-bit field is stored as given and refused on
 // encode rather than masked: masking would route the frame to a different
 // virtual channel than the caller named.
-func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
+func NewTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
 	if len(data) > 65535 {
 		return nil, ErrDataTooLarge
 	}
@@ -479,7 +487,7 @@ func NewIdleFrameWithCounter(scid uint16, vcid uint8, config ChannelConfig, coun
 	if config.HasOCF {
 		ocf = make([]byte, 4)
 	}
-	frame, err := NewTMTransferFrame(scid, vcid, idleData, fsh, ocf)
+	frame, err := NewTransferFrame(scid, vcid, idleData, fsh, ocf)
 	if err != nil {
 		return nil, err
 	}
@@ -510,19 +518,37 @@ func IsIdleFrame(frame *TMTransferFrame) bool {
 // DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame, treating
 // the last two octets as a Frame Error Control Field and verifying them.
 //
-// Use DecodeTMTransferFrameWithConfig for a channel that carries no such
-// field, which clause 5.6.1b permits under Reed-Solomon coding.
+// Deprecated: use DecodeTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
 func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
-	return DecodeTMTransferFrameWithConfig(data, ChannelConfig{HasFEC: true})
+	return DecodeTransferFrame(data)
+}
+
+// DecodeTransferFrame parses a byte slice into a TM Transfer Frame, treating
+// the last two octets as a Frame Error Control Field and verifying them.
+//
+// Use DecodeTransferFrameWithConfig for a channel that carries no such
+// field, which clause 5.6.1b permits under Reed-Solomon coding.
+func DecodeTransferFrame(data []byte) (*TMTransferFrame, error) {
+	return DecodeTransferFrameWithConfig(data, ChannelConfig{HasFEC: true})
 }
 
 // DecodeTMTransferFrameWithConfig parses a frame, verifying the Frame Error
 // Control Field only when the channel carries one.
 //
+// Deprecated: use DecodeTransferFrameWithConfig, which is the name every
+// data-link package now uses. This forwarder will be removed in v1.0.
+func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
+	return DecodeTransferFrameWithConfig(data, config)
+}
+
+// DecodeTransferFrameWithConfig parses a frame, verifying the Frame Error
+// Control Field only when the channel carries one.
+//
 // When config.FrameLength is set, the input must be exactly that long (
 // frames on a physical channel are fixed-length per CCSDS 132.0-B-3 clause 2.1.3)
 // and any other size returns ErrFrameLengthMismatch.
-func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
+func DecodeTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
 	// A frame needs its six-octet primary header, and two more for the error
 	// control field when the channel carries one.
 	minimum := 6
