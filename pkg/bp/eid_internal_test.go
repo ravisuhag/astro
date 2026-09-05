@@ -53,7 +53,15 @@ func TestEIDEncoding(t *testing.T) {
 }
 
 // RFC 9758 clause 6.2 says the two encodings carry the same EID. Read both
-// spellings of ipn:977000.100.1 and check they land on the same value.
+// spellings of ipn:977000.100.1 and check they land on the same Scheme,
+// Allocator, Node and Service.
+//
+// The two do not compare equal with == any more: decoding keeps track of
+// which spelling was used (the unexported form field) so that re-encoding
+// reproduces it rather than folding both into this library's preferred
+// two-element form — see EID's form field and B6 in plans/009. That is a
+// deliberate change from the wire-compatibility this test used to check by
+// comparing whole structs, so it now compares the fields a caller can see.
 func TestEIDBothIPNFormsAgree(t *testing.T) {
 	two := mustHex(t, "8202821b000ee8680000006401")        // clause 6.1.1
 	three := mustHex(t, "820283"+"1a000ee868"+"1864"+"01") // clause 6.1.2
@@ -66,12 +74,82 @@ func TestEIDBothIPNFormsAgree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("three-element form: %v", err)
 	}
-	if fromTwo != fromThree {
+	if fromTwo.Scheme != fromThree.Scheme || fromTwo.Allocator != fromThree.Allocator ||
+		fromTwo.Node != fromThree.Node || fromTwo.Service != fromThree.Service {
 		t.Errorf("two-element gave %+v, three-element gave %+v", fromTwo, fromThree)
 	}
 	want := IPNWithAllocator(977000, 100, 1)
 	if fromTwo != want {
 		t.Errorf("decoded %+v, want %+v", fromTwo, want)
+	}
+	if fromThree == want {
+		t.Errorf("three-element form decoded == a caller-built EID; want its form remembered as distinct")
+	}
+}
+
+// B6: an EID decoded from a spelling other than this library's preferred one
+// must re-encode to the exact octets it arrived with, not silently normalize
+// to the preferred spelling. RFC 9171 clause 4.3.1 requires the primary block
+// to survive a hop unchanged, and pkg/bpsec rebuilds the integrity-protected
+// plaintext by calling Encode on whatever pkg/bp decoded (see
+// TestIntegrityAcceptsIPNThreeElementSource and
+// TestIntegrityAcceptsDTNNoneAsTextSource in pkg/bpsec for that end-to-end
+// case).
+func TestEIDRoundTripsTheDecodedForm(t *testing.T) {
+	tests := []struct {
+		name string
+		hex  string
+	}{
+		{"ipn three-element form, RFC 9758 clause 6.1.2", "820283" + "1a000ee868" + "1864" + "01"},
+		{"dtn null endpoint spelled as text, RFC 9171 clause 4.2.5.1.1", "8201" + "646e6f6e65"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := mustHex(t, tt.hex)
+			decoded, err := decodeEIDFrom(cbor.NewDecoder(want))
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			got, err := appendEID(nil, decoded)
+			if err != nil {
+				t.Fatalf("appendEID: %v", err)
+			}
+			if hex.EncodeToString(got) != hex.EncodeToString(want) {
+				t.Errorf("round trip = %s, want %s", hex.EncodeToString(got), hex.EncodeToString(want))
+			}
+		})
+	}
+}
+
+// A caller building an EID by hand -- rather than decoding one -- always gets
+// this library's preferred spelling: the ipn two-element form regardless of
+// whether the allocator is zero, and the dtn null endpoint as the integer 0.
+// Originated bundles are unaffected by the form field decoding introduces.
+func TestEIDCallerBuiltAlwaysUsesThePreferredForm(t *testing.T) {
+	for _, e := range []EID{
+		IPN(2, 1),
+		IPNWithAllocator(0, 2, 1),
+		IPNWithAllocator(977000, 100, 1), // a nonzero allocator does not switch the wire form
+	} {
+		got, err := appendEID(nil, e)
+		if err != nil {
+			t.Fatalf("%s: appendEID: %v", e, err)
+		}
+		// [scheme, [fully-qualified node number, service]]: the SSP array
+		// header, the third octet, is 0x82 (two elements), never 0x83.
+		if got[2] != 0x82 {
+			t.Errorf("%s: SSP array header = 0x%02x, want 0x82 (two-element)", e, got[2])
+		}
+	}
+
+	for _, e := range []EID{NullEID(), DTN("none")} {
+		got, err := appendEID(nil, e)
+		if err != nil {
+			t.Fatalf("%s: appendEID: %v", e, err)
+		}
+		if hex.EncodeToString(got) != "820100" {
+			t.Errorf("%s = %s, want 820100 (the null endpoint as the integer 0)", e, hex.EncodeToString(got))
+		}
 	}
 }
 
