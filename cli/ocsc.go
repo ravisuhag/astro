@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/ocsc"
@@ -90,7 +91,7 @@ func ocscConditionCmd() *cobra.Command {
 				return fmt.Errorf("conditioning: %w", err)
 			}
 
-			return printCodeblocks(blocks, len(frames), rate, outputFmt)
+			return printCodeblocks(cmd.OutOrStdout(), blocks, len(frames), rate, outputFmt)
 		},
 	}
 
@@ -147,7 +148,7 @@ func ocscRandomizeCmd() *cobra.Command {
 
 			randomized := ocsc.Randomize(block)
 
-			return printCodeblocks([]*ocsc.BitString{randomized}, 0, 0, outputFmt)
+			return printCodeblocks(cmd.OutOrStdout(), []*ocsc.BitString{randomized}, 0, 0, outputFmt)
 		},
 	}
 
@@ -167,11 +168,11 @@ type codeblockJSON struct {
 
 // printCodeblocks renders codeblocks, reporting the bit length alongside the
 // octets because a codeblock is not a whole number of octets.
-func printCodeblocks(blocks []*ocsc.BitString, frames int, rate ocsc.CodeRate, format string) error {
+func printCodeblocks(out io.Writer, blocks []*ocsc.BitString, frames int, rate ocsc.CodeRate, format string) error {
 	switch format {
 	case "hex":
 		for _, block := range blocks {
-			fmt.Println(hex.EncodeToString(block.Bytes()))
+			fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
 		}
 	case "json":
 		rows := make([]codeblockJSON, 0, len(blocks))
@@ -186,17 +187,17 @@ func printCodeblocks(blocks []*ocsc.BitString, frames int, rate ocsc.CodeRate, f
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Println(string(b))
+		fmt.Fprintln(out, string(b))
 	case "text":
 		if frames > 0 {
-			fmt.Printf("%d frame(s) conditioned into %d codeblock(s) at rate %s\n",
+			fmt.Fprintf(out, "%d frame(s) conditioned into %d codeblock(s) at rate %s\n",
 				frames, len(blocks), rate)
 		}
 		for i, block := range blocks {
-			fmt.Println(strings.Repeat("─", 60))
-			fmt.Printf("Codeblock #%d: %d bits (%d octets, last one zero-padded)\n",
+			fmt.Fprintln(out, strings.Repeat("─", 60))
+			fmt.Fprintf(out, "Codeblock #%d: %d bits (%d octets, last one zero-padded)\n",
 				i+1, block.Len(), len(block.Bytes()))
-			fmt.Println(hex.EncodeToString(block.Bytes()))
+			fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
 		}
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'hex', or 'json')", format)
