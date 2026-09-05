@@ -162,6 +162,372 @@ func TestLastRecoveredSegmentTriggersFinished(t *testing.T) {
 	}
 }
 
+// A contiguous run of lost segments is merged by the receiver's gap map into
+// one NAK request. The sender must still re-segment its retransmission by
+// SegmentSize rather than answering with a single oversized File Data PDU
+// (the fresh-data path already chunks this way; the resend path must match).
+func TestClass2RetransmitsLostRunInSegments(t *testing.T) {
+	const segmentSize = 64
+	const numSegments = 20
+
+	content := make([]byte, segmentSize*numSegments)
+	for i := range content {
+		content[i] = byte(i)
+	}
+	srcFS := cfdp.NewMemoryFilestore()
+	if err := srcFS.WriteAt("src.dat", 0, content); err != nil {
+		t.Fatal(err)
+	}
+	dstFS := cfdp.NewMemoryFilestore()
+
+	sender, err := cfdp.NewSender(srcFS, senderConfig(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver := cfdp.NewReceiver(dstFS, receiverConfig(true))
+
+	// Drop ten consecutive data segments right after the metadata (index 0),
+	// so the receiver sees one 640-octet gap rather than ten small ones.
+	index := 0
+	for {
+		pdu, ok, err := sender.NextPDU()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			break
+		}
+		if index >= 1 && index <= 10 {
+			index++
+			continue // lost in transit
+		}
+		index++
+		raw, err := pdu.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := cfdp.DecodePDU(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := receiver.HandlePDU(decoded); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	missing := receiver.MissingSegments()
+	if len(missing) != 1 {
+		t.Fatalf("expected the ten lost segments merged into one gap, got %+v", missing)
+	}
+	if gapLen := missing[0].EndOffset - missing[0].StartOffset; gapLen != 10*segmentSize {
+		t.Fatalf("gap length = %d, want %d", gapLen, 10*segmentSize)
+	}
+
+	// Pump the recovery exchange, checking every retransmitted File Data PDU's
+	// payload length along the way.
+	for round := 0; round < 50; round++ {
+		progressed := false
+
+		for {
+			pdu, ok, err := receiver.NextPDU()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok {
+				break
+			}
+			progressed = true
+			raw, err := pdu.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for {
+			pdu, ok, err := sender.NextPDU()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok {
+				break
+			}
+			progressed = true
+			if pdu.Header.IsFileData {
+				fd, err := cfdp.DecodeFileDataPDU(pdu.Data, false, pdu.Header.LargeFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(fd.Data) > segmentSize {
+					t.Fatalf("retransmitted segment payload = %d octets, want <= %d (SegmentSize)", len(fd.Data), segmentSize)
+				}
+			}
+			raw, err := pdu.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := receiver.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if ack, ok, err := sender.AckFinished(); err == nil && ok {
+			raw, err := ack.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := receiver.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+			progressed = true
+		}
+
+		if !progressed {
+			break
+		}
+	}
+
+	if !receiver.Complete() {
+		t.Fatalf("recovery failed; still missing %+v", receiver.MissingSegments())
+	}
+	delivered, err := dstFS.Read("dst.dat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(delivered, content) {
+		t.Error("recovered file differs from the source")
+	}
+}
+
+// When a lost run is larger than a 16-bit data field can carry (~65,535
+// octets), the resend path must still split it into SegmentSize-sized PDUs
+// rather than building one PDU that PDU.Encode refuses -- which, on the
+// unfixed code, also discards the request since the pop happens before the
+// PDU is built.
+func TestClass2RecoversLostRunLargerThanPDULimit(t *testing.T) {
+	const segmentSize = 1024
+	const numSegments = 200
+	const lostSegments = 100 // 100 * 1024 = 102400 octets, over the 65535 limit
+
+	content := make([]byte, segmentSize*numSegments)
+	for i := range content {
+		content[i] = byte(i)
+	}
+	srcFS := cfdp.NewMemoryFilestore()
+	if err := srcFS.WriteAt("src.dat", 0, content); err != nil {
+		t.Fatal(err)
+	}
+	dstFS := cfdp.NewMemoryFilestore()
+
+	config := senderConfig(true)
+	config.SegmentSize = segmentSize
+	sender, err := cfdp.NewSender(srcFS, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver := cfdp.NewReceiver(dstFS, receiverConfig(true))
+
+	index := 0
+	for {
+		pdu, ok, err := sender.NextPDU()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			break
+		}
+		if index >= 1 && index <= lostSegments {
+			index++
+			continue // lost in transit
+		}
+		index++
+		raw, err := pdu.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := cfdp.DecodePDU(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := receiver.HandlePDU(decoded); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	missing := receiver.MissingSegments()
+	if len(missing) != 1 {
+		t.Fatalf("expected the lost run merged into one gap, got %+v", missing)
+	}
+	if gapLen := missing[0].EndOffset - missing[0].StartOffset; gapLen != lostSegments*segmentSize {
+		t.Fatalf("gap length = %d, want %d", gapLen, lostSegments*segmentSize)
+	}
+	if gapLen := missing[0].EndOffset - missing[0].StartOffset; gapLen <= 0xFFFF {
+		t.Fatalf("gap length = %d, want > 0xFFFF for this to exercise the PDU size limit", gapLen)
+	}
+
+	for round := 0; round < 200; round++ {
+		progressed := false
+
+		for {
+			pdu, ok, err := receiver.NextPDU()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok {
+				break
+			}
+			progressed = true
+			raw, err := pdu.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := sender.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for {
+			pdu, ok, err := sender.NextPDU()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok {
+				break
+			}
+			progressed = true
+			// This is where the unfixed code fails: an oversized retransmitted
+			// PDU cannot be encoded to the wire.
+			raw, err := pdu.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := receiver.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if ack, ok, err := sender.AckFinished(); err == nil && ok {
+			raw, err := ack.Encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := cfdp.DecodePDU(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := receiver.HandlePDU(decoded); err != nil {
+				t.Fatal(err)
+			}
+			progressed = true
+		}
+
+		if !progressed {
+			break
+		}
+	}
+
+	if !receiver.Complete() {
+		t.Fatalf("recovery failed; still missing %+v", receiver.MissingSegments())
+	}
+	delivered, err := dstFS.Read("dst.dat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(delivered, content) {
+		t.Error("recovered file differs from the source")
+	}
+}
+
+// Clause 5.2.6: a NAK is the receiver's complete current statement of what is
+// missing. Delivering the same NAK twice (a plausible replay on a lossy
+// return link) must not retransmit the same octets twice.
+func TestDuplicateNAKDoesNotDoubleRetransmit(t *testing.T) {
+	content := testFile() // 500 octets; SegmentSize 64 from senderConfig.
+	srcFS := cfdp.NewMemoryFilestore()
+	if err := srcFS.WriteAt("src.dat", 0, content); err != nil {
+		t.Fatal(err)
+	}
+	sender, err := cfdp.NewSender(srcFS, senderConfig(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drive the sender through metadata, all fresh data and the EOF, so only
+	// the resend queue remains to answer NAKs (Class 2's EOF is emitted by
+	// the same NextPDU call that exhausts the fresh data).
+	for {
+		_, ok, err := sender.NextPDU()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			break
+		}
+	}
+
+	nak := &cfdp.NAKPDU{
+		EndOfScope: uint64(len(content)),
+		Requests:   []cfdp.SegmentRequest{{StartOffset: 0, EndOffset: 64}},
+	}
+	body, err := nak.Encode(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdu := &cfdp.PDU{Header: toReceiver(true, false), Data: body}
+
+	// The same NAK arrives twice, as a replay would.
+	if err := sender.HandlePDU(pdu); err != nil {
+		t.Fatal(err)
+	}
+	if err := sender.HandlePDU(pdu); err != nil {
+		t.Fatal(err)
+	}
+
+	var totalOctets int
+	for {
+		p, ok, err := sender.NextPDU()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			break
+		}
+		if !p.Header.IsFileData {
+			continue
+		}
+		fd, err := cfdp.DecodeFileDataPDU(p.Data, false, p.Header.LargeFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalOctets += len(fd.Data)
+	}
+	if totalOctets != 64 {
+		t.Errorf("retransmitted %d octets for a NAK delivered twice, want %d (once)", totalOctets, 64)
+	}
+}
+
 // F3: an EOF carrying a fault condition is an EOF (cancel): the receiver must
 // ACK it, answer with Finished (delivery incomplete), and stop NAKing.
 func TestRemoteCancelTerminatesReceive(t *testing.T) {
