@@ -189,7 +189,7 @@ func sppDecodeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), formatted)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -265,7 +265,7 @@ func sppEncodeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), formatted)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -326,40 +326,40 @@ func printInspect(out io.Writer, pkt *spp.SpacePacket, raw []byte) {
 	h := pkt.PrimaryHeader
 	totalLen := spp.PrimaryHeaderSize + int(h.PacketLength) + 1
 
-	fmt.Fprintln(out, "Space Packet Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "Space Packet Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Primary Header
-	fmt.Fprintln(out, "Primary Header (6 bytes)")
-	fmt.Fprintf(out, "  Version .............. %d\n", h.Version)
-	fmt.Fprintf(out, "  Type ................. %d (%s)\n", h.Type, typeName(h.Type))
-	fmt.Fprintf(out, "  Secondary Header Flag  %d\n", h.SecondaryHeaderFlag)
-	fmt.Fprintf(out, "  APID ................. %d (0x%03X)\n", h.APID, h.APID)
-	fmt.Fprintf(out, "  Sequence Flags ....... %d (%s)\n", h.SequenceFlags, seqFlagsName(h.SequenceFlags))
-	fmt.Fprintf(out, "  Sequence Count ....... %d\n", h.SequenceCount)
-	fmt.Fprintf(out, "  Packet Data Length ... %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
+	_, _ = fmt.Fprintln(out, "Primary Header (6 bytes)")
+	_, _ = fmt.Fprintf(out, "  Version .............. %d\n", h.Version)
+	_, _ = fmt.Fprintf(out, "  Type ................. %d (%s)\n", h.Type, typeName(h.Type))
+	_, _ = fmt.Fprintf(out, "  Secondary Header Flag  %d\n", h.SecondaryHeaderFlag)
+	_, _ = fmt.Fprintf(out, "  APID ................. %d (0x%03X)\n", h.APID, h.APID)
+	_, _ = fmt.Fprintf(out, "  Sequence Flags ....... %d (%s)\n", h.SequenceFlags, seqFlagsName(h.SequenceFlags))
+	_, _ = fmt.Fprintf(out, "  Sequence Count ....... %d\n", h.SequenceCount)
+	_, _ = fmt.Fprintf(out, "  Packet Data Length ... %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
 
 	if pkt.IsIdle() {
-		fmt.Fprintln(out, "  [IDLE PACKET]")
+		_, _ = fmt.Fprintln(out, "  [IDLE PACKET]")
 	}
 
 	// User Data
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "User Data (%d bytes)\n", len(pkt.UserData))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "User Data (%d bytes)\n", len(pkt.UserData))
 	if len(pkt.UserData) > 0 {
-		fmt.Fprint(out, hexDump(pkt.UserData, "  "))
+		_, _ = fmt.Fprint(out, hexDump(pkt.UserData, "  "))
 	}
 
 	// Error Control
 	if pkt.ErrorControl != nil {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Error Control: 0x%04X (CRC-16-CCITT)\n", *pkt.ErrorControl)
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Error Control: 0x%04X (CRC-16-CCITT)\n", *pkt.ErrorControl)
 	}
 
 	// Full hex dump
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Raw Packet (%d bytes)\n", len(raw[:totalLen]))
-	fmt.Fprint(out, hexDump(raw[:totalLen], "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Packet (%d bytes)\n", len(raw[:totalLen]))
+	_, _ = fmt.Fprint(out, hexDump(raw[:totalLen], "  "))
 }
 
 // hexDump produces a classic hex dump with offset, hex bytes, and ASCII.
@@ -370,11 +370,11 @@ func hexDump(data []byte, indent string) string {
 		chunk := data[i:end]
 
 		// Offset
-		fmt.Fprintf(&sb, "%s%04x  ", indent, i)
+		_, _ = fmt.Fprintf(&sb, "%s%04x  ", indent, i)
 
 		// Hex bytes
 		for j, b := range chunk {
-			fmt.Fprintf(&sb, "%02x ", b)
+			_, _ = fmt.Fprintf(&sb, "%02x ", b)
 			if j == 7 {
 				sb.WriteByte(' ')
 			}
@@ -431,12 +431,12 @@ func sppValidateCmd() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "Packet is valid.")
+			_, _ = fmt.Fprintln(out, "Packet is valid.")
 			h := pkt.PrimaryHeader
-			fmt.Fprintf(out, "  Type: %s, APID: %d, SeqCount: %d, Data: %d bytes\n",
+			_, _ = fmt.Fprintf(out, "  Type: %s, APID: %d, SeqCount: %d, Data: %d bytes\n",
 				typeName(h.Type), h.APID, h.SequenceCount, len(pkt.UserData))
 			if crcFlag && pkt.ErrorControl != nil {
-				fmt.Fprintf(out, "  CRC: 0x%04X (OK)\n", *pkt.ErrorControl)
+				_, _ = fmt.Fprintf(out, "  CRC: 0x%04X (OK)\n", *pkt.ErrorControl)
 			}
 			return nil
 		},
@@ -486,19 +486,19 @@ func sppStreamCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
-					fmt.Fprintln(out, string(b))
+					_, _ = fmt.Fprintln(out, string(b))
 				case "hex":
-					fmt.Fprintln(out, hex.EncodeToString(pktData))
+					_, _ = fmt.Fprintln(out, hex.EncodeToString(pktData))
 				case "text":
-					fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
+					_, _ = fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.PrimaryHeader
-					fmt.Fprintf(out, "  Type: %s  APID: %d  SeqFlags: %s  SeqCount: %d  DataLen: %d\n",
+					_, _ = fmt.Fprintf(out, "  Type: %s  APID: %d  SeqFlags: %s  SeqCount: %d  DataLen: %d\n",
 						typeName(h.Type), h.APID, seqFlagsName(h.SequenceFlags), h.SequenceCount,
 						len(pkt.UserData))
 					if len(pkt.UserData) <= 32 {
-						fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.UserData))
+						_, _ = fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.UserData))
 					} else {
-						fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
+						_, _ = fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
 							hex.EncodeToString(pkt.UserData[:32]), len(pkt.UserData))
 					}
 				}
@@ -508,7 +508,7 @@ func sppStreamCmd() *cobra.Command {
 			}
 
 			trailing := func(n int) {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
 			}
 
 			// DeclaredPacketSize, not PacketSizer: the stream reader has to
@@ -519,7 +519,7 @@ func sppStreamCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
+				_, _ = fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
 			}
 			return nil
 		},

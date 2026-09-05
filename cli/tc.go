@@ -229,21 +229,21 @@ func printTCFrame(out io.Writer, f *tcdl.TCTransferFrame, raw []byte, format str
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Fprintln(out, "TC Transfer Frame:")
-		fmt.Fprintln(out, "Primary Header:")
-		fmt.Fprintln(out, f.Header.Humanize())
-		fmt.Fprintf(out, "  MCID: %d\n", f.Header.MCID())
-		fmt.Fprintf(out, "  GVCID: %d\n", f.Header.GVCID())
+		_, _ = fmt.Fprintln(out, "TC Transfer Frame:")
+		_, _ = fmt.Fprintln(out, "Primary Header:")
+		_, _ = fmt.Fprintln(out, f.Header.Humanize())
+		_, _ = fmt.Fprintf(out, "  MCID: %d\n", f.Header.MCID())
+		_, _ = fmt.Fprintf(out, "  GVCID: %d\n", f.Header.GVCID())
 		if f.SegmentHeader != nil {
-			fmt.Fprintln(out, "Segment Header:")
-			fmt.Fprintln(out, f.SegmentHeader.Humanize())
+			_, _ = fmt.Fprintln(out, "Segment Header:")
+			_, _ = fmt.Fprintln(out, f.SegmentHeader.Humanize())
 		}
-		fmt.Fprintf(out, "Data Field: %d bytes\n", len(f.DataField))
-		fmt.Fprintf(out, "FEC: 0x%04X\n", f.FrameErrorControl)
+		_, _ = fmt.Fprintf(out, "Data Field: %d bytes\n", len(f.DataField))
+		_, _ = fmt.Fprintf(out, "FEC: 0x%04X\n", f.FrameErrorControl)
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}
@@ -253,36 +253,36 @@ func printTCFrame(out io.Writer, f *tcdl.TCTransferFrame, raw []byte, format str
 func printTCInspect(out io.Writer, f *tcdl.TCTransferFrame, raw []byte) {
 	h := f.Header
 
-	fmt.Fprintln(out, "TC Transfer Frame Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "TC Transfer Frame Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
-	fmt.Fprintln(out, "Primary Header (5 bytes)")
-	fmt.Fprintf(out, "  Version .............. %d\n", h.VersionNumber)
-	fmt.Fprintf(out, "  Bypass Flag .......... %d (%s)\n", h.BypassFlag, bypassName(h.BypassFlag))
-	fmt.Fprintf(out, "  Control Command ...... %d (%s)\n", h.ControlCommandFlag, controlName(h.ControlCommandFlag))
-	fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
-	fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VirtualChannelID)
-	fmt.Fprintf(out, "  Frame Length ......... %d bytes\n", h.FrameLength+1)
-	fmt.Fprintf(out, "  Frame Sequence Num ... %d\n", h.FrameSequenceNum)
-	fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
-	fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
+	_, _ = fmt.Fprintln(out, "Primary Header (5 bytes)")
+	_, _ = fmt.Fprintf(out, "  Version .............. %d\n", h.VersionNumber)
+	_, _ = fmt.Fprintf(out, "  Bypass Flag .......... %d (%s)\n", h.BypassFlag, bypassName(h.BypassFlag))
+	_, _ = fmt.Fprintf(out, "  Control Command ...... %d (%s)\n", h.ControlCommandFlag, controlName(h.ControlCommandFlag))
+	_, _ = fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
+	_, _ = fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VirtualChannelID)
+	_, _ = fmt.Fprintf(out, "  Frame Length ......... %d bytes\n", h.FrameLength+1)
+	_, _ = fmt.Fprintf(out, "  Frame Sequence Num ... %d\n", h.FrameSequenceNum)
+	_, _ = fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
+	_, _ = fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
 
 	if f.SegmentHeader != nil {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintln(out, "Segment Header (1 byte)")
-		fmt.Fprintln(out, f.SegmentHeader.Humanize())
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintln(out, "Segment Header (1 byte)")
+		_, _ = fmt.Fprintln(out, f.SegmentHeader.Humanize())
 	}
 
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
 	if len(f.DataField) > 0 {
-		fmt.Fprint(out, hexDump(f.DataField, "  "))
+		_, _ = fmt.Fprint(out, hexDump(f.DataField, "  "))
 	}
 
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
 
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
-	fmt.Fprint(out, hexDump(raw, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
+	_, _ = fmt.Fprint(out, hexDump(raw, "  "))
 }

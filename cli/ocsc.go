@@ -172,7 +172,7 @@ func printCodeblocks(out io.Writer, blocks []*ocsc.BitString, frames int, rate o
 	switch format {
 	case "hex":
 		for _, block := range blocks {
-			fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
+			_, _ = fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
 		}
 	case "json":
 		rows := make([]codeblockJSON, 0, len(blocks))
@@ -187,17 +187,17 @@ func printCodeblocks(out io.Writer, blocks []*ocsc.BitString, frames int, rate o
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "text":
 		if frames > 0 {
-			fmt.Fprintf(out, "%d frame(s) conditioned into %d codeblock(s) at rate %s\n",
+			_, _ = fmt.Fprintf(out, "%d frame(s) conditioned into %d codeblock(s) at rate %s\n",
 				frames, len(blocks), rate)
 		}
 		for i, block := range blocks {
-			fmt.Fprintln(out, strings.Repeat("─", 60))
-			fmt.Fprintf(out, "Codeblock #%d: %d bits (%d octets, last one zero-padded)\n",
+			_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+			_, _ = fmt.Fprintf(out, "Codeblock #%d: %d bits (%d octets, last one zero-padded)\n",
 				i+1, block.Len(), len(block.Bytes()))
-			fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
+			_, _ = fmt.Fprintln(out, hex.EncodeToString(block.Bytes()))
 		}
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'hex', or 'json')", format)

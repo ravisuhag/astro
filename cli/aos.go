@@ -288,7 +288,7 @@ func aosGenCmd() *cobra.Command {
 					return err
 				}
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n",
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n",
 				count, scid, vcid, frameSize)
 			return nil
 		},
@@ -469,17 +469,17 @@ func emitAOSFrame(out io.Writer, outputFmt string, insertZoneLen int, hasOCF, ha
 			if err != nil {
 				return fmt.Errorf("encoding JSON output: %w", err)
 			}
-			fmt.Fprintln(out, string(b))
+			_, _ = fmt.Fprintln(out, string(b))
 		case "hex":
-			fmt.Fprintln(out, hex.EncodeToString(raw))
+			_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 		case "text":
-			fmt.Fprintf(out, "--- Frame #%d (SCID=%d VCID=%d VC=%d) ---\n",
+			_, _ = fmt.Fprintf(out, "--- Frame #%d (SCID=%d VCID=%d VC=%d) ---\n",
 				index, ident.scid, ident.vcid, ident.vcCount)
-			fmt.Fprintf(out, "  Data: %d bytes", len(frame.DataField))
+			_, _ = fmt.Fprintf(out, "  Data: %d bytes", len(frame.DataField))
 			if aos.IsIdleFrame(frame) {
-				fmt.Fprint(out, " [IDLE]")
+				_, _ = fmt.Fprint(out, " [IDLE]")
 			}
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 		}
 
 		return nil
@@ -494,11 +494,11 @@ func printAOSFrame(out io.Writer, f *aos.TransferFrame, raw []byte, format strin
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Fprintln(out, f.Humanize())
+		_, _ = fmt.Fprintln(out, f.Humanize())
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}
@@ -509,46 +509,46 @@ func printAOSFrame(out io.Writer, f *aos.TransferFrame, raw []byte, format strin
 func printAOSInspect(out io.Writer, f *aos.TransferFrame, raw []byte) {
 	h := f.Header
 
-	fmt.Fprintln(out, "AOS Transfer Frame Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "AOS Transfer Frame Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
-	fmt.Fprintf(out, "Primary Header (%d bytes)\n", aos.PrimaryHeaderSize)
-	fmt.Fprintf(out, "  TFVN ........................ %d (0b%02b)\n", h.TFVN, h.TFVN)
-	fmt.Fprintf(out, "  Spacecraft ID ............... %d (0x%02X)\n", h.SCID, h.SCID)
-	fmt.Fprintf(out, "  Virtual Channel ID .......... %d\n", h.VCID)
-	fmt.Fprintf(out, "  VC Frame Count .............. %d (0x%06X)\n", h.VCFrameCount, h.VCFrameCount)
-	fmt.Fprintf(out, "  Replay Flag ................. %v\n", h.ReplayFlag)
-	fmt.Fprintf(out, "  VC Frame Count Usage Flag ... %v\n", h.VCFCUsageFlag)
-	fmt.Fprintf(out, "  VC Frame Count Cycle ........ %d\n", h.VCFrameCountCycle)
-	fmt.Fprintf(out, "  MCID ........................ %d\n", h.MCID())
-	fmt.Fprintf(out, "  GVCID ....................... %d\n", h.GVCID())
+	_, _ = fmt.Fprintf(out, "Primary Header (%d bytes)\n", aos.PrimaryHeaderSize)
+	_, _ = fmt.Fprintf(out, "  TFVN ........................ %d (0b%02b)\n", h.TFVN, h.TFVN)
+	_, _ = fmt.Fprintf(out, "  Spacecraft ID ............... %d (0x%02X)\n", h.SCID, h.SCID)
+	_, _ = fmt.Fprintf(out, "  Virtual Channel ID .......... %d\n", h.VCID)
+	_, _ = fmt.Fprintf(out, "  VC Frame Count .............. %d (0x%06X)\n", h.VCFrameCount, h.VCFrameCount)
+	_, _ = fmt.Fprintf(out, "  Replay Flag ................. %v\n", h.ReplayFlag)
+	_, _ = fmt.Fprintf(out, "  VC Frame Count Usage Flag ... %v\n", h.VCFCUsageFlag)
+	_, _ = fmt.Fprintf(out, "  VC Frame Count Cycle ........ %d\n", h.VCFrameCountCycle)
+	_, _ = fmt.Fprintf(out, "  MCID ........................ %d\n", h.MCID())
+	_, _ = fmt.Fprintf(out, "  GVCID ....................... %d\n", h.GVCID())
 
 	if len(f.InsertZone) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Insert Zone (%d bytes)\n", len(f.InsertZone))
-		fmt.Fprint(out, hexDump(f.InsertZone, "  "))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Insert Zone (%d bytes)\n", len(f.InsertZone))
+		_, _ = fmt.Fprint(out, hexDump(f.InsertZone, "  "))
 	}
 
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
 	if len(f.DataField) > 0 {
-		fmt.Fprint(out, hexDump(f.DataField, "  "))
+		_, _ = fmt.Fprint(out, hexDump(f.DataField, "  "))
 	}
 	if aos.IsIdleFrame(f) {
-		fmt.Fprintln(out, "  [OID FRAME, VCID 63]")
+		_, _ = fmt.Fprintln(out, "  [OID FRAME, VCID 63]")
 	}
 
 	if len(f.OCF) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OCF))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OCF))
 	}
 
 	if len(f.FECF) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
 	}
 
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
-	fmt.Fprint(out, hexDump(raw, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
+	_, _ = fmt.Fprint(out, hexDump(raw, "  "))
 }

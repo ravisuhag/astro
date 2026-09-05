@@ -134,12 +134,12 @@ func ldcCompressCmd() *cobra.Command {
 					return fmt.Errorf("writing output: %w", err)
 				}
 			case "hex":
-				fmt.Fprintln(out, hex.EncodeToString(coded))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(coded))
 			case "text":
 				ratio := float64(len(data)) / float64(len(coded))
-				fmt.Fprintf(out, "Compressed %d sample(s), %d octets in, %d octets out (%.2fx)\n",
+				_, _ = fmt.Fprintf(out, "Compressed %d sample(s), %d octets in, %d octets out (%.2fx)\n",
 					len(samples), len(data), len(coded), ratio)
-				fmt.Fprintln(out, hex.EncodeToString(coded))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(coded))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'bin', 'hex', or 'text')", outputFmt)
 			}
@@ -193,11 +193,11 @@ func ldcDecompressCmd() *cobra.Command {
 					return fmt.Errorf("writing output: %w", err)
 				}
 			case "hex":
-				fmt.Fprintln(out, hex.EncodeToString(octets))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(octets))
 			case "text":
-				fmt.Fprintf(out, "Recovered %d sample(s) at %d bits each\n",
+				_, _ = fmt.Fprintf(out, "Recovered %d sample(s) at %d bits each\n",
 					len(samples), header.Params.Resolution)
-				fmt.Fprintln(out, hex.EncodeToString(octets))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(octets))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'bin', 'hex', or 'text')", outputFmt)
 			}
@@ -248,10 +248,10 @@ func ldcInspectCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Fprintln(out, string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Fprintln(out, header.Humanize())
-				fmt.Fprintf(out, "  File size .......... %d octets\n", len(data))
+				_, _ = fmt.Fprintln(out, header.Humanize())
+				_, _ = fmt.Fprintf(out, "  File size .......... %d octets\n", len(data))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}

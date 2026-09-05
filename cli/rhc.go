@@ -105,14 +105,14 @@ func rhcCompressCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("compressing cycle %d: %w", offset/width, err)
 				}
-				fmt.Fprintf(out, "%d %s\n", bitLen, hex.EncodeToString(coded))
+				_, _ = fmt.Fprintf(out, "%d %s\n", bitLen, hex.EncodeToString(coded))
 
 				inBits += vectorBits
 				outBits += bitLen
 			}
 
 			ratio := float64(inBits) / float64(outBits)
-			fmt.Fprintf(cmd.ErrOrStderr(), "%d cycle(s), %d bits in, %d bits out (%.2fx)\n",
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%d cycle(s), %d bits in, %d bits out (%.2fx)\n",
 				len(data)/width, inBits, outBits, ratio)
 			return nil
 		},
@@ -196,7 +196,7 @@ func rhcDecompressCmd() *cobra.Command {
 						return fmt.Errorf("writing output: %w", err)
 					}
 				case "hex":
-					fmt.Fprintln(out, hex.EncodeToString(vector))
+					_, _ = fmt.Fprintln(out, hex.EncodeToString(vector))
 				default:
 					return fmt.Errorf("unknown format: %s (use 'bin' or 'hex')", outputFmt)
 				}

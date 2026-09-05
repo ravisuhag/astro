@@ -99,7 +99,7 @@ func sppGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), APID=%d, %d data bytes each\n", count, apid, size)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), APID=%d, %d data bytes each\n", count, apid, size)
 			return nil
 		},
 	}
@@ -176,7 +176,7 @@ func tmGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
 			return nil
 		},
 	}
@@ -248,7 +248,7 @@ func tcGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
 			return nil
 		},
 	}
@@ -324,7 +324,7 @@ func caduGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CADU(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, caduSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CADU(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, caduSize)
 			return nil
 		},
 	}
@@ -391,7 +391,7 @@ func cltuGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CLTU(s), SCID=%d VCID=%d\n", count, scid, vcid)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CLTU(s), SCID=%d VCID=%d\n", count, scid, vcid)
 			return nil
 		},
 	}
@@ -457,7 +457,7 @@ func eppGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), PID=%d, %d data bytes each\n", count, protocolID, size)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), PID=%d, %d data bytes each\n", count, protocolID, size)
 			return nil
 		},
 	}
@@ -479,7 +479,7 @@ func writeGenOutput(out io.Writer, data []byte, format string) error {
 		_, err := out.Write(data)
 		return err
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(data))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(data))
 		return nil
 	default:
 		return fmt.Errorf("unknown format: %s (use 'bin' or 'hex')", format)

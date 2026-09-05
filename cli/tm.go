@@ -324,26 +324,26 @@ func printTMFrame(out io.Writer, f *tmdl.TMTransferFrame, raw []byte, format str
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Fprintln(out, "TM Transfer Frame:")
-		fmt.Fprintln(out, "Primary Header:")
-		fmt.Fprintln(out, f.Header.Humanize())
-		fmt.Fprintf(out, "  MCID: %d\n", f.Header.MCID())
-		fmt.Fprintf(out, "  GVCID: %d\n", f.Header.GVCID())
+		_, _ = fmt.Fprintln(out, "TM Transfer Frame:")
+		_, _ = fmt.Fprintln(out, "Primary Header:")
+		_, _ = fmt.Fprintln(out, f.Header.Humanize())
+		_, _ = fmt.Fprintf(out, "  MCID: %d\n", f.Header.MCID())
+		_, _ = fmt.Fprintf(out, "  GVCID: %d\n", f.Header.GVCID())
 		if f.Header.FSHFlag {
-			fmt.Fprintln(out, "Secondary Header:")
-			fmt.Fprintln(out, f.SecondaryHeader.Humanize())
+			_, _ = fmt.Fprintln(out, "Secondary Header:")
+			_, _ = fmt.Fprintln(out, f.SecondaryHeader.Humanize())
 		}
-		fmt.Fprintf(out, "Data Field: %d bytes\n", len(f.DataField))
+		_, _ = fmt.Fprintf(out, "Data Field: %d bytes\n", len(f.DataField))
 		if len(f.OperationalControl) > 0 {
-			fmt.Fprintf(out, "OCF: %s\n", hex.EncodeToString(f.OperationalControl))
+			_, _ = fmt.Fprintf(out, "OCF: %s\n", hex.EncodeToString(f.OperationalControl))
 		}
-		fmt.Fprintf(out, "FEC: 0x%04X\n", f.FrameErrorControl)
+		_, _ = fmt.Fprintf(out, "FEC: 0x%04X\n", f.FrameErrorControl)
 		if tmdl.IsIdleFrame(f) {
-			fmt.Fprintln(out, "[IDLE FRAME]")
+			_, _ = fmt.Fprintln(out, "[IDLE FRAME]")
 		}
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
@@ -355,57 +355,57 @@ func printTMFrame(out io.Writer, f *tmdl.TMTransferFrame, raw []byte, format str
 func printTMInspect(out io.Writer, f *tmdl.TMTransferFrame, raw []byte) {
 	h := f.Header
 
-	fmt.Fprintln(out, "TM Transfer Frame Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "TM Transfer Frame Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Primary Header
-	fmt.Fprintln(out, "Primary Header (6 bytes)")
-	fmt.Fprintf(out, "  Version .............. %d\n", h.VersionNumber)
-	fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
-	fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VirtualChannelID)
-	fmt.Fprintf(out, "  OCF Flag ............. %v\n", h.OCFFlag)
-	fmt.Fprintf(out, "  MC Frame Count ....... %d\n", h.MCFrameCount)
-	fmt.Fprintf(out, "  VC Frame Count ....... %d\n", h.VCFrameCount)
-	fmt.Fprintf(out, "  FSH Flag ............. %v\n", h.FSHFlag)
-	fmt.Fprintf(out, "  Sync Flag ............ %v\n", h.SyncFlag)
-	fmt.Fprintf(out, "  Packet Order Flag .... %v\n", h.PacketOrderFlag)
-	fmt.Fprintf(out, "  Segment Length ID .... %d\n", h.SegmentLengthID)
-	fmt.Fprintf(out, "  First Header Ptr ..... %d (0x%03X)\n", h.FirstHeaderPtr, h.FirstHeaderPtr)
-	fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
-	fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
+	_, _ = fmt.Fprintln(out, "Primary Header (6 bytes)")
+	_, _ = fmt.Fprintf(out, "  Version .............. %d\n", h.VersionNumber)
+	_, _ = fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
+	_, _ = fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VirtualChannelID)
+	_, _ = fmt.Fprintf(out, "  OCF Flag ............. %v\n", h.OCFFlag)
+	_, _ = fmt.Fprintf(out, "  MC Frame Count ....... %d\n", h.MCFrameCount)
+	_, _ = fmt.Fprintf(out, "  VC Frame Count ....... %d\n", h.VCFrameCount)
+	_, _ = fmt.Fprintf(out, "  FSH Flag ............. %v\n", h.FSHFlag)
+	_, _ = fmt.Fprintf(out, "  Sync Flag ............ %v\n", h.SyncFlag)
+	_, _ = fmt.Fprintf(out, "  Packet Order Flag .... %v\n", h.PacketOrderFlag)
+	_, _ = fmt.Fprintf(out, "  Segment Length ID .... %d\n", h.SegmentLengthID)
+	_, _ = fmt.Fprintf(out, "  First Header Ptr ..... %d (0x%03X)\n", h.FirstHeaderPtr, h.FirstHeaderPtr)
+	_, _ = fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
+	_, _ = fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
 
 	if tmdl.IsIdleFrame(f) {
-		fmt.Fprintln(out, "  [IDLE FRAME]")
+		_, _ = fmt.Fprintln(out, "  [IDLE FRAME]")
 	}
 
 	// Secondary Header
 	if h.FSHFlag {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Secondary Header (%d bytes)\n", 1+len(f.SecondaryHeader.DataField))
-		fmt.Fprintln(out, f.SecondaryHeader.Humanize())
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Secondary Header (%d bytes)\n", 1+len(f.SecondaryHeader.DataField))
+		_, _ = fmt.Fprintln(out, f.SecondaryHeader.Humanize())
 	}
 
 	// Data Field
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
 	if len(f.DataField) > 0 {
-		fmt.Fprint(out, hexDump(f.DataField, "  "))
+		_, _ = fmt.Fprint(out, hexDump(f.DataField, "  "))
 	}
 
 	// OCF
 	if len(f.OperationalControl) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OperationalControl))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OperationalControl))
 	}
 
 	// FEC
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
 
 	// Full hex dump
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
-	fmt.Fprint(out, hexDump(raw, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
+	_, _ = fmt.Fprint(out, hexDump(raw, "  "))
 }
 
 // tmProtocol describes TM Transfer Frames to the receive loop.
@@ -452,17 +452,17 @@ func emitTMFrame(out io.Writer, outputFmt string) func(raw []byte, index int, id
 			if err != nil {
 				return fmt.Errorf("encoding JSON output: %w", err)
 			}
-			fmt.Fprintln(out, string(b))
+			_, _ = fmt.Fprintln(out, string(b))
 		case "hex":
-			fmt.Fprintln(out, hex.EncodeToString(raw))
+			_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 		case "text":
-			fmt.Fprintf(out, "--- Frame #%d (SCID=%d VCID=%d MC=%d VC=%d) ---\n",
+			_, _ = fmt.Fprintf(out, "--- Frame #%d (SCID=%d VCID=%d MC=%d VC=%d) ---\n",
 				index, ident.scid, ident.vcid, ident.mcCount, ident.vcCount)
-			fmt.Fprintf(out, "  Data: %d bytes", len(frame.DataField))
+			_, _ = fmt.Fprintf(out, "  Data: %d bytes", len(frame.DataField))
 			if tmdl.IsIdleFrame(frame) {
-				fmt.Fprint(out, " [IDLE]")
+				_, _ = fmt.Fprint(out, " [IDLE]")
 			}
-			fmt.Fprintln(out)
+			_, _ = fmt.Fprintln(out)
 		}
 
 		return nil

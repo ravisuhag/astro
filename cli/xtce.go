@@ -53,8 +53,8 @@ func xtceValidateCmd() *cobra.Command {
 
 			systems, parameters, containers := countDatabase(db)
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%s is valid.\n", args[0])
-			fmt.Fprintf(out, "  %d space system(s), %d parameter(s), %d container(s)\n",
+			_, _ = fmt.Fprintf(out, "%s is valid.\n", args[0])
+			_, _ = fmt.Fprintf(out, "  %d space system(s), %d parameter(s), %d container(s)\n",
 				systems, parameters, containers)
 			return nil
 		},
@@ -112,7 +112,7 @@ func xtceListCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Fprintln(out, string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
 				if kind == "all" || kind == "systems" {
 					printNames(out, "Space systems", listing.Systems)
@@ -166,7 +166,7 @@ func xtceLayoutCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), string(b))
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), string(b))
 			case "text":
 				printLayout(cmd.OutOrStdout(), layout)
 			default:
@@ -221,7 +221,7 @@ func xtceDecodeCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if resolved && outputFmt == "text" {
-				fmt.Fprintln(out, "Layout resolved against this packet: the container's shape depends on its contents.")
+				_, _ = fmt.Fprintln(out, "Layout resolved against this packet: the container's shape depends on its contents.")
 			}
 
 			packet, err := layout.Extract(data)
@@ -285,7 +285,7 @@ func xtceMatchCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("matching the packet: %w", err)
 				}
-				fmt.Fprintln(out, match.Name)
+				_, _ = fmt.Fprintln(out, match.Name)
 				return nil
 			}
 
@@ -295,7 +295,7 @@ func xtceMatchCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Fprintf(out, "Matched container: %s\n", packet.Layout.Container.Name)
+				_, _ = fmt.Fprintf(out, "Matched container: %s\n", packet.Layout.Container.Name)
 			}
 			return printXTCEPacket(out, cmd.ErrOrStderr(), packet, raw, outputFmt)
 		},
@@ -396,11 +396,11 @@ func countDatabase(db *xtce.SpaceSystem) (systems, parameters, containers int) {
 }
 
 func printNames(out io.Writer, heading string, names []string) {
-	fmt.Fprintf(out, "%s (%d):\n", heading, len(names))
+	_, _ = fmt.Fprintf(out, "%s (%d):\n", heading, len(names))
 	for _, name := range names {
-		fmt.Fprintf(out, "  %s\n", name)
+		_, _ = fmt.Fprintf(out, "  %s\n", name)
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 }
 
 // fieldJSON is one row of a layout.
@@ -447,15 +447,15 @@ func fieldTypeName(field xtce.Field) string {
 }
 
 func printLayout(out io.Writer, layout *xtce.Layout) {
-	fmt.Fprintf(out, "Container: %s\n", layout.Container.Name)
-	fmt.Fprintf(out, "Size: %d bits (%d octets minimum)\n",
+	_, _ = fmt.Fprintf(out, "Container: %s\n", layout.Container.Name)
+	_, _ = fmt.Fprintf(out, "Size: %d bits (%d octets minimum)\n",
 		layout.BitSize, (layout.BitSize+7)/8)
-	fmt.Fprintln(out, strings.Repeat("─", 72))
-	fmt.Fprintf(out, "%-8s %-8s %-12s %s\n", "OFFSET", "WIDTH", "TYPE", "NAME")
-	fmt.Fprintln(out, strings.Repeat("─", 72))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 72))
+	_, _ = fmt.Fprintf(out, "%-8s %-8s %-12s %s\n", "OFFSET", "WIDTH", "TYPE", "NAME")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 72))
 
 	for _, field := range layout.Fields {
-		fmt.Fprintf(out, "%-8d %-8d %-12s %s\n",
+		_, _ = fmt.Fprintf(out, "%-8d %-8d %-12s %s\n",
 			field.BitOffset, field.BitSize, fieldTypeName(field), field.Name)
 	}
 }
@@ -490,26 +490,26 @@ func printXTCEPacket(out, errOut io.Writer, packet *xtce.Packet, raw bool, outpu
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 
 	case "text":
-		fmt.Fprintln(out, strishRepeat(72))
-		fmt.Fprintf(out, "%-8s %-8s %-28s %s\n", "OFFSET", "WIDTH", "NAME", "VALUE")
-		fmt.Fprintln(out, strishRepeat(72))
+		_, _ = fmt.Fprintln(out, strishRepeat(72))
+		_, _ = fmt.Fprintf(out, "%-8s %-8s %-28s %s\n", "OFFSET", "WIDTH", "NAME", "VALUE")
+		_, _ = fmt.Fprintln(out, strishRepeat(72))
 
 		failed := 0
 		for _, value := range packet.Values {
 			if value.Err != nil {
 				failed++
-				fmt.Fprintf(errOut, "  %s: %v\n", value.Field.Name, value.Err)
+				_, _ = fmt.Fprintf(errOut, "  %s: %v\n", value.Field.Name, value.Err)
 				continue
 			}
-			fmt.Fprintf(out, "%-8d %-8d %-28s %v\n",
+			_, _ = fmt.Fprintf(out, "%-8d %-8d %-28s %v\n",
 				value.Field.BitOffset, value.Field.BitSize,
 				value.Field.Name, displayValue(pick(value, raw)))
 		}
 		if failed > 0 {
-			fmt.Fprintf(out, "\n%d field(s) could not be decoded; see stderr.\n", failed)
+			_, _ = fmt.Fprintf(out, "\n%d field(s) could not be decoded; see stderr.\n", failed)
 		}
 
 	default:

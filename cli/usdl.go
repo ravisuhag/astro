@@ -315,7 +315,7 @@ func usdlGenCmd() *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d MAP=%d, %d bytes each\n",
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d MAP=%d, %d bytes each\n",
 				count, scid, vcid, mapid, frameSize)
 			return nil
 		},
@@ -339,11 +339,11 @@ func printUSDLFrame(out io.Writer, f *usdl.TransferFrame, raw []byte, format str
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Fprintln(out, f.Humanize())
+		_, _ = fmt.Fprintln(out, f.Humanize())
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}
@@ -355,75 +355,75 @@ func printUSDLInspect(out io.Writer, f *usdl.TransferFrame, raw []byte) {
 	h := f.Header
 	dfh := f.DataFieldHeader
 
-	fmt.Fprintln(out, "USLP Transfer Frame Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "USLP Transfer Frame Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Primary Header
-	fmt.Fprintf(out, "Primary Header (%d bytes)\n", h.Size())
-	fmt.Fprintf(out, "  TFVN ................. %d (0b%04b)\n", h.TFVN, h.TFVN)
-	fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%04X)\n", h.SCID, h.SCID)
+	_, _ = fmt.Fprintf(out, "Primary Header (%d bytes)\n", h.Size())
+	_, _ = fmt.Fprintf(out, "  TFVN ................. %d (0b%04b)\n", h.TFVN, h.TFVN)
+	_, _ = fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%04X)\n", h.SCID, h.SCID)
 	srcDst := "Source"
 	if h.SourceOrDest == 1 {
 		srcDst = "Destination"
 	}
-	fmt.Fprintf(out, "  Source/Dest .......... %s\n", srcDst)
-	fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VCID)
-	fmt.Fprintf(out, "  MAP ID ............... %d\n", h.MAPID)
-	fmt.Fprintf(out, "  Truncated Header ..... %v\n", h.EndOfFPH)
+	_, _ = fmt.Fprintf(out, "  Source/Dest .......... %s\n", srcDst)
+	_, _ = fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VCID)
+	_, _ = fmt.Fprintf(out, "  MAP ID ............... %d\n", h.MAPID)
+	_, _ = fmt.Fprintf(out, "  Truncated Header ..... %v\n", h.EndOfFPH)
 	if !h.EndOfFPH {
-		fmt.Fprintf(out, "  Frame Length ......... %d bytes\n", int(h.FrameLength)+1)
-		fmt.Fprintf(out, "  Bypass/Seq Ctrl ...... %v\n", h.BypassSeqCtrl)
-		fmt.Fprintf(out, "  Protocol Ctrl Cmd .... %v\n", h.ProtCtrlCmd)
-		fmt.Fprintf(out, "  OCF Flag ............. %v\n", h.OCFFlag)
-		fmt.Fprintf(out, "  VCF Count Length ..... %d\n", h.VCFCountLen)
+		_, _ = fmt.Fprintf(out, "  Frame Length ......... %d bytes\n", int(h.FrameLength)+1)
+		_, _ = fmt.Fprintf(out, "  Bypass/Seq Ctrl ...... %v\n", h.BypassSeqCtrl)
+		_, _ = fmt.Fprintf(out, "  Protocol Ctrl Cmd .... %v\n", h.ProtCtrlCmd)
+		_, _ = fmt.Fprintf(out, "  OCF Flag ............. %v\n", h.OCFFlag)
+		_, _ = fmt.Fprintf(out, "  VCF Count Length ..... %d\n", h.VCFCountLen)
 		if h.VCFCountLen > 0 {
-			fmt.Fprintf(out, "  VCF Count ............ %d\n", h.VCFCount)
+			_, _ = fmt.Fprintf(out, "  VCF Count ............ %d\n", h.VCFCount)
 		}
 	}
-	fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
-	fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
+	_, _ = fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
+	_, _ = fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
 
 	// Insert Zone
 	if len(f.InsertZone) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Insert Zone (%d bytes)\n", len(f.InsertZone))
-		fmt.Fprint(out, hexDump(f.InsertZone, "  "))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Insert Zone (%d bytes)\n", len(f.InsertZone))
+		_, _ = fmt.Fprint(out, hexDump(f.InsertZone, "  "))
 	}
 
 	// Data Field Header
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "TFDF Header (%d bytes)\n", dfh.Size())
-	fmt.Fprintf(out, "  Construction Rule .... %d\n", dfh.ConstructionRule)
-	fmt.Fprintf(out, "  UPID ................. %d\n", dfh.UPID)
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "TFDF Header (%d bytes)\n", dfh.Size())
+	_, _ = fmt.Fprintf(out, "  Construction Rule .... %d\n", dfh.ConstructionRule)
+	_, _ = fmt.Fprintf(out, "  UPID ................. %d\n", dfh.UPID)
 	if dfh.HasPointer() {
-		fmt.Fprintf(out, "  FHP/LVO Pointer ...... %d (0x%04X)\n", dfh.Pointer, dfh.Pointer)
+		_, _ = fmt.Fprintf(out, "  FHP/LVO Pointer ...... %d (0x%04X)\n", dfh.Pointer, dfh.Pointer)
 	}
 
 	if usdl.IsIdleFrame(f) {
-		fmt.Fprintln(out, "  [IDLE FRAME]")
+		_, _ = fmt.Fprintln(out, "  [IDLE FRAME]")
 	}
 
 	// Data Field
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Data Zone (%d bytes)\n", len(f.DataField))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Zone (%d bytes)\n", len(f.DataField))
 	if len(f.DataField) > 0 {
-		fmt.Fprint(out, hexDump(f.DataField, "  "))
+		_, _ = fmt.Fprint(out, hexDump(f.DataField, "  "))
 	}
 
 	// OCF
 	if len(f.OCF) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OCF))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Operational Control Field (4 bytes): %s\n", hex.EncodeToString(f.OCF))
 	}
 
 	// FECF
 	if len(f.FECF) > 0 {
-		fmt.Fprintln(out, strings.Repeat("─", 60))
-		fmt.Fprintf(out, "Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintf(out, "Frame Error Control: 0x%s (CRC-16-CCITT)\n", hex.EncodeToString(f.FECF))
 	}
 
 	// Full hex dump
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
-	fmt.Fprint(out, hexDump(raw, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
+	_, _ = fmt.Fprint(out, hexDump(raw, "  "))
 }

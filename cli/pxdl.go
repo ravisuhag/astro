@@ -155,16 +155,16 @@ func pxdlSPDUCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Fprintln(out, string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Fprintf(out, "%d SPDU(s) in %d octet(s)\n", len(spdus), len(data))
+				_, _ = fmt.Fprintf(out, "%d SPDU(s) in %d octet(s)\n", len(spdus), len(data))
 				for i, spdu := range spdus {
-					fmt.Fprintln(out, strings.Repeat("─", 60))
-					fmt.Fprintf(out, "SPDU #%d\n", i+1)
+					_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+					_, _ = fmt.Fprintf(out, "SPDU #%d\n", i+1)
 					if summary := humanizeOrEmpty(spdu); summary != "" {
-						fmt.Fprintln(out, summary)
+						_, _ = fmt.Fprintln(out, summary)
 					} else {
-						fmt.Fprintf(out, "  %T\n", spdu)
+						_, _ = fmt.Fprintf(out, "  %T\n", spdu)
 					}
 				}
 			default:
@@ -196,11 +196,11 @@ func printPXDLFrame(out io.Writer, frame *pxdl.TransferFrame, raw []byte, format
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Fprintln(out, hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Fprintln(out, frame.Humanize())
+		_, _ = fmt.Fprintln(out, frame.Humanize())
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}

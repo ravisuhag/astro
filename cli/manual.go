@@ -91,7 +91,7 @@ func printManualIndex(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(out, rendered)
+	_, _ = fmt.Fprint(out, rendered)
 	return nil
 }
 
@@ -110,7 +110,7 @@ func printManual(out io.Writer, docsFS embed.FS, protocol string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(out, rendered)
+	_, _ = fmt.Fprint(out, rendered)
 	return nil
 }
 

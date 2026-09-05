@@ -218,12 +218,12 @@ func pusEncodeCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "hex":
-				fmt.Fprintln(out, hex.EncodeToString(message))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(message))
 			case "text":
-				fmt.Fprintf(out, "PUS %s[%d,%d], %d octets (%d header, %d body)\n",
+				_, _ = fmt.Fprintf(out, "PUS %s[%d,%d], %d octets (%d header, %d body)\n",
 					strings.ToUpper(direction), service, subtype,
 					len(message), len(header), len(body))
-				fmt.Fprintln(out, hex.EncodeToString(message))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(message))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'hex')", outputFmt)
 			}
@@ -276,7 +276,7 @@ func pusServicesCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), string(b))
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), string(b))
 			case "text":
 				out := cmd.OutOrStdout()
 				printNames(out, "Requests (TC)", requests)
@@ -396,25 +396,25 @@ func printPUSMessage(out io.Writer, headerText string, message pusMessageJSON, o
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Fprintln(out, string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 
 	case "text":
-		fmt.Fprintf(out, "PUS %s[%d,%d]\n",
+		_, _ = fmt.Fprintf(out, "PUS %s[%d,%d]\n",
 			strings.ToUpper(message.Direction), message.Service, message.Subtype)
-		fmt.Fprintln(out, headerText)
+		_, _ = fmt.Fprintln(out, headerText)
 
-		fmt.Fprintf(out, "Body: %d octets\n", len(message.Body)/2)
+		_, _ = fmt.Fprintf(out, "Body: %d octets\n", len(message.Body)/2)
 		switch {
 		case message.BodyDetail != "":
-			fmt.Fprintln(out, message.BodyDetail)
+			_, _ = fmt.Fprintln(out, message.BodyDetail)
 		case message.BodyKnown:
 			// Decoded, but the type has nothing to say beyond its fields.
-			fmt.Fprintf(out, "  %s\n", message.Body)
+			_, _ = fmt.Fprintf(out, "  %s\n", message.Body)
 		default:
 			// Not implemented, so the octets are all that can honestly be
 			// shown. Say why rather than printing them as if understood.
-			fmt.Fprintf(out, "  %s\n", message.Body)
-			fmt.Fprintf(out, "  [not decoded: %s]\n", message.BodyError)
+			_, _ = fmt.Fprintf(out, "  %s\n", message.Body)
+			_, _ = fmt.Fprintf(out, "  [not decoded: %s]\n", message.BodyError)
 		}
 
 	default:

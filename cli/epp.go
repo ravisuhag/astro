@@ -141,7 +141,7 @@ func eppDecodeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), formatted)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -219,7 +219,7 @@ func eppEncodeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), formatted)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), formatted)
 			return nil
 		},
 	}
@@ -274,41 +274,41 @@ func printEPPInspect(out io.Writer, pkt *epp.EncapsulationPacket, raw []byte) {
 	hdrSize := h.Size()
 	totalLen := int(h.PacketLength)
 
-	fmt.Fprintln(out, "Encapsulation Packet Inspector")
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "Encapsulation Packet Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Header
-	fmt.Fprintf(out, "Header (%d bytes, LoL %d)\n", hdrSize, h.LengthOfLength)
-	fmt.Fprintf(out, "  PVN .................. %d\n", h.PVN)
-	fmt.Fprintf(out, "  Protocol ID .......... %d (%s)\n", h.ProtocolID, eppProtocolIDName(h.ProtocolID))
-	fmt.Fprintf(out, "  Length of Length ...... %d\n", h.LengthOfLength)
+	_, _ = fmt.Fprintf(out, "Header (%d bytes, LoL %d)\n", hdrSize, h.LengthOfLength)
+	_, _ = fmt.Fprintf(out, "  PVN .................. %d\n", h.PVN)
+	_, _ = fmt.Fprintf(out, "  Protocol ID .......... %d (%s)\n", h.ProtocolID, eppProtocolIDName(h.ProtocolID))
+	_, _ = fmt.Fprintf(out, "  Length of Length ...... %d\n", h.LengthOfLength)
 
 	if hdrSize >= epp.HeaderSize4 {
-		fmt.Fprintf(out, "  User Defined ......... %d (0x%X)\n", h.UserDefined, h.UserDefined)
-		fmt.Fprintf(out, "  Protocol ID Ext ...... %d\n", h.ExtendedProtocolID)
+		_, _ = fmt.Fprintf(out, "  User Defined ......... %d (0x%X)\n", h.UserDefined, h.UserDefined)
+		_, _ = fmt.Fprintf(out, "  Protocol ID Ext ...... %d\n", h.ExtendedProtocolID)
 	}
 	if hdrSize == epp.HeaderSize8 {
-		fmt.Fprintf(out, "  CCSDS Defined ........ %d (0x%04X)\n", h.CCSDSDefined, h.CCSDSDefined)
+		_, _ = fmt.Fprintf(out, "  CCSDS Defined ........ %d (0x%04X)\n", h.CCSDSDefined, h.CCSDSDefined)
 	}
 
-	fmt.Fprintf(out, "  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
+	_, _ = fmt.Fprintf(out, "  Packet Length ........ %d (total packet: %d bytes)\n", h.PacketLength, totalLen)
 
 	if pkt.IsIdle() {
-		fmt.Fprintln(out, "  [IDLE PACKET]")
+		_, _ = fmt.Fprintln(out, "  [IDLE PACKET]")
 	}
 
 	// Data Zone
-	fmt.Fprintln(out, strings.Repeat("─", 60))
-	fmt.Fprintf(out, "Data Zone (%d bytes)\n", len(pkt.Data))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Zone (%d bytes)\n", len(pkt.Data))
 	if len(pkt.Data) > 0 {
-		fmt.Fprint(out, hexDump(pkt.Data, "  "))
+		_, _ = fmt.Fprint(out, hexDump(pkt.Data, "  "))
 	}
 
 	// Full hex dump
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 	displayLen := min(totalLen, len(raw))
-	fmt.Fprintf(out, "Raw Packet (%d bytes)\n", displayLen)
-	fmt.Fprint(out, hexDump(raw[:displayLen], "  "))
+	_, _ = fmt.Fprintf(out, "Raw Packet (%d bytes)\n", displayLen)
+	_, _ = fmt.Fprint(out, hexDump(raw[:displayLen], "  "))
 }
 
 func eppValidateCmd() *cobra.Command {
@@ -340,9 +340,9 @@ func eppValidateCmd() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "Packet is valid.")
+			_, _ = fmt.Fprintln(out, "Packet is valid.")
 			h := pkt.Header
-			fmt.Fprintf(out, "  Protocol ID: %d (%s), Header: %d bytes, Data: %d bytes\n",
+			_, _ = fmt.Fprintf(out, "  Protocol ID: %d (%s), Header: %d bytes, Data: %d bytes\n",
 				h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 			return nil
 		},
@@ -390,18 +390,18 @@ func eppStreamCmd() *cobra.Command {
 					if err != nil {
 						return fmt.Errorf("encoding JSON output: %w", err)
 					}
-					fmt.Fprintln(out, string(b))
+					_, _ = fmt.Fprintln(out, string(b))
 				case "hex":
-					fmt.Fprintln(out, hex.EncodeToString(pktData))
+					_, _ = fmt.Fprintln(out, hex.EncodeToString(pktData))
 				case "text":
-					fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
+					_, _ = fmt.Fprintf(out, "--- Packet #%d (offset %d, %d bytes) ---\n", count, offset, len(pktData))
 					h := pkt.Header
-					fmt.Fprintf(out, "  PID: %d (%s)  Header: %d bytes  DataLen: %d\n",
+					_, _ = fmt.Fprintf(out, "  PID: %d (%s)  Header: %d bytes  DataLen: %d\n",
 						h.ProtocolID, eppProtocolIDName(h.ProtocolID), h.Size(), len(pkt.Data))
 					if len(pkt.Data) <= 32 {
-						fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.Data))
+						_, _ = fmt.Fprintf(out, "  Data: %s\n", hex.EncodeToString(pkt.Data))
 					} else {
-						fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
+						_, _ = fmt.Fprintf(out, "  Data: %s... (%d bytes)\n",
 							hex.EncodeToString(pkt.Data[:32]), len(pkt.Data))
 					}
 				}
@@ -411,7 +411,7 @@ func eppStreamCmd() *cobra.Command {
 			}
 
 			trailing := func(n int) {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %d trailing bytes ignored\n", n)
 			}
 
 			// An Encapsulation Packet's length is readable from its first
@@ -421,7 +421,7 @@ func eppStreamCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
+				_, _ = fmt.Fprintf(out, "\nDecoded %d packet(s), %d bytes total.\n", count, offset)
 			}
 			return nil
 		},
