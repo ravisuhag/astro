@@ -113,22 +113,35 @@ type MultiplexingService struct {
 	synced      bool
 	sizer       PacketSizer
 	gapDetector *FrameGapDetector
+	gapResync   bool // when true, discard partial packets on frame gaps
 }
 
 // NewMultiplexingService creates a new M_PDU service instance.
+// Gap-based resync is enabled automatically when a FrameCounter is provided.
+// For pure receivers (counter=nil) that consume externally-stamped frames,
+// call SetGapResync(true) to enable resync on frame loss.
 func NewMultiplexingService(scid, vcid uint8, vc *VirtualChannel, config ChannelConfig, counter *FrameCounter) *MultiplexingService {
 	return &MultiplexingService{
-		scid:    scid,
-		vcid:    vcid,
-		config:  config,
-		counter: counter,
-		vc:      vc,
+		scid:      scid,
+		vcid:      vcid,
+		config:    config,
+		counter:   counter,
+		vc:        vc,
+		gapResync: counter != nil,
 	}
 }
 
 // SetPacketSizer configures the packet sizer used by Receive() to detect
 // packet boundaries within the M_PDU packet zone.
 func (s *MultiplexingService) SetPacketSizer(sizer PacketSizer) { s.sizer = sizer }
+
+// SetGapResync enables or disables gap-based resync on the receive side.
+// When enabled, the receiver discards partially-assembled packets whenever
+// a frame gap is detected. Enable this for pure receivers that consume
+// externally-stamped frames without a local FrameCounter.
+func (s *MultiplexingService) SetGapResync(enabled bool) {
+	s.gapResync = enabled
+}
 
 // packetZoneCapacity returns the bytes available for packet data after
 // reserving the M_PDU header.
@@ -284,7 +297,7 @@ func (s *MultiplexingService) Receive() ([]byte, error) {
 		}
 
 		vcGap := s.gapDetector.Track(frame)
-		if s.counter != nil && vcGap > 0 {
+		if s.gapResync && vcGap > 0 {
 			s.recvBuf = nil
 			s.synced = false
 		}
