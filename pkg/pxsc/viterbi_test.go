@@ -444,6 +444,7 @@ func BenchmarkViterbiDecode(b *testing.B) {
 	symbols := pxsc.ConvolutionalEncode(data)
 
 	b.SetBytes(int64(len(symbols)))
+	b.ReportAllocs()
 	b.ResetTimer()
 
 	for range b.N {
