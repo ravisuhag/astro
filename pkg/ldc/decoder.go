@@ -19,6 +19,33 @@ import "fmt"
 //	DecompressCount     you know how many samples there are
 //	DecompressFile      the header says, which is the standard's own answer
 
+// DecompressOption configures Decompress beyond its required parameters.
+type DecompressOption func(*decompressConfig)
+
+// decompressConfig holds the options Decompress accepts.
+type decompressConfig struct {
+	maxSamples int
+}
+
+// WithMaxSamples bounds how many samples an unbounded Decompress call may
+// produce before it gives up with ErrOutputTooLarge.
+//
+// Decompress has no sample count of its own to stop at: nothing in the coded
+// stream says how many samples it holds. A zero-block run costs as little as
+// seven bits of input and produces up to 4032 samples (63 blocks of up to 64
+// each), and nothing but this option stops a stream of them from growing the
+// output for as long as the input allows.
+//
+// The default, used when this option is not given, is maxDecodableSamples,
+// the same ceiling DecompressFile applies to a header's claimed sample count.
+// Pass a value below zero to remove the ceiling entirely; that is not
+// recommended for input from an untrusted source.
+func WithMaxSamples(n int) DecompressOption {
+	return func(c *decompressConfig) {
+		c.maxSamples = n
+	}
+}
+
 // Decompress reads a coded data set stream back into samples.
 //
 // It decodes until the input is exhausted, treating a trailing run of fewer
@@ -36,22 +63,36 @@ import "fmt"
 // It also cannot recover a partial final block, because nothing in the stream
 // says the block was short. Use DecompressCount or DecompressFile when the
 // sample count is not a whole number of blocks.
-func Decompress(data []byte, p Params) ([]uint32, error) {
-	return decompress(data, p, -1)
+//
+// Because Decompress has no declared sample count to bound its output, it
+// stops and returns ErrOutputTooLarge once the output would pass a ceiling;
+// see WithMaxSamples.
+func Decompress(data []byte, p Params, opts ...DecompressOption) ([]uint32, error) {
+	cfg := decompressConfig{maxSamples: maxDecodableSamples}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return decompress(data, p, -1, cfg.maxSamples)
 }
 
 // DecompressCount reads exactly count samples, which allows a partial final
 // block.
+//
+// count is an explicit bound the caller already knows, so it is not subject
+// to the WithMaxSamples ceiling that guards Decompress's unbounded path; the
+// loop below stops at count regardless.
 func DecompressCount(data []byte, p Params, count int) ([]uint32, error) {
 	if count < 0 {
 		return nil, fmt.Errorf("%w: negative sample count", ErrSampleCountMismatch)
 	}
-	return decompress(data, p, count)
+	return decompress(data, p, count, -1)
 }
 
 // decompress does the work. A count below zero means "until the input runs
-// out".
-func decompress(data []byte, p Params, count int) ([]uint32, error) {
+// out", in which case maxSamples bounds the output; a count below zero for
+// maxSamples means "no ceiling", which is how the count-bounded callers reach
+// decompress, since their own count already bounds the loop.
+func decompress(data []byte, p Params, count, maxSamples int) ([]uint32, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -90,6 +131,16 @@ func decompress(data []byte, p Params, count int) ([]uint32, error) {
 			return nil, err
 		}
 		block += consumed
+
+		// Checked every iteration, not only once the input runs out: a
+		// zero-block run can add thousands of samples in a single readBlock
+		// call, and count < 0 is exactly the unbounded path that has no other
+		// ceiling. count >= 0 callers already stop at totalBlocks above, so
+		// maxSamples does not apply to them (decompress is called with
+		// maxSamples < 0 in that case).
+		if count < 0 && maxSamples >= 0 && len(mapped) > maxSamples {
+			return nil, fmt.Errorf("%w: more than %d samples", ErrOutputTooLarge, maxSamples)
+		}
 	}
 
 	if count > 0 {
