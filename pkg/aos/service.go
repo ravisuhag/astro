@@ -586,7 +586,7 @@ func (s *VirtualChannelFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-	frame, err := DecodeFrame(data, s.config)
+	frame, err := DecodeTransferFrameWithConfig(data, s.config)
 	if err != nil {
 		return err
 	}
