@@ -19,7 +19,7 @@ So the decoders are the attack surface, and this page is what is done about that
 
 ## Every decoder is fuzzed
 
-83 fuzz targets across 32 packages. The property each one asserts is that arbitrary input never panics and never allocates from a length field the input controls.
+84 fuzz targets across 32 packages. The property each one asserts is that arbitrary input never panics and never allocates from a length field the input controls.
 
 ```bash
 make fuzz-smoke

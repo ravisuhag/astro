@@ -17,12 +17,12 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 
 | | |
 |---|---|
-| Test functions | 2016 |
-| Wire test vectors | 400, across 32 packages |
-| Fuzz targets | 77 |
-| Benchmarks | 33 |
+| Test functions | 2097 |
+| Wire test vectors | 412, across 32 packages |
+| Fuzz targets | 84 |
+| Benchmarks | 36 |
 | Numbered PICS items | 500 |
-| Statement coverage | 86.5% mean across 33 packages, 59.6% lowest |
+| Statement coverage | 87.4% mean across 33 packages, 72.9% lowest |
 
 ## The vector corpus
 
