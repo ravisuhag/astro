@@ -63,6 +63,16 @@ var (
 	// ErrUnitsNotApplicable indicates the literal '[n/a]', which clause
 	// 7.7.1.3 forbids appearing in a message.
 	ErrUnitsNotApplicable = errors.New("ndm: '[n/a]' must not appear as a unit")
+
+	// ErrBlankTextValue indicates a mandatory free-text value (clause 7.5.9)
+	// that parses to nothing but blanks, such as a lone underscore. There is
+	// no encode-side inverse of the underscore rule: an encoder writes a
+	// free-text value verbatim, so a value of one blank comes back out as an
+	// empty field, which the mandatory-keyword check would otherwise refuse
+	// on a later re-decode with a message pointing nowhere near the real
+	// problem. Refusing it here, where the value is read, gives a clear
+	// reason instead.
+	ErrBlankTextValue = errors.New("ndm: mandatory text value is blank")
 )
 
 // Sentinel errors from the shared header.

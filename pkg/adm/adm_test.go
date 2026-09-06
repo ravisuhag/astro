@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravisuhag/astro/internal/ndm"
 	"github.com/ravisuhag/astro/pkg/adm"
 )
 
@@ -268,5 +269,31 @@ func TestDecodeAPMRejects(t *testing.T) {
 				t.Errorf("DecodeAPM = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+// OBJECT_NAME is mandatory in table 3-2, so a value that parses to nothing
+// but blanks must be refused the same way it is in the OPM.
+func TestAPMBlankObjectNameIsRefused(t *testing.T) {
+	blank := strings.Replace(figureG1, "OBJECT_NAME   = TRMM", "OBJECT_NAME   = _", 1)
+
+	_, err := adm.DecodeAPM([]byte(blank))
+	if !errors.Is(err, ndm.ErrBlankTextValue) {
+		t.Fatalf("DecodeAPM = %v, want ErrBlankTextValue", err)
+	}
+}
+
+// CENTER_NAME, unlike OBJECT_NAME, is optional in table 3-2 (a spacecraft
+// need not orbit anything in particular), so a value that parses to blank is
+// not an error the way it is for a mandatory field.
+func TestAPMBlankCenterNameIsAccepted(t *testing.T) {
+	blank := strings.Replace(figureG1, "CENTER_NAME   = EARTH", "CENTER_NAME   = _", 1)
+
+	m, err := adm.DecodeAPM([]byte(blank))
+	if err != nil {
+		t.Fatalf("DecodeAPM: %v", err)
+	}
+	if m.Metadata.CenterName != " " {
+		t.Fatalf("CenterName = %q, want a single blank", m.Metadata.CenterName)
 	}
 }

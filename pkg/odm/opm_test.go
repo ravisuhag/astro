@@ -3,9 +3,11 @@ package odm_test
 import (
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ravisuhag/astro/internal/ndm"
 	"github.com/ravisuhag/astro/pkg/odm"
 )
 
@@ -393,5 +395,57 @@ func TestEncodeStaysWithinTheDigitCeiling(t *testing.T) {
 				t.Errorf("Z round-tripped to %v, want %v", back.Data.StateVector.Z, tt.value)
 			}
 		})
+	}
+}
+
+// OBJECT_NAME = _ parses under clause 7.5.9 to a single blank, which is not
+// empty, so it used to pass Validate. But the encoder wrote that blank
+// verbatim, and classify's TrimSpace on the way back in turned it into
+// nothing, so the mandatory-keyword check on re-decode failed with a message
+// pointing nowhere near the real problem. Found by FuzzDecodeOPM.
+//
+// There is no encode-side fix for this: an inverse that turned a lone blank
+// back into an underscore on the way out would also rewrite every real space
+// in a name like MARS GLOBAL SURVEYOR, breaking the vector corpus. So a
+// mandatory free-text value that parses to nothing but blanks is refused at
+// decode instead, with ndm.ErrBlankTextValue rather than a confusing
+// "mandatory keyword is missing" on a later re-decode.
+func TestBlankObjectNameIsRefused(t *testing.T) {
+	blank := strings.Replace(figureG1, "OBJECT_NAME    = OSPREY 5", "OBJECT_NAME    = _", 1)
+
+	_, err := odm.DecodeOPM([]byte(blank))
+	if !errors.Is(err, ndm.ErrBlankTextValue) {
+		t.Fatalf("DecodeOPM = %v, want ErrBlankTextValue", err)
+	}
+	if errors.Is(err, odm.ErrMissingKeyword) {
+		t.Fatalf("DecodeOPM = %v, should not look like a missing keyword", err)
+	}
+}
+
+// A name with real spaces must keep working: this is the regression guard
+// for the fix above being too broad. MARS GLOBAL SURVEYOR is one of the names
+// in the vector corpus, and clause 7.5.9 keeps a single blank inside a value
+// significant, so it must decode, encode and re-decode unchanged.
+func TestObjectNameWithRealSpacesRoundTrips(t *testing.T) {
+	withSpaces := strings.Replace(figureG1, "OBJECT_NAME    = OSPREY 5", "OBJECT_NAME    = MARS GLOBAL SURVEYOR", 1)
+
+	m, err := odm.DecodeOPM([]byte(withSpaces))
+	if err != nil {
+		t.Fatalf("DecodeOPM: %v", err)
+	}
+	if m.Metadata.ObjectName != "MARS GLOBAL SURVEYOR" {
+		t.Fatalf("ObjectName = %q, want %q", m.Metadata.ObjectName, "MARS GLOBAL SURVEYOR")
+	}
+
+	encoded, err := m.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	again, err := odm.DecodeOPM(encoded)
+	if err != nil {
+		t.Fatalf("re-decoding our own output failed: %v\n%s", err, encoded)
+	}
+	if again.Metadata.ObjectName != "MARS GLOBAL SURVEYOR" {
+		t.Fatalf("ObjectName round-tripped to %q, want %q", again.Metadata.ObjectName, "MARS GLOBAL SURVEYOR")
 	}
 }

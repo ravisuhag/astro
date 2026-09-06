@@ -129,11 +129,23 @@ func readMetadata(s *ndm.Scanner, md *OEMMetadata) error {
 func assignOEMMetadata(md *OEMMetadata, keyword, value string) error {
 	switch keyword {
 	case "OBJECT_NAME":
-		md.ObjectName = ndm.ParseText(value)
+		name, err := ndm.ParseTextRequired(value)
+		if err != nil {
+			return err
+		}
+		md.ObjectName = name
 	case "OBJECT_ID":
-		md.ObjectID = ndm.ParseText(value)
+		id, err := ndm.ParseTextRequired(value)
+		if err != nil {
+			return err
+		}
+		md.ObjectID = id
 	case "CENTER_NAME":
-		md.CenterName = ndm.ParseText(value)
+		center, err := ndm.ParseTextRequired(value)
+		if err != nil {
+			return err
+		}
+		md.CenterName = center
 	case "REF_FRAME":
 		md.RefFrame = value
 	case "TIME_SYSTEM":

@@ -178,6 +178,38 @@ func TestParseText(t *testing.T) {
 	}
 }
 
+// A mandatory field's value must survive being written back out, and a value
+// that is nothing but blanks does not: an encoder writes it verbatim, so it
+// comes back as an empty field. ParseTextRequired is what a mandatory field
+// calls instead of ParseText, so it must refuse a lone underscore and any
+// other value that collapses to nothing, while still accepting anything with
+// real content, blanks included.
+func TestParseTextRequired(t *testing.T) {
+	blank := []string{"_", "", "___", "   "}
+	for _, input := range blank {
+		if _, err := ParseTextRequired(input); !errors.Is(err, ErrBlankTextValue) {
+			t.Errorf("ParseTextRequired(%q) = %v, want ErrBlankTextValue", input, err)
+		}
+	}
+
+	ok := []struct{ input, want string }{
+		{"MARS_PATHFINDER", "MARS PATHFINDER"},
+		{"MARS PATHFINDER", "MARS PATHFINDER"},
+		{"_TEST_", " TEST "},
+		{"OSPREY 5", "OSPREY 5"},
+	}
+	for _, tt := range ok {
+		got, err := ParseTextRequired(tt.input)
+		if err != nil {
+			t.Errorf("ParseTextRequired(%q): %v", tt.input, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("ParseTextRequired(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 // Clause 7.5.10 allows a calendar date or an ordinal one, with or without the
 // Z terminator, in the same file. Which one a value is comes from the value.
 func TestParseEpoch(t *testing.T) {

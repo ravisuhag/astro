@@ -165,11 +165,23 @@ func (m *OPM) readXMLMetadata(elements []ndm.Element) error {
 		}
 		switch e.Name {
 		case "OBJECT_NAME":
-			md.ObjectName = ndm.ParseText(e.Value)
+			name, err := ndm.ParseTextRequired(e.Value)
+			if err != nil {
+				return err
+			}
+			md.ObjectName = name
 		case "OBJECT_ID":
-			md.ObjectID = ndm.ParseText(e.Value)
+			id, err := ndm.ParseTextRequired(e.Value)
+			if err != nil {
+				return err
+			}
+			md.ObjectID = id
 		case "CENTER_NAME":
-			md.CenterName = ndm.ParseText(e.Value)
+			center, err := ndm.ParseTextRequired(e.Value)
+			if err != nil {
+				return err
+			}
+			md.CenterName = center
 		case "REF_FRAME":
 			md.RefFrame = e.Value
 		case "TIME_SYSTEM":

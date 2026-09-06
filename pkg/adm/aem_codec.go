@@ -120,10 +120,20 @@ func readAEMMetadata(s *ndm.Scanner, md *AEMMetadata) error {
 func assignAEMMetadata(md *AEMMetadata, keyword, value string) error {
 	switch keyword {
 	case "OBJECT_NAME":
-		md.ObjectName = ndm.ParseText(value)
+		name, err := ndm.ParseTextRequired(value)
+		if err != nil {
+			return err
+		}
+		md.ObjectName = name
 	case "OBJECT_ID":
-		md.ObjectID = ndm.ParseText(value)
+		id, err := ndm.ParseTextRequired(value)
+		if err != nil {
+			return err
+		}
+		md.ObjectID = id
 	case "CENTER_NAME":
+		// Table 4-3 leaves CENTER_NAME optional, so a blank value here is not
+		// refused the way the mandatory fields above are.
 		md.CenterName = ndm.ParseText(value)
 	case "REF_FRAME_A":
 		md.FrameA = value
