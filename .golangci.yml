@@ -1,5 +1,13 @@
 version: "2"
 
+issues:
+  # golangci-lint truncates to 3 issues of the same kind and 50 per linter by
+  # default. That silent truncation has twice hidden real findings here — 66
+  # of 76 errorlint issues in one change, 450 errcheck issues in another —
+  # both on sweeping edits where full output mattered most. Report everything.
+  max-same-issues: 0
+  max-issues-per-linter: 0
+
 linters:
   enable:
     # Flags direct == / != / switch comparisons against sentinel errors, and
