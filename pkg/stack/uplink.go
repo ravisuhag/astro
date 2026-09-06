@@ -362,12 +362,23 @@ func (c *Commander) pump(vcid uint8, fop *cop.FOP) error {
 // the sliding window is full or the channel is waiting, and only a CLCW will
 // release them. That is sequence control working, not a fault.
 func (c *Commander) NextCLTU() ([]byte, bool, error) {
+	// A pump failure on one channel (a FOP-1 alert, say) is a fault on that
+	// channel, not on the drain. The other channels may still have commands
+	// ready to go, so the loop keeps offering them; the first failure is
+	// remembered and returned once the pass has nothing else ready, so it
+	// is never silently dropped and never lets one wedged channel starve
+	// the rest.
+	var pumpErr error
+
 	// In configuration order, so a drain is repeatable.
 	for _, channel := range c.config.Channels {
 		// Offer anything the backlog is holding first: a CLCW since the last
-		// call may have moved the window.
-		if err := c.pump(channel.ID, c.fops[channel.ID]); err != nil {
-			return nil, false, err
+		// call may have moved the window. A pump error is remembered, not
+		// acted on here: pump still drains whatever it could (a BD queue
+		// drains regardless of an AD-side fault), so GetNextFrame is tried
+		// regardless of the error too.
+		if err := c.pump(channel.ID, c.fops[channel.ID]); err != nil && pumpErr == nil {
+			pumpErr = err
 		}
 
 		frame, _, ok := c.fops[channel.ID].GetNextFrame()
@@ -381,7 +392,7 @@ func (c *Commander) NextCLTU() ([]byte, bool, error) {
 		}
 		return cltu, true, nil
 	}
-	return nil, false, nil
+	return nil, false, pumpErr
 }
 
 // CLTUs iterates the CLTUs ready to transmit.
