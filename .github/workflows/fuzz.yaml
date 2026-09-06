@@ -35,7 +35,7 @@ jobs:
       # the corpus between runs, so each night starts from what the last one
       # learned rather than from the seeds.
       - name: Restore fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/go-build/fuzz
           key: fuzz-corpus-${{ github.run_id }}
