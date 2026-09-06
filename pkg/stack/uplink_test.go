@@ -687,6 +687,141 @@ func TestAcceptRejectsRubbishCLTU(t *testing.T) {
 	}
 }
 
+// A blocked AD frame must not hold up the BD frame queued behind it: type
+// BD "arrive[s] whatever state FOP-1 is in" (see the package doc), so an
+// expedited command sent while the AD window is full has to reach the wire
+// without waiting for a CLCW. This fills the window, leaves a second AD
+// command stuck behind it, and only then sends the expedited one.
+func TestUplinkExpeditedSkipsAStalledADBacklog(t *testing.T) {
+	config := stack.Uplink{
+		SpacecraftID: 42,
+		// A window of one, so the second AD command has nowhere to go and
+		// sits in the backlog rather than in flight.
+		Channels: []stack.UplinkVC{{ID: 0, Window: 1}},
+	}
+
+	commander, err := stack.NewCommander(config)
+	if err != nil {
+		t.Fatalf("NewCommander: %v", err)
+	}
+	onboard, err := stack.NewOnboard(config)
+	if err != nil {
+		t.Fatalf("NewOnboard: %v", err)
+	}
+
+	// Fills the window: this one goes straight to FOP-1.
+	if err := commander.Send(0, command(t, 100, 0, "FIRST")); err != nil {
+		t.Fatalf("Send first: %v", err)
+	}
+	// The window is full, so this one sits in the backlog: the blocked AD
+	// frame at the front of the queue.
+	if err := commander.Send(0, command(t, 100, 1, "SECOND")); err != nil {
+		t.Fatalf("Send second: %v", err)
+	}
+	// Queued behind it, an expedited command that should not have to wait.
+	if err := commander.SendExpedited(0, command(t, 100, 2, "ABORT")); err != nil {
+		t.Fatalf("SendExpedited: %v", err)
+	}
+
+	delivered := drainUplink(t, commander, onboard)
+	if delivered != 2 {
+		t.Errorf("delivered %d frames, want 2 (FIRST and ABORT) — the stalled "+
+			"AD command must not hold up the expedited one behind it", delivered)
+	}
+
+	// SECOND is still stuck behind the window: nothing freed it.
+	if pending, err := commander.Pending(0); err != nil || pending == 0 {
+		t.Errorf("Pending(0) = %d (err %v), want SECOND still held", pending, err)
+	}
+}
+
+// A FOP-1 Alert takes a channel out of the Active state (S1-S3): after it,
+// TransmitFrame on that channel returns ErrFOPNotActive until the operator
+// recovers it. That must be a fault on the one channel, not on the whole
+// commander: NextCLTU still has to serve every other channel, and there has
+// to be a way back for the one that alerted.
+func TestUplinkAlertOnOneChannelDoesNotStarveTheOthers(t *testing.T) {
+	config := stack.Uplink{
+		SpacecraftID: 42,
+		Channels: []stack.UplinkVC{
+			{ID: 0, Window: 1}, // this one will be driven into an alert
+			{ID: 1, Window: 10},
+		},
+	}
+
+	commander, err := stack.NewCommander(config)
+	if err != nil {
+		t.Fatalf("NewCommander: %v", err)
+	}
+
+	// VC0: fill the window, then queue a second command that stays stuck
+	// in the backlog behind it.
+	if err := commander.Send(0, command(t, 100, 0, "FIRST")); err != nil {
+		t.Fatalf("Send VC0 first: %v", err)
+	}
+	if err := commander.Send(0, command(t, 100, 1, "SECOND")); err != nil {
+		t.Fatalf("Send VC0 second: %v", err)
+	}
+
+	// A CLCW with the Lockout flag set alerts FOP-1 on VC0 (E14): it leaves
+	// Active for Initial, and every later TransmitFrame on it fails.
+	lockout := cop.CLCW{VirtualChannelID: 0, LockoutFlag: true}
+	encoded, err := lockout.Encode()
+	if err != nil {
+		t.Fatalf("encoding the lockout CLCW: %v", err)
+	}
+	if err := commander.AcceptCLCW(encoded); err == nil {
+		t.Fatal("AcceptCLCW with Lockout set did not report the alert")
+	}
+	if state, err := commander.State(0); err != nil || state != cop.FOPInitial {
+		t.Fatalf("VC0 state = %v (err %v), want Initial after the alert", state, err)
+	}
+
+	// VC1 has a command ready and no reason to care what happened on VC0.
+	if err := commander.Send(1, command(t, 200, 0, "ROUTINE")); err != nil {
+		t.Fatalf("Send VC1: %v", err)
+	}
+
+	sawVC1 := false
+	sawWedgeError := false
+	for i := 0; i < 5; i++ {
+		cltu, ok, err := commander.NextCLTU()
+		if err != nil {
+			sawWedgeError = true
+		}
+		if ok && len(cltu) > 0 {
+			sawVC1 = true
+		}
+		if !ok {
+			break
+		}
+	}
+	if !sawVC1 {
+		t.Error("a wedged VC0 kept VC1's ready command from ever going out")
+	}
+	if !sawWedgeError {
+		t.Error("NextCLTU never reported VC0's alert: the fault must not be swallowed")
+	}
+
+	// Recovery: an operator brings VC0 back without rebuilding the
+	// Commander.
+	if err := commander.Initialize(0, 0); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	if state, err := commander.State(0); err != nil || state != cop.FOPActive {
+		t.Fatalf("VC0 state after Initialize = %v (err %v), want active", state, err)
+	}
+
+	// And the command that was stuck behind the alert now goes out.
+	cltu, ok, err := commander.NextCLTU()
+	if err != nil {
+		t.Fatalf("NextCLTU after recovery: %v", err)
+	}
+	if !ok || len(cltu) == 0 {
+		t.Error("VC0 produced nothing after recovery, want SECOND to be offered again")
+	}
+}
+
 // The uplink half of the "few lines" claim, as runnable code.
 func ExampleCommander() {
 	config := stack.Uplink{
