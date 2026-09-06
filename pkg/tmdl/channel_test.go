@@ -322,7 +322,7 @@ func TestTMServiceManager_VCFService(t *testing.T) {
 	svc := tmdl.NewVirtualChannelFrameService(3, vc)
 	mgr.RegisterVirtualService(3, tmdl.VCF, svc)
 
-	frame, err := tmdl.NewTMTransferFrame(933, 3, []byte("frame data"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 3, []byte("frame data"), nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create frame: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestTMServiceManager_MasterChannel(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 	mgr.RegisterMasterChannel(933, mc)
 
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("mc data"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("mc data"), nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create frame: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestTMServiceManager_MasterChannel(t *testing.T) {
 func TestTMServiceManager_UnregisteredMasterChannel(t *testing.T) {
 	mgr := tmdl.NewTMServiceManager()
 
-	frame, err := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	frame, err := tmdl.NewTransferFrame(933, 1, []byte("data"), nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create frame: %v", err)
 	}
@@ -612,7 +612,7 @@ func TestMasterChannel_AddAndGet(t *testing.T) {
 	vc := tmdl.NewVirtualChannel(1, 10)
 	mc.AddVirtualChannel(vc, 1)
 
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(933, 1, []byte("data"), nil, nil)
 	_ = mc.AddFrame(frame)
 
 	got, _ := mc.GetNextFrame()
@@ -625,7 +625,7 @@ func TestMasterChannel_SCIDMismatch(t *testing.T) {
 	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
 	vc := tmdl.NewVirtualChannel(1, 10)
 	mc.AddVirtualChannel(vc, 1)
-	frame, _ := tmdl.NewTMTransferFrame(500, 1, []byte("data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(500, 1, []byte("data"), nil, nil)
 	if !errors.Is(mc.AddFrame(frame), tmdl.ErrSCIDMismatch) {
 		t.Error("Expected ErrSCIDMismatch")
 	}
@@ -633,7 +633,7 @@ func TestMasterChannel_SCIDMismatch(t *testing.T) {
 
 func TestMasterChannel_VCIDNotFound(t *testing.T) {
 	mc := tmdl.NewMasterChannel(933, tmdl.ChannelConfig{})
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(933, 1, []byte("data"), nil, nil)
 	if !errors.Is(mc.AddFrame(frame), tmdl.ErrVirtualChannelNotFound) {
 		t.Error("Expected ErrVirtualChannelNotFound")
 	}
@@ -689,7 +689,7 @@ func TestMasterChannel_FrameGapDetection(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 
 	// Frame 1: MC=0, VC=0
-	f1, _ := tmdl.NewTMTransferFrame(933, 1, []byte("a"), nil, nil)
+	f1, _ := tmdl.NewTransferFrame(933, 1, []byte("a"), nil, nil)
 	f1.Header.MCFrameCount = 0
 	f1.Header.VCFrameCount = 0
 	if err := mc.AddFrame(f1); err != nil {
@@ -703,7 +703,7 @@ func TestMasterChannel_FrameGapDetection(t *testing.T) {
 	}
 
 	// Frame 2: MC=3, VC=2 (MC gap of 2, VC gap of 1)
-	f2, _ := tmdl.NewTMTransferFrame(933, 1, []byte("b"), nil, nil)
+	f2, _ := tmdl.NewTransferFrame(933, 1, []byte("b"), nil, nil)
 	f2.Header.MCFrameCount = 3
 	f2.Header.VCFrameCount = 2
 	if err := mc.AddFrame(f2); err != nil {
@@ -717,7 +717,7 @@ func TestMasterChannel_FrameGapDetection(t *testing.T) {
 	}
 
 	// Frame 3: MC=4, VC=3 (no gaps)
-	f3, _ := tmdl.NewTMTransferFrame(933, 1, []byte("c"), nil, nil)
+	f3, _ := tmdl.NewTransferFrame(933, 1, []byte("c"), nil, nil)
 	f3.Header.MCFrameCount = 4
 	f3.Header.VCFrameCount = 3
 	if err := mc.AddFrame(f3); err != nil {

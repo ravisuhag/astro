@@ -251,11 +251,19 @@ func WithSequenceNumber(n uint8) FrameOption {
 }
 
 // NewTCTransferFrame creates a new TC Transfer Frame.
+//
+// Deprecated: use NewTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
+func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
+	return NewTransferFrame(scid, vcid, data, opts...)
+}
+
+// NewTransferFrame creates a new TC Transfer Frame.
 // The frame length is automatically computed. CRC is auto-calculated.
 // A VCID wider than the 6-bit field is stored as given and refused on
 // encode rather than masked: masking would route the frame to a different
 // virtual channel than the caller named.
-func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
+func NewTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
 	frame := &TCTransferFrame{
 		Header: PrimaryHeader{
 			VersionNumber:    0,
@@ -301,11 +309,24 @@ func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOptio
 
 // Encode converts the TC Transfer Frame to a byte slice including CRC.
 //
-// The Frame Error Control Field is computed from the frame's current
-// contents on every call, so header or data changes made after construction
-// are always covered. Use EncodeWithoutFEC to build a frame with a
-// deliberately invalid CRC.
+// The Frame Length field and the Frame Error Control Field are both
+// refreshed from the frame's current contents on every call, so header or
+// data changes made after construction (DataField and SegmentHeader are
+// exported) cannot produce a declared length that disagrees with what is
+// actually on the wire: decodeTCFrame trusts the header's Frame Length to
+// find the CRC, so a stale value there gets the frame rejected at the
+// other end. Use EncodeWithoutFEC to build a frame with a deliberately
+// invalid CRC.
 func (tf *TCTransferFrame) Encode() ([]byte, error) {
+	totalLen := PrimaryHeaderSize + len(tf.DataField) + FECSize
+	if tf.SegmentHeader != nil {
+		totalLen++
+	}
+	if totalLen > MaxFrameLength {
+		return nil, ErrDataTooLarge
+	}
+	tf.Header.FrameLength = uint16(totalLen - 1)
+
 	frameData, err := tf.EncodeWithoutFEC()
 	if err != nil {
 		return nil, err
@@ -347,11 +368,19 @@ func (tf *TCTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 }
 
 // DecodeTCTransferFrame parses a byte slice into a TC Transfer Frame.
+//
+// Deprecated: use DecodeTransferFrame, which is the name every data-link
+// package now uses. This forwarder will be removed in v1.0.
+func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
+	return DecodeTransferFrame(data)
+}
+
+// DecodeTransferFrame parses a byte slice into a TC Transfer Frame.
 // Verifies CRC integrity. The segment header, if present, remains in
 // DataField because the primary header has no flag to indicate its
 // presence. Use DecodeTCTransferFrameWithSegmentHeader when the MAP
 // sublayer is known to be in use.
-func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
+func DecodeTransferFrame(data []byte) (*TCTransferFrame, error) {
 	return decodeTCFrame(data, false)
 }
 

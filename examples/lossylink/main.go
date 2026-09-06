@@ -218,7 +218,7 @@ func main() {
 
 		// Step 3: Extract original frame (strip virtual fill) and decode.
 		frameData := corrected[:frameLength]
-		frame, err := tmdl.DecodeTMTransferFrame(frameData)
+		frame, err := tmdl.DecodeTransferFrame(frameData)
 		if err != nil {
 			crcRejects++
 			continue

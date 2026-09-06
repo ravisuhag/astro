@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ravisuhag/astro/pkg/cop"
+	"github.com/ravisuhag/astro/pkg/sdl"
 	"github.com/ravisuhag/astro/pkg/spp"
 	"github.com/ravisuhag/astro/pkg/tcdl"
 	"github.com/ravisuhag/astro/pkg/tcsc"
@@ -108,6 +109,10 @@ func (u Uplink) Validate() error {
 		if channel.Buffer < 0 {
 			return fmt.Errorf("%w: virtual channel %d has a negative buffer",
 				ErrInvalidConfig, channel.ID)
+		}
+		if channel.Window > cop.MaxWindow {
+			return fmt.Errorf("%w: virtual channel %d has window %d, above the COP-1 maximum of %d",
+				ErrInvalidConfig, channel.ID, channel.Window, cop.MaxWindow)
 		}
 	}
 	return nil
@@ -551,9 +556,15 @@ func (o *Onboard) Next(vcid uint8) ([]byte, bool, error) {
 		}
 	}
 	if err != nil {
-		// The service reports an empty buffer as an error; here that is a
-		// normal end of stream.
-		return nil, false, nil
+		// The service reports an empty buffer the same way it reports a
+		// real reassembly failure: as an error. sdl.ErrNoFramesAvailable is
+		// the only one of those that means "nothing ready yet"; anything
+		// else (a misconfigured packet sizer, an incomplete segment) is a
+		// fault the caller needs to see rather than a silent empty read.
+		if errors.Is(err, sdl.ErrNoFramesAvailable) {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
 	return packet, true, nil
 }

@@ -71,6 +71,105 @@
       "input": "a403040128",
       "name": "peer-abort-access-denied-decode",
       "note": "The same octets read back. A PEER-ABORT invocation with diagnostic 40, accessDenied. It is the one operation with no standard header, which clause 3.3.1.1 states outright: annex F3.5 calls its ASN.1 a dummy definition and explains that ISP1 carries an abort as a single octet, so there is nowhere to put one. a4 03 04 01 28 is the [4] alternative holding an OCTET STRING of one octet. The value space is partitioned across the cross support family — 0 to 39 are SLE's, 40 to 69 this framework's, 128 to 199 ISP1's, 200 to 250 the application's — so 40 means accessDenied here and something else entirely from another layer."
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 7,
+        "operation": 1,
+        "operation_name": "BIND return",
+        "positive": true,
+        "responder_identifier": "CNES"
+      },
+      "input": "a11130098000020107a00281001a04434e4553",
+      "name": "bind-return-decode",
+      "note": "The same octets read back. A BIND return with a positive result, naming the responder. Annex F3.5 defines BindReturn as a genuine SEQUENCE of a header field and a responderIdentifier — unlike UnbindReturn, StartReturn and the rest, which are themselves StandardReturnHeader. So the header here keeps its own universal SEQUENCE tag rather than the alternative's context tag replacing it: a1 11 is the [1] alternative, 30 09 is the nested header SEQUENCE holding 80 00 credentials 'unused', 02 01 07 the invoke id, and a0 02 81 00 the positive result with an unused extension; then 1a 04 43 4e 45 53 is the VisibleString 'CNES' for responderIdentifier. This is the pairing case for appendReturnHeader, which nests a SEQUENCE, against appendReturnHeaderContent, which does not."
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 3,
+        "operation": 20,
+        "operation_name": "STOP invocation",
+        "procedure_name": "Cyclic Report",
+        "procedure_oid": "1.3.112.4.4.1.1.3.2.1.1",
+        "procedure_role": "prime"
+      },
+      "input": "b41930158000020103300e060a2b70040401010302010180008100",
+      "name": "stop-invocation-decode",
+      "note": "The same octets read back. A STOP invocation naming the prime instance of the Cyclic Report procedure. Clause 3.8 defines STOP and annex F3.4 gives it the same shape as START: a header and an unused extension, nothing else. b4 19 is the [20] alternative; inside, 30 15 is the standard invocation header holding 80 00 credentials 'unused', 02 01 03 the invoke id, and 30 0e the procedure name for 1.3.112.4.4.1.1.3.2.1.1 (Cyclic Report) with 80 00 for the 'prime' alternative of the three-way role CHOICE; then 81 00 is the unused extension."
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "credentials_used": false,
+        "invoke_id": 11,
+        "list_of_parameters": "040101",
+        "operation": 40,
+        "operation_name": "GET invocation",
+        "procedure_name": "Association Control",
+        "procedure_oid": "1.3.112.4.4.1.1.3.1",
+        "procedure_role": "association control"
+      },
+      "input": "bf281a3013800002010b300c06082b7004040101030182000401018100",
+      "name": "get-invocation-decode",
+      "note": "The same octets read back. A GET invocation asking for parameters under the Association Control procedure. Clause 3.12 and annex F3.4 define GET as a header, the ListOfParametersEvents CHOICE, and an unused extension. bf 28 is the [40] alternative's two-octet tag — annex F3.15 numbers this operation past 30, past what a single tag octet's five low bits can hold, so a second tag octet carries the value — and 1a is the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0b the invoke id 11, and 30 0c the procedure name for Association Control with 82 00 for its dedicated role alternative [2]; 04 01 01 is an OCTET STRING standing in for the ListOfParametersEvents CHOICE, carried as opaque octets because six of its eight alternatives are built from SANA-registered identifiers outside this document; 81 00 is the unused extension. list_of_parameters is pinned as the complete element 04 01 01, tag and length included: decodeGetInvocation keeps the whole tag-length-value, which is what GetInvocation.encode appends verbatim."
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "credentials_used": false,
+        "event_name": "040103",
+        "event_time": "040102",
+        "event_value": "040104",
+        "invoke_id": 12,
+        "operation": 50,
+        "operation_name": "NOTIFY invocation",
+        "procedure_instance": 2,
+        "procedure_name": "Cyclic Report",
+        "procedure_oid": "1.3.112.4.4.1.1.3.2.1.1",
+        "procedure_role": "secondary"
+      },
+      "input": "bf32233016800002010c300f060a2b7004040101030201018101020401020401030401048100",
+      "name": "notify-invocation-decode",
+      "note": "The same octets read back. A NOTIFY invocation reporting an event under a secondary instance of the Cyclic Report procedure. Clause 3.11 and annex F3.4 define NOTIFY as a header followed by an EventTime, an EventName and an EventValue, then an unused extension. bf 32 is the [50] alternative's two-octet tag, 23 the length; inside, 30 16 is the header holding 80 00 credentials 'unused', 02 01 0c the invoke id 12, and 30 0f the procedure name for Cyclic Report with 81 01 02 for the secondary alternative [1] carrying instance number 2; the three OCTET STRINGs 04 01 02, 04 01 03 and 04 01 04 stand in for EventTime, EventName and EventValue, each opaque here because its content is a Time, a Name or an EventValue CHOICE this document leaves to a service specification; 81 00 is the unused extension. event_time, event_name and event_value are each pinned as the complete element, tag and length included: decodeNotifyInvocation keeps the whole tag-length-value, which is what NotifyInvocation.encode appends verbatim."
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "credentials_used": false,
+        "data": "04026869",
+        "generation_time": "040105",
+        "invoke_id": 13,
+        "operation": 70,
+        "operation_name": "TRANSFER-DATA invocation",
+        "procedure_name": "Buffered Data Delivery",
+        "procedure_oid": "1.3.112.4.4.1.1.3.3",
+        "procedure_role": "prime",
+        "sequence_counter": 9
+      },
+      "input": "bf46213013800002010d300c06082b700404010103038000040105020109040268698100",
+      "name": "transfer-data-invocation-decode",
+      "note": "The same octets read back. A TRANSFER-DATA invocation moving one data unit under the prime instance of Buffered Data Delivery. Clause 3.9 and annex F3.4 define TRANSFER-DATA as a header, a GenerationTime, a SequenceCounter and Data, then an unused extension. bf 46 is the [70] alternative's two-octet tag, 21 the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0d the invoke id 13, and 30 0c the procedure name for Buffered Data Delivery (1.3.112.4.4.1.1.3.3) with 80 00 for the 'prime' role; 04 01 05 stands in for GenerationTime, opaque for the same reason EventTime is; 02 01 09 is SequenceCounter, INTEGER 9, which decodes correctly since it is a real INTEGER rather than an opaque field; 04 02 68 69 is Data, an OCTET STRING carrying 'hi'; 81 00 is the unused extension. generation_time and data are each pinned as the complete element, tag and length included: decodeTransferDataInvocation keeps the whole tag-length-value, which is what TransferDataInvocation.encode appends verbatim."
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "credentials_used": false,
+        "data": "0402676f",
+        "data_unit_id": 21,
+        "invoke_id": 14,
+        "operation": 60,
+        "operation_name": "PROCESS-DATA invocation",
+        "procedure_name": "Association Control",
+        "procedure_oid": "1.3.112.4.4.1.1.3.1",
+        "procedure_role": "association control"
+      },
+      "input": "bf3c1e3013800002010e300c06082b7004040101030182000201150402676f8100",
+      "name": "process-data-invocation-decode",
+      "note": "The same octets read back. A PROCESS-DATA invocation moving one data unit under Association Control. Clause 3.10 and annex F3.4 define PROCESS-DATA as a header, a DataUnitID and Data, then an unused extension — the one data-moving operation with no GenerationTime, because it travels user to provider rather than provider to user. bf 3c is the [60] alternative's two-octet tag, 1e the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0e the invoke id 14, and 30 0c the procedure name for Association Control with 82 00 for its role; 02 01 15 is DataUnitID, INTEGER 21, which decodes correctly since it is a real INTEGER rather than an opaque field, and which a confirmed PROCESS-DATA return would echo back; 04 02 67 6f is Data, an OCTET STRING carrying 'go'; 81 00 is the unused extension. data is pinned as the complete element, tag and length included: decodeProcessDataInvocation keeps the whole tag-length-value, which is what ProcessDataInvocation.encode appends verbatim."
     }
   ],
   "encode": [
@@ -131,6 +230,88 @@
       "name": "peer-abort-access-denied",
       "note": "A PEER-ABORT invocation with diagnostic 40, accessDenied. It is the one operation with no standard header, which clause 3.3.1.1 states outright: annex F3.5 calls its ASN.1 a dummy definition and explains that ISP1 carries an abort as a single octet, so there is nowhere to put one. a4 03 04 01 28 is the [4] alternative holding an OCTET STRING of one octet. The value space is partitioned across the cross support family — 0 to 39 are SLE's, 40 to 69 this framework's, 128 to 199 ISP1's, 200 to 250 the application's — so 40 means accessDenied here and something else entirely from another layer.",
       "want": "a403040128"
+    },
+    {
+      "clause": "F3.5",
+      "fields": {
+        "invoke_id": 7,
+        "operation": 1,
+        "positive": true,
+        "responder_identifier": "CNES"
+      },
+      "name": "bind-return",
+      "note": "A BIND return with a positive result, naming the responder. Annex F3.5 defines BindReturn as a genuine SEQUENCE of a header field and a responderIdentifier — unlike UnbindReturn, StartReturn and the rest, which are themselves StandardReturnHeader. So the header here keeps its own universal SEQUENCE tag rather than the alternative's context tag replacing it: a1 11 is the [1] alternative, 30 09 is the nested header SEQUENCE holding 80 00 credentials 'unused', 02 01 07 the invoke id, and a0 02 81 00 the positive result with an unused extension; then 1a 04 43 4e 45 53 is the VisibleString 'CNES' for responderIdentifier. This is the pairing case for appendReturnHeader, which nests a SEQUENCE, against appendReturnHeaderContent, which does not.",
+      "want": "a11130098000020107a00281001a04434e4553"
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "invoke_id": 3,
+        "operation": 20,
+        "procedure_role": "prime",
+        "procedure_type": "cyclicReport"
+      },
+      "name": "stop-invocation",
+      "note": "A STOP invocation naming the prime instance of the Cyclic Report procedure. Clause 3.8 defines STOP and annex F3.4 gives it the same shape as START: a header and an unused extension, nothing else. b4 19 is the [20] alternative; inside, 30 15 is the standard invocation header holding 80 00 credentials 'unused', 02 01 03 the invoke id, and 30 0e the procedure name for 1.3.112.4.4.1.1.3.2.1.1 (Cyclic Report) with 80 00 for the 'prime' alternative of the three-way role CHOICE; then 81 00 is the unused extension.",
+      "want": "b41930158000020103300e060a2b70040401010302010180008100"
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "invoke_id": 11,
+        "list_of_parameters": "040101",
+        "operation": 40,
+        "procedure_role": "association control",
+        "procedure_type": "associationControl"
+      },
+      "name": "get-invocation",
+      "note": "A GET invocation asking for parameters under the Association Control procedure. Clause 3.12 and annex F3.4 define GET as a header, the ListOfParametersEvents CHOICE, and an unused extension. bf 28 is the [40] alternative's two-octet tag — annex F3.15 numbers this operation past 30, past what a single tag octet's five low bits can hold, so a second tag octet carries the value — and 1a is the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0b the invoke id 11, and 30 0c the procedure name for Association Control with 82 00 for its dedicated role alternative [2]; 04 01 01 is an OCTET STRING standing in for the ListOfParametersEvents CHOICE, carried as opaque octets because six of its eight alternatives are built from SANA-registered identifiers outside this document; 81 00 is the unused extension.",
+      "want": "bf281a3013800002010b300c06082b7004040101030182000401018100"
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "event_name": "040103",
+        "event_time": "040102",
+        "event_value": "040104",
+        "invoke_id": 12,
+        "operation": 50,
+        "procedure_instance": 2,
+        "procedure_role": "secondary",
+        "procedure_type": "cyclicReport"
+      },
+      "name": "notify-invocation",
+      "note": "A NOTIFY invocation reporting an event under a secondary instance of the Cyclic Report procedure. Clause 3.11 and annex F3.4 define NOTIFY as a header followed by an EventTime, an EventName and an EventValue, then an unused extension. bf 32 is the [50] alternative's two-octet tag, 23 the length; inside, 30 16 is the header holding 80 00 credentials 'unused', 02 01 0c the invoke id 12, and 30 0f the procedure name for Cyclic Report with 81 01 02 for the secondary alternative [1] carrying instance number 2; the three OCTET STRINGs 04 01 02, 04 01 03 and 04 01 04 stand in for EventTime, EventName and EventValue, each opaque here because its content is a Time, a Name or an EventValue CHOICE this document leaves to a service specification; 81 00 is the unused extension.",
+      "want": "bf32233016800002010c300f060a2b7004040101030201018101020401020401030401048100"
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "data": "04026869",
+        "generation_time": "040105",
+        "invoke_id": 13,
+        "operation": 70,
+        "procedure_role": "prime",
+        "procedure_type": "bufferedDataDelivery",
+        "sequence_counter": 9
+      },
+      "name": "transfer-data-invocation",
+      "note": "A TRANSFER-DATA invocation moving one data unit under the prime instance of Buffered Data Delivery. Clause 3.9 and annex F3.4 define TRANSFER-DATA as a header, a GenerationTime, a SequenceCounter and Data, then an unused extension. bf 46 is the [70] alternative's two-octet tag, 21 the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0d the invoke id 13, and 30 0c the procedure name for Buffered Data Delivery (1.3.112.4.4.1.1.3.3) with 80 00 for the 'prime' role; 04 01 05 stands in for GenerationTime, opaque for the same reason EventTime is; 02 01 09 is SequenceCounter, INTEGER 9; 04 02 68 69 is Data, an OCTET STRING carrying 'hi'; 81 00 is the unused extension.",
+      "want": "bf46213013800002010d300c06082b700404010103038000040105020109040268698100"
+    },
+    {
+      "clause": "F3.4",
+      "fields": {
+        "data": "0402676f",
+        "data_unit_id": 21,
+        "invoke_id": 14,
+        "operation": 60,
+        "procedure_role": "association control",
+        "procedure_type": "associationControl"
+      },
+      "name": "process-data-invocation",
+      "note": "A PROCESS-DATA invocation moving one data unit under Association Control. Clause 3.10 and annex F3.4 define PROCESS-DATA as a header, a DataUnitID and Data, then an unused extension — the one data-moving operation with no GenerationTime, because it travels user to provider rather than provider to user. bf 3c is the [60] alternative's two-octet tag, 1e the length; inside, 30 13 is the header holding 80 00 credentials 'unused', 02 01 0e the invoke id 14, and 30 0c the procedure name for Association Control with 82 00 for its role; 02 01 15 is DataUnitID, INTEGER 21, which a confirmed PROCESS-DATA return would echo back; 04 02 67 6f is Data, an OCTET STRING carrying 'go'; 81 00 is the unused extension.",
+      "want": "bf3c1e3013800002010e300c06082b7004040101030182000201150402676f8100"
     }
   ],
   "note": "The CSTS specification framework. These vectors are DERIVED, not published: CCSDS 921.1-B-2 prints no worked example and no octets, because it is an abstract specification with an ASN.1 annex rather than a wire format document. Each vector's note carries its derivation from annex F octet by octet, so a reader can check it against the module instead of against this package. What they pin hardest is the tagging. Every module in annex F uses IMPLICIT TAGS, so a CHOICE alternative's context tag replaces the tag of the type beneath it: where an alternative is defined as 'X ::= StandardReturnHeader', the [n] replaces that SEQUENCE's tag and no SEQUENCE appears in the encoding. Writing one there as well produces a PDU one level too deep, which round-trips perfectly against itself and against nothing else.",

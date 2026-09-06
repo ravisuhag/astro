@@ -266,7 +266,7 @@ if err != nil { /* handle sync errors */ }
 // 3. (Optional) Apply Reed-Solomon decoding/correction
 
 // 4. Decode the Transfer Frame
-frame, err := tmdl.DecodeTMTransferFrame(frameData)
+frame, err := tmdl.DecodeTransferFrame(frameData)
 if err != nil { /* handle CRC errors */ }
 ```
 

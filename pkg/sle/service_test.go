@@ -1,6 +1,7 @@
 package sle_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -204,7 +205,9 @@ func TestServiceRefusesOperationsOutOfState(t *testing.T) {
 	now := testTime
 	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
 
-	// State 1: no START, no STOP, no UNBIND.
+	// State 1: no START, no STOP, no UNBIND, no GET-PARAMETER, no
+	// SCHEDULE-STATUS-REPORT, no STATUS-REPORT — every operation but
+	// PEER-ABORT needs a bound association.
 	if _, err := user.Start(now, 1, sle.ConditionalTime{}, sle.ConditionalTime{}, sle.FrameQualityAll); !errors.Is(err, sle.ErrNotBound) {
 		t.Errorf("Start() at state 1 = %v, want ErrNotBound", err)
 	}
@@ -216,6 +219,24 @@ func TestServiceRefusesOperationsOutOfState(t *testing.T) {
 	}
 	if err := provider.SendTransferBuffer(sle.RAFTransferBuffer{}, now); !errors.Is(err, sle.ErrNotBound) {
 		t.Errorf("SendTransferBuffer() at state 1 = %v, want ErrNotBound", err)
+	}
+	if _, err := user.GetParameter(1, now, 1); !errors.Is(err, sle.ErrNotBound) {
+		t.Errorf("GetParameter() at state 1 = %v, want ErrNotBound", err)
+	}
+	if _, err := user.ScheduleStatusReport(sle.ReportImmediately, 0, now, 1); !errors.Is(err, sle.ErrNotBound) {
+		t.Errorf("ScheduleStatusReport() at state 1 = %v, want ErrNotBound", err)
+	}
+	if err := provider.HandleGetParameterInvocation(
+		&sle.GetParameterInvocation{InvokeId: 1, Parameter: 1}, nil, now, 1); !errors.Is(err, sle.ErrNotBound) {
+		t.Errorf("HandleGetParameterInvocation() at state 1 = %v, want ErrNotBound", err)
+	}
+	if err := provider.HandleScheduleStatusReportInvocation(
+		&sle.ScheduleStatusReportInvocation{InvokeId: 1, Kind: sle.ReportImmediately},
+		true, 0, now, 1); !errors.Is(err, sle.ErrNotBound) {
+		t.Errorf("HandleScheduleStatusReportInvocation() at state 1 = %v, want ErrNotBound", err)
+	}
+	if err := provider.SendStatusReport(&sle.RAFStatusReportInvocation{}, now); !errors.Is(err, sle.ErrNotBound) {
+		t.Errorf("SendStatusReport() at state 1 = %v, want ErrNotBound", err)
 	}
 
 	bindTo(t, user, provider, now)
@@ -236,6 +257,13 @@ func TestServiceRefusesOperationsOutOfState(t *testing.T) {
 	}
 	if err := user.Unbind(now, 3, sle.UnbindEnd); !errors.Is(err, sle.ErrAlreadyStarted) {
 		t.Errorf("Unbind() at state 3 = %v, want ErrAlreadyStarted", err)
+	}
+
+	// PEER-ABORT has no state gate at all: unlike every operation above, it
+	// succeeds from state 3 exactly as it would from any other state.
+	provider.PeerAbort(sle.AbortProtocolError, now)
+	if provider.State() != sle.ServiceUnbound {
+		t.Errorf("PeerAbort() at state 3 left state = %s, want unbound", provider.State())
 	}
 }
 
@@ -391,6 +419,33 @@ func TestOutstandingTracksConfirmedOperations(t *testing.T) {
 	}
 }
 
+// TestServiceUserRefusesInvokeIdStillOutstanding covers the user side of B5:
+// InvokeId is 16 bits, so nextInvokeId wraps after 65,536 confirmed
+// operations. If the identifier it would assign next is still awaiting its
+// return, invoke must refuse locally with a diagnosable cause rather than
+// send a PDU the provider would answer with the (misleadingly remote-looking)
+// 'duplicate invoke ID' diagnostic.
+func TestServiceUserRefusesInvokeIdStillOutstanding(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	bindTo(t, user, provider, now)
+	startTo(t, user, provider, now)
+
+	// STOP is valid throughout state 3 and invoking it does not itself change
+	// state, so it can be invoked repeatedly. Never handling its return keeps
+	// every identifier in `awaiting`, so the 65,537th invocation reuses
+	// identifier 0, which is still outstanding from the very first call.
+	const wrapAt = 65536
+	for i := 0; i < wrapAt; i++ {
+		if _, err := user.Stop(now, 1); err != nil {
+			t.Fatalf("Stop() at iteration %d = %v, want nil", i, err)
+		}
+	}
+	if _, err := user.Stop(now, 1); !errors.Is(err, sle.ErrInvokeIdExhausted) {
+		t.Fatalf("Stop() at iteration %d = %v, want ErrInvokeIdExhausted", wrapAt, err)
+	}
+}
+
 // TestServiceRejectsMismatchedRole catches the wiring mistake of handing a
 // provider association to a user machine.
 func TestServiceRejectsMismatchedRole(t *testing.T) {
@@ -437,5 +492,181 @@ func TestOperationTagsMatchTheServiceKind(t *testing.T) {
 	}
 	if decoded.Tag != 100 {
 		t.Errorf("BIND tag = %d, want 100", decoded.Tag)
+	}
+}
+
+// TestGetParameterHappyPath drives GET-PARAMETER to a positive answer,
+// covering ServiceUser.GetParameter, ServiceProvider.HandleGetParameterInvocation
+// and ServiceUser.HandleGetParameterReturn — all shared by every service, and
+// all 0% before this test existed.
+func TestGetParameterHappyPath(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	if user.DeliveryMode() != sle.DeliveryReturnCompleteOnline {
+		t.Fatalf("DeliveryMode() = %v, want DeliveryReturnCompleteOnline", user.DeliveryMode())
+	}
+	bindTo(t, user, provider, now)
+
+	id, err := user.GetParameter(7, now, 2)
+	if err != nil {
+		t.Fatalf("GetParameter() = %v", err)
+	}
+	if op := user.Outstanding()[id]; op != sle.OpGetParameterInvocation {
+		t.Fatalf("outstanding[%d] = %v, want GET-PARAMETER invocation", id, op)
+	}
+
+	events := pumpToProvider(t, user, provider, now)
+	if len(events) != 1 || events[0].GetParameterInvocation == nil {
+		t.Fatalf("provider saw %d events, want one GET-PARAMETER invocation", len(events))
+	}
+	if events[0].GetParameterInvocation.Parameter != 7 {
+		t.Errorf("parameter = %d, want 7", events[0].GetParameterInvocation.Parameter)
+	}
+
+	// The parameter value is a still-encoded BER element: this package does
+	// not model any service's parameter CHOICE, so the caller supplies one.
+	answer := sle.AppendInteger(nil, 42)
+	err = provider.HandleGetParameterInvocation(events[0].GetParameterInvocation, answer, now, 3)
+	if err != nil {
+		t.Fatalf("HandleGetParameterInvocation() = %v", err)
+	}
+
+	userEvents := pumpToUser(t, provider, user, now)
+	if len(userEvents) != 1 || userEvents[0].GetParameterReturn == nil {
+		t.Fatalf("user saw %d events, want one GET-PARAMETER return", len(userEvents))
+	}
+	if !userEvents[0].GetParameterReturn.Positive {
+		t.Error("the GET-PARAMETER was refused")
+	}
+	if !bytes.Equal(userEvents[0].GetParameterReturn.Parameter, answer) {
+		t.Errorf("parameter = %x, want %x", userEvents[0].GetParameterReturn.Parameter, answer)
+	}
+	if len(user.Outstanding()) != 0 {
+		t.Errorf("still outstanding after the return: %v", user.Outstanding())
+	}
+}
+
+// TestGetParameterUnknownIsRefused drives the negative branch: a provider
+// with nothing to say answers 'unknown parameter'.
+func TestGetParameterUnknownIsRefused(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	bindTo(t, user, provider, now)
+
+	if _, err := user.GetParameter(99, now, 2); err != nil {
+		t.Fatalf("GetParameter() = %v", err)
+	}
+	events := pumpToProvider(t, user, provider, now)
+	err := provider.HandleGetParameterInvocation(events[0].GetParameterInvocation, nil, now, 3)
+	if err != nil {
+		t.Fatalf("HandleGetParameterInvocation() = %v", err)
+	}
+
+	userEvents := pumpToUser(t, provider, user, now)
+	if userEvents[0].GetParameterReturn.Positive {
+		t.Fatal("an unanswered parameter decoded as positive")
+	}
+	if userEvents[0].GetParameterReturn.SpecificDiagnostic != sle.GetParameterUnknown {
+		t.Errorf("diagnostic = %v, want unknown parameter", userEvents[0].GetParameterReturn.SpecificDiagnostic)
+	}
+}
+
+// TestScheduleStatusReportHappyPathThenStatusReport drives
+// SCHEDULE-STATUS-REPORT to a positive answer, covering
+// ServiceUser.ScheduleStatusReport, ServiceProvider.HandleScheduleStatusReportInvocation
+// and ServiceUser.HandleScheduleStatusReportReturn, then has the provider
+// emit the unconfirmed STATUS-REPORT the schedule asked for and checks the
+// user receives it — the request-then-deliver loop clause 3.9 of each
+// service specification describes, and ServiceProvider.SendStatusReport's
+// only caller in this package's own tests.
+func TestScheduleStatusReportHappyPathThenStatusReport(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	bindTo(t, user, provider, now)
+
+	id, err := user.ScheduleStatusReport(sle.ReportImmediately, 0, now, 2)
+	if err != nil {
+		t.Fatalf("ScheduleStatusReport() = %v", err)
+	}
+	if op := user.Outstanding()[id]; op != sle.OpScheduleStatusReportInvocation {
+		t.Fatalf("outstanding[%d] = %v, want SCHEDULE-STATUS-REPORT invocation", id, op)
+	}
+
+	events := pumpToProvider(t, user, provider, now)
+	if len(events) != 1 || events[0].ScheduleStatusReportInvocation == nil {
+		t.Fatalf("provider saw %d events, want one SCHEDULE-STATUS-REPORT invocation", len(events))
+	}
+	if events[0].ScheduleStatusReportInvocation.Kind != sle.ReportImmediately {
+		t.Errorf("kind = %v, want immediately", events[0].ScheduleStatusReportInvocation.Kind)
+	}
+
+	err = provider.HandleScheduleStatusReportInvocation(
+		events[0].ScheduleStatusReportInvocation, true, 0, now, 3)
+	if err != nil {
+		t.Fatalf("HandleScheduleStatusReportInvocation() = %v", err)
+	}
+
+	userEvents := pumpToUser(t, provider, user, now)
+	if len(userEvents) != 1 || userEvents[0].ScheduleStatusReportReturn == nil {
+		t.Fatalf("user saw %d events, want one SCHEDULE-STATUS-REPORT return", len(userEvents))
+	}
+	if !userEvents[0].ScheduleStatusReportReturn.Positive {
+		t.Error("the schedule request was refused")
+	}
+	if len(user.Outstanding()) != 0 {
+		t.Errorf("still outstanding after the return: %v", user.Outstanding())
+	}
+
+	// The provider now emits the report it was just asked for. This is
+	// unconfirmed, so it needs no invoke identifier and settles nothing.
+	report := &sle.RAFStatusReportInvocation{
+		ErrorFreeFrameNumber: 10,
+		DeliveredFrameNumber: 12,
+		ProductionStatus:     sle.ProductionRunning,
+	}
+	if err := provider.SendStatusReport(report, now); err != nil {
+		t.Fatalf("SendStatusReport() = %v", err)
+	}
+	reportEvents := pumpToUser(t, provider, user, now)
+	if len(reportEvents) != 1 || reportEvents[0].StatusReport == nil {
+		t.Fatalf("user saw %d events, want one STATUS-REPORT", len(reportEvents))
+	}
+	if reportEvents[0].StatusReport.DeliveredFrameNumber != 12 {
+		t.Errorf("delivered frame number = %d, want 12", reportEvents[0].StatusReport.DeliveredFrameNumber)
+	}
+	if reportEvents[0].StatusReport.ErrorFreeFrameNumber != 10 {
+		t.Errorf("error-free frame number = %d, want 10", reportEvents[0].StatusReport.ErrorFreeFrameNumber)
+	}
+}
+
+// TestPeerAbortEndsTheAssociationFromEitherSide covers HandlePeerAbort:
+// whichever end sends PEER-ABORT, the far end's own HandlePDU decodes it and
+// reaches HandlePeerAbort, ending that end unbound too — even though it was
+// active a moment before, which is the point: PEER-ABORT overrides whatever
+// state the far end thought it was in.
+func TestPeerAbortEndsTheAssociationFromEitherSide(t *testing.T) {
+	now := testTime
+	user, provider := servicePair(t, sle.DeliveryReturnCompleteOnline)
+	bindTo(t, user, provider, now)
+	startTo(t, user, provider, now)
+
+	if provider.State() != sle.ServiceActive || user.State() != sle.ServiceActive {
+		t.Fatal("both ends should be active before the abort")
+	}
+
+	provider.PeerAbort(sle.AbortProtocolError, now)
+	if provider.State() != sle.ServiceUnbound {
+		t.Errorf("provider state after its own PeerAbort = %s, want unbound", provider.State())
+	}
+
+	events := pumpToUser(t, provider, user, now)
+	if len(events) != 1 || events[0].PeerAbort == nil {
+		t.Fatalf("user saw %d events, want one PEER-ABORT", len(events))
+	}
+	if events[0].PeerAbort.Diagnostic != sle.AbortProtocolError {
+		t.Errorf("diagnostic = %v, want protocol error", events[0].PeerAbort.Diagnostic)
+	}
+	if user.State() != sle.ServiceUnbound {
+		t.Errorf("user state after HandlePeerAbort = %s, want unbound", user.State())
 	}
 }

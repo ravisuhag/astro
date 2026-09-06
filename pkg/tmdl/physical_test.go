@@ -139,8 +139,8 @@ func TestPhysicalChannel_Demultiplex(t *testing.T) {
 	pc.AddMasterChannel(mc1, 1)
 	pc.AddMasterChannel(mc2, 1)
 
-	f1, _ := tmdl.NewTMTransferFrame(100, 1, []byte("for-sc100"), nil, nil)
-	f2, _ := tmdl.NewTMTransferFrame(200, 1, []byte("for-sc200"), nil, nil)
+	f1, _ := tmdl.NewTransferFrame(100, 1, []byte("for-sc100"), nil, nil)
+	f2, _ := tmdl.NewTransferFrame(200, 1, []byte("for-sc200"), nil, nil)
 	_ = pc.AddFrame(f1)
 	_ = pc.AddFrame(f2)
 
@@ -156,7 +156,7 @@ func TestPhysicalChannel_Demultiplex(t *testing.T) {
 
 func TestPhysicalChannel_DemuxUnknownSCID(t *testing.T) {
 	pc := tmdl.NewPhysicalChannel("test", tmdl.ChannelConfig{})
-	frame, _ := tmdl.NewTMTransferFrame(999, 1, []byte("data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(999, 1, []byte("data"), nil, nil)
 	if !errors.Is(pc.AddFrame(frame), tmdl.ErrMasterChannelNotFound) {
 		t.Error("Expected ErrMasterChannelNotFound")
 	}

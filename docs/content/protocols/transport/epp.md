@@ -225,7 +225,7 @@ packet, err := epp.NewIPEPacket(ipv4Datagram)
 encoded, err := packet.Encode()
 
 // Frame in a TM Transfer Frame (via tmdl)
-frame, err := tmdl.NewTMTransferFrame(0x1A, 1, encoded, nil, nil)
+frame, err := tmdl.NewTransferFrame(0x1A, 1, encoded, nil, nil)
 ```
 
 ### Receive path

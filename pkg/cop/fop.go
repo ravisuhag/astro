@@ -89,6 +89,16 @@ const (
 	TT1 = 1
 )
 
+// MaxWindow is the largest legal FOP-1 sliding window width K.
+//
+// The frame sequence number N(S) is eight bits (CCSDS 232.0-B-4 clause
+// 4.1.2.3), so the sequence space holds 256 values. A window wider than
+// half of that means a report value the receiver sends can be the genuine
+// next N(R) or a wrapped-around repeat of one already acknowledged, and
+// FOP-1 has no way to tell which: a lost CLCW then looks exactly like a
+// wrap. 127 is the largest K that keeps every N(R) unambiguous.
+const MaxWindow = 127
+
 // SentFrame tracks a transmitted Type-A frame awaiting acknowledgment.
 type SentFrame struct {
 	SequenceNum uint8
@@ -130,7 +140,7 @@ type FOP struct {
 	bcOut     bool        // BC frame ready to be pulled by GetNextFrame
 	pendingVR *uint8      // V(R) value pinned by Initiate AD with Set V(R)
 
-	windowWidth uint8 // K: FOP sliding window width (1..255)
+	windowWidth uint8 // K: FOP sliding window width (1..MaxWindow)
 
 	t1Initial    int // T1 initial value in caller tick units; 0 = disabled
 	t1Remaining  int
@@ -148,12 +158,17 @@ type FOP struct {
 
 // NewFOP creates a new FOP-1 instance in the Initial state (S6).
 //
-// windowWidth is the FOP sliding window (1..255; 0 is clamped to 1). The
-// transmission limit defaults to 255, the timeout type to TT0, and the T1
-// timer starts disabled (initial value 0).
+// windowWidth is the FOP sliding window (1..MaxWindow; 0 is clamped to 1
+// and anything above MaxWindow is clamped down to it — see MaxWindow for
+// why a wider window is not just impractical but unsafe). The transmission
+// limit defaults to 255, the timeout type to TT0, and the T1 timer starts
+// disabled (initial value 0).
 func NewFOP(scid uint16, vcid uint8, windowWidth uint8) *FOP {
 	if windowWidth == 0 {
 		windowWidth = 1
+	}
+	if windowWidth > MaxWindow {
+		windowWidth = MaxWindow
 	}
 	return &FOP{
 		state:       FOPInitial,
@@ -306,11 +321,13 @@ func (f *FOP) SetVS(vs uint8) error {
 }
 
 // SetSlidingWindow sets the FOP sliding window width K (E36).
-// Valid values are 1..255.
+// Valid values are 1..MaxWindow; wider is refused rather than clamped,
+// since a caller invoking this directive is asking for a specific K and
+// deserves to know it will not get it (see MaxWindow for why).
 func (f *FOP) SetSlidingWindow(w uint8) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if w == 0 {
+	if w == 0 || w > MaxWindow {
 		return ErrFOPInvalidWindow
 	}
 	f.windowWidth = w
@@ -502,8 +519,8 @@ func (f *FOP) ProcessCLCW(clcw *CLCW) error {
 	// Acknowledge frames up to (but excluding) N(R).
 	if ackCount > 0 {
 		f.nnr = nr
-		f.sentQueue = pruneAcked(f.sentQueue, nr)
-		f.waitQueue = pruneAcked(f.waitQueue, nr)
+		f.sentQueue = pruneAcked(f.sentQueue, nr, ackCount)
+		f.waitQueue = pruneAcked(f.waitQueue, nr, ackCount)
 		// New frames acknowledged: reset the retransmission budget and
 		// restart T1 for the frames still outstanding.
 		f.txCount = 1
@@ -606,12 +623,22 @@ func (f *FOP) retransmitting() bool {
 }
 
 // pruneAcked removes every frame acknowledged by N(R) from q.
-func pruneAcked(q []SentFrame, nr uint8) []SentFrame {
+//
+// ackCount is (nr - previous N(R)) & 0xFF: the number of sequence numbers
+// this CLCW has just acknowledged. A frame is dropped only when its
+// distance behind N(R) falls within that count, i.e. it is one of the
+// frames this CLCW just confirmed; a fixed half-window can't tell that
+// apart from a frame still legitimately outstanding once the sliding
+// window K exceeds it (CCSDS 232.1-B-2 lets K run up to 255), so the
+// bound has to be the real acknowledgement count rather than a constant.
+func pruneAcked(q []SentFrame, nr uint8, ackCount uint8) []SentFrame {
 	var remaining []SentFrame
 	for _, sf := range q {
 		diff := (nr - sf.SequenceNum) & 0xFF
-		if diff == 0 || diff > 128 {
-			// Not yet acknowledged (seq >= N(R) in modular arithmetic).
+		if diff == 0 || diff > ackCount {
+			// Not yet acknowledged: sf.SequenceNum is N(R) itself (the next
+			// frame expected) or further ahead in sequence, not one of the
+			// ackCount frames this CLCW just confirmed.
 			remaining = append(remaining, sf)
 		}
 	}

@@ -453,7 +453,17 @@ func DecodeTransferFrame(data []byte, insertZoneLen int, hasOCF, hasFECF bool) (
 // DecodeFrame parses a byte slice into an AOS Transfer Frame using the
 // physical channel configuration for the optional fields, including the
 // Frame Header Error Control.
+//
+// Deprecated: use DecodeTransferFrameWithConfig, which is the name every
+// data-link package now uses. This forwarder will be removed in v1.0.
 func DecodeFrame(data []byte, config ChannelConfig) (*TransferFrame, error) {
+	return DecodeTransferFrameWithConfig(data, config)
+}
+
+// DecodeTransferFrameWithConfig parses a byte slice into an AOS Transfer
+// Frame using the physical channel configuration for the optional fields,
+// including the Frame Header Error Control.
+func DecodeTransferFrameWithConfig(data []byte, config ChannelConfig) (*TransferFrame, error) {
 	return decodeFrame(data, config.InsertZoneLen, config.HasOCF, config.HasFECF, config.HasFHEC)
 }
 

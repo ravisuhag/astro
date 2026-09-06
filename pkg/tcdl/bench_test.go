@@ -27,7 +27,7 @@ func benchPayload(size int) []byte {
 }
 
 func BenchmarkEncodeFrame(b *testing.B) {
-	frame, err := tcdl.NewTCTransferFrame(42, 1, benchPayload(1017))
+	frame, err := tcdl.NewTransferFrame(42, 1, benchPayload(1017))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func BenchmarkEncodeFrame(b *testing.B) {
 }
 
 func BenchmarkDecodeFrame(b *testing.B) {
-	frame, err := tcdl.NewTCTransferFrame(42, 1, benchPayload(1017))
+	frame, err := tcdl.NewTransferFrame(42, 1, benchPayload(1017))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func BenchmarkDecodeFrame(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := tcdl.DecodeTCTransferFrame(encoded); err != nil {
+		if _, err := tcdl.DecodeTransferFrame(encoded); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -285,12 +285,19 @@ func Decode(data []byte) (*EncapsulationPacket, error) {
 	}
 
 	headerSize := header.Size()
-	totalSize := int(header.PacketLength)
 
-	// Verify we have enough data for the declared packet length
-	if len(data) < totalSize {
+	// Compare in int64 before narrowing to int: on a 32-bit build (GOARCH=386,
+	// arm, wasm) int is 32 bits, so a PacketLength near 0xFFFFFFFF (valid for
+	// the LoL '11' 8-octet header, whose only check is >= HeaderSize8) would
+	// become negative once truncated. A negative totalSize would pass
+	// `len(data) < totalSize` and then panic slicing data[headerSize:totalSize].
+	// header.PacketLength is uint32, so int64(header.PacketLength) is always
+	// exact and non-negative regardless of platform int width.
+	totalSize64 := int64(header.PacketLength)
+	if totalSize64 > int64(len(data)) {
 		return nil, ErrDataTooShort
 	}
+	totalSize := int(totalSize64)
 
 	ep := &EncapsulationPacket{
 		Header: header,

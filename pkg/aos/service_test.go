@@ -1,6 +1,7 @@
 package aos_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/aos"
@@ -342,6 +343,92 @@ func TestMultiplexingService_FHPResync(t *testing.T) {
 	// and resyncs; the next emission should be smallPkt.
 	if !bytesEqual(got, bigPkt) && !bytesEqual(got, smallPkt) {
 		t.Errorf("got unexpected packet: % X", got)
+	}
+}
+
+// TestMultiplexingService_GapResyncPreventsSplicing reproduces B4: a
+// receive-only pipeline builds its M_PDU service with counter=nil, since it
+// has nothing of its own to stamp into frames. Before SetGapResync existed,
+// that meant it could never resync on a frame gap: a lost frame carrying
+// the boundary between two packets left the reassembler blindly splicing
+// the tail of one onto pieces of the next and handing back the result as
+// if it were a complete, valid packet.
+//
+// Two 25-byte packets are packed back to back into five 10-byte frames.
+// Frame index 2 carries the FHP marking where the second packet starts and
+// is the one dropped, leaving "no packet start" continuation frames on
+// both sides of it with no boundary information at all.
+func TestMultiplexingService_GapResyncPreventsSplicing(t *testing.T) {
+	const zoneCapacity = 10
+
+	pkt1 := makeSPP(t, 100, bytes.Repeat([]byte{0xA1}, 19)) // 6 + 19 = 25 bytes
+	pkt2 := makeSPP(t, 200, bytes.Repeat([]byte{0xB2}, 19)) // 6 + 19 = 25 bytes
+	if len(pkt1) != 25 || len(pkt2) != 25 {
+		t.Fatalf("test setup: len(pkt1)=%d len(pkt2)=%d, want 25 each", len(pkt1), len(pkt2))
+	}
+	stream := append(append([]byte{}, pkt1...), pkt2...) // 50 bytes, back to back
+	zone := func(i int) []byte { return stream[i*zoneCapacity : (i+1)*zoneCapacity] }
+
+	buildFrame := func(t *testing.T, count uint32, fhp uint16, z []byte) *aos.TransferFrame {
+		t.Helper()
+		df, err := aos.PackMPDUDataField(fhp, z)
+		if err != nil {
+			t.Fatalf("PackMPDUDataField: %v", err)
+		}
+		frame, err := aos.NewTransferFrame(50, 1, df, aos.WithVCFrameCount(count))
+		if err != nil {
+			t.Fatalf("NewTransferFrame: %v", err)
+		}
+		return frame
+	}
+
+	// VCFrameCount=2, which would carry FHP=5 (pkt2 starts mid-zone), is
+	// never built: it is the dropped frame.
+	frameSpecs := []struct {
+		count uint32
+		fhp   uint16
+		zone  int
+	}{
+		{0, 0, 0},                    // pkt1 starts here
+		{1, aos.FHPNoPacketStart, 1}, // pkt1 continuation
+		{3, aos.FHPNoPacketStart, 3}, // pkt2 continuation; the boundary frame before it was lost
+		{4, aos.FHPNoPacketStart, 4}, // pkt2 continuation, ends the stream
+	}
+
+	newReceiver := func(t *testing.T, gapResync bool) *aos.MultiplexingService {
+		t.Helper()
+		vc := aos.NewVirtualChannel(1, 10)
+		for _, s := range frameSpecs {
+			if err := vc.Add(buildFrame(t, s.count, s.fhp, zone(s.zone))); err != nil {
+				t.Fatalf("vc.Add: %v", err)
+			}
+		}
+		config := aos.ChannelConfig{FrameLength: zoneCapacity + aos.MPDUHeaderSize + aos.PrimaryHeaderSize}
+		rx := aos.NewMultiplexingService(50, 1, vc, config, nil)
+		rx.SetPacketSizer(spp.PacketSizer)
+		if gapResync {
+			rx.SetGapResync(true)
+		}
+		return rx
+	}
+
+	// Without opting in (the only behavior possible before this fix), the
+	// gap goes unresynced and the reassembler splices pkt2's bytes onto
+	// pkt1's head, silently delivering a 25-byte result that is not pkt1.
+	got, err := newReceiver(t, false).Receive()
+	if err != nil {
+		t.Fatalf("Receive() without gap resync: unexpected error %v", err)
+	}
+	if bytesEqual(got, pkt1) {
+		t.Fatal("test setup did not reproduce the splice: got the real pkt1 back without gap resync")
+	}
+
+	// With SetGapResync(true), the gap must discard the partial packet
+	// instead of splicing: nothing should be delivered rather than a
+	// corrupted stand-in for pkt1.
+	got, err = newReceiver(t, true).Receive()
+	if err == nil {
+		t.Errorf("gap resync did not prevent the splice: got %d bytes instead of an empty-channel error: % X", len(got), got)
 	}
 }
 

@@ -147,7 +147,7 @@ func tmGenCmd() *cobra.Command {
 				}
 
 				// Build a base frame to get a valid structure, then
-				// reconstruct with correct counters. NewTMTransferFrame
+				// reconstruct with correct counters. NewTransferFrame
 				// computes CRC, so we set counters first by building
 				// a fresh frame each iteration.
 				frame := &tmdl.TMTransferFrame{
@@ -229,7 +229,7 @@ func tcGenCmd() *cobra.Command {
 					opts = append(opts, tcdl.WithBypass())
 				}
 
-				frame, err := tcdl.NewTCTransferFrame(scid, vcid, data, opts...)
+				frame, err := tcdl.NewTransferFrame(scid, vcid, data, opts...)
 				if err != nil {
 					return fmt.Errorf("frame #%d: %w", i+1, err)
 				}
@@ -370,7 +370,7 @@ func cltuGenCmd() *cobra.Command {
 					return err
 				}
 
-				frame, err := tcdl.NewTCTransferFrame(scid, vcid, data,
+				frame, err := tcdl.NewTransferFrame(scid, vcid, data,
 					tcdl.WithSequenceNumber(uint8(i)&0xFF))
 				if err != nil {
 					return fmt.Errorf("CLTU #%d: %w", i+1, err)

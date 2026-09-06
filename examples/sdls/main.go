@@ -133,7 +133,7 @@ func securedDownlink() {
 	fmt.Println()
 
 	// The protected data field is now ordinary frame payload.
-	frame, err := tmdl.NewTMTransferFrame(spacecraftID, vcidSecure, protected, nil, nil)
+	frame, err := tmdl.NewTransferFrame(spacecraftID, vcidSecure, protected, nil, nil)
 	if err != nil {
 		log.Fatalf("framing: %v", err)
 	}
@@ -153,7 +153,7 @@ func securedDownlink() {
 		len(encoded), frame.Header.MCFrameCount)
 
 	// The ground side.
-	decoded, err := tmdl.DecodeTMTransferFrame(encoded)
+	decoded, err := tmdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		log.Fatalf("decoding the frame: %v", err)
 	}

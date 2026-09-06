@@ -89,11 +89,11 @@ Type-B frames skip all of it. That is the point of them, see the note below.
 import "github.com/ravisuhag/astro/pkg/tcdl"
 
 // Create and encode a TC Transfer Frame
-frame, _ := tcdl.NewTCTransferFrame(0x1A, 1, []byte("SET_MODE=SAFE"))
+frame, _ := tcdl.NewTransferFrame(0x1A, 1, []byte("SET_MODE=SAFE"))
 encoded, _ := frame.Encode()
 
 // Decode a received frame
-decoded, _ := tcdl.DecodeTCTransferFrame(encoded)
+decoded, _ := tcdl.DecodeTransferFrame(encoded)
 fmt.Println(decoded.Header.Humanize())
 ```
 
@@ -132,23 +132,23 @@ The `TCTransferFrame` is the fundamental data unit. TC frames are variable-lengt
 
 ```go
 // Basic frame with SCID=0x1A, VCID=1
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data)
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data)
 
 // Type-B (expedited/bypass) frame
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data, tcdl.WithBypass())
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data, tcdl.WithBypass())
 
 // Control command frame
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data, tcdl.WithControlCommand())
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data, tcdl.WithControlCommand())
 
 // Frame with segment header (MAP sublayer)
 sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 0}
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data, tcdl.WithSegmentHeader(sh))
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data, tcdl.WithSegmentHeader(sh))
 
 // Frame with explicit sequence number (for COP-1)
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data, tcdl.WithSequenceNumber(42))
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data, tcdl.WithSequenceNumber(42))
 
 // Combining options
-frame, err := tcdl.NewTCTransferFrame(0x1A, 1, data,
+frame, err := tcdl.NewTransferFrame(0x1A, 1, data,
     tcdl.WithSegmentHeader(sh),
     tcdl.WithSequenceNumber(42),
 )
@@ -164,7 +164,7 @@ encoded, err := frame.Encode()
 raw, err := frame.EncodeWithoutFEC()
 
 // Decode bytes back to a frame (validates CRC)
-frame, err := tcdl.DecodeTCTransferFrame(encoded)
+frame, err := tcdl.DecodeTransferFrame(encoded)
 
 // Check frame type
 if tcdl.IsBypass(frame) { /* Type-B expedited frame */ }
@@ -377,7 +377,7 @@ pc := tcdl.NewPhysicalChannel("TC-Uplink")
 pc.AddMasterChannel(mc, 1)
 
 // 2. Process incoming frames
-frame, err := tcdl.DecodeTCTransferFrame(receivedBytes)
+frame, err := tcdl.DecodeTransferFrame(receivedBytes)
 if err != nil { /* handle CRC or frame errors */ }
 
 // 3. Route to Master Channel -> Virtual Channel

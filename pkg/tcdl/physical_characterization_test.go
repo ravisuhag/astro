@@ -16,7 +16,7 @@ func TestPhysicalChannelRoutesFramesBySCID(t *testing.T) {
 	mc.AddVirtualChannel(tcdl.NewVirtualChannel(1, 4), 1)
 	pc.AddMasterChannel(mc, 1)
 
-	frame, err := tcdl.NewTCTransferFrame(0x0AB, 1, []byte("command"))
+	frame, err := tcdl.NewTransferFrame(0x0AB, 1, []byte("command"))
 	if err != nil {
 		t.Fatalf("building a frame: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestPhysicalChannelRefusesAnUnknownSCID(t *testing.T) {
 	mc.AddVirtualChannel(tcdl.NewVirtualChannel(1, 4), 1)
 	pc.AddMasterChannel(mc, 1)
 
-	frame, err := tcdl.NewTCTransferFrame(7, 1, []byte("command"))
+	frame, err := tcdl.NewTransferFrame(7, 1, []byte("command"))
 	if err != nil {
 		t.Fatalf("building a frame: %v", err)
 	}

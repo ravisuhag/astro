@@ -282,7 +282,7 @@ func TestMAPAccessService_FixedLength_SingleFrame(t *testing.T) {
 
 	// Receive trims to the SDU with no out-of-band size knowledge.
 	rxVC := usdl.NewVirtualChannel(1, 10)
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}

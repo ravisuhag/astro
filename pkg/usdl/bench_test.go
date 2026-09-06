@@ -65,7 +65,7 @@ func BenchmarkDecodeFrame(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0); err != nil {
+		if _, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true}); err != nil {
 			b.Fatal(err)
 		}
 	}

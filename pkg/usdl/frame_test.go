@@ -268,7 +268,7 @@ func TestTransferFrame_EncodeDecode_CRC16(t *testing.T) {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -299,7 +299,7 @@ func TestTransferFrame_EncodeDecode_OctetStreamRule(t *testing.T) {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -330,7 +330,7 @@ func TestTransferFrame_CRCMismatch(t *testing.T) {
 	// Corrupt a data byte
 	encoded[len(encoded)-3] ^= 0xFF
 
-	_, err = usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	_, err = usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != usdl.ErrCRCMismatch {
 		t.Errorf("expected ErrCRCMismatch, got %v", err)
 	}
@@ -355,7 +355,7 @@ func TestTransferFrame_WithOCF_SignaledInBand(t *testing.T) {
 	}
 
 	// No out-of-band OCF knowledge needed: the flag drives the decoder.
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -382,7 +382,7 @@ func TestTransferFrame_WithInsertZone(t *testing.T) {
 		t.Fatalf("Encode() error = %v", err)
 	}
 
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 3)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true, InsertZoneLen: 3})
 	if err != nil {
 		t.Fatalf("DecodeTransferFrame() error = %v", err)
 	}
@@ -471,7 +471,7 @@ func TestNewIdleFrame(t *testing.T) {
 	if len(encoded) != config.FrameLength {
 		t.Errorf("encoded idle frame length = %d, want %d", len(encoded), config.FrameLength)
 	}
-	if _, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0); err != nil {
+	if _, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true}); err != nil {
 		t.Fatalf("DecodeTransferFrame(idle) error = %v", err)
 	}
 }
@@ -551,7 +551,7 @@ func TestUSDLFrame_EncodeRecomputesFECFAfterMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := usdl.DecodeTransferFrame(encoded, usdl.FECSize16, 0)
+	decoded, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
 	if err != nil {
 		t.Fatalf("re-encoded frame does not decode: %v", err)
 	}

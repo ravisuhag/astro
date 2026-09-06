@@ -209,6 +209,44 @@ func TestFOP_AckPrunesWaitQueue(t *testing.T) {
 	}
 }
 
+// TestFOP_AckPrunesAtMaxWindow exercises the ackCount-based pruning fix
+// (B1) at the largest window MaxWindow now allows.
+//
+// B1 needed a window past 128 outstanding frames to reproduce against the
+// old hardcoded half-window heuristic, and that is exactly what MaxWindow
+// now forbids: with K bounded at 127, no legally configured FOP can ever
+// have enough outstanding frames to put an acknowledged one further than
+// 128 behind N(R), so that overflow can no longer be constructed through
+// the public API at all. What is left worth checking is that ackCount-based
+// pruning still drains the acknowledged prefix correctly right up to the
+// new ceiling: K=MaxWindow with 126 outstanding and N(R)=95 acknowledges
+// sequence numbers 0..94 (95 frames), leaving 95..125 (31 frames)
+// outstanding.
+func TestFOP_AckPrunesAtMaxWindow(t *testing.T) {
+	fop := cop.NewFOP(42, 1, cop.MaxWindow)
+	fop.Initialize(0)
+
+	const outstanding = cop.MaxWindow - 1
+	for range outstanding {
+		if err := fop.TransmitFrame([]byte("frame")); err != nil {
+			t.Fatalf("TransmitFrame: %v", err)
+		}
+	}
+	if fop.PendingCount() != outstanding {
+		t.Fatalf("PendingCount before ack = %d, want %d", fop.PendingCount(), outstanding)
+	}
+
+	const acked = 95
+	if err := fop.ProcessCLCW(&cop.CLCW{ReportValue: acked}); err != nil {
+		t.Fatalf("ProcessCLCW: %v", err)
+	}
+
+	const want = outstanding - acked
+	if got := fop.PendingCount(); got != want {
+		t.Errorf("PendingCount after ack = %d, want %d (queue failed to drain)", got, want)
+	}
+}
+
 // TestFOP_T1Expiry_RetransmitThenAlertT1 walks both halves of the T1
 // timer rule in CCSDS 232.1-B-2 5.1.9.1: an expiry below the transmission
 // limit starts recovery, and an expiry at the limit generates Alert[T1].
@@ -365,8 +403,14 @@ func TestFOP_Directives_Validation(t *testing.T) {
 	if err := fop.SetSlidingWindow(0); !errors.Is(err, cop.ErrFOPInvalidWindow) {
 		t.Errorf("expected ErrFOPInvalidWindow, got %v", err)
 	}
-	if err := fop.SetSlidingWindow(255); err != nil {
-		t.Errorf("SetSlidingWindow(255): %v", err)
+	// Above MaxWindow: a window that wide makes a lost CLCW indistinguishable
+	// from a wrap of the 8-bit sequence number, so it is refused rather than
+	// clamped.
+	if err := fop.SetSlidingWindow(200); !errors.Is(err, cop.ErrFOPInvalidWindow) {
+		t.Errorf("SetSlidingWindow(200): expected ErrFOPInvalidWindow, got %v", err)
+	}
+	if err := fop.SetSlidingWindow(cop.MaxWindow); err != nil {
+		t.Errorf("SetSlidingWindow(MaxWindow): %v", err)
 	}
 	if err := fop.SetTransmissionLimit(0); !errors.Is(err, cop.ErrFOPInvalidLimit) {
 		t.Errorf("expected ErrFOPInvalidLimit, got %v", err)

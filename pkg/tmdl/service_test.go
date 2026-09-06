@@ -445,7 +445,7 @@ func TestVCFService_SendReceive(t *testing.T) {
 	vc := tmdl.NewVirtualChannel(1, 100)
 	svc := tmdl.NewVirtualChannelFrameService(1, vc)
 
-	frame, _ := tmdl.NewTMTransferFrame(933, 1, []byte("frame data"), nil, nil)
+	frame, _ := tmdl.NewTransferFrame(933, 1, []byte("frame data"), nil, nil)
 	encoded, _ := frame.Encode()
 
 	if err := svc.Send(encoded); err != nil {
@@ -1079,7 +1079,7 @@ func TestMasterChannel_IdleFrameCounterContinuity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tmdl.DecodeTMTransferFrame(encoded); err != nil {
+	if _, err := tmdl.DecodeTransferFrame(encoded); err != nil {
 		t.Errorf("Stamped idle frame does not round-trip: %v", err)
 	}
 }
@@ -1135,7 +1135,7 @@ func TestFrameLengthEnforcedOnEncodeAndDecode(t *testing.T) {
 	}
 
 	// A short frame must be rejected on encode.
-	short, err := tmdl.NewTMTransferFrame(933, 1, []byte("tiny"), nil, nil)
+	short, err := tmdl.NewTransferFrame(933, 1, []byte("tiny"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1144,10 +1144,10 @@ func TestFrameLengthEnforcedOnEncodeAndDecode(t *testing.T) {
 	}
 
 	// A wrong-length input must be rejected on decode.
-	if _, err := tmdl.DecodeTMTransferFrameWithConfig(encoded[:20], config); !errors.Is(err, tmdl.ErrFrameLengthMismatch) {
+	if _, err := tmdl.DecodeTransferFrameWithConfig(encoded[:20], config); !errors.Is(err, tmdl.ErrFrameLengthMismatch) {
 		t.Errorf("Decode of short input: got %v, want ErrFrameLengthMismatch", err)
 	}
-	if _, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config); err != nil {
+	if _, err := tmdl.DecodeTransferFrameWithConfig(encoded, config); err != nil {
 		t.Errorf("Decode of exact-length input: %v", err)
 	}
 }
@@ -1373,7 +1373,7 @@ func TestMasterChannelFSHAndOCFServices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("idle frame does not encode to the fixed length: %v", err)
 	}
-	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	back, err := tmdl.DecodeTransferFrameWithConfig(encoded, config)
 	if err != nil {
 		t.Fatalf("idle frame CRC invalid after MC field insertion: %v", err)
 	}
@@ -1458,7 +1458,7 @@ func TestVCPSecondaryHeaderRoundTrip(t *testing.T) {
 	}
 
 	// The packet survives the round trip and the receiver reports the SDU.
-	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	back, err := tmdl.DecodeTransferFrameWithConfig(encoded, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1520,7 +1520,7 @@ func TestVCAStatusFieldsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	back, err := tmdl.DecodeTMTransferFrameWithConfig(encoded, config)
+	back, err := tmdl.DecodeTransferFrameWithConfig(encoded, config)
 	if err != nil {
 		t.Fatal(err)
 	}

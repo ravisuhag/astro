@@ -142,13 +142,24 @@ func TestDecodeMessageRejectsBadType(t *testing.T) {
 
 func TestDecodeMessageRejectsOversizedBody(t *testing.T) {
 	// The length field is 32 bits, so a hostile message can name four
-	// gigabytes.
+	// gigabytes: 0xFFFFFFFF. On a 32-bit build (GOARCH=386, arm, wasm) a bare
+	// int(...) conversion of that value would come out negative, so this must
+	// be rejected by an unsigned comparison rather than one that can go
+	// negative — and having rejected it, the decoder must report consuming
+	// nothing rather than a partial or negative count.
 	data := make([]byte, sle.TMLHeaderSize)
 	data[0] = byte(sle.MessageSLEPDU)
 	data[4], data[5], data[6], data[7] = 0xFF, 0xFF, 0xFF, 0xFF
 
-	if _, _, err := sle.DecodeMessageWithLimit(data, 1024); !errors.Is(err, sle.ErrMessageTooLarge) {
+	msg, consumed, err := sle.DecodeMessageWithLimit(data, 1024)
+	if !errors.Is(err, sle.ErrMessageTooLarge) {
 		t.Errorf("error = %v, want ErrMessageTooLarge", err)
+	}
+	if msg != nil {
+		t.Errorf("message = %+v, want nil", msg)
+	}
+	if consumed != 0 {
+		t.Errorf("consumed = %d, want 0", consumed)
 	}
 }
 
@@ -195,5 +206,18 @@ func TestReadMessageRejectsTruncatedStream(t *testing.T) {
 		if _, err := sle.ReadMessage(bytes.NewReader(encoded[:cut]), 0); err == nil {
 			t.Errorf("length %d: expected an error, got nil", cut)
 		}
+	}
+}
+
+func TestReadMessageRejectsOversizedBody(t *testing.T) {
+	// Same hazard as TestDecodeMessageRejectsOversizedBody, for the streaming
+	// reader: a header declaring 0xFFFFFFFF must be rejected by an unsigned
+	// comparison, not one that can turn negative on a 32-bit build.
+	header := make([]byte, sle.TMLHeaderSize)
+	header[0] = byte(sle.MessageSLEPDU)
+	header[4], header[5], header[6], header[7] = 0xFF, 0xFF, 0xFF, 0xFF
+
+	if _, err := sle.ReadMessage(bytes.NewReader(header), 1024); !errors.Is(err, sle.ErrMessageTooLarge) {
+		t.Errorf("error = %v, want ErrMessageTooLarge", err)
 	}
 }

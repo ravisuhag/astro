@@ -163,6 +163,14 @@ type SecurityAssociation struct {
 
 	// ivCounter is the sender's IV, held as a big-endian integer across the
 	// full IV width and incremented once per protected frame.
+	//
+	// This counter must survive a process restart: reloading the same key
+	// from configuration and starting again from IV 1 reuses every nonce the
+	// previous process already sent under that key, which is catastrophic
+	// for AES-GCM (clause E1.1 b). Before shutdown, or periodically, checkpoint
+	// it with IVCounter() alongside the key; on startup, restore it with
+	// SetIVCounter() before protecting any frame. An SA with no checkpoint to
+	// restore must be rekeyed instead of resuming from IV 1.
 	ivCounter []byte
 
 	// seqCounter is the sender's managed anti-replay sequence number
@@ -235,7 +243,26 @@ func (sa *SecurityAssociation) Validate() error {
 		}
 	}
 
+	// An SA that asks for anti-replay protection (clause 2.3.2.3) but carries
+	// neither an IV nor a Sequence Number field has nothing for
+	// checkAndAdvanceSequence to check: it would authenticate every frame and
+	// enforce no ordering at all, with no signal to the caller. This is
+	// reachable today only through the clause E2 CMAC baseline, whose IV is
+	// forced to zero above; requiring a Sequence Number closes it.
+	if sa.SeqWindow > 0 && sa.FieldLengths.IV == 0 && sa.FieldLengths.SeqNum == 0 {
+		return ErrNoAntiReplayCounter
+	}
+
 	return nil
+}
+
+// ReplayProtected reports whether this SA's configuration actually enforces
+// the anti-replay check of clause 2.3.2.3, rather than leaving a caller to infer
+// it from SeqWindow and FieldLengths separately. It is true when SeqWindow is
+// positive and the SA carries a counter (an IV or a Sequence Number field)
+// for checkAndAdvanceSequence to compare against.
+func (sa *SecurityAssociation) ReplayProtected() bool {
+	return sa.SeqWindow > 0 && (sa.FieldLengths.IV > 0 || sa.FieldLengths.SeqNum > 0)
 }
 
 // usesCMAC reports whether this SA authenticates with AES-CMAC rather than
@@ -277,6 +304,31 @@ func (sa *SecurityAssociation) nextIV() ([]byte, error) {
 		return nil, err
 	}
 	return copySlice(sa.ivCounter), nil
+}
+
+// IVCounter returns a copy of the sender's current IV counter, or nil when
+// this SA has no IV field or has not yet protected a frame. Checkpoint this
+// value alongside the key so a restarted process can resume with
+// SetIVCounter instead of re-emitting IV 1 under a key that already saw it
+// (clause E1.1 b).
+func (sa *SecurityAssociation) IVCounter() []byte {
+	return copySlice(sa.ivCounter)
+}
+
+// SetIVCounter restores the sender's IV counter, typically from a checkpoint
+// taken via IVCounter before a previous process exited. v must be exactly
+// sa.FieldLengths.IV octets long, matching the width nextIV increments;
+// otherwise SetIVCounter returns ErrInvalidIVCounter and leaves the SA
+// unchanged.
+//
+// The next call to nextIV increments this value before transmitting it, so
+// pass the last value actually sent, not the next one to send.
+func (sa *SecurityAssociation) SetIVCounter(v []byte) error {
+	if len(v) != sa.FieldLengths.IV {
+		return ErrInvalidIVCounter
+	}
+	sa.ivCounter = copySlice(v)
+	return nil
 }
 
 // nextSeqNum advances the sender's explicit sequence number, per clause 4.2.3.4 a).

@@ -1,6 +1,10 @@
 package cfdp
 
-import "sync"
+import (
+	"slices"
+	"sort"
+	"sync"
+)
 
 // segment is one contiguous run of received file data, half-open [start, end).
 type segment struct {
@@ -40,11 +44,26 @@ type ReceiverConfig struct {
 	// that much memory. Zero means DefaultMaxFileSize. Set it to what the
 	// mission actually transfers.
 	MaxFileSize uint64
+
+	// MaxSegments bounds how many distinct, non-adjacent byte ranges this
+	// receiver will track in its received-data set at once. Two ranges that
+	// touch or overlap merge into one and never count against this; only a
+	// genuinely new, separate range does. Nothing in the standard bounds how
+	// many such ranges a peer can force the receiver to hold -- file data
+	// arriving with a lost octet between every segment never merges -- so
+	// without a cap recordSegment's work and the eventual NAK would both
+	// grow without bound. Zero means DefaultMaxSegments.
+	MaxSegments int
 }
 
 // DefaultMaxFileSize bounds a transfer when ReceiverConfig leaves MaxFileSize
 // at zero: 64 MiB, matching ltp.DefaultMaxBlockSize.
 const DefaultMaxFileSize = 64 << 20
+
+// DefaultMaxSegments bounds a transfer when ReceiverConfig leaves MaxSegments
+// at zero: 65536, comfortably above what an ordinary lossy transfer
+// fragments into while keeping the received-data set cheap to search.
+const DefaultMaxSegments = 65536
 
 // Receiver drives one incoming CFDP transaction.
 //
@@ -125,6 +144,9 @@ func NewReceiver(fs Filestore, config ReceiverConfig) *Receiver {
 	if config.MaxFileSize == 0 {
 		config.MaxFileSize = DefaultMaxFileSize
 	}
+	if config.MaxSegments == 0 {
+		config.MaxSegments = DefaultMaxSegments
+	}
 	return &Receiver{
 		config:    config,
 		fs:        fs,
@@ -133,15 +155,17 @@ func NewReceiver(fs Filestore, config ReceiverConfig) *Receiver {
 	}
 }
 
-// header builds a PDU header for a PDU heading back to the sender.
-func (r *Receiver) header(dataLen int) *PDUHeader {
+// header builds a PDU header for a PDU heading back to the sender. The data
+// field length is not set here: PDU.Encode computes and checks the real value
+// from the data actually supplied, so filling it in here would be redundant
+// and, since it truncates to 16 bits, potentially lossy and misleading.
+func (r *Receiver) header() *PDUHeader {
 	return &PDUHeader{
 		IsFileData:   false,
 		Direction:    TowardSender,
 		Acknowledged: r.config.Acknowledged,
 		CRCFlag:      r.config.CRCFlag,
 		LargeFile:    r.largeFile,
-		DataLength:   uint16(dataLen),
 		// The transaction is still named by its originator, so the source
 		// entity ID stays the sender's even on the return path (clause 5.1 note).
 		Source:         r.config.Source,
@@ -164,43 +188,54 @@ func (r *Receiver) matchesTransaction(h *PDUHeader) bool {
 }
 
 // recordSegment folds a new byte range into the received set, merging it with
-// any neighbours so the set stays sorted and non-overlapping.
-func (r *Receiver) recordSegment(start, end uint64) {
+// any neighbours that touch or overlap it. r.received stays sorted by start
+// (and, since entries never touch or overlap each other, by end too), so a
+// binary search finds the run of neighbours to merge in O(log n), and
+// slices.Delete/slices.Insert splice the result in without rebuilding the
+// whole slice the way the previous implementation did on every call.
+//
+// A range that touches or overlaps something already held only ever shrinks
+// or holds steady the number of distinct entries. Only a genuinely new,
+// separate range grows it -- that is the case MaxSegments bounds, since
+// nothing in the standard stops a peer sending only non-adjacent ranges
+// (S10) and making this list grow without limit.
+func (r *Receiver) recordSegment(start, end uint64) error {
 	if end <= start {
-		return
+		return nil
 	}
 
-	merged := make([]segment, 0, len(r.received)+1)
-	added := false
+	// lo is the first existing segment that could touch or overlap
+	// [start, end) from the left: the first whose end reaches at least as
+	// far as start.
+	lo := sort.Search(len(r.received), func(i int) bool {
+		return r.received[i].end >= start
+	})
+	// hi is the first segment past that run: the first, at or after lo,
+	// whose start is beyond end.
+	hi := lo + sort.Search(len(r.received)-lo, func(i int) bool {
+		return r.received[lo+i].start > end
+	})
 
-	for _, s := range r.received {
-		switch {
-		case s.end < start:
-			merged = append(merged, s)
-		case s.start > end:
-			if !added {
-				merged = append(merged, segment{start, end})
-				added = true
-			}
-			merged = append(merged, s)
-		default:
-			// Overlapping or touching: widen the range being inserted.
-			if s.start < start {
-				start = s.start
-			}
-			if s.end > end {
-				end = s.end
-			}
+	for _, s := range r.received[lo:hi] {
+		if s.start < start {
+			start = s.start
+		}
+		if s.end > end {
+			end = s.end
 		}
 	}
-	if !added {
-		merged = append(merged, segment{start, end})
+
+	if hi == lo && len(r.received) >= r.config.MaxSegments {
+		return r.fault(CondFilestoreRejection)
 	}
 
-	r.received = merged
+	r.received = slices.Delete(r.received, lo, hi)
+	r.received = slices.Insert(r.received, lo, segment{start, end})
+
 	if end > r.highWater {
 		r.highWater = end
 	}
+	return nil
 }
 
 // missingWithin returns the sub-ranges of [start, end) not yet received, so a
@@ -562,7 +597,9 @@ func (r *Receiver) storeFileData(fd *FileDataPDU) error {
 		if r.checksum != nil {
 			r.checksum.Update(m.start, chunk)
 		}
-		r.recordSegment(m.start, m.end)
+		if err := r.recordSegment(m.start, m.end); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -591,7 +628,7 @@ func (r *Receiver) handleEOF(pdu *PDU) error {
 		if err != nil {
 			return err
 		}
-		r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 	}
 
 	// Clause 4.11.2: an EOF with a fault condition code is an EOF (cancel). The
@@ -624,7 +661,7 @@ func (r *Receiver) handlePrompt(p *PromptPDU) error {
 		if err != nil {
 			return err
 		}
-		r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 		return nil
 	}
 	return r.queueNAK()
@@ -650,23 +687,67 @@ func (r *Receiver) queueNAK() error {
 		limit = r.highWater
 	}
 
-	nak := &NAKPDU{StartOfScope: 0, EndOfScope: limit}
+	var requests []SegmentRequest
 	if r.metadata == nil {
 		// A segment request of 0..0 asks for the Metadata PDU (table 5-11).
-		nak.Requests = append(nak.Requests, SegmentRequest{})
+		requests = append(requests, SegmentRequest{})
 	}
-	nak.Requests = append(nak.Requests, r.gaps(limit)...)
+	requests = append(requests, r.gaps(limit)...)
 
-	if len(nak.Requests) == 0 {
+	if len(requests) == 0 {
 		return nil
 	}
 
-	body, err := nak.Encode(r.largeFile)
-	if err != nil {
-		return err
+	// Each request costs 8 octets (16 in large-file mode; clause 5.1.10), and
+	// PDU.Encode refuses a data field over 0xFFFF octets. At roughly 8,000
+	// gaps (4,000 large-file) one NAK carrying every gap would not encode --
+	// and a NAK is the only way this receiver has to say what is missing, so
+	// without a split the transfer would stall behind a PDU it can never
+	// send. Clause 5.2.6 provides for exactly this: break the requests into
+	// as many NAK PDUs as necessary, each scoped to the range it covers.
+	maxPerNAK := maxNAKRequests(r.largeFile, r.config.CRCFlag)
+
+	start := uint64(0)
+	for len(requests) > 0 {
+		n := min(len(requests), maxPerNAK)
+		batch := requests[:n]
+		requests = requests[n:]
+
+		// The scope of this batch runs up to where the next batch's first
+		// request begins -- or, for the last batch, to the overall limit --
+		// so consecutive batches' scopes partition [0, limit) with no gap
+		// left undeclared.
+		end := limit
+		if len(requests) > 0 {
+			end = requests[0].StartOffset
+		}
+
+		nak := &NAKPDU{StartOfScope: start, EndOfScope: end, Requests: batch}
+		body, err := nak.Encode(r.largeFile)
+		if err != nil {
+			return err
+		}
+		r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
+		start = end
 	}
-	r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
 	return nil
+}
+
+// maxNAKRequests returns how many segment requests fit in one NAK PDU's data
+// field without PDU.Encode's 0xFFFF ceiling refusing it: the directive code,
+// the two scope FSS fields, an optional trailing CRC, and as many
+// FSS-pair requests as remain.
+func maxNAKRequests(largeFile, crcFlag bool) int {
+	fssWidth := 4
+	if largeFile {
+		fssWidth = 8
+	}
+	overhead := 1 + 2*fssWidth // directive code + start-of-scope + end-of-scope
+	if crcFlag {
+		overhead += CRCSize
+	}
+	reqSize := 2 * fssWidth
+	return (0xFFFF - overhead) / reqSize
 }
 
 // evaluateCompletion checks the checksum once everything has arrived and
@@ -759,7 +840,7 @@ func (r *Receiver) queueFinished(delivery DeliveryCode, status FileStatus) {
 	if err != nil {
 		return
 	}
-	r.pending = append(r.pending, &PDU{Header: r.header(len(body)), Data: body})
+	r.pending = append(r.pending, &PDU{Header: r.header(), Data: body})
 	r.finishedSent = true
 
 	if r.config.Acknowledged {

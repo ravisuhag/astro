@@ -8,7 +8,7 @@ import (
 
 func FuzzDecodeTCTransferFrame(f *testing.F) {
 	// Seed with a valid encoded frame so the fuzzer starts from real structure.
-	if frame, err := tcdl.NewTCTransferFrame(42, 5, []byte("seed-payload")); err == nil {
+	if frame, err := tcdl.NewTransferFrame(42, 5, []byte("seed-payload")); err == nil {
 		if encoded, err := frame.Encode(); err == nil {
 			f.Add(encoded)
 		}
@@ -17,7 +17,7 @@ func FuzzDecodeTCTransferFrame(f *testing.F) {
 	f.Add(make([]byte, 7))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Property: never panic. Errors are fine.
-		_, _ = tcdl.DecodeTCTransferFrame(data)
+		_, _ = tcdl.DecodeTransferFrame(data)
 		_, _ = tcdl.DecodeTCTransferFrameWithSegmentHeader(data)
 	})
 }

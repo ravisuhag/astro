@@ -46,10 +46,17 @@ func (r bitReader) read(offset, width uint) (uint64, error) {
 // first bit read becomes the top bit of the first octet, and the last octet is
 // padded with zeros. That is how a binary field of, say, twelve bits has to be
 // handed back, since an octet is the smallest thing a []byte can hold.
+//
+// Unlike read, there is no fixed cap on width: a binary or string field can
+// legitimately be far wider than 64 bits. The packet's own bit length is the
+// cap instead, and the guard below is written so that offset+width, which a
+// hostile width could drive past 2^64, is never computed: a wrapped sum would
+// let an enormous width slip past the check and reach the make([]byte, ...)
+// below.
 func (r bitReader) readBytes(offset, width uint) ([]byte, error) {
-	if end := offset + width; end > r.bitLen() {
-		return nil, fmt.Errorf("%w: bits %d to %d of a %d-bit packet",
-			ErrPacketTooShort, offset, end, r.bitLen())
+	if offset > r.bitLen() || width > r.bitLen()-offset {
+		return nil, fmt.Errorf("%w: offset %d and width %d exceed the %d-bit packet",
+			ErrPacketTooShort, offset, width, r.bitLen())
 	}
 
 	out := make([]byte, (width+7)/8)

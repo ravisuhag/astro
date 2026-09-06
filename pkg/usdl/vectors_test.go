@@ -23,7 +23,7 @@ func TestDecode_FrameLengthCrossCheck(t *testing.T) {
 	}
 	// Deliver with a trailing extra byte: length field no longer matches.
 	padded := append(append([]byte{}, encoded...), 0x00)
-	if _, err := usdl.DecodeTransferFrame(padded, usdl.FECSize16, 0); err != usdl.ErrFrameLengthMismatch {
+	if _, err := usdl.DecodeTransferFrameWithConfig(padded, usdl.ChannelConfig{HasFECF: true}); err != usdl.ErrFrameLengthMismatch {
 		t.Errorf("expected ErrFrameLengthMismatch, got %v", err)
 	}
 }
@@ -41,7 +41,7 @@ func TestDecode_RejectsHeaderSpares(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded[6] |= 0x10 // set a reserved spare bit
-	if _, err := usdl.DecodeTransferFrame(encoded, 0, 0); err != usdl.ErrInvalidHeaderSpare {
+	if _, err := usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{}); err != usdl.ErrInvalidHeaderSpare {
 		t.Errorf("expected ErrInvalidHeaderSpare, got %v", err)
 	}
 }

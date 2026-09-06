@@ -37,7 +37,7 @@ func TestSetVR_RoundTrip_TCDLAndCOP(t *testing.T) {
 
 	// Spacecraft side: decode the frame and run it through the FARM.
 	farm := cop.NewFARM(vcid, 10)
-	decoded, err := tcdl.DecodeTCTransferFrame(wire)
+	decoded, err := tcdl.DecodeTransferFrame(wire)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestSetVR_RoundTrip_TCDLAndCOP(t *testing.T) {
 	}
 
 	// And the very next AD frame flows in sequence end to end.
-	dataFrame, err := tcdl.NewTCTransferFrame(scid, vcid, []byte("payload"),
+	dataFrame, err := tcdl.NewTransferFrame(scid, vcid, []byte("payload"),
 		tcdl.WithSequenceNumber(vr))
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestSetVR_RoundTrip_TCDLAndCOP(t *testing.T) {
 	if !ok || ns != vr {
 		t.Fatalf("AD frame N(S) = %d (ok=%v), want %d", ns, ok, vr)
 	}
-	decoded, err = tcdl.DecodeTCTransferFrame(wire)
+	decoded, err = tcdl.DecodeTransferFrame(wire)
 	if err != nil {
 		t.Fatal(err)
 	}

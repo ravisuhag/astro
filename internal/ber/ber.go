@@ -550,3 +550,15 @@ func (e *Element) Copy() []byte {
 	copy(out, e.Bytes)
 	return out
 }
+
+// Raw returns the element as it appeared on the wire: the tag and length
+// re-encoded around the content. Copy returns only the content, which is what
+// a caller that re-wraps the value wants; Raw is for a caller that stores an
+// element opaquely and appends it back verbatim.
+//
+// An element decoded from the indefinite-length form is rebuilt here in
+// definite-length form, since that is the only form this package's encoder
+// emits. The value is the same; the octets are not.
+func (e *Element) Raw() []byte {
+	return AppendElement(nil, e.Class, e.Constructed, e.Tag, e.Bytes)
+}

@@ -113,10 +113,15 @@ func DecodeMessageWithLimit(data []byte, maxBody int) (*Message, int, error) {
 		return nil, 0, ErrInvalidMessageType
 	}
 
-	length := int(binary.BigEndian.Uint32(data[4:8]))
-	if length > maxBody {
+	// Compare the raw, unsigned wire value against maxBody before narrowing
+	// to int: on a 32-bit build (GOARCH=386, arm, wasm) int is 32 bits, so a
+	// wire length of 0xFFFFFFFF would become -1 and slip past an `int`
+	// comparison instead of being rejected as oversized.
+	rawLength := binary.BigEndian.Uint32(data[4:8])
+	if uint64(rawLength) > uint64(maxBody) {
 		return nil, 0, ErrMessageTooLarge
 	}
+	length := int(rawLength)
 	if len(data) < TMLHeaderSize+length {
 		return nil, 0, ErrDataTooShort
 	}
@@ -156,10 +161,14 @@ func ReadMessage(r io.Reader, maxBody int) (*Message, error) {
 		return nil, ErrInvalidMessageType
 	}
 
-	length := int(binary.BigEndian.Uint32(header[4:8]))
-	if length > maxBody {
+	// See the matching comment in DecodeMessageWithLimit: compare the raw
+	// unsigned wire value before narrowing to int, so a wire length of
+	// 0xFFFFFFFF cannot become a negative int on a 32-bit build.
+	rawLength := binary.BigEndian.Uint32(header[4:8])
+	if uint64(rawLength) > uint64(maxBody) {
 		return nil, ErrMessageTooLarge
 	}
+	length := int(rawLength)
 	if m.Type == MessageHeartbeat && length != 0 {
 		return nil, ErrNonEmptyHeartbeat
 	}

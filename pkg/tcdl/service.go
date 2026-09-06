@@ -142,7 +142,7 @@ func (s *MAPPacketService) emitFrame(data []byte, segFlags uint8) error {
 		opts = append(opts, WithSequenceNumber(s.counter.Next(s.vcid)))
 	}
 
-	frame, err := NewTCTransferFrame(s.scid, s.vcid, data, opts...)
+	frame, err := NewTransferFrame(s.scid, s.vcid, data, opts...)
 	if err != nil {
 		return err
 	}
@@ -293,7 +293,7 @@ func (s *MAPAccessService) Send(data []byte) error {
 	} else if s.counter != nil {
 		opts = append(opts, WithSequenceNumber(s.counter.Next(s.vcid)))
 	}
-	frame, err := NewTCTransferFrame(s.scid, s.vcid, data, opts...)
+	frame, err := NewTransferFrame(s.scid, s.vcid, data, opts...)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (s *VCFrameService) Send(data []byte) error {
 	if len(data) == 0 {
 		return ErrEmptyData
 	}
-	frame, err := DecodeTCTransferFrame(data)
+	frame, err := DecodeTransferFrame(data)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package ltp
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/ravisuhag/astro/pkg/sdnv"
 )
@@ -213,10 +214,19 @@ func DecodeReportSegment(data []byte) (*ReportSegment, int, error) {
 
 // ClaimedRanges returns the claims as absolute block offsets, having added the
 // lower bound that clause 3.2.2 measures them from.
+//
+// LowerBound and a claim's Offset are both wire-chosen SDNVs that can each
+// reach 2^64, so their sum is saturated at math.MaxUint64 rather than left to
+// wrap. A caller checking the result against a known bound must see an
+// out-of-range value, not a small one a wraparound slipped past it.
 func (r *ReportSegment) ClaimedRanges() []ReceptionClaim {
 	out := make([]ReceptionClaim, 0, len(r.Claims))
 	for _, c := range r.Claims {
-		out = append(out, ReceptionClaim{Offset: r.LowerBound + c.Offset, Length: c.Length})
+		offset := r.LowerBound + c.Offset
+		if offset < r.LowerBound {
+			offset = math.MaxUint64
+		}
+		out = append(out, ReceptionClaim{Offset: offset, Length: c.Length})
 	}
 	return out
 }

@@ -55,7 +55,40 @@ type EID struct {
 	// Service is the ipn service number. Zero may identify a node's
 	// administrative endpoint (RFC 9171 clause 4.2.5.1.2).
 	Service uint64
+
+	// form records which of two equivalent wire spellings this EID was
+	// decoded from, for the two cases where RFC 9171 and RFC 9758 allow more
+	// than one encoding of the same value: an ipn scheme-specific part as a
+	// two- or three-element array, and the dtn null endpoint as the integer 0
+	// or the text string "none".
+	//
+	// appendEID honours it so that re-encoding a decoded EID reproduces the
+	// same octets, which pkg/bpsec depends on when it re-encodes the primary
+	// block to build the integrity-protected plaintext (RFC 9171 clause
+	// 4.3.1 requires that block to arrive unchanged). An EID a caller builds
+	// by hand leaves this at its zero value, meaning "this library's
+	// preferred form", so originated bundles are unaffected.
+	form eidForm
 }
+
+// eidForm names a non-preferred wire spelling decodeIPNSSP or decodeDTNSSP
+// read, so appendEID can reproduce it. The zero value means the preferred
+// form and is what a caller-constructed EID carries.
+type eidForm uint8
+
+const (
+	// formPreferred is this library's own spelling: an ipn two-element
+	// scheme-specific part, and the dtn null endpoint as the integer 0.
+	formPreferred eidForm = iota
+	// formIPNThreeElement is an ipn scheme-specific part written as the
+	// three-element array of RFC 9758 clause 6.1.1, naming the allocator
+	// explicitly even when it is the Default Allocator.
+	formIPNThreeElement
+	// formDTNNoneAsText is the dtn null endpoint spelled as the text string
+	// "none" rather than the integer 0 (RFC 9171 clause 4.2.5.1.1 allows
+	// either).
+	formDTNNoneAsText
+)
 
 // dtnNoneSSP is the scheme-specific part naming the null endpoint.
 const dtnNoneSSP = "none"
@@ -139,10 +172,13 @@ func (e EID) String() string {
 
 // appendEID writes an EID as the two-item array of RFC 9171 clause 4.2.5.1.
 //
-// ipn EIDs go out in the two-element scheme-specific form. RFC 9758
-// clause 6.1.1 makes that the backwards-compatible one: with the Default
-// Allocator it is the same octets RFC 9171 asks for, so bundles this package
-// writes are readable by implementations that predate RFC 9758.
+// A caller-built ipn EID (form == formPreferred) goes out in the two-element
+// scheme-specific form. RFC 9758 clause 6.1.1 makes that the
+// backwards-compatible one: with the Default Allocator it is the same octets
+// RFC 9171 asks for, so bundles this package originates are readable by
+// implementations that predate RFC 9758. An EID decoded from the
+// three-element form, or from the dtn null endpoint spelled as text, keeps
+// that spelling — see the form field's doc comment.
 func appendEID(dst []byte, e EID) ([]byte, error) {
 	if err := e.Validate(); err != nil {
 		return nil, err
@@ -153,13 +189,20 @@ func appendEID(dst []byte, e EID) ([]byte, error) {
 
 	switch e.Scheme {
 	case SchemeDTN:
-		if e.DTNSSP == dtnNoneSSP {
-			// The null endpoint is the one dtn SSP that is a number.
+		if e.DTNSSP == dtnNoneSSP && e.form == formPreferred {
+			// The null endpoint is the one dtn SSP that is a number, unless
+			// it arrived spelled as text.
 			return cbor.AppendUint(dst, 0), nil
 		}
 		return cbor.AppendTextString(dst, e.DTNSSP), nil
 
 	case SchemeIPN:
+		if e.form == formIPNThreeElement {
+			dst = cbor.AppendArrayHeader(dst, 3)
+			dst = cbor.AppendUint(dst, e.Allocator)
+			dst = cbor.AppendUint(dst, e.Node)
+			return cbor.AppendUint(dst, e.Service), nil
+		}
 		dst = cbor.AppendArrayHeader(dst, 2)
 		dst = cbor.AppendUint(dst, e.Allocator<<32|e.Node) // the Fully Qualified Node Number
 		return cbor.AppendUint(dst, e.Service), nil
@@ -217,7 +260,14 @@ func decodeDTNSSP(d *cbor.Decoder) (EID, error) {
 	if err != nil {
 		return EID{}, err
 	}
-	return DTN(ssp), nil
+	e := DTN(ssp)
+	if ssp == dtnNoneSSP {
+		// The null endpoint spelled as text rather than as the integer 0
+		// (RFC 9171 clause 4.2.5.1.1 allows both). Remember which one this
+		// bundle used so re-encoding it does not silently switch spellings.
+		e.form = formDTNNoneAsText
+	}
+	return e, nil
 }
 
 // ipnSSP reads the scheme-specific part of an ipn EID, in either the two- or
@@ -264,7 +314,15 @@ func decodeIPNSSP(d *cbor.Decoder) (EID, error) {
 	if first >= maxIPNComponent || second >= maxIPNComponent {
 		return EID{}, ErrIPNComponentTooLarge
 	}
-	return EID{Scheme: SchemeIPN, Allocator: first, Node: second, Service: third}, nil
+	return EID{
+		Scheme:    SchemeIPN,
+		Allocator: first,
+		Node:      second,
+		Service:   third,
+		// Remember the three-element spelling so re-encoding does not fold
+		// it into the two-element form.
+		form: formIPNThreeElement,
+	}, nil
 }
 
 // Encode writes the endpoint ID as the two-item array of RFC 9171

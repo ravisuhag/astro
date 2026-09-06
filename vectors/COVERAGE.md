@@ -17,7 +17,7 @@ evidence of conformance.
 | `cmac` | RFC 4493 (CMAC-AES128), NIST SP 800-38B (CMAC-AES256) | 8 | — |
 | `cop` | CCSDS 232.0-B-4 (CLCW), CCSDS 232.1-B-2 (FARM-1) | 29 | — |
 | `crc` | CCSDS 132.0-B-3 clause 4.1.6 (CRC-16-CCITT) | 13 | — |
-| `csts` | CCSDS 921.1-B-2 (specification framework) | 10 | — |
+| `csts` | CCSDS 921.1-B-2 (specification framework) | 22 | — |
 | `epp` | CCSDS 133.1-B-3 | 16 | — |
 | `keywrap` | RFC 3394 (AES Key Wrap) | 6 | — |
 | `ldc` | CCSDS 121.0-B-3 | — | 107 |
@@ -40,9 +40,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **400** | **138** |
+| **Total** | | **412** | **138** |
 
-400 vectors and 138 referenced corpus files across 32 packages.
+412 vectors and 138 referenced corpus files across 32 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered
@@ -67,6 +67,11 @@ was added once the runner existed. Before that, sequence vectors were data no te
 `internal/vectors` skipped every one of them with "no runner is wired for
 them", so COP-1's ten sat in the corpus and in this table's counts
 without ever running against `pkg/cop`. They run now, and so do the rest.
+
+These vectors pin specific values; they say nothing about arbitrary
+input. `pkg/cop`'s `CLCW.Decode` and `FARM.ProcessFrame` are separately
+fuzzed (`FuzzCLCWDecode`, `FuzzFARMProcessFrame`), which is the check
+that matters for octets a vector never thought to write down.
 
 `ltp/session.json` drives a sender and receiver across a link that drops
 segments: the clean run, a lost data segment recovering with no timer,

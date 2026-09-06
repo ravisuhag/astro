@@ -76,7 +76,7 @@ func TestNewUnlockFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestNewSetVRFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestNewSetVRFrame(t *testing.T) {
 
 func TestBCFrame_RejectsSegmentHeaderAtConstruction(t *testing.T) {
 	// CCSDS 232.0-B-4 4.1.3.2.2.1.3: no segment header on a control command.
-	_, err := tcdl.NewTCTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
+	_, err := tcdl.NewTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
 		tcdl.WithControlCommand(),
 		tcdl.WithSegmentHeader(tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}),
 	)
@@ -136,7 +136,7 @@ func TestBCFrame_RejectsSegmentHeaderSetAfterConstruction(t *testing.T) {
 }
 
 func TestBCFrame_UnlockWithoutSegmentHeaderStillEncodes(t *testing.T) {
-	frame, err := tcdl.NewTCTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
+	frame, err := tcdl.NewTransferFrame(0x0AB, 1, tcdl.BuildUnlockCommand(),
 		tcdl.WithControlCommand())
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestBCFrame_UnlockWithoutSegmentHeaderStillEncodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := tcdl.DecodeTCTransferFrame(encoded)
+	decoded, err := tcdl.DecodeTransferFrame(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestFrame_SegmentHeaderStillAllowedOnDataFrames(t *testing.T) {
 	sh := tcdl.SegmentHeader{SequenceFlags: tcdl.SegUnsegmented, MAPID: 3}
 
 	// Type-AD: sequence-controlled data.
-	adFrame, err := tcdl.NewTCTransferFrame(0x0AB, 1, []byte("data"),
+	adFrame, err := tcdl.NewTransferFrame(0x0AB, 1, []byte("data"),
 		tcdl.WithSegmentHeader(sh), tcdl.WithSequenceNumber(7))
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func TestFrame_SegmentHeaderStillAllowedOnDataFrames(t *testing.T) {
 	}
 
 	// Type-BD: expedited data.
-	bdFrame, err := tcdl.NewTCTransferFrame(0x0AB, 1, []byte("data"),
+	bdFrame, err := tcdl.NewTransferFrame(0x0AB, 1, []byte("data"),
 		tcdl.WithSegmentHeader(sh), tcdl.WithBypass())
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestDecodeWithSegmentHeader_LeavesBCDataFieldWhole(t *testing.T) {
 func TestDecode_RejectsInvalidFrameType(t *testing.T) {
 	// Hand-build a frame with Bypass=0, Control Command=1: byte 0 has the
 	// control command bit (bit 4) set and the bypass bit (bit 5) clear.
-	frame, err := tcdl.NewTCTransferFrame(42, 1, []byte{0x00})
+	frame, err := tcdl.NewTransferFrame(42, 1, []byte{0x00})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestDecode_RejectsInvalidFrameType(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded[0] |= 1 << 4 // set Control Command, Bypass stays 0
-	if _, err := tcdl.DecodeTCTransferFrame(encoded); !errors.Is(err, tcdl.ErrInvalidFrameType) {
+	if _, err := tcdl.DecodeTransferFrame(encoded); !errors.Is(err, tcdl.ErrInvalidFrameType) {
 		t.Errorf("expected ErrInvalidFrameType, got %v", err)
 	}
 }

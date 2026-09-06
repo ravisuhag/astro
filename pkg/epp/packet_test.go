@@ -717,6 +717,26 @@ func TestHeaderOnlyNonIdleRejected(t *testing.T) {
 	}
 }
 
+func TestDecodeRejectsHugeLoL4PacketLength(t *testing.T) {
+	// An 8-octet header (LoL '11') only requires PacketLength >= HeaderSize8;
+	// nothing caps it below the full 32-bit range, so a peer can declare
+	// 0xFFFFFFFF. Decode must reject this as too short for the data on hand
+	// rather than slicing off the end of the buffer: int(header.PacketLength)
+	// on a 32-bit build turns 0xFFFFFFFF negative, which would otherwise pass
+	// `len(data) < totalSize` and then panic on data[headerSize:totalSize].
+	data := make([]byte, epp.HeaderSize8)
+	data[0] = (epp.PVN << 5) | (epp.ProtocolIDMission << 2) | epp.LoL4Octet
+	data[4], data[5], data[6], data[7] = 0xFF, 0xFF, 0xFF, 0xFF
+
+	pkt, err := epp.Decode(data)
+	if !errors.Is(err, epp.ErrDataTooShort) {
+		t.Fatalf("Decode() error = %v, want ErrDataTooShort", err)
+	}
+	if pkt != nil {
+		t.Errorf("Decode() packet = %+v, want nil", pkt)
+	}
+}
+
 func TestHumanizeAllHeaderSizes(t *testing.T) {
 	idle, _ := epp.NewIdlePacket()
 	if s := idle.Humanize(); s == "" {

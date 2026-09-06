@@ -35,7 +35,7 @@ vectors:
 # -count 3 because a laptop's clock speed is not constant and one sample of a
 # few-microsecond operation says very little; compare medians, not single runs.
 BENCHTIME ?= 2s
-BENCHPKGS ?= ./pkg/crc/ ./pkg/spp/ ./pkg/tmdl/ ./pkg/tcdl/ ./pkg/aos/ ./pkg/usdl/ ./pkg/tmsc/ ./pkg/tcsc/ ./pkg/ldc/ ./pkg/rhc/
+BENCHPKGS ?= ./pkg/crc/ ./pkg/spp/ ./pkg/tmdl/ ./pkg/tcdl/ ./pkg/aos/ ./pkg/usdl/ ./pkg/tmsc/ ./pkg/tcsc/ ./pkg/ldc/ ./pkg/rhc/ ./pkg/pxsc/ ./pkg/sdls/
 bench:
 	go test -bench . -benchmem -benchtime $(BENCHTIME) -count 3 $(BENCHPKGS)
 
@@ -110,7 +110,14 @@ fuzz-smoke:
 	go test -run '^$$' -fuzz FuzzDecodeROCFPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzDecodeFCLTUPDU -fuzztime $(FUZZTIME) ./pkg/sle/
 	go test -run '^$$' -fuzz FuzzLoad -fuzztime $(FUZZTIME) ./pkg/xtce/
+	go test -run '^$$' -fuzz FuzzExtractDynamic -fuzztime $(FUZZTIME) ./pkg/xtce/
 	go test -run '^$$' -fuzz FuzzDecompress -fuzztime $(FUZZTIME) ./pkg/ldc/
 	go test -run '^$$' -fuzz FuzzCompressRoundTrip -fuzztime $(FUZZTIME) ./pkg/ldc/
 	go test -run '^$$' -fuzz FuzzDecompressPacket -fuzztime $(FUZZTIME) ./pkg/rhc/
 	go test -run '^$$' -fuzz FuzzCompressRoundTrip -fuzztime $(FUZZTIME) ./pkg/rhc/
+	go test -run '^$$' -fuzz FuzzCLCWDecode -fuzztime $(FUZZTIME) ./pkg/cop/
+	go test -run '^$$' -fuzz FuzzFARMProcessFrame -fuzztime $(FUZZTIME) ./pkg/cop/
+	go test -run '^$$' -fuzz FuzzRSDecode -fuzztime $(FUZZTIME) ./pkg/tmsc/
+	go test -run '^$$' -fuzz FuzzRSDecodeShortened -fuzztime $(FUZZTIME) ./pkg/tmsc/
+	go test -run '^$$' -fuzz FuzzUnwrapCLTU -fuzztime $(FUZZTIME) ./pkg/tcsc/
+	go test -run '^$$' -fuzz FuzzBCHDecode -fuzztime $(FUZZTIME) ./pkg/tcsc/

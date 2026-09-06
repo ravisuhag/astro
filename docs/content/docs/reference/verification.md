@@ -17,12 +17,12 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 
 | | |
 |---|---|
-| Test functions | 1559 |
-| Wire test vectors | 246, across 23 packages |
-| Fuzz targets | 77 |
-| Benchmarks | 33 |
+| Test functions | 2097 |
+| Wire test vectors | 412, across 32 packages |
+| Fuzz targets | 84 |
+| Benchmarks | 36 |
 | Numbered PICS items | 500 |
-| Statement coverage | 88.7% mean across 28 packages, 69.4% lowest |
+| Statement coverage | 87.4% mean across 33 packages, 72.9% lowest |
 
 ## The vector corpus
 
@@ -36,11 +36,13 @@ and agreement between two independent implementations is the only thing
 that catches a clause misread the same way twice.
 
 Every vector carries the clause it comes from and the arithmetic that
-produced it. A vector without a derivation does not load. Three of the 246
-are marked `unverified` instead, which says plainly that agreeing with them
-proves an implementation matches the corpus rather than the standard.
+produced it. A vector without a derivation does not load, and one without a
+clause is marked `unverified` instead, which says plainly that agreeing with
+it proves an implementation matches the corpus rather than the standard.
+None of the 400 carry that marker today.
 [`COVERAGE.md`](https://github.com/ravisuhag/astro/blob/main/vectors/COVERAGE.md)
-lists those, alongside what the corpus does not cover at all.
+explains the one case that did, until the clause was found, alongside what
+the corpus does not cover at all.
 
 [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md)
 is what a consumer needs: field dictionaries per package, the hex and
@@ -96,13 +98,13 @@ Two variations are worth naming:
 
 ## Fuzzing
 
-Every decoder has a fuzz target: 77 of them across 29 packages (`grep -rc '^func Fuzz' --include='*_test.go'` summed over the tree). The property is that arbitrary octets never panic and never allocate from an attacker-controlled length field.
+Every decoder has a fuzz target: 57 of them across 20 packages. The property is that arbitrary octets never panic and never allocate from an attacker-controlled length field.
 
 ```bash
 make fuzz-smoke
 ```
 
-runs a short burst (15 seconds each) over 67 of them, covering every frame and packet decoder. The other 10 (extra targets in `pkg/pus`, `pkg/pxsc` and `pkg/xtce`) run only with `go test -fuzz` directly. See [security](/docs/reference/security) for the resource limits this pairs with.
+runs a short burst over the six frame and packet decoders that see untrusted input first. The other 51 targets run with `go test -fuzz`. See [security](/docs/reference/security) for the resource limits this pairs with.
 
 ## What "derived" means in a conformance table
 
