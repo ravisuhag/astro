@@ -87,17 +87,17 @@ func (m *OPM) writeData(w *ndm.Writer) {
 
 	if k := m.Data.Keplerian; k != nil {
 		w.Comments(k.Comments)
-		w.AssignUnits("SEMI_MAJOR_AXIS", formatValue(k.SemiMajorAxis), "km")
-		w.Assign("ECCENTRICITY", formatValue(k.Eccentricity))
-		w.AssignUnits("INCLINATION", formatValue(k.Inclination), "deg")
-		w.AssignUnits("RA_OF_ASC_NODE", formatValue(k.RAOfAscNode), "deg")
-		w.AssignUnits("ARG_OF_PERICENTER", formatValue(k.ArgOfPericenter), "deg")
+		w.AssignUnits("SEMI_MAJOR_AXIS", ndm.FormatValue(k.SemiMajorAxis), "km")
+		w.Assign("ECCENTRICITY", ndm.FormatValue(k.Eccentricity))
+		w.AssignUnits("INCLINATION", ndm.FormatValue(k.Inclination), "deg")
+		w.AssignUnits("RA_OF_ASC_NODE", ndm.FormatValue(k.RAOfAscNode), "deg")
+		w.AssignUnits("ARG_OF_PERICENTER", ndm.FormatValue(k.ArgOfPericenter), "deg")
 		anomaly := "TRUE_ANOMALY"
 		if k.AnomalyIsMean {
 			anomaly = "MEAN_ANOMALY"
 		}
-		w.AssignUnits(anomaly, formatValue(k.Anomaly), "deg")
-		w.AssignUnits("GM", formatValue(k.GM), "km**3/s**2")
+		w.AssignUnits(anomaly, ndm.FormatValue(k.Anomaly), "deg")
+		w.AssignUnits("GM", ndm.FormatValue(k.GM), "km**3/s**2")
 	}
 
 	if s := m.Data.Spacecraft; s != nil {
@@ -112,11 +112,11 @@ func (m *OPM) writeData(w *ndm.Writer) {
 		if epoch, err := ndm.FormatEpoch(man.EpochIgnition, 1); err == nil {
 			w.Assign("MAN_EPOCH_IGNITION", epoch)
 		}
-		w.AssignUnits("MAN_DURATION", formatValue(man.Duration), "s")
-		w.AssignUnits("MAN_DELTA_MASS", formatValue(man.DeltaMass), "kg")
+		w.AssignUnits("MAN_DURATION", ndm.FormatValue(man.Duration), "s")
+		w.AssignUnits("MAN_DELTA_MASS", ndm.FormatValue(man.DeltaMass), "kg")
 		w.Assign("MAN_REF_FRAME", man.RefFrame)
 		for i, dv := range man.DV {
-			w.AssignUnits("MAN_DV_"+string(rune('1'+i)), formatValue(dv), "km/s")
+			w.AssignUnits("MAN_DV_"+string(rune('1'+i)), ndm.FormatValue(dv), "km/s")
 		}
 	}
 
@@ -129,13 +129,13 @@ func (m *OPM) writeStateVector(w *ndm.Writer) {
 	sv := m.Data.StateVector
 
 	w.Comments(sv.Comments)
-	if epoch, err := ndm.FormatEpoch(sv.Epoch, epochPrecision(sv.Epoch)); err == nil {
+	if epoch, err := ndm.FormatEpoch(sv.Epoch, ndm.EpochPrecision(sv.Epoch)); err == nil {
 		w.Assign("EPOCH", epoch)
 	}
-	w.AssignUnits("X", formatValue(sv.X), "km")
-	w.AssignUnits("Y", formatValue(sv.Y), "km")
-	w.AssignUnits("Z", formatValue(sv.Z), "km")
-	w.AssignUnits("X_DOT", formatValue(sv.XDot), "km/s")
-	w.AssignUnits("Y_DOT", formatValue(sv.YDot), "km/s")
-	w.AssignUnits("Z_DOT", formatValue(sv.ZDot), "km/s")
+	w.AssignUnits("X", ndm.FormatValue(sv.X), "km")
+	w.AssignUnits("Y", ndm.FormatValue(sv.Y), "km")
+	w.AssignUnits("Z", ndm.FormatValue(sv.Z), "km")
+	w.AssignUnits("X_DOT", ndm.FormatValue(sv.XDot), "km/s")
+	w.AssignUnits("Y_DOT", ndm.FormatValue(sv.YDot), "km/s")
+	w.AssignUnits("Z_DOT", ndm.FormatValue(sv.ZDot), "km/s")
 }

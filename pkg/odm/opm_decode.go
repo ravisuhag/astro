@@ -256,7 +256,7 @@ func (d *opmDecoder) assignMetadata(keyword, value string) error {
 	case "TIME_SYSTEM":
 		md.TimeSystem = value
 	case "REF_FRAME_EPOCH":
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -269,7 +269,7 @@ func (d *opmDecoder) assignStateVector(keyword, value string) error {
 	sv := &d.message.Data.StateVector
 
 	if keyword == "EPOCH" {
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -277,7 +277,7 @@ func (d *opmDecoder) assignStateVector(keyword, value string) error {
 		return nil
 	}
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -301,7 +301,7 @@ func (d *opmDecoder) assignStateVector(keyword, value string) error {
 func (d *opmDecoder) assignKeplerian(keyword, value string) error {
 	k := d.keplerian()
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (d *opmDecoder) assignManeuver(keyword, value string) error {
 	m := &d.message.Data.Maneuvers[len(d.message.Data.Maneuvers)-1]
 
 	if keyword == "MAN_EPOCH_IGNITION" {
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -351,7 +351,7 @@ func (d *opmDecoder) assignManeuver(keyword, value string) error {
 		return nil
 	}
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}

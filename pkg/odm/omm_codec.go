@@ -208,7 +208,7 @@ func (d *ommDecoder) assignMetadata(keyword, value string) error {
 	case "MEAN_ELEMENT_THEORY":
 		md.MeanElementTheory = value
 	case "REF_FRAME_EPOCH":
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -221,7 +221,7 @@ func (d *ommDecoder) assignElements(keyword, value string) error {
 	e := &d.message.Data.Elements
 
 	if keyword == "EPOCH" {
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func (d *ommDecoder) assignElements(keyword, value string) error {
 		return nil
 	}
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func (d *ommDecoder) assignTLE(keyword, value string) error {
 		return nil
 	}
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -365,17 +365,17 @@ func (m *OMM) Encode() ([]byte, error) {
 		return nil, err
 	}
 	if e.UsesMeanMotion {
-		w.AssignUnits("MEAN_MOTION", formatValue(e.MeanMotion), "rev/day")
+		w.AssignUnits("MEAN_MOTION", ndm.FormatValue(e.MeanMotion), "rev/day")
 	} else {
-		w.AssignUnits("SEMI_MAJOR_AXIS", formatValue(e.SemiMajorAxis), "km")
+		w.AssignUnits("SEMI_MAJOR_AXIS", ndm.FormatValue(e.SemiMajorAxis), "km")
 	}
-	w.Assign("ECCENTRICITY", formatValue(e.Eccentricity))
-	w.AssignUnits("INCLINATION", formatValue(e.Inclination), "deg")
-	w.AssignUnits("RA_OF_ASC_NODE", formatValue(e.RAOfAscNode), "deg")
-	w.AssignUnits("ARG_OF_PERICENTER", formatValue(e.ArgOfPericenter), "deg")
-	w.AssignUnits("MEAN_ANOMALY", formatValue(e.MeanAnomaly), "deg")
+	w.Assign("ECCENTRICITY", ndm.FormatValue(e.Eccentricity))
+	w.AssignUnits("INCLINATION", ndm.FormatValue(e.Inclination), "deg")
+	w.AssignUnits("RA_OF_ASC_NODE", ndm.FormatValue(e.RAOfAscNode), "deg")
+	w.AssignUnits("ARG_OF_PERICENTER", ndm.FormatValue(e.ArgOfPericenter), "deg")
+	w.AssignUnits("MEAN_ANOMALY", ndm.FormatValue(e.MeanAnomaly), "deg")
 	if e.GM != 0 {
-		w.AssignUnits("GM", formatValue(e.GM), "km**3/s**2")
+		w.AssignUnits("GM", ndm.FormatValue(e.GM), "km**3/s**2")
 	}
 
 	if s := m.Data.Spacecraft; s != nil {
@@ -402,14 +402,14 @@ func writeTLEParameters(w *ndm.Writer, t *TLEParameters) {
 	w.Assign("REV_AT_EPOCH", ndm.FormatInt(t.RevAtEpoch))
 
 	if t.UsesBTerm {
-		w.AssignUnits("BTERM", formatValue(t.BTerm), "m**2/kg")
+		w.AssignUnits("BTERM", ndm.FormatValue(t.BTerm), "m**2/kg")
 	} else {
-		w.AssignUnits("BSTAR", formatValue(t.BStar), "1/[Earth radii]")
+		w.AssignUnits("BSTAR", ndm.FormatValue(t.BStar), "1/[Earth radii]")
 	}
-	w.AssignUnits("MEAN_MOTION_DOT", formatValue(t.MeanMotionDot), "rev/day**2")
+	w.AssignUnits("MEAN_MOTION_DOT", ndm.FormatValue(t.MeanMotionDot), "rev/day**2")
 	if t.UsesAgom {
-		w.AssignUnits("AGOM", formatValue(t.Agom), "m**2/kg")
+		w.AssignUnits("AGOM", ndm.FormatValue(t.Agom), "m**2/kg")
 	} else {
-		w.AssignUnits("MEAN_MOTION_DDOT", formatValue(t.MeanMotionDDot), "rev/day**3")
+		w.AssignUnits("MEAN_MOTION_DDOT", ndm.FormatValue(t.MeanMotionDDot), "rev/day**3")
 	}
 }

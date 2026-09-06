@@ -65,28 +65,28 @@ func xmlOEMMetadata(md *OEMMetadata) ([]ndm.Element, error) {
 	}
 	out = append(out, ndm.Leaf("TIME_SYSTEM", md.TimeSystem))
 
-	start, err := ndm.FormatEpoch(md.StartTime, epochPrecision(md.StartTime))
+	start, err := ndm.FormatEpoch(md.StartTime, ndm.EpochPrecision(md.StartTime))
 	if err != nil {
 		return nil, err
 	}
 	out = append(out, ndm.Leaf("START_TIME", start))
 
 	if md.UseableStartTime != nil {
-		v, err := ndm.FormatEpoch(*md.UseableStartTime, epochPrecision(*md.UseableStartTime))
+		v, err := ndm.FormatEpoch(*md.UseableStartTime, ndm.EpochPrecision(*md.UseableStartTime))
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, ndm.Leaf("USEABLE_START_TIME", v))
 	}
 	if md.UseableStopTime != nil {
-		v, err := ndm.FormatEpoch(*md.UseableStopTime, epochPrecision(*md.UseableStopTime))
+		v, err := ndm.FormatEpoch(*md.UseableStopTime, ndm.EpochPrecision(*md.UseableStopTime))
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, ndm.Leaf("USEABLE_STOP_TIME", v))
 	}
 
-	stop, err := ndm.FormatEpoch(md.StopTime, epochPrecision(md.StopTime))
+	stop, err := ndm.FormatEpoch(md.StopTime, ndm.EpochPrecision(md.StopTime))
 	if err != nil {
 		return nil, err
 	}
@@ -106,22 +106,22 @@ func xmlOEMData(block *EphemerisBlock) ([]ndm.Element, error) {
 
 	// One block per record, with every component named.
 	for _, line := range block.Lines {
-		epoch, err := ndm.FormatEpoch(line.Epoch, epochPrecision(line.Epoch))
+		epoch, err := ndm.FormatEpoch(line.Epoch, ndm.EpochPrecision(line.Epoch))
 		if err != nil {
 			return nil, err
 		}
 		children := []ndm.Element{
 			ndm.Leaf("EPOCH", epoch),
-			leaf("X", formatValue(line.X)), leaf("Y", formatValue(line.Y)), leaf("Z", formatValue(line.Z)),
-			leaf("X_DOT", formatValue(line.XDot)),
-			leaf("Y_DOT", formatValue(line.YDot)),
-			leaf("Z_DOT", formatValue(line.ZDot)),
+			leaf("X", ndm.FormatValue(line.X)), leaf("Y", ndm.FormatValue(line.Y)), leaf("Z", ndm.FormatValue(line.Z)),
+			leaf("X_DOT", ndm.FormatValue(line.XDot)),
+			leaf("Y_DOT", ndm.FormatValue(line.YDot)),
+			leaf("Z_DOT", ndm.FormatValue(line.ZDot)),
 		}
 		if line.HasAcceleration {
 			children = append(children,
-				leaf("X_DDOT", formatValue(line.XDDot)),
-				leaf("Y_DDOT", formatValue(line.YDDot)),
-				leaf("Z_DDOT", formatValue(line.ZDDot)),
+				leaf("X_DDOT", ndm.FormatValue(line.XDDot)),
+				leaf("Y_DDOT", ndm.FormatValue(line.YDDot)),
+				leaf("Z_DDOT", ndm.FormatValue(line.ZDDot)),
 			)
 		}
 		out = append(out, ndm.Block(xmlStateVector, children...))
@@ -129,7 +129,7 @@ func xmlOEMData(block *EphemerisBlock) ([]ndm.Element, error) {
 
 	// And one per covariance matrix, with the OPM's named keywords.
 	for i, c := range block.Covariances {
-		epoch, err := ndm.FormatEpoch(c.Epoch, epochPrecision(c.Epoch))
+		epoch, err := ndm.FormatEpoch(c.Epoch, ndm.EpochPrecision(c.Epoch))
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func xmlOEMData(block *EphemerisBlock) ([]ndm.Element, error) {
 		}
 		for _, e := range covarianceElements {
 			children = append(children,
-				ndm.LeafWithUnits(e.keyword, formatValue(c.Matrix[e.row][e.col]), e.units))
+				ndm.LeafWithUnits(e.keyword, ndm.FormatValue(c.Matrix[e.row][e.col]), e.units))
 		}
 		out = append(out, ndm.Block(xmlCovarianceMatrix, children...))
 	}
@@ -237,7 +237,7 @@ func readXMLEphemerisLine(elements []ndm.Element) (EphemerisLine, error) {
 			continue
 		}
 		if e.Name == "EPOCH" {
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return line, err
 			}
@@ -283,7 +283,7 @@ func readXMLOEMCovariance(elements []ndm.Element) (OEMCovariance, error) {
 		}
 		switch e.Name {
 		case "EPOCH":
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return c, err
 			}

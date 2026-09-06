@@ -61,13 +61,13 @@ func (m *TDM) EncodeXML() ([]byte, error) {
 
 		data := ndm.Comments(segment.Comments)
 		for _, obs := range segment.Observations {
-			epoch, err := ndm.FormatEpoch(obs.Epoch, epochPrecision(obs.Epoch))
+			epoch, err := ndm.FormatEpoch(obs.Epoch, ndm.EpochPrecision(obs.Epoch))
 			if err != nil {
 				return nil, err
 			}
 			data = append(data, ndm.Block(xmlObservation,
 				ndm.Leaf("EPOCH", epoch),
-				ndm.Leaf(obs.Keyword, formatValue(obs.Value)),
+				ndm.Leaf(obs.Keyword, ndm.FormatValue(obs.Value)),
 			))
 		}
 

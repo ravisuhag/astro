@@ -39,7 +39,7 @@ func (m *APM) EncodeXML() ([]byte, error) {
 }
 
 func (m *APM) xmlData() ([]ndm.Element, error) {
-	epoch, err := ndm.FormatEpoch(m.Epoch, epochPrecision(m.Epoch))
+	epoch, err := ndm.FormatEpoch(m.Epoch, ndm.EpochPrecision(m.Epoch))
 	if err != nil {
 		return nil, err
 	}
@@ -54,17 +54,17 @@ func (m *APM) xmlData() ([]ndm.Element, error) {
 		children := ndm.Comments(b.Comments)
 		children = append(children, framesElements(b.frames)...)
 		children = append(children, ndm.Block(xmlQuaternion,
-			ndm.Leaf("Q1", formatValue(b.Q1)),
-			ndm.Leaf("Q2", formatValue(b.Q2)),
-			ndm.Leaf("Q3", formatValue(b.Q3)),
-			ndm.Leaf("QC", formatValue(b.QC)),
+			ndm.Leaf("Q1", ndm.FormatValue(b.Q1)),
+			ndm.Leaf("Q2", ndm.FormatValue(b.Q2)),
+			ndm.Leaf("Q3", ndm.FormatValue(b.Q3)),
+			ndm.Leaf("QC", ndm.FormatValue(b.QC)),
 		))
 		if b.HasDerivative {
 			children = append(children, ndm.Block(xmlQuaternionDot,
-				leaf("Q1_DOT", formatValue(b.Derivative.Q1)),
-				leaf("Q2_DOT", formatValue(b.Derivative.Q2)),
-				leaf("Q3_DOT", formatValue(b.Derivative.Q3)),
-				leaf("QC_DOT", formatValue(b.Derivative.QC)),
+				leaf("Q1_DOT", ndm.FormatValue(b.Derivative.Q1)),
+				leaf("Q2_DOT", ndm.FormatValue(b.Derivative.Q2)),
+				leaf("Q3_DOT", ndm.FormatValue(b.Derivative.Q3)),
+				leaf("QC_DOT", ndm.FormatValue(b.Derivative.QC)),
 			))
 		}
 		out = append(out, ndm.Block(xmlQuaternionState, children...))
@@ -75,15 +75,15 @@ func (m *APM) xmlData() ([]ndm.Element, error) {
 		children = append(children, framesElements(b.frames)...)
 		children = append(children,
 			ndm.Leaf("EULER_ROT_SEQ", b.RotSeq),
-			leaf("ANGLE_1", formatValue(b.Angle1)),
-			leaf("ANGLE_2", formatValue(b.Angle2)),
-			leaf("ANGLE_3", formatValue(b.Angle3)),
+			leaf("ANGLE_1", ndm.FormatValue(b.Angle1)),
+			leaf("ANGLE_2", ndm.FormatValue(b.Angle2)),
+			leaf("ANGLE_3", ndm.FormatValue(b.Angle3)),
 		)
 		if b.HasRates {
 			children = append(children,
-				leaf("ANGLE_1_DOT", formatValue(b.Rate1)),
-				leaf("ANGLE_2_DOT", formatValue(b.Rate2)),
-				leaf("ANGLE_3_DOT", formatValue(b.Rate3)),
+				leaf("ANGLE_1_DOT", ndm.FormatValue(b.Rate1)),
+				leaf("ANGLE_2_DOT", ndm.FormatValue(b.Rate2)),
+				leaf("ANGLE_3_DOT", ndm.FormatValue(b.Rate3)),
 			)
 		}
 		out = append(out, ndm.Block(xmlEulerAngleState, children...))
@@ -94,9 +94,9 @@ func (m *APM) xmlData() ([]ndm.Element, error) {
 		children = append(children, framesElements(b.frames)...)
 		children = append(children,
 			ndm.Leaf("ANGVEL_FRAME", b.Frame),
-			leaf("ANGVEL_X", formatValue(b.X)),
-			leaf("ANGVEL_Y", formatValue(b.Y)),
-			leaf("ANGVEL_Z", formatValue(b.Z)),
+			leaf("ANGVEL_X", ndm.FormatValue(b.X)),
+			leaf("ANGVEL_Y", ndm.FormatValue(b.Y)),
+			leaf("ANGVEL_Z", ndm.FormatValue(b.Z)),
 		)
 		out = append(out, ndm.Block(xmlAngularVelocity, children...))
 	}
@@ -105,23 +105,23 @@ func (m *APM) xmlData() ([]ndm.Element, error) {
 		children := ndm.Comments(b.Comments)
 		children = append(children, framesElements(b.frames)...)
 		children = append(children,
-			leaf("SPIN_ALPHA", formatValue(b.Alpha)),
-			leaf("SPIN_DELTA", formatValue(b.Delta)),
-			leaf("SPIN_ANGLE", formatValue(b.Angle)),
-			leaf("SPIN_ANGLE_VEL", formatValue(b.AngleVel)),
+			leaf("SPIN_ALPHA", ndm.FormatValue(b.Alpha)),
+			leaf("SPIN_DELTA", ndm.FormatValue(b.Delta)),
+			leaf("SPIN_ANGLE", ndm.FormatValue(b.Angle)),
+			leaf("SPIN_ANGLE_VEL", ndm.FormatValue(b.AngleVel)),
 		)
 		if b.HasNutation {
 			children = append(children,
-				leaf("NUTATION", formatValue(b.Nutation)),
-				leaf("NUTATION_PER", formatValue(b.NutationPeriod)),
-				leaf("NUTATION_PHASE", formatValue(b.NutationPhase)),
+				leaf("NUTATION", ndm.FormatValue(b.Nutation)),
+				leaf("NUTATION_PER", ndm.FormatValue(b.NutationPeriod)),
+				leaf("NUTATION_PHASE", ndm.FormatValue(b.NutationPhase)),
 			)
 		}
 		if b.HasMomentum {
 			children = append(children,
-				leaf("MOMENTUM_ALPHA", formatValue(b.MomentumAlpha)),
-				leaf("MOMENTUM_DELTA", formatValue(b.MomentumDelta)),
-				leaf("NUTATION_VEL", formatValue(b.NutationVel)),
+				leaf("MOMENTUM_ALPHA", ndm.FormatValue(b.MomentumAlpha)),
+				leaf("MOMENTUM_DELTA", ndm.FormatValue(b.MomentumDelta)),
+				leaf("NUTATION_VEL", ndm.FormatValue(b.NutationVel)),
 			)
 		}
 		out = append(out, ndm.Block(xmlSpin, children...))
@@ -137,24 +137,24 @@ func (m *APM) xmlData() ([]ndm.Element, error) {
 			{"IXX", b.IXX}, {"IYY", b.IYY}, {"IZZ", b.IZZ},
 			{"IXY", b.IXY}, {"IXZ", b.IXZ}, {"IYZ", b.IYZ},
 		} {
-			children = append(children, leaf(e.keyword, formatValue(e.value)))
+			children = append(children, leaf(e.keyword, ndm.FormatValue(e.value)))
 		}
 		out = append(out, ndm.Block(xmlInertia, children...))
 	}
 
 	for _, man := range m.Maneuvers {
-		start, err := ndm.FormatEpoch(man.EpochStart, epochPrecision(man.EpochStart))
+		start, err := ndm.FormatEpoch(man.EpochStart, ndm.EpochPrecision(man.EpochStart))
 		if err != nil {
 			return nil, err
 		}
 		children := ndm.Comments(man.Comments)
 		children = append(children,
 			ndm.Leaf("MAN_EPOCH_START", start),
-			leaf("MAN_DURATION", formatValue(man.Duration)),
+			leaf("MAN_DURATION", ndm.FormatValue(man.Duration)),
 			ndm.Leaf("MAN_REF_FRAME", man.RefFrame),
-			leaf("MAN_TOR_X", formatValue(man.TorqueX)),
-			leaf("MAN_TOR_Y", formatValue(man.TorqueY)),
-			leaf("MAN_TOR_Z", formatValue(man.TorqueZ)),
+			leaf("MAN_TOR_X", ndm.FormatValue(man.TorqueX)),
+			leaf("MAN_TOR_Y", ndm.FormatValue(man.TorqueY)),
+			leaf("MAN_TOR_Z", ndm.FormatValue(man.TorqueZ)),
 		)
 		out = append(out, ndm.Block(xmlManeuver, children...))
 	}
@@ -217,7 +217,7 @@ func (m *APM) readXMLData(elements []ndm.Element) error {
 			case ndm.KeywordComment:
 				m.Comments = append(m.Comments, e.Value)
 			case "EPOCH":
-				t, err := parseEpoch(e.Value)
+				t, err := ndm.ParseEpoch(e.Value)
 				if err != nil {
 					return err
 				}
@@ -362,7 +362,7 @@ func (m *APM) readXMLManeuver(elements []ndm.Element) error {
 	if !ok {
 		return ErrMissingKeyword
 	}
-	t, err := parseEpoch(start)
+	t, err := ndm.ParseEpoch(start)
 	if err != nil {
 		return err
 	}

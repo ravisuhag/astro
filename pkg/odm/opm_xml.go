@@ -44,14 +44,14 @@ func (m *OPM) xmlData() []ndm.Element {
 	sv := m.Data.StateVector
 
 	state := ndm.Comments(sv.Comments)
-	if epoch, err := ndm.FormatEpoch(sv.Epoch, epochPrecision(sv.Epoch)); err == nil {
+	if epoch, err := ndm.FormatEpoch(sv.Epoch, ndm.EpochPrecision(sv.Epoch)); err == nil {
 		state = append(state, ndm.Leaf("EPOCH", epoch))
 	}
 	state = append(state,
-		leaf("X", formatValue(sv.X)), leaf("Y", formatValue(sv.Y)), leaf("Z", formatValue(sv.Z)),
-		leaf("X_DOT", formatValue(sv.XDot)),
-		leaf("Y_DOT", formatValue(sv.YDot)),
-		leaf("Z_DOT", formatValue(sv.ZDot)),
+		leaf("X", ndm.FormatValue(sv.X)), leaf("Y", ndm.FormatValue(sv.Y)), leaf("Z", ndm.FormatValue(sv.Z)),
+		leaf("X_DOT", ndm.FormatValue(sv.XDot)),
+		leaf("Y_DOT", ndm.FormatValue(sv.YDot)),
+		leaf("Z_DOT", ndm.FormatValue(sv.ZDot)),
 	)
 
 	out := []ndm.Element{ndm.Block(xmlStateVector, state...)}
@@ -63,13 +63,13 @@ func (m *OPM) xmlData() []ndm.Element {
 		}
 		children := ndm.Comments(k.Comments)
 		children = append(children,
-			leaf("SEMI_MAJOR_AXIS", formatValue(k.SemiMajorAxis)),
-			ndm.Leaf("ECCENTRICITY", formatValue(k.Eccentricity)),
-			leaf("INCLINATION", formatValue(k.Inclination)),
-			leaf("RA_OF_ASC_NODE", formatValue(k.RAOfAscNode)),
-			leaf("ARG_OF_PERICENTER", formatValue(k.ArgOfPericenter)),
-			leaf(anomaly, formatValue(k.Anomaly)),
-			leaf("GM", formatValue(k.GM)),
+			leaf("SEMI_MAJOR_AXIS", ndm.FormatValue(k.SemiMajorAxis)),
+			ndm.Leaf("ECCENTRICITY", ndm.FormatValue(k.Eccentricity)),
+			leaf("INCLINATION", ndm.FormatValue(k.Inclination)),
+			leaf("RA_OF_ASC_NODE", ndm.FormatValue(k.RAOfAscNode)),
+			leaf("ARG_OF_PERICENTER", ndm.FormatValue(k.ArgOfPericenter)),
+			leaf(anomaly, ndm.FormatValue(k.Anomaly)),
+			leaf("GM", ndm.FormatValue(k.GM)),
 		)
 		out = append(out, ndm.Block(xmlKeplerianElements, children...))
 	}
@@ -86,16 +86,16 @@ func (m *OPM) xmlData() []ndm.Element {
 	// elements.
 	for _, man := range m.Data.Maneuvers {
 		children := ndm.Comments(man.Comments)
-		if epoch, err := ndm.FormatEpoch(man.EpochIgnition, epochPrecision(man.EpochIgnition)); err == nil {
+		if epoch, err := ndm.FormatEpoch(man.EpochIgnition, ndm.EpochPrecision(man.EpochIgnition)); err == nil {
 			children = append(children, ndm.Leaf("MAN_EPOCH_IGNITION", epoch))
 		}
 		children = append(children,
-			leaf("MAN_DURATION", formatValue(man.Duration)),
-			leaf("MAN_DELTA_MASS", formatValue(man.DeltaMass)),
+			leaf("MAN_DURATION", ndm.FormatValue(man.Duration)),
+			leaf("MAN_DELTA_MASS", ndm.FormatValue(man.DeltaMass)),
 			ndm.Leaf("MAN_REF_FRAME", man.RefFrame),
-			leaf("MAN_DV_1", formatValue(man.DV[0])),
-			leaf("MAN_DV_2", formatValue(man.DV[1])),
-			leaf("MAN_DV_3", formatValue(man.DV[2])),
+			leaf("MAN_DV_1", ndm.FormatValue(man.DV[0])),
+			leaf("MAN_DV_2", ndm.FormatValue(man.DV[1])),
+			leaf("MAN_DV_3", ndm.FormatValue(man.DV[2])),
 		)
 		out = append(out, ndm.Block(xmlManeuverParameters, children...))
 	}
@@ -107,13 +107,13 @@ func (m *OPM) xmlData() []ndm.Element {
 func spacecraftLeaves(s *SpacecraftParameters) []ndm.Element {
 	out := ndm.Comments(s.Comments)
 	if s.hasMass {
-		out = append(out, leaf("MASS", formatValue(s.Mass)))
+		out = append(out, leaf("MASS", ndm.FormatValue(s.Mass)))
 	}
 	return append(out,
-		leaf("SOLAR_RAD_AREA", formatValue(s.SolarRadArea)),
-		ndm.Leaf("SOLAR_RAD_COEFF", formatValue(s.SolarRadCoeff)),
-		leaf("DRAG_AREA", formatValue(s.DragArea)),
-		ndm.Leaf("DRAG_COEFF", formatValue(s.DragCoeff)),
+		leaf("SOLAR_RAD_AREA", ndm.FormatValue(s.SolarRadArea)),
+		ndm.Leaf("SOLAR_RAD_COEFF", ndm.FormatValue(s.SolarRadCoeff)),
+		leaf("DRAG_AREA", ndm.FormatValue(s.DragArea)),
+		ndm.Leaf("DRAG_COEFF", ndm.FormatValue(s.DragCoeff)),
 	)
 }
 
@@ -175,7 +175,7 @@ func (m *OPM) readXMLMetadata(elements []ndm.Element) error {
 		case "TIME_SYSTEM":
 			md.TimeSystem = e.Value
 		case "REF_FRAME_EPOCH":
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return err
 			}
@@ -246,7 +246,7 @@ func (m *OPM) readXMLStateVector(elements []ndm.Element) error {
 			continue
 		}
 		if e.Name == "EPOCH" {
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return err
 			}
@@ -328,7 +328,7 @@ func readXMLManeuver(elements []ndm.Element) (Maneuver, error) {
 		}
 		switch e.Name {
 		case "MAN_EPOCH_IGNITION":
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return man, err
 			}

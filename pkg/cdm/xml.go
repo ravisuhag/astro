@@ -240,7 +240,7 @@ func (m *CDM) readXMLHeader(elements []ndm.Element) error {
 	if !ok {
 		return ndm.ErrMissingHeaderField
 	}
-	t, err := parseEpoch(created)
+	t, err := ndm.ParseEpoch(created)
 	if err != nil {
 		return err
 	}

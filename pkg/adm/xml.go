@@ -115,7 +115,7 @@ func readXMLHeader(version string, elements []ndm.Element) (Header, error) {
 	if !ok {
 		return h, ndm.ErrMissingHeaderField
 	}
-	t, err := parseEpoch(created)
+	t, err := ndm.ParseEpoch(created)
 	if err != nil {
 		return h, err
 	}

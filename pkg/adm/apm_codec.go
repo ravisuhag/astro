@@ -114,7 +114,7 @@ func readAPMBody(s *ndm.Scanner, m *APM) error {
 			}
 			seen[keyword] = true
 			inData = true
-			t, err := parseEpoch(value)
+			t, err := ndm.ParseEpoch(value)
 			if err != nil {
 				return ndm.At(line.Number, err)
 			}

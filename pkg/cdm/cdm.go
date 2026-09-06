@@ -67,7 +67,7 @@ func (s Section) number(keyword string) (float64, bool) {
 	if !ok {
 		return 0, false
 	}
-	v, err := parseValue(raw)
+	v, err := ndm.ParseValue(raw)
 	if err != nil {
 		return 0, false
 	}
@@ -80,7 +80,7 @@ func (s Section) epoch(keyword string) (time.Time, bool) {
 	if !ok {
 		return time.Time{}, false
 	}
-	t, err := parseEpoch(raw)
+	t, err := ndm.ParseEpoch(raw)
 	if err != nil {
 		return time.Time{}, false
 	}

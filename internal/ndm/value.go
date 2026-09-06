@@ -89,7 +89,7 @@ func FormatInt(v int32) string { return strconv.FormatInt(int64(v), 10) }
 // ASCII string", which would allow 1.5E+03 and refuse 15.0E+02 or 0.15E+04.
 // Messages in the wild break that constantly, and the worked examples in the
 // standard's own annex G are not all normalized either. Reading is lenient;
-// FormatFloat writes the conforming form.
+// FormatValue (internal/ndm/format.go) writes the conforming form.
 func ParseFloat(value string) (float64, error) {
 	if err := checkNoBlanks(value); err != nil {
 		return 0, err
@@ -119,19 +119,6 @@ func ParseFloat(value string) (float64, error) {
 		return 0, ErrNotANumber
 	}
 	return f, nil
-}
-
-// FormatFloat writes a non-integer value in fixed-point notation with the
-// given number of fractional digits (clause 7.5.6).
-func FormatFloat(v float64, decimals int) string {
-	return strconv.FormatFloat(v, 'f', decimals, 64)
-}
-
-// FormatScientific writes a non-integer value in the floating-point notation
-// of clause 7.5.7, with the decimal point in the second position of the
-// mantissa as sub-clause (b) requires.
-func FormatScientific(v float64, decimals int) string {
-	return strconv.FormatFloat(v, 'E', decimals, 64)
 }
 
 // checkDigitCount enforces the 16-digit ceiling of clauses 7.5.6 and 7.5.7.
@@ -199,6 +186,19 @@ func ParseText(value string) string {
 // implements the same ASCII time codes A and B under CCSDS 301.0-B-4
 // clause 3.5 — including second 60 at a leap second, which clause 7.5.10 calls
 // out in its note and which Go's own time package refuses.
+//
+// An epoch does not carry a unit suffix, so this does not call SplitUnits
+// first. Clause 7.5.10 spells out the epoch grammar
+// (YYYY-MM-DDThh:mm:ss[.d→d][Z] or the ordinal form) with no room for a
+// bracketed unit. Clause 7.7.1.1's allowance for a unit suffix is scoped to
+// "OPM/OMM UNITS" and requires the text to "exactly match the units ...
+// as specified in tables 3-3 and 4-3" — and in both tables the EPOCH row's
+// Units column is blank, so there is no unit text a suffix could match.
+// Table 6-8 goes further and lists TIME_ABSOLUTE's units as literally 'n/a',
+// which clause 7.7.1.3 forbids ever writing out as '[n/a]'. So an epoch with
+// a unit suffix, such as "2022-12-18T14:28:15Z [s]", is rejected outright
+// rather than tolerated by stripping the suffix — checkNoBlanks below takes
+// care of that, since any suffix requires a blank before it.
 func ParseEpoch(value string) (time.Time, error) {
 	if err := checkNoBlanks(value); err != nil {
 		return time.Time{}, err

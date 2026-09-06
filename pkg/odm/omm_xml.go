@@ -44,25 +44,25 @@ func (m *OMM) xmlData() []ndm.Element {
 	e := m.Data.Elements
 
 	elements := ndm.Comments(e.Comments)
-	if epoch, err := ndm.FormatEpoch(e.Epoch, epochPrecision(e.Epoch)); err == nil {
+	if epoch, err := ndm.FormatEpoch(e.Epoch, ndm.EpochPrecision(e.Epoch)); err == nil {
 		elements = append(elements, ndm.Leaf("EPOCH", epoch))
 	}
 	// Which of the paired keywords goes out is the same decision the
 	// key-value form makes, and it has to survive the change of form.
 	if e.UsesMeanMotion {
-		elements = append(elements, leaf("MEAN_MOTION", formatValue(e.MeanMotion)))
+		elements = append(elements, leaf("MEAN_MOTION", ndm.FormatValue(e.MeanMotion)))
 	} else {
-		elements = append(elements, leaf("SEMI_MAJOR_AXIS", formatValue(e.SemiMajorAxis)))
+		elements = append(elements, leaf("SEMI_MAJOR_AXIS", ndm.FormatValue(e.SemiMajorAxis)))
 	}
 	elements = append(elements,
-		ndm.Leaf("ECCENTRICITY", formatValue(e.Eccentricity)),
-		leaf("INCLINATION", formatValue(e.Inclination)),
-		leaf("RA_OF_ASC_NODE", formatValue(e.RAOfAscNode)),
-		leaf("ARG_OF_PERICENTER", formatValue(e.ArgOfPericenter)),
-		leaf("MEAN_ANOMALY", formatValue(e.MeanAnomaly)),
+		ndm.Leaf("ECCENTRICITY", ndm.FormatValue(e.Eccentricity)),
+		leaf("INCLINATION", ndm.FormatValue(e.Inclination)),
+		leaf("RA_OF_ASC_NODE", ndm.FormatValue(e.RAOfAscNode)),
+		leaf("ARG_OF_PERICENTER", ndm.FormatValue(e.ArgOfPericenter)),
+		leaf("MEAN_ANOMALY", ndm.FormatValue(e.MeanAnomaly)),
 	)
 	if e.GM != 0 {
-		elements = append(elements, leaf("GM", formatValue(e.GM)))
+		elements = append(elements, leaf("GM", ndm.FormatValue(e.GM)))
 	}
 
 	out := []ndm.Element{ndm.Block(xmlMeanElements, elements...)}
@@ -80,15 +80,15 @@ func (m *OMM) xmlData() []ndm.Element {
 			ndm.Leaf("REV_AT_EPOCH", ndm.FormatInt(t.RevAtEpoch)),
 		)
 		if t.UsesBTerm {
-			children = append(children, leaf("BTERM", formatValue(t.BTerm)))
+			children = append(children, leaf("BTERM", ndm.FormatValue(t.BTerm)))
 		} else {
-			children = append(children, leaf("BSTAR", formatValue(t.BStar)))
+			children = append(children, leaf("BSTAR", ndm.FormatValue(t.BStar)))
 		}
-		children = append(children, leaf("MEAN_MOTION_DOT", formatValue(t.MeanMotionDot)))
+		children = append(children, leaf("MEAN_MOTION_DOT", ndm.FormatValue(t.MeanMotionDot)))
 		if t.UsesAgom {
-			children = append(children, leaf("AGOM", formatValue(t.Agom)))
+			children = append(children, leaf("AGOM", ndm.FormatValue(t.Agom)))
 		} else {
-			children = append(children, leaf("MEAN_MOTION_DDOT", formatValue(t.MeanMotionDDot)))
+			children = append(children, leaf("MEAN_MOTION_DDOT", ndm.FormatValue(t.MeanMotionDDot)))
 		}
 		out = append(out, ndm.Block(xmlTLEParameters, children...))
 	}
@@ -155,7 +155,7 @@ func (m *OMM) readXMLMetadata(elements []ndm.Element) error {
 		case "MEAN_ELEMENT_THEORY":
 			md.MeanElementTheory = e.Value
 		case "REF_FRAME_EPOCH":
-			t, err := parseEpochValue(e.Value)
+			t, err := ndm.ParseEpoch(e.Value)
 			if err != nil {
 				return err
 			}
@@ -226,7 +226,7 @@ func (m *OMM) readXMLMeanElements(elements []ndm.Element) error {
 			continue
 		}
 		if el.Name == "EPOCH" {
-			t, err := parseEpochValue(el.Value)
+			t, err := ndm.ParseEpoch(el.Value)
 			if err != nil {
 				return err
 			}

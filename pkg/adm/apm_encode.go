@@ -27,7 +27,7 @@ func (m *APM) Encode() ([]byte, error) {
 
 	w.Blank()
 	w.Comments(m.Comments)
-	epoch, err := ndm.FormatEpoch(m.Epoch, epochPrecision(m.Epoch))
+	epoch, err := ndm.FormatEpoch(m.Epoch, ndm.EpochPrecision(m.Epoch))
 	if err != nil {
 		return nil, err
 	}
@@ -37,15 +37,15 @@ func (m *APM) Encode() ([]byte, error) {
 		w.Blank()
 		openBlock(&w, blockQuaternion, b.Comments)
 		writeFrames(&w, b.frames)
-		w.Assign("Q1", formatValue(b.Q1))
-		w.Assign("Q2", formatValue(b.Q2))
-		w.Assign("Q3", formatValue(b.Q3))
-		w.Assign("QC", formatValue(b.QC))
+		w.Assign("Q1", ndm.FormatValue(b.Q1))
+		w.Assign("Q2", ndm.FormatValue(b.Q2))
+		w.Assign("Q3", ndm.FormatValue(b.Q3))
+		w.Assign("QC", ndm.FormatValue(b.QC))
 		if b.HasDerivative {
-			w.AssignUnits("Q1_DOT", formatValue(b.Derivative.Q1), "1/s")
-			w.AssignUnits("Q2_DOT", formatValue(b.Derivative.Q2), "1/s")
-			w.AssignUnits("Q3_DOT", formatValue(b.Derivative.Q3), "1/s")
-			w.AssignUnits("QC_DOT", formatValue(b.Derivative.QC), "1/s")
+			w.AssignUnits("Q1_DOT", ndm.FormatValue(b.Derivative.Q1), "1/s")
+			w.AssignUnits("Q2_DOT", ndm.FormatValue(b.Derivative.Q2), "1/s")
+			w.AssignUnits("Q3_DOT", ndm.FormatValue(b.Derivative.Q3), "1/s")
+			w.AssignUnits("QC_DOT", ndm.FormatValue(b.Derivative.QC), "1/s")
 		}
 		closeBlock(&w, blockQuaternion)
 	}
@@ -55,13 +55,13 @@ func (m *APM) Encode() ([]byte, error) {
 		openBlock(&w, blockEuler, b.Comments)
 		writeFrames(&w, b.frames)
 		w.Assign("EULER_ROT_SEQ", b.RotSeq)
-		w.AssignUnits("ANGLE_1", formatValue(b.Angle1), "deg")
-		w.AssignUnits("ANGLE_2", formatValue(b.Angle2), "deg")
-		w.AssignUnits("ANGLE_3", formatValue(b.Angle3), "deg")
+		w.AssignUnits("ANGLE_1", ndm.FormatValue(b.Angle1), "deg")
+		w.AssignUnits("ANGLE_2", ndm.FormatValue(b.Angle2), "deg")
+		w.AssignUnits("ANGLE_3", ndm.FormatValue(b.Angle3), "deg")
 		if b.HasRates {
-			w.AssignUnits("ANGLE_1_DOT", formatValue(b.Rate1), "deg/s")
-			w.AssignUnits("ANGLE_2_DOT", formatValue(b.Rate2), "deg/s")
-			w.AssignUnits("ANGLE_3_DOT", formatValue(b.Rate3), "deg/s")
+			w.AssignUnits("ANGLE_1_DOT", ndm.FormatValue(b.Rate1), "deg/s")
+			w.AssignUnits("ANGLE_2_DOT", ndm.FormatValue(b.Rate2), "deg/s")
+			w.AssignUnits("ANGLE_3_DOT", ndm.FormatValue(b.Rate3), "deg/s")
 		}
 		closeBlock(&w, blockEuler)
 	}
@@ -71,9 +71,9 @@ func (m *APM) Encode() ([]byte, error) {
 		openBlock(&w, blockAngVel, b.Comments)
 		writeFrames(&w, b.frames)
 		w.Assign("ANGVEL_FRAME", b.Frame)
-		w.AssignUnits("ANGVEL_X", formatValue(b.X), "deg/s")
-		w.AssignUnits("ANGVEL_Y", formatValue(b.Y), "deg/s")
-		w.AssignUnits("ANGVEL_Z", formatValue(b.Z), "deg/s")
+		w.AssignUnits("ANGVEL_X", ndm.FormatValue(b.X), "deg/s")
+		w.AssignUnits("ANGVEL_Y", ndm.FormatValue(b.Y), "deg/s")
+		w.AssignUnits("ANGVEL_Z", ndm.FormatValue(b.Z), "deg/s")
 		closeBlock(&w, blockAngVel)
 	}
 
@@ -81,19 +81,19 @@ func (m *APM) Encode() ([]byte, error) {
 		w.Blank()
 		openBlock(&w, blockSpin, b.Comments)
 		writeFrames(&w, b.frames)
-		w.AssignUnits("SPIN_ALPHA", formatValue(b.Alpha), "deg")
-		w.AssignUnits("SPIN_DELTA", formatValue(b.Delta), "deg")
-		w.AssignUnits("SPIN_ANGLE", formatValue(b.Angle), "deg")
-		w.AssignUnits("SPIN_ANGLE_VEL", formatValue(b.AngleVel), "deg/s")
+		w.AssignUnits("SPIN_ALPHA", ndm.FormatValue(b.Alpha), "deg")
+		w.AssignUnits("SPIN_DELTA", ndm.FormatValue(b.Delta), "deg")
+		w.AssignUnits("SPIN_ANGLE", ndm.FormatValue(b.Angle), "deg")
+		w.AssignUnits("SPIN_ANGLE_VEL", ndm.FormatValue(b.AngleVel), "deg/s")
 		if b.HasNutation {
-			w.AssignUnits("NUTATION", formatValue(b.Nutation), "deg")
-			w.AssignUnits("NUTATION_PER", formatValue(b.NutationPeriod), "s")
-			w.AssignUnits("NUTATION_PHASE", formatValue(b.NutationPhase), "deg")
+			w.AssignUnits("NUTATION", ndm.FormatValue(b.Nutation), "deg")
+			w.AssignUnits("NUTATION_PER", ndm.FormatValue(b.NutationPeriod), "s")
+			w.AssignUnits("NUTATION_PHASE", ndm.FormatValue(b.NutationPhase), "deg")
 		}
 		if b.HasMomentum {
-			w.AssignUnits("MOMENTUM_ALPHA", formatValue(b.MomentumAlpha), "deg")
-			w.AssignUnits("MOMENTUM_DELTA", formatValue(b.MomentumDelta), "deg")
-			w.AssignUnits("NUTATION_VEL", formatValue(b.NutationVel), "deg/s")
+			w.AssignUnits("MOMENTUM_ALPHA", ndm.FormatValue(b.MomentumAlpha), "deg")
+			w.AssignUnits("MOMENTUM_DELTA", ndm.FormatValue(b.MomentumDelta), "deg")
+			w.AssignUnits("NUTATION_VEL", ndm.FormatValue(b.NutationVel), "deg/s")
 		}
 		closeBlock(&w, blockSpin)
 	}
@@ -109,7 +109,7 @@ func (m *APM) Encode() ([]byte, error) {
 			{"IXX", b.IXX}, {"IYY", b.IYY}, {"IZZ", b.IZZ},
 			{"IXY", b.IXY}, {"IXZ", b.IXZ}, {"IYZ", b.IYZ},
 		} {
-			w.AssignUnits(e.keyword, formatValue(e.value), "kg*m**2")
+			w.AssignUnits(e.keyword, ndm.FormatValue(e.value), "kg*m**2")
 		}
 		closeBlock(&w, blockInertia)
 	}
@@ -117,16 +117,16 @@ func (m *APM) Encode() ([]byte, error) {
 	for _, man := range m.Maneuvers {
 		w.Blank()
 		openBlock(&w, blockManeuver, man.Comments)
-		start, err := ndm.FormatEpoch(man.EpochStart, epochPrecision(man.EpochStart))
+		start, err := ndm.FormatEpoch(man.EpochStart, ndm.EpochPrecision(man.EpochStart))
 		if err != nil {
 			return nil, err
 		}
 		w.Assign("MAN_EPOCH_START", start)
-		w.AssignUnits("MAN_DURATION", formatValue(man.Duration), "s")
+		w.AssignUnits("MAN_DURATION", ndm.FormatValue(man.Duration), "s")
 		w.Assign("MAN_REF_FRAME", man.RefFrame)
-		w.AssignUnits("MAN_TOR_X", formatValue(man.TorqueX), "N*m")
-		w.AssignUnits("MAN_TOR_Y", formatValue(man.TorqueY), "N*m")
-		w.AssignUnits("MAN_TOR_Z", formatValue(man.TorqueZ), "N*m")
+		w.AssignUnits("MAN_TOR_X", ndm.FormatValue(man.TorqueX), "N*m")
+		w.AssignUnits("MAN_TOR_Y", ndm.FormatValue(man.TorqueY), "N*m")
+		w.AssignUnits("MAN_TOR_Z", ndm.FormatValue(man.TorqueZ), "N*m")
 		closeBlock(&w, blockManeuver)
 	}
 	return w.Bytes(), nil
