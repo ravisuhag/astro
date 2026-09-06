@@ -153,7 +153,7 @@ func assignAEMMetadata(md *AEMMetadata, keyword, value string) error {
 		}
 		md.InterpolationDegree = degree
 	case "START_TIME", "STOP_TIME", "USEABLE_START_TIME", "USEABLE_STOP_TIME":
-		t, err := parseEpoch(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -318,14 +318,14 @@ func (m *AEM) Encode() ([]byte, error) {
 		w.Section(keywordDataStart)
 		w.Comments(block.Comments)
 		for _, line := range block.Lines {
-			epoch, err := ndm.FormatEpoch(line.Epoch, epochPrecision(line.Epoch))
+			epoch, err := ndm.FormatEpoch(line.Epoch, ndm.EpochPrecision(line.Epoch))
 			if err != nil {
 				return nil, err
 			}
 			fields := make([]string, 0, len(line.Values)+1)
 			fields = append(fields, epoch)
 			for _, v := range line.Values {
-				fields = append(fields, formatValue(v))
+				fields = append(fields, ndm.FormatValue(v))
 			}
 			w.Raw(strings.Join(fields, " "))
 		}
@@ -335,7 +335,7 @@ func (m *AEM) Encode() ([]byte, error) {
 }
 
 func writeEpochKeyword(w *ndm.Writer, keyword string, t time.Time) error {
-	value, err := ndm.FormatEpoch(t, epochPrecision(t))
+	value, err := ndm.FormatEpoch(t, ndm.EpochPrecision(t))
 	if err != nil {
 		return err
 	}

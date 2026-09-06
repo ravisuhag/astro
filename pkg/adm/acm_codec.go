@@ -330,7 +330,7 @@ func writeACMHeader(w *ndm.Writer, h Header) error {
 	if h.Classification != "" {
 		w.Assign(ndm.KeywordClassification, h.Classification)
 	}
-	created, err := ndm.FormatEpoch(h.CreationDate, epochPrecision(h.CreationDate))
+	created, err := ndm.FormatEpoch(h.CreationDate, ndm.EpochPrecision(h.CreationDate))
 	if err != nil {
 		return err
 	}

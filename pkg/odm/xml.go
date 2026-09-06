@@ -72,7 +72,7 @@ func covarianceLeaves(c *Covariance) []ndm.Element {
 		out = append(out, ndm.Leaf("COV_REF_FRAME", c.RefFrame))
 	}
 	for _, e := range covarianceElements {
-		out = append(out, ndm.LeafWithUnits(e.keyword, formatValue(c.Matrix[e.row][e.col]), e.units))
+		out = append(out, ndm.LeafWithUnits(e.keyword, ndm.FormatValue(c.Matrix[e.row][e.col]), e.units))
 	}
 	return out
 }
@@ -163,7 +163,7 @@ func readXMLHeader(version string, elements []ndm.Element) (Header, error) {
 	if !ok {
 		return h, ndm.ErrMissingHeaderField
 	}
-	t, err := parseEpochValue(created)
+	t, err := ndm.ParseEpoch(created)
 	if err != nil {
 		return h, err
 	}

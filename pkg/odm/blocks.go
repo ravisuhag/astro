@@ -9,7 +9,7 @@ import "github.com/ravisuhag/astro/internal/ndm"
 
 // assignSpacecraftKeyword reads one spacecraft parameter.
 func assignSpacecraftKeyword(s *SpacecraftParameters, keyword, value string) error {
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -32,12 +32,12 @@ func assignSpacecraftKeyword(s *SpacecraftParameters, keyword, value string) err
 func writeSpacecraftParameters(w *ndm.Writer, s *SpacecraftParameters) {
 	w.Comments(s.Comments)
 	if s.hasMass {
-		w.AssignUnits("MASS", formatValue(s.Mass), "kg")
+		w.AssignUnits("MASS", ndm.FormatValue(s.Mass), "kg")
 	}
-	w.AssignUnits("SOLAR_RAD_AREA", formatValue(s.SolarRadArea), "m**2")
-	w.Assign("SOLAR_RAD_COEFF", formatValue(s.SolarRadCoeff))
-	w.AssignUnits("DRAG_AREA", formatValue(s.DragArea), "m**2")
-	w.Assign("DRAG_COEFF", formatValue(s.DragCoeff))
+	w.AssignUnits("SOLAR_RAD_AREA", ndm.FormatValue(s.SolarRadArea), "m**2")
+	w.Assign("SOLAR_RAD_COEFF", ndm.FormatValue(s.SolarRadCoeff))
+	w.AssignUnits("DRAG_AREA", ndm.FormatValue(s.DragArea), "m**2")
+	w.Assign("DRAG_COEFF", ndm.FormatValue(s.DragCoeff))
 }
 
 // assignCovarianceKeyword reads one covariance keyword, filling both triangles
@@ -48,7 +48,7 @@ func assignCovarianceKeyword(c *Covariance, keyword, value string) error {
 		return nil
 	}
 
-	v, err := parseValue(value)
+	v, err := ndm.ParseValue(value)
 	if err != nil {
 		return err
 	}
@@ -70,6 +70,6 @@ func writeCovarianceKeywords(w *ndm.Writer, c *Covariance) {
 		w.Assign("COV_REF_FRAME", c.RefFrame)
 	}
 	for _, e := range covarianceElements {
-		w.AssignUnits(e.keyword, formatValue(c.Matrix[e.row][e.col]), e.units)
+		w.AssignUnits(e.keyword, ndm.FormatValue(c.Matrix[e.row][e.col]), e.units)
 	}
 }

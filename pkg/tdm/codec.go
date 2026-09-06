@@ -232,11 +232,11 @@ func (m *TDM) Encode() ([]byte, error) {
 		w.Section(keywordDataStart)
 		w.Comments(segment.Comments)
 		for _, obs := range segment.Observations {
-			epoch, err := ndm.FormatEpoch(obs.Epoch, epochPrecision(obs.Epoch))
+			epoch, err := ndm.FormatEpoch(obs.Epoch, ndm.EpochPrecision(obs.Epoch))
 			if err != nil {
 				return nil, err
 			}
-			w.Assign(obs.Keyword, epoch+" "+formatValue(obs.Value))
+			w.Assign(obs.Keyword, epoch+" "+ndm.FormatValue(obs.Value))
 		}
 		w.Section(keywordDataStop)
 	}

@@ -148,7 +148,7 @@ func assignOEMMetadata(md *OEMMetadata, keyword, value string) error {
 		md.InterpolationDegree = degree
 	case "START_TIME", "STOP_TIME", "REF_FRAME_EPOCH",
 		"USEABLE_START_TIME", "USEABLE_STOP_TIME":
-		t, err := parseEpochValue(value)
+		t, err := ndm.ParseEpoch(value)
 		if err != nil {
 			return err
 		}
@@ -278,7 +278,7 @@ func readCovarianceSection(s *ndm.Scanner, block *EphemerisBlock) error {
 			if err := finish(); err != nil {
 				return ndm.At(line.Number, err)
 			}
-			t, err := parseEpochValue(value)
+			t, err := ndm.ParseEpoch(value)
 			if err != nil {
 				return ndm.At(line.Number, err)
 			}

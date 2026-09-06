@@ -49,7 +49,7 @@ func xmlAEMMetadata(md *AEMMetadata) ([]ndm.Element, error) {
 	out = append(out, framesElements(md.frames)...)
 	out = append(out, ndm.Leaf("TIME_SYSTEM", md.TimeSystem))
 
-	start, err := ndm.FormatEpoch(md.StartTime, epochPrecision(md.StartTime))
+	start, err := ndm.FormatEpoch(md.StartTime, ndm.EpochPrecision(md.StartTime))
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +65,14 @@ func xmlAEMMetadata(md *AEMMetadata) ([]ndm.Element, error) {
 		if optional.value == nil {
 			continue
 		}
-		v, err := ndm.FormatEpoch(*optional.value, epochPrecision(*optional.value))
+		v, err := ndm.FormatEpoch(*optional.value, ndm.EpochPrecision(*optional.value))
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, ndm.Leaf(optional.keyword, v))
 	}
 
-	stop, err := ndm.FormatEpoch(md.StopTime, epochPrecision(md.StopTime))
+	stop, err := ndm.FormatEpoch(md.StopTime, ndm.EpochPrecision(md.StopTime))
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func xmlAEMData(block *AttitudeBlock) ([]ndm.Element, error) {
 		if len(line.Values) != len(names) {
 			return nil, ErrAttitudeLineFields
 		}
-		epoch, err := ndm.FormatEpoch(line.Epoch, epochPrecision(line.Epoch))
+		epoch, err := ndm.FormatEpoch(line.Epoch, ndm.EpochPrecision(line.Epoch))
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +130,7 @@ func xmlAEMData(block *AttitudeBlock) ([]ndm.Element, error) {
 func groupAttitudeValues(t AttitudeType, names []string, values []float64) []ndm.Element {
 	leaves := make([]ndm.Element, 0, len(names))
 	for i, name := range names {
-		leaves = append(leaves, leaf(name, formatValue(values[i])))
+		leaves = append(leaves, leaf(name, ndm.FormatValue(values[i])))
 	}
 
 	switch t {
@@ -244,7 +244,7 @@ func readXMLAttitudeLine(elements []ndm.Element, names []string) (AttitudeLine, 
 	if !ok {
 		return line, ErrMissingKeyword
 	}
-	t, err := parseEpoch(epoch)
+	t, err := ndm.ParseEpoch(epoch)
 	if err != nil {
 		return line, err
 	}

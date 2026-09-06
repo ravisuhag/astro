@@ -103,19 +103,19 @@ func writeEphemerisBlock(w *ndm.Writer, b *EphemerisBlock) error {
 // formatEphemerisLine writes one positional data row (clause 5.2.4.1). Fields
 // are separated by a single space; clause 5.2.4.3 asks only for at least one.
 func formatEphemerisLine(line EphemerisLine) (string, error) {
-	epoch, err := ndm.FormatEpoch(line.Epoch, epochPrecision(line.Epoch))
+	epoch, err := ndm.FormatEpoch(line.Epoch, ndm.EpochPrecision(line.Epoch))
 	if err != nil {
 		return "", err
 	}
 
 	fields := []string{
 		epoch,
-		formatValue(line.X), formatValue(line.Y), formatValue(line.Z),
-		formatValue(line.XDot), formatValue(line.YDot), formatValue(line.ZDot),
+		ndm.FormatValue(line.X), ndm.FormatValue(line.Y), ndm.FormatValue(line.Z),
+		ndm.FormatValue(line.XDot), ndm.FormatValue(line.YDot), ndm.FormatValue(line.ZDot),
 	}
 	if line.HasAcceleration {
 		fields = append(fields,
-			formatValue(line.XDDot), formatValue(line.YDDot), formatValue(line.ZDDot))
+			ndm.FormatValue(line.XDDot), ndm.FormatValue(line.YDDot), ndm.FormatValue(line.ZDDot))
 	}
 	return strings.Join(fields, " "), nil
 }
@@ -126,14 +126,14 @@ func writeCovarianceMatrix(w *ndm.Writer, matrix [6][6]float64) {
 	for row := 0; row < 6; row++ {
 		fields := make([]string, 0, row+1)
 		for col := 0; col <= row; col++ {
-			fields = append(fields, formatValue(matrix[row][col]))
+			fields = append(fields, ndm.FormatValue(matrix[row][col]))
 		}
 		w.Raw(strings.Join(fields, " "))
 	}
 }
 
 func writeEpoch(w *ndm.Writer, keyword string, t time.Time) error {
-	value, err := ndm.FormatEpoch(t, epochPrecision(t))
+	value, err := ndm.FormatEpoch(t, ndm.EpochPrecision(t))
 	if err != nil {
 		return err
 	}

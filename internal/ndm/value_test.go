@@ -233,6 +233,29 @@ func TestParseEpochRejects(t *testing.T) {
 	}
 }
 
+// TestParseEpochRejectsAUnitSuffix pins the decision that an epoch never
+// carries a unit suffix (see the commentary on ParseEpoch above).
+//
+// Clause 7.5.10 spells out the epoch grammar
+// (YYYY-MM-DDThh:mm:ss[.d→d][Z], or the ordinal form) with no unit in it.
+// Clause 7.7.1.1's unit allowance is scoped to "OPM/OMM UNITS" and ties any
+// suffix to the units named for that keyword in tables 3-3/4-3; the EPOCH row
+// of both tables leaves its Units column blank, so a suffix has nothing to
+// match. A time string followed by " [s]" is therefore not a variant
+// spelling of a valid epoch — it is a different, invalid value, and it must
+// be rejected rather than silently accepted by stripping the suffix.
+func TestParseEpochRejectsAUnitSuffix(t *testing.T) {
+	const bare = "2022-12-18T14:28:15Z"
+	if _, err := ParseEpoch(bare); err != nil {
+		t.Fatalf("ParseEpoch(%q): %v", bare, err)
+	}
+
+	const suffixed = "2022-12-18T14:28:15Z [s]"
+	if _, err := ParseEpoch(suffixed); err == nil {
+		t.Errorf("ParseEpoch(%q) was accepted; clause 7.5.10 has no unit suffix in the epoch grammar", suffixed)
+	}
+}
+
 func TestFormatEpochRoundTrips(t *testing.T) {
 	want := time.Date(2022, 12, 18, 14, 28, 15, 117200000, time.UTC)
 
