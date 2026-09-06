@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -35,7 +35,7 @@ jobs:
       # the corpus between runs, so each night starts from what the last one
       # learned rather than from the seeds.
       - name: Restore fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/go-build/fuzz
           key: fuzz-corpus-${{ github.run_id }}
@@ -50,7 +50,7 @@ jobs:
       # the failure can be reproduced without re-running the fuzzer.
       - name: Upload crashers
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashers
           path: "**/testdata/fuzz/**"
