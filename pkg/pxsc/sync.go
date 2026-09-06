@@ -104,12 +104,58 @@ func (s *Synchronizer) tryAt(data []byte, start, minLen, maxLen int) (PLTU, bool
 		}
 	}
 
+	return s.scanLengths(data, start, minLen, maxLen, implied)
+}
+
+// scanLengths is tryAt's fallback: the header's self-declared length (if
+// any) already failed, so every candidate frame length from minLen to
+// maxLen is tried in turn.
+//
+// Each candidate's body extends the previous one by a single octet, so the
+// CRC-32 over the growing prefix is carried forward with updateCRC32
+// instead of being recomputed in full for every candidate — same lengths
+// tried, same CRCs compared, same frames found, just in O(maxLen) rather
+// than O(maxLen²).
+func (s *Synchronizer) scanLengths(data []byte, start, minLen, maxLen, implied int) (PLTU, bool) {
+	if maxLen < minLen {
+		return PLTU{}, false
+	}
+
+	// body[:maxLen] is every octet any candidate frame could claim; the four
+	// octets after that are the trailing CRC for the longest candidate, and
+	// a prefix of them is the trailing CRC for every shorter one too.
+	body := data[start+ASMSize : start+ASMSize+maxLen+CRC32Size]
+
+	// crc is the running CRC-32 over body[:frameLen], advanced one octet at
+	// a time as frameLen grows. Prime it for the first candidate.
+	var crc uint32
+	for i := 0; i < minLen; i++ {
+		crc = updateCRC32(crc, body[i])
+	}
+
 	for frameLen := minLen; frameLen <= maxLen; frameLen++ {
-		if frameLen == implied {
-			continue // already tried
+		if frameLen != implied { // implied was already tried via checkAt
+			// The expected CRC sits at body[frameLen:frameLen+4] and moves
+			// with frameLen; a codeword verifies when running the running
+			// CRC through those four octets zeroes the register, the same
+			// test VerifyCRC32 makes over the whole candidate body.
+			end := crc
+			for _, b := range body[frameLen : frameLen+CRC32Size] {
+				end = updateCRC32(end, b)
+			}
+			if end == 0 {
+				frame := make([]byte, frameLen)
+				copy(frame, body[:frameLen])
+
+				crcBytes := body[frameLen : frameLen+CRC32Size]
+				value := uint32(crcBytes[0])<<24 | uint32(crcBytes[1])<<16 |
+					uint32(crcBytes[2])<<8 | uint32(crcBytes[3])
+
+				return PLTU{Frame: frame, CRC: value, Offset: start}, true
+			}
 		}
-		if pltu, ok := s.checkAt(data, start, frameLen); ok {
-			return pltu, true
+		if frameLen < maxLen {
+			crc = updateCRC32(crc, body[frameLen])
 		}
 	}
 	return PLTU{}, false

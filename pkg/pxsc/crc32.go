@@ -54,6 +54,20 @@ func buildCRC32Table() [256]uint32 {
 	return table
 }
 
+// updateCRC32 advances a Proximity-1 CRC-32 register by one octet.
+//
+// This is the same table-driven step ComputeCRC32 takes per byte, exposed
+// so a caller can carry a running CRC across a growing prefix instead of
+// recomputing it from scratch each time the prefix grows by one octet:
+//
+//	crc(n+1) = updateCRC32(crc(n), body[n])
+//
+// Synchronizer.tryAt uses this to check every candidate frame length in
+// O(maxLen) rather than the O(maxLen²) a full recompute per candidate costs.
+func updateCRC32(crc uint32, b byte) uint32 {
+	return crc<<8 ^ crc32Table[byte(crc>>24)^b]
+}
+
 // ComputeCRC32 returns the Proximity-1 CRC-32 over data.
 //
 // The register starts at zero and there is no final inversion, per annex C
@@ -61,7 +75,7 @@ func buildCRC32Table() [256]uint32 {
 func ComputeCRC32(data []byte) uint32 {
 	var reg uint32
 	for _, b := range data {
-		reg = reg<<8 ^ crc32Table[byte(reg>>24)^b]
+		reg = updateCRC32(reg, b)
 	}
 	return reg
 }

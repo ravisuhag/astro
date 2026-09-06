@@ -9,7 +9,10 @@ import (
 )
 
 // buildFrame returns one encoded Version-3 Transfer Frame.
-func buildFrame(t *testing.T, scid uint16, payload string) []byte {
+//
+// testing.TB rather than *testing.T so both tests and benchmarks can share
+// this helper.
+func buildFrame(t testing.TB, scid uint16, payload string) []byte {
 	t.Helper()
 	f, err := pxdl.NewTransferFrame(scid, 0, []byte(payload))
 	if err != nil {
