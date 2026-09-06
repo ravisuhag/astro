@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/epp"
@@ -73,6 +72,7 @@ func sppGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(size)
 				if err != nil {
@@ -94,12 +94,12 @@ func sppGenCmd() *cobra.Command {
 					return fmt.Errorf("packet #%d: %w", i+1, err)
 				}
 
-				if err := writeGenOutput(encoded, outputFmt); err != nil {
+				if err := writeGenOutput(out, encoded, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d packet(s), APID=%d, %d data bytes each\n", count, apid, size)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), APID=%d, %d data bytes each\n", count, apid, size)
 			return nil
 		},
 	}
@@ -139,6 +139,7 @@ func tmGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(dataSize)
 				if err != nil {
@@ -170,12 +171,12 @@ func tmGenCmd() *cobra.Command {
 					frameSize = len(encoded)
 				}
 
-				if err := writeGenOutput(encoded, outputFmt); err != nil {
+				if err := writeGenOutput(out, encoded, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
 			return nil
 		},
 	}
@@ -215,6 +216,7 @@ func tcGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(dataSize)
 				if err != nil {
@@ -241,12 +243,12 @@ func tcGenCmd() *cobra.Command {
 					frameSize = len(encoded)
 				}
 
-				if err := writeGenOutput(encoded, outputFmt); err != nil {
+				if err := writeGenOutput(out, encoded, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d frame(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, frameSize)
 			return nil
 		},
 	}
@@ -287,6 +289,7 @@ func caduGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(dataSize)
 				if err != nil {
@@ -316,12 +319,12 @@ func caduGenCmd() *cobra.Command {
 					caduSize = len(cadu)
 				}
 
-				if err := writeGenOutput(cadu, outputFmt); err != nil {
+				if err := writeGenOutput(out, cadu, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d CADU(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, caduSize)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CADU(s), SCID=%d VCID=%d, %d bytes each\n", count, scid, vcid, caduSize)
 			return nil
 		},
 	}
@@ -360,6 +363,7 @@ func cltuGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(dataSize)
 				if err != nil {
@@ -382,12 +386,12 @@ func cltuGenCmd() *cobra.Command {
 					return fmt.Errorf("CLTU #%d: %w", i+1, err)
 				}
 
-				if err := writeGenOutput(cltu, outputFmt); err != nil {
+				if err := writeGenOutput(out, cltu, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d CLTU(s), SCID=%d VCID=%d\n", count, scid, vcid)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d CLTU(s), SCID=%d VCID=%d\n", count, scid, vcid)
 			return nil
 		},
 	}
@@ -428,6 +432,7 @@ func eppGenCmd() *cobra.Command {
 				return fmt.Errorf("count must be >= 0, got %d", count)
 			}
 
+			out := cmd.OutOrStdout()
 			for i := range count {
 				data, err := randomBytes(size)
 				if err != nil {
@@ -447,12 +452,12 @@ func eppGenCmd() *cobra.Command {
 					return fmt.Errorf("packet #%d: %w", i+1, err)
 				}
 
-				if err := writeGenOutput(encoded, outputFmt); err != nil {
+				if err := writeGenOutput(out, encoded, outputFmt); err != nil {
 					return err
 				}
 			}
 
-			fmt.Fprintf(os.Stderr, "Generated %d packet(s), PID=%d, %d data bytes each\n", count, protocolID, size)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Generated %d packet(s), PID=%d, %d data bytes each\n", count, protocolID, size)
 			return nil
 		},
 	}
@@ -467,14 +472,14 @@ func eppGenCmd() *cobra.Command {
 }
 
 // writeGenOutput writes encoded data in the specified format.
-// bin writes raw bytes to stdout; hex writes one hex line per item.
-func writeGenOutput(data []byte, format string) error {
+// bin writes raw bytes to out; hex writes one hex line per item.
+func writeGenOutput(out io.Writer, data []byte, format string) error {
 	switch format {
 	case "bin":
-		_, err := os.Stdout.Write(data)
+		_, err := out.Write(data)
 		return err
 	case "hex":
-		fmt.Println(hex.EncodeToString(data))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(data))
 		return nil
 	default:
 		return fmt.Errorf("unknown format: %s (use 'bin' or 'hex')", format)

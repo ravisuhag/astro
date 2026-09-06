@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/ldc"
@@ -128,18 +127,19 @@ func ldcCompressCmd() *cobra.Command {
 				return fmt.Errorf("compressing: %w", err)
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "bin":
-				if _, err := os.Stdout.Write(coded); err != nil {
+				if _, err := out.Write(coded); err != nil {
 					return fmt.Errorf("writing output: %w", err)
 				}
 			case "hex":
-				fmt.Println(hex.EncodeToString(coded))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(coded))
 			case "text":
 				ratio := float64(len(data)) / float64(len(coded))
-				fmt.Printf("Compressed %d sample(s), %d octets in, %d octets out (%.2fx)\n",
+				_, _ = fmt.Fprintf(out, "Compressed %d sample(s), %d octets in, %d octets out (%.2fx)\n",
 					len(samples), len(data), len(coded), ratio)
-				fmt.Println(hex.EncodeToString(coded))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(coded))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'bin', 'hex', or 'text')", outputFmt)
 			}
@@ -186,17 +186,18 @@ func ldcDecompressCmd() *cobra.Command {
 				return err
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "bin":
-				if _, err := os.Stdout.Write(octets); err != nil {
+				if _, err := out.Write(octets); err != nil {
 					return fmt.Errorf("writing output: %w", err)
 				}
 			case "hex":
-				fmt.Println(hex.EncodeToString(octets))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(octets))
 			case "text":
-				fmt.Printf("Recovered %d sample(s) at %d bits each\n",
+				_, _ = fmt.Fprintf(out, "Recovered %d sample(s) at %d bits each\n",
 					len(samples), header.Params.Resolution)
-				fmt.Println(hex.EncodeToString(octets))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(octets))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'bin', 'hex', or 'text')", outputFmt)
 			}
@@ -230,6 +231,7 @@ func ldcInspectCmd() *cobra.Command {
 				return fmt.Errorf("reading the file header: %w", err)
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "json":
 				b, err := json.MarshalIndent(ldcHeaderJSON{
@@ -246,10 +248,10 @@ func ldcInspectCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println(header.Humanize())
-				fmt.Printf("  File size .......... %d octets\n", len(data))
+				_, _ = fmt.Fprintln(out, header.Humanize())
+				_, _ = fmt.Fprintf(out, "  File size .......... %d octets\n", len(data))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}

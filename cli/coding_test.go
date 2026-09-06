@@ -12,6 +12,7 @@ import (
 // The CLCW is the part of COP-1 that goes on the wire, so a round trip
 // through it is the thing worth pinning.
 func TestCLCWRoundTrip(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "cop", "clcw-encode",
 		"--vcid", "3", "--report-value", "7", "--wait")
 	if err != nil {
@@ -57,6 +58,7 @@ func TestCLCWRoundTrip(t *testing.T) {
 // A CLCW is exactly four octets, so it fits a TM frame's Operational Control
 // Field. That is the whole reason the command exists.
 func TestCLCWIsFourOctets(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "cop", "clcw-encode", "--vcid", "0", "--report-value", "1")
 	if err != nil {
 		t.Fatalf("clcw-encode failed: %v", err)
@@ -74,6 +76,7 @@ func TestCLCWIsFourOctets(t *testing.T) {
 // And it goes straight into a frame's OCF, which is the pipeline the help
 // promises.
 func TestCLCWFitsATMFrameOCF(t *testing.T) {
+	t.Parallel()
 	clcw, err := runCLI(t, nil, "cop", "clcw-encode", "--vcid", "0", "--report-value", "5")
 	if err != nil {
 		t.Fatalf("clcw-encode failed: %v", err)
@@ -90,6 +93,7 @@ func TestCLCWFitsATMFrameOCF(t *testing.T) {
 }
 
 func TestCLCWDecodeRejectsWrongLength(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("0102"), "cop", "clcw-decode", "--input", "hex"); err == nil {
 		t.Error("clcw-decode accepted two octets")
 	}
@@ -98,6 +102,7 @@ func TestCLCWDecodeRejectsWrongLength(t *testing.T) {
 // --- Proximity-1 data link ---
 
 func TestPXDLRoundTrip(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "pxdl", "encode",
 		"--scid", "42", "--port", "1", "--data", "0102030405")
 	if err != nil {
@@ -131,6 +136,7 @@ func TestPXDLRoundTrip(t *testing.T) {
 }
 
 func TestPXDLDecodeRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("00"), "pxdl", "decode", "--input", "hex"); err == nil {
 		t.Error("decode accepted one octet as a frame")
 	}
@@ -139,6 +145,7 @@ func TestPXDLDecodeRejectsRubbish(t *testing.T) {
 // --- Proximity-1 coding ---
 
 func TestPXSCPLTURoundTrip(t *testing.T) {
+	t.Parallel()
 	frame, err := runCLI(t, nil, "pxdl", "encode",
 		"--scid", "42", "--port", "1", "--data", "0102030405")
 	if err != nil {
@@ -163,6 +170,7 @@ func TestPXSCPLTURoundTrip(t *testing.T) {
 // A PLTU whose CRC does not match is corrupt, and passing the frame on would
 // put bad data into the layer above.
 func TestPXSCUnwrapRejectsBadCRC(t *testing.T) {
+	t.Parallel()
 	pltu, err := runCLI(t, []byte("802a1809000102030405"), "pxsc", "wrap", "--input", "hex")
 	if err != nil {
 		t.Fatalf("wrap failed: %v", err)
@@ -184,6 +192,7 @@ func TestPXSCUnwrapRejectsBadCRC(t *testing.T) {
 // back the last 35 bits of a stream, so encode appends a tail; without it the
 // round trip would silently lose its last few octets.
 func TestPXSCConvolutionalRoundTripIsExact(t *testing.T) {
+	t.Parallel()
 	original := "faf320802a180900010203040566d00a35"
 
 	symbols, err := runCLI(t, []byte(original), "pxsc", "encode", "--input", "hex")
@@ -203,6 +212,7 @@ func TestPXSCConvolutionalRoundTripIsExact(t *testing.T) {
 // Without the tail the tail is lost, which is what --flush=false documents
 // and what the default exists to avoid.
 func TestPXSCWithoutFlushLosesTheTail(t *testing.T) {
+	t.Parallel()
 	original := "faf320802a180900010203040566d00a35"
 
 	symbols, err := runCLI(t, []byte(original), "pxsc", "encode",
@@ -222,6 +232,7 @@ func TestPXSCWithoutFlushLosesTheTail(t *testing.T) {
 
 // The code corrects errors, which is the point of having it.
 func TestPXSCViterbiCorrectsAFlippedBit(t *testing.T) {
+	t.Parallel()
 	original := "802a1809000102030405"
 
 	symbols, err := runCLI(t, []byte(original), "pxsc", "encode", "--input", "hex")
@@ -246,6 +257,7 @@ func TestPXSCViterbiCorrectsAFlippedBit(t *testing.T) {
 }
 
 func TestPXSCSyncFindsWrappedFrames(t *testing.T) {
+	t.Parallel()
 	pltu, err := runCLI(t, []byte("802a1809000102030405"), "pxsc", "wrap", "--input", "hex")
 	if err != nil {
 		t.Fatalf("wrap failed: %v", err)
@@ -274,6 +286,7 @@ func TestPXSCSyncFindsWrappedFrames(t *testing.T) {
 // --- Optical coding ---
 
 func TestOCSCCondition(t *testing.T) {
+	t.Parallel()
 	// Four 256-octet frames.
 	var frames []byte
 	for i := 0; i < 1024; i++ {
@@ -311,6 +324,7 @@ func TestOCSCCondition(t *testing.T) {
 }
 
 func TestOCSCConditionRejectsPartialFrame(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("0102030405"), "ocsc", "condition",
 		"--input", "hex", "--frame-len", "256", "--rate", "1/2"); err == nil {
 		t.Error("condition accepted five octets as 256-octet frames")
@@ -318,6 +332,7 @@ func TestOCSCConditionRejectsPartialFrame(t *testing.T) {
 }
 
 func TestOCSCConditionRejectsUnknownRate(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("01"), "ocsc", "condition",
 		"--input", "hex", "--frame-len", "1", "--rate", "7/8"); err == nil {
 		t.Error("condition accepted a rate the standard does not define")
@@ -326,6 +341,7 @@ func TestOCSCConditionRejectsUnknownRate(t *testing.T) {
 
 // The randomiser is its own inverse, so applying it twice returns the input.
 func TestOCSCRandomizeIsItsOwnInverse(t *testing.T) {
+	t.Parallel()
 	original := "0123456789abcdef"
 
 	once, err := runCLI(t, []byte(original), "ocsc", "randomize",
@@ -350,6 +366,7 @@ func TestOCSCRandomizeIsItsOwnInverse(t *testing.T) {
 // A bit length longer than the input has octets for is a mismatch worth
 // reporting rather than reading past the end of the buffer.
 func TestOCSCRandomizeRejectsTooFewOctets(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("0102"), "ocsc", "randomize",
 		"--input", "hex", "--bits", "64"); err == nil {
 		t.Error("randomize accepted --bits 64 with two octets")
@@ -359,6 +376,7 @@ func TestOCSCRandomizeRejectsTooFewOctets(t *testing.T) {
 // --- SDLS ---
 
 func TestSDLSInspect(t *testing.T) {
+	t.Parallel()
 	// SPI 1, a 12-octet IV, 8 octets of protected data, a 16-octet MAC.
 	frame := "0001" + "aabbccddeeff001122334455" +
 		"0011223344556677" + "00112233445566778899aabbccddeeff"
@@ -402,6 +420,7 @@ func TestSDLSInspect(t *testing.T) {
 // states them, so a wrong width shifts everything after the SPI. The SPI
 // itself keeps its place, which is why it is reported separately.
 func TestSDLSInspectWrongFieldWidths(t *testing.T) {
+	t.Parallel()
 	frame := "0001" + "aabbccddeeff001122334455" + "0011223344556677"
 
 	right, err := runCLI(t, []byte(frame), "sdls", "inspect",
@@ -436,6 +455,7 @@ func TestSDLSInspectWrongFieldWidths(t *testing.T) {
 // A frame too short for the stated field widths is reported rather than read
 // past the end of.
 func TestSDLSInspectShortInput(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("0001aabb"), "sdls", "inspect",
 		"--input", "hex", "--iv", "12"); err == nil {
 		t.Error("inspect accepted a frame too short for a 12-octet IV")
@@ -445,6 +465,7 @@ func TestSDLSInspectShortInput(t *testing.T) {
 // Every command in this batch takes --format, so an unknown one has to fail
 // the same way throughout.
 func TestCodingCommandsRejectUnknownFormat(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][]string{
 		"cop":  {"cop", "clcw-decode", "--input", "hex", "--format", "yaml"},
 		"pxdl": {"pxdl", "decode", "--input", "hex", "--format", "yaml"},

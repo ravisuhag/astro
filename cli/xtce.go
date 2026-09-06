@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"sort"
 	"strings"
 
@@ -52,8 +52,9 @@ func xtceValidateCmd() *cobra.Command {
 			}
 
 			systems, parameters, containers := countDatabase(db)
-			fmt.Printf("%s is valid.\n", args[0])
-			fmt.Printf("  %d space system(s), %d parameter(s), %d container(s)\n",
+			out := cmd.OutOrStdout()
+			_, _ = fmt.Fprintf(out, "%s is valid.\n", args[0])
+			_, _ = fmt.Fprintf(out, "  %d space system(s), %d parameter(s), %d container(s)\n",
 				systems, parameters, containers)
 			return nil
 		},
@@ -93,6 +94,7 @@ func xtceListCmd() *cobra.Command {
 			}
 
 			listing := databaseListing(db)
+			out := cmd.OutOrStdout()
 
 			switch outputFmt {
 			case "json":
@@ -110,16 +112,16 @@ func xtceListCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
 				if kind == "all" || kind == "systems" {
-					printNames("Space systems", listing.Systems)
+					printNames(out, "Space systems", listing.Systems)
 				}
 				if kind == "all" || kind == "parameters" {
-					printNames("Parameters", listing.Parameters)
+					printNames(out, "Parameters", listing.Parameters)
 				}
 				if kind == "all" || kind == "containers" {
-					printNames("Containers", listing.Containers)
+					printNames(out, "Containers", listing.Containers)
 				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
@@ -164,9 +166,9 @@ func xtceLayoutCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), string(b))
 			case "text":
-				printLayout(layout)
+				printLayout(cmd.OutOrStdout(), layout)
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 			}
@@ -217,8 +219,9 @@ func xtceDecodeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("laying out %s: %w", container, err)
 			}
+			out := cmd.OutOrStdout()
 			if resolved && outputFmt == "text" {
-				fmt.Println("Layout resolved against this packet: the container's shape depends on its contents.")
+				_, _ = fmt.Fprintln(out, "Layout resolved against this packet: the container's shape depends on its contents.")
 			}
 
 			packet, err := layout.Extract(data)
@@ -226,7 +229,7 @@ func xtceDecodeCmd() *cobra.Command {
 				return fmt.Errorf("extracting the packet: %w", err)
 			}
 
-			return printXTCEPacket(packet, raw, outputFmt)
+			return printXTCEPacket(out, cmd.ErrOrStderr(), packet, raw, outputFmt)
 		},
 	}
 
@@ -276,12 +279,13 @@ func xtceMatchCmd() *cobra.Command {
 				return err
 			}
 
+			out := cmd.OutOrStdout()
 			if outputFmt == "name" {
 				match, err := db.MatchFrom(rootContainer, data)
 				if err != nil {
 					return fmt.Errorf("matching the packet: %w", err)
 				}
-				fmt.Println(match.Name)
+				_, _ = fmt.Fprintln(out, match.Name)
 				return nil
 			}
 
@@ -291,9 +295,9 @@ func xtceMatchCmd() *cobra.Command {
 			}
 
 			if outputFmt == "text" {
-				fmt.Printf("Matched container: %s\n", packet.Layout.Container.Name)
+				_, _ = fmt.Fprintf(out, "Matched container: %s\n", packet.Layout.Container.Name)
 			}
-			return printXTCEPacket(packet, raw, outputFmt)
+			return printXTCEPacket(out, cmd.ErrOrStderr(), packet, raw, outputFmt)
 		},
 	}
 
@@ -391,12 +395,12 @@ func countDatabase(db *xtce.SpaceSystem) (systems, parameters, containers int) {
 	return len(names.Systems), len(names.Parameters), len(names.Containers)
 }
 
-func printNames(heading string, names []string) {
-	fmt.Printf("%s (%d):\n", heading, len(names))
+func printNames(out io.Writer, heading string, names []string) {
+	_, _ = fmt.Fprintf(out, "%s (%d):\n", heading, len(names))
 	for _, name := range names {
-		fmt.Printf("  %s\n", name)
+		_, _ = fmt.Fprintf(out, "  %s\n", name)
 	}
-	fmt.Println()
+	_, _ = fmt.Fprintln(out)
 }
 
 // fieldJSON is one row of a layout.
@@ -442,16 +446,16 @@ func fieldTypeName(field xtce.Field) string {
 	return field.Type.TypeKind()
 }
 
-func printLayout(layout *xtce.Layout) {
-	fmt.Printf("Container: %s\n", layout.Container.Name)
-	fmt.Printf("Size: %d bits (%d octets minimum)\n",
+func printLayout(out io.Writer, layout *xtce.Layout) {
+	_, _ = fmt.Fprintf(out, "Container: %s\n", layout.Container.Name)
+	_, _ = fmt.Fprintf(out, "Size: %d bits (%d octets minimum)\n",
 		layout.BitSize, (layout.BitSize+7)/8)
-	fmt.Println(strings.Repeat("─", 72))
-	fmt.Printf("%-8s %-8s %-12s %s\n", "OFFSET", "WIDTH", "TYPE", "NAME")
-	fmt.Println(strings.Repeat("─", 72))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 72))
+	_, _ = fmt.Fprintf(out, "%-8s %-8s %-12s %s\n", "OFFSET", "WIDTH", "TYPE", "NAME")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 72))
 
 	for _, field := range layout.Fields {
-		fmt.Printf("%-8d %-8d %-12s %s\n",
+		_, _ = fmt.Fprintf(out, "%-8d %-8d %-12s %s\n",
 			field.BitOffset, field.BitSize, fieldTypeName(field), field.Name)
 	}
 }
@@ -465,7 +469,7 @@ type valueJSON struct {
 	Error     string `json:"error,omitempty"`
 }
 
-func printXTCEPacket(packet *xtce.Packet, raw bool, outputFmt string) error {
+func printXTCEPacket(out, errOut io.Writer, packet *xtce.Packet, raw bool, outputFmt string) error {
 	switch outputFmt {
 	case "json":
 		rows := make([]valueJSON, 0, len(packet.Values))
@@ -486,26 +490,26 @@ func printXTCEPacket(packet *xtce.Packet, raw bool, outputFmt string) error {
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 
 	case "text":
-		fmt.Println(strishRepeat(72))
-		fmt.Printf("%-8s %-8s %-28s %s\n", "OFFSET", "WIDTH", "NAME", "VALUE")
-		fmt.Println(strishRepeat(72))
+		_, _ = fmt.Fprintln(out, strishRepeat(72))
+		_, _ = fmt.Fprintf(out, "%-8s %-8s %-28s %s\n", "OFFSET", "WIDTH", "NAME", "VALUE")
+		_, _ = fmt.Fprintln(out, strishRepeat(72))
 
 		failed := 0
 		for _, value := range packet.Values {
 			if value.Err != nil {
 				failed++
-				fmt.Fprintf(os.Stderr, "  %s: %v\n", value.Field.Name, value.Err)
+				_, _ = fmt.Fprintf(errOut, "  %s: %v\n", value.Field.Name, value.Err)
 				continue
 			}
-			fmt.Printf("%-8d %-8d %-28s %v\n",
+			_, _ = fmt.Fprintf(out, "%-8d %-8d %-28s %v\n",
 				value.Field.BitOffset, value.Field.BitSize,
 				value.Field.Name, displayValue(pick(value, raw)))
 		}
 		if failed > 0 {
-			fmt.Printf("\n%d field(s) could not be decoded; see stderr.\n", failed)
+			_, _ = fmt.Fprintf(out, "\n%d field(s) could not be decoded; see stderr.\n", failed)
 		}
 
 	default:

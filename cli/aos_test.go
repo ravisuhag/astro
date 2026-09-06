@@ -8,6 +8,7 @@ import (
 )
 
 func TestAOSRoundTripJSON(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "aos", "encode",
 		"--scid", "42", "--vcid", "3", "--vc-count", "99", "--data", "0102030405")
 	if err != nil {
@@ -39,6 +40,7 @@ func TestAOSRoundTripJSON(t *testing.T) {
 }
 
 func TestAOSRoundTripWithOCF(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "aos", "encode",
 		"--scid", "42", "--vcid", "1", "--data", "0102030405", "--ocf", "deadbeef")
 	if err != nil {
@@ -64,6 +66,7 @@ func TestAOSRoundTripWithOCF(t *testing.T) {
 }
 
 func TestAOSRoundTripWithFECF(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "aos", "encode",
 		"--scid", "42", "--vcid", "1", "--data", "0102030405", "--fecf")
 	if err != nil {
@@ -89,6 +92,7 @@ func TestAOSRoundTripWithFECF(t *testing.T) {
 }
 
 func TestAOSRoundTripWithInsertZone(t *testing.T) {
+	t.Parallel()
 	// The insert zone is 4 bytes here; decode must be told its length.
 	encoded, err := runCLI(t, nil, "aos", "encode",
 		"--scid", "42", "--vcid", "1", "--data", "0102030405", "--insert", "aabbccdd")
@@ -115,6 +119,7 @@ func TestAOSRoundTripWithInsertZone(t *testing.T) {
 }
 
 func TestAOSInspect(t *testing.T) {
+	t.Parallel()
 	encoded, err := runCLI(t, nil, "aos", "encode",
 		"--scid", "42", "--vcid", "1", "--data", "0102030405")
 	if err != nil {
@@ -158,6 +163,7 @@ func buildAOSStream(t *testing.T, scid, vcid uint8, first, step, count int) (str
 }
 
 func TestAOSGapsContiguous(t *testing.T) {
+	t.Parallel()
 	stream, frameLen := buildAOSStream(t, 50, 1, 0, 1, 3)
 
 	out, err := runCLI(t, []byte(stream), "aos", "gaps",
@@ -171,6 +177,7 @@ func TestAOSGapsContiguous(t *testing.T) {
 }
 
 func TestAOSGapsSizesTheGap(t *testing.T) {
+	t.Parallel()
 	// Counts 0, 4, 8: three frames missing before each of the last two.
 	stream, frameLen := buildAOSStream(t, 50, 1, 0, 4, 3)
 
@@ -187,6 +194,7 @@ func TestAOSGapsSizesTheGap(t *testing.T) {
 // AOS has no master channel frame count, so no master channel gap can be
 // reported for it however the counts run.
 func TestAOSGapsReportsNoMasterChannel(t *testing.T) {
+	t.Parallel()
 	stream, frameLen := buildAOSStream(t, 50, 1, 0, 4, 2)
 
 	out, err := runCLI(t, []byte(stream), "aos", "gaps",
@@ -205,6 +213,7 @@ func TestAOSGapsReportsNoMasterChannel(t *testing.T) {
 // The 24-bit count wraps at 0xFFFFFF, so 0xFFFFFF -> 0 is contiguous rather
 // than sixteen million frames missing.
 func TestAOSGapsWrapsAt24Bits(t *testing.T) {
+	t.Parallel()
 	first, frameLen := buildAOSStream(t, 50, 1, 0xFFFFFF, 1, 1)
 	second, _ := buildAOSStream(t, 50, 1, 0, 1, 1)
 
@@ -219,6 +228,7 @@ func TestAOSGapsWrapsAt24Bits(t *testing.T) {
 }
 
 func TestAOSDemuxFiltersByVCID(t *testing.T) {
+	t.Parallel()
 	onVC1, frameLen := buildAOSStream(t, 50, 1, 0, 1, 2)
 	onVC2, _ := buildAOSStream(t, 50, 2, 0, 1, 1)
 
@@ -245,6 +255,7 @@ func TestAOSDemuxFiltersByVCID(t *testing.T) {
 }
 
 func TestAOSDemuxNoMatches(t *testing.T) {
+	t.Parallel()
 	stream, frameLen := buildAOSStream(t, 50, 1, 0, 1, 1)
 
 	out, err := runCLI(t, []byte(stream), "aos", "demux",
@@ -259,6 +270,7 @@ func TestAOSDemuxNoMatches(t *testing.T) {
 }
 
 func TestAOSDemuxRejectsUnknownFormat(t *testing.T) {
+	t.Parallel()
 	stream, frameLen := buildAOSStream(t, 50, 1, 0, 1, 1)
 
 	if _, err := runCLI(t, []byte(stream), "aos", "demux",

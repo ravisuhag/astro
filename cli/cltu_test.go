@@ -16,6 +16,7 @@ func encodeTCFrameHex(t *testing.T) string {
 }
 
 func TestCLTUWrapUnwrapRoundTrip(t *testing.T) {
+	t.Parallel()
 	frame := encodeTCFrameHex(t)
 
 	wrapped, err := runCLI(t, []byte(frame), "cltu", "wrap", "--input", "hex")
@@ -46,6 +47,7 @@ func TestCLTUWrapUnwrapRoundTrip(t *testing.T) {
 }
 
 func TestCLTUInspect(t *testing.T) {
+	t.Parallel()
 	frame := encodeTCFrameHex(t)
 
 	wrapped, err := runCLI(t, []byte(frame), "cltu", "wrap", "--input", "hex")

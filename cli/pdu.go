@@ -56,6 +56,7 @@ func newPDUDecodeCmd(use, short, long, example string, decode pduDecoder) *cobra
 		Example: example,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -72,15 +73,15 @@ func newPDUDecodeCmd(use, short, long, example string, decode pduDecoder) *cobra
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println(described.Kind)
-				fmt.Println(described.Summary)
+				_, _ = fmt.Fprintln(out, described.Kind)
+				_, _ = fmt.Fprintln(out, described.Summary)
 				if described.Body != "" {
-					fmt.Printf("Body: %d octets\n  %s\n", len(described.Body)/2, described.Body)
+					_, _ = fmt.Fprintf(out, "Body: %d octets\n  %s\n", len(described.Body)/2, described.Body)
 				}
 				if described.Note != "" {
-					fmt.Printf("  [%s]\n", described.Note)
+					_, _ = fmt.Fprintf(out, "  [%s]\n", described.Note)
 				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
@@ -232,12 +233,12 @@ func describeUserMessages(options []cfdp.TLV) string {
 	}
 
 	var out strings.Builder
-	fmt.Fprintf(&out, "User operations (%d message(s)):", len(messages))
+	_, _ = fmt.Fprintf(&out, "User operations (%d message(s)):", len(messages))
 
 	for _, message := range messages {
-		fmt.Fprintf(&out, "\n  %s", message.Type)
+		_, _ = fmt.Fprintf(&out, "\n  %s", message.Type)
 		if detail := describeUserMessageContent(message); detail != "" {
-			fmt.Fprintf(&out, "\n%s", detail)
+			_, _ = fmt.Fprintf(&out, "\n%s", detail)
 		}
 	}
 	return out.String()
@@ -426,6 +427,7 @@ func sleDecodeCmd() *cobra.Command {
   astro sle decode --service fcltu --input hex < pdu.hex`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			kind, err := sleServiceKind(service)
 			if err != nil {
 				return err
@@ -467,13 +469,13 @@ func sleDecodeCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println(described.Kind)
-				fmt.Println(described.Summary)
-				fmt.Printf("Content: %d octets\n  %s\n", len(pdu.Content), described.Body)
+				_, _ = fmt.Fprintln(out, described.Kind)
+				_, _ = fmt.Fprintln(out, described.Summary)
+				_, _ = fmt.Fprintf(out, "Content: %d octets\n  %s\n", len(pdu.Content), described.Body)
 				if described.Note != "" {
-					fmt.Printf("  [%s]\n", described.Note)
+					_, _ = fmt.Fprintf(out, "  [%s]\n", described.Note)
 				}
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)

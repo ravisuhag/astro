@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/pxdl"
@@ -67,7 +68,7 @@ func pxdlEncodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding the frame: %w", err)
 			}
 
-			return printPXDLFrame(frame, encoded, outputFmt)
+			return printPXDLFrame(cmd.OutOrStdout(), frame, encoded, outputFmt)
 		},
 	}
 
@@ -106,7 +107,7 @@ func pxdlDecodeCmd() *cobra.Command {
 				return fmt.Errorf("decoding the frame: %w", err)
 			}
 
-			return printPXDLFrame(frame, data, outputFmt)
+			return printPXDLFrame(cmd.OutOrStdout(), frame, data, outputFmt)
 		},
 	}
 
@@ -140,6 +141,7 @@ func pxdlSPDUCmd() *cobra.Command {
 				return fmt.Errorf("no SPDUs in %d octet(s)", len(data))
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "json":
 				rows := make([]spduJSON, 0, len(spdus))
@@ -153,16 +155,16 @@ func pxdlSPDUCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Printf("%d SPDU(s) in %d octet(s)\n", len(spdus), len(data))
+				_, _ = fmt.Fprintf(out, "%d SPDU(s) in %d octet(s)\n", len(spdus), len(data))
 				for i, spdu := range spdus {
-					fmt.Println(strings.Repeat("─", 60))
-					fmt.Printf("SPDU #%d\n", i+1)
+					_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+					_, _ = fmt.Fprintf(out, "SPDU #%d\n", i+1)
 					if summary := humanizeOrEmpty(spdu); summary != "" {
-						fmt.Println(summary)
+						_, _ = fmt.Fprintln(out, summary)
 					} else {
-						fmt.Printf("  %T\n", spdu)
+						_, _ = fmt.Fprintf(out, "  %T\n", spdu)
 					}
 				}
 			default:
@@ -182,7 +184,7 @@ type spduJSON struct {
 	Summary string `json:"summary,omitempty"`
 }
 
-func printPXDLFrame(frame *pxdl.TransferFrame, raw []byte, format string) error {
+func printPXDLFrame(out io.Writer, frame *pxdl.TransferFrame, raw []byte, format string) error {
 	switch format {
 	case "json":
 		b, err := json.MarshalIndent(pxdlFrameJSON{
@@ -194,11 +196,11 @@ func printPXDLFrame(frame *pxdl.TransferFrame, raw []byte, format string) error 
 		if err != nil {
 			return fmt.Errorf("encoding JSON output: %w", err)
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Println(hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Println(frame.Humanize())
+		_, _ = fmt.Fprintln(out, frame.Humanize())
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/tcdl"
@@ -107,7 +108,7 @@ func tcDecodeCmd() *cobra.Command {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
 
-			return printTCFrame(frame, data, outputFmt)
+			return printTCFrame(cmd.OutOrStdout(), frame, data, outputFmt)
 		},
 	}
 
@@ -170,7 +171,7 @@ func tcEncodeCmd() *cobra.Command {
 				return fmt.Errorf("encoding frame: %w", err)
 			}
 
-			return printTCFrame(frame, encoded, outputFmt)
+			return printTCFrame(cmd.OutOrStdout(), frame, encoded, outputFmt)
 		},
 	}
 
@@ -211,7 +212,7 @@ func tcInspectCmd() *cobra.Command {
 				return fmt.Errorf("decoding frame: %w", err)
 			}
 
-			printTCInspect(frame, data)
+			printTCInspect(cmd.OutOrStdout(), frame, data)
 			return nil
 		},
 	}
@@ -221,67 +222,67 @@ func tcInspectCmd() *cobra.Command {
 	return cmd
 }
 
-func printTCFrame(f *tcdl.TCTransferFrame, raw []byte, format string) error {
+func printTCFrame(out io.Writer, f *tcdl.TCTransferFrame, raw []byte, format string) error {
 	switch format {
 	case "json":
 		b, err := json.MarshalIndent(toTCFrameJSON(f), "", "  ")
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "hex":
-		fmt.Println(hex.EncodeToString(raw))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(raw))
 	case "text":
-		fmt.Println("TC Transfer Frame:")
-		fmt.Println("Primary Header:")
-		fmt.Println(f.Header.Humanize())
-		fmt.Printf("  MCID: %d\n", f.Header.MCID())
-		fmt.Printf("  GVCID: %d\n", f.Header.GVCID())
+		_, _ = fmt.Fprintln(out, "TC Transfer Frame:")
+		_, _ = fmt.Fprintln(out, "Primary Header:")
+		_, _ = fmt.Fprintln(out, f.Header.Humanize())
+		_, _ = fmt.Fprintf(out, "  MCID: %d\n", f.Header.MCID())
+		_, _ = fmt.Fprintf(out, "  GVCID: %d\n", f.Header.GVCID())
 		if f.SegmentHeader != nil {
-			fmt.Println("Segment Header:")
-			fmt.Println(f.SegmentHeader.Humanize())
+			_, _ = fmt.Fprintln(out, "Segment Header:")
+			_, _ = fmt.Fprintln(out, f.SegmentHeader.Humanize())
 		}
-		fmt.Printf("Data Field: %d bytes\n", len(f.DataField))
-		fmt.Printf("FEC: 0x%04X\n", f.FrameErrorControl)
+		_, _ = fmt.Fprintf(out, "Data Field: %d bytes\n", len(f.DataField))
+		_, _ = fmt.Fprintf(out, "FEC: 0x%04X\n", f.FrameErrorControl)
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", format)
 	}
 	return nil
 }
 
-func printTCInspect(f *tcdl.TCTransferFrame, raw []byte) {
+func printTCInspect(out io.Writer, f *tcdl.TCTransferFrame, raw []byte) {
 	h := f.Header
 
-	fmt.Println("TC Transfer Frame Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "TC Transfer Frame Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
-	fmt.Println("Primary Header (5 bytes)")
-	fmt.Printf("  Version .............. %d\n", h.VersionNumber)
-	fmt.Printf("  Bypass Flag .......... %d (%s)\n", h.BypassFlag, bypassName(h.BypassFlag))
-	fmt.Printf("  Control Command ...... %d (%s)\n", h.ControlCommandFlag, controlName(h.ControlCommandFlag))
-	fmt.Printf("  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
-	fmt.Printf("  Virtual Channel ID ... %d\n", h.VirtualChannelID)
-	fmt.Printf("  Frame Length ......... %d bytes\n", h.FrameLength+1)
-	fmt.Printf("  Frame Sequence Num ... %d\n", h.FrameSequenceNum)
-	fmt.Printf("  MCID ................. %d\n", h.MCID())
-	fmt.Printf("  GVCID ................ %d\n", h.GVCID())
+	_, _ = fmt.Fprintln(out, "Primary Header (5 bytes)")
+	_, _ = fmt.Fprintf(out, "  Version .............. %d\n", h.VersionNumber)
+	_, _ = fmt.Fprintf(out, "  Bypass Flag .......... %d (%s)\n", h.BypassFlag, bypassName(h.BypassFlag))
+	_, _ = fmt.Fprintf(out, "  Control Command ...... %d (%s)\n", h.ControlCommandFlag, controlName(h.ControlCommandFlag))
+	_, _ = fmt.Fprintf(out, "  Spacecraft ID ........ %d (0x%03X)\n", h.SpacecraftID, h.SpacecraftID)
+	_, _ = fmt.Fprintf(out, "  Virtual Channel ID ... %d\n", h.VirtualChannelID)
+	_, _ = fmt.Fprintf(out, "  Frame Length ......... %d bytes\n", h.FrameLength+1)
+	_, _ = fmt.Fprintf(out, "  Frame Sequence Num ... %d\n", h.FrameSequenceNum)
+	_, _ = fmt.Fprintf(out, "  MCID ................. %d\n", h.MCID())
+	_, _ = fmt.Fprintf(out, "  GVCID ................ %d\n", h.GVCID())
 
 	if f.SegmentHeader != nil {
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println("Segment Header (1 byte)")
-		fmt.Println(f.SegmentHeader.Humanize())
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprintln(out, "Segment Header (1 byte)")
+		_, _ = fmt.Fprintln(out, f.SegmentHeader.Humanize())
 	}
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Data Field (%d bytes)\n", len(f.DataField))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Data Field (%d bytes)\n", len(f.DataField))
 	if len(f.DataField) > 0 {
-		fmt.Print(hexDump(f.DataField, "  "))
+		_, _ = fmt.Fprint(out, hexDump(f.DataField, "  "))
 	}
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Frame Error Control: 0x%04X (CRC-16-CCITT)\n", f.FrameErrorControl)
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw Frame (%d bytes)\n", len(raw))
-	fmt.Print(hexDump(raw, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw Frame (%d bytes)\n", len(raw))
+	_, _ = fmt.Fprint(out, hexDump(raw, "  "))
 }

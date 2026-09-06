@@ -3,9 +3,9 @@ package cli
 import (
 	"bytes"
 	"embed"
-	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -22,9 +22,26 @@ import (
 //go:embed docs/content/cli/*.md
 var testDocsFS embed.FS
 
+// stdinMu serializes the tests below on the one resource plan 025 left
+// global: os.Stdin. Every cli/*.go command now writes through
+// cmd.OutOrStdout()/cmd.ErrOrStderr() rather than the process's stdout, so
+// runCLI no longer needs to touch os.Stdout at all — output is captured
+// straight off the buffers passed to cmd.SetOut/SetErr, and tests can run
+// under t.Parallel().
+//
+// Input is a different story: readInput, openInput and openListing all read
+// os.Stdin directly (cobra's cmd.InOrStdin() is not wired up), and changing
+// that is out of scope for plan 025, which is about output only. So a test
+// that feeds stdin still has to swap the package-global os.Stdin, and two
+// such tests running concurrently would otherwise race on it — or worse,
+// read each other's pipe. The mutex below makes that swap-and-read safe
+// without touching the input path: tests still declare t.Parallel(), and the
+// ones that do not use stdin genuinely overlap; the ones that do serialize on
+// this lock rather than corrupting each other.
+var stdinMu sync.Mutex
+
 // runCLI executes the root command with args, feeding stdin and capturing
-// stdout. Commands print via fmt (os.Stdout) and read os.Stdin directly,
-// so both are swapped with pipes for the duration of the call.
+// output.
 //
 // The root command is built with an empty docs filesystem, which is right
 // for every command except manual: printManual always fails at ReadFile
@@ -39,43 +56,35 @@ func runCLI(t *testing.T, stdin []byte, args ...string) (string, error) {
 func runCLIWithFS(t *testing.T, docsFS embed.FS, stdin []byte, args ...string) (string, error) {
 	t.Helper()
 
+	stdinMu.Lock()
+	defer stdinMu.Unlock()
+
 	inR, inW, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	origIn, origOut := os.Stdin, os.Stdout
-	os.Stdin, os.Stdout = inR, outW
-	defer func() { os.Stdin, os.Stdout = origIn, origOut }()
+	origIn := os.Stdin
+	os.Stdin = inR
+	defer func() { os.Stdin = origIn }()
 
 	go func() {
 		_, _ = inW.Write(stdin)
 		_ = inW.Close()
 	}()
 
-	// Drain stdout concurrently so a command writing more than the pipe
-	// buffer holds cannot block.
-	var buf bytes.Buffer
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(&buf, outR)
-		close(done)
-	}()
-
+	var cmdOut, cmdErr bytes.Buffer
 	cmd := New(docsFS)
+	cmd.SetOut(&cmdOut)
+	cmd.SetErr(&cmdErr)
 	cmd.SetArgs(args)
 	execErr := cmd.Execute()
 
-	_ = outW.Close()
-	<-done
-	os.Stdin, os.Stdout = origIn, origOut
-	return buf.String(), execErr
+	return cmdOut.String(), execErr
 }
 
 func TestRunCLI_SPPRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	out, err := runCLI(t, nil, "spp", "encode", "--apid", "100", "--type", "tm", "--data", "68656c6c6f")
 	if err != nil {
 		t.Fatalf("encode failed: %v", err)
@@ -90,6 +99,8 @@ func TestRunCLI_SPPRoundTrip(t *testing.T) {
 // filesystem, so printManual always failed at ReadFile against it.
 // runCLIWithFS(testDocsFS, ...) gives manual something real to read.
 func TestRunCLI_Manual(t *testing.T) {
+	t.Parallel()
+
 	out, err := runCLIWithFS(t, testDocsFS, nil, "manual", "time")
 	if err != nil {
 		t.Fatalf("manual time failed: %v", err)
@@ -111,6 +122,8 @@ func TestRunCLI_Manual(t *testing.T) {
 
 // TestRunCLI_ManualIndex covers printManualIndex, the no-argument form.
 func TestRunCLI_ManualIndex(t *testing.T) {
+	t.Parallel()
+
 	out, err := runCLI(t, nil, "manual")
 	if err != nil {
 		t.Fatalf("manual failed: %v", err)
@@ -124,6 +137,8 @@ func TestRunCLI_ManualIndex(t *testing.T) {
 
 // TestRunCLI_ManualUnknownProtocol covers printManual's rejection branch.
 func TestRunCLI_ManualUnknownProtocol(t *testing.T) {
+	t.Parallel()
+
 	if _, err := runCLIWithFS(t, testDocsFS, nil, "manual", "sundial"); err == nil {
 		t.Fatal("expected an error for an unknown protocol, got nil")
 	}

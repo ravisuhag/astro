@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/pxsc"
@@ -53,8 +53,9 @@ func pxscWrapCmd() *cobra.Command {
 				return fmt.Errorf("wrapping the frame: %w", err)
 			}
 
-			return writeOctets(pltu, outputFmt, func() {
-				fmt.Printf("PLTU: %d octets (%d sync marker + %d frame + %d CRC)\n",
+			out := cmd.OutOrStdout()
+			return writeOctets(out, pltu, outputFmt, func() {
+				_, _ = fmt.Fprintf(out, "PLTU: %d octets (%d sync marker + %d frame + %d CRC)\n",
 					len(pltu), pxsc.ASMSize, len(data), pxsc.CRC32Size)
 			})
 		},
@@ -91,8 +92,9 @@ func pxscUnwrapCmd() *cobra.Command {
 				return fmt.Errorf("unwrapping the PLTU: %w", err)
 			}
 
-			return writeOctets(frame, outputFmt, func() {
-				fmt.Printf("Frame: %d octets, CRC-32 verified\n", len(frame))
+			out := cmd.OutOrStdout()
+			return writeOctets(out, frame, outputFmt, func() {
+				_, _ = fmt.Fprintf(out, "Frame: %d octets, CRC-32 verified\n", len(frame))
 			})
 		},
 	}
@@ -122,16 +124,17 @@ func pxscSyncCmd() *cobra.Command {
 			}
 
 			frames := pxsc.NewSynchronizer().ScanFrames(data)
+			out := cmd.OutOrStdout()
 
 			switch outputFmt {
 			case "hex":
 				for _, frame := range frames {
-					fmt.Println(hex.EncodeToString(frame))
+					_, _ = fmt.Fprintln(out, hex.EncodeToString(frame))
 				}
 			case "text":
-				fmt.Printf("Found %d frame(s) in %d octet(s)\n", len(frames), len(data))
+				_, _ = fmt.Fprintf(out, "Found %d frame(s) in %d octet(s)\n", len(frames), len(data))
 				for i, frame := range frames {
-					fmt.Printf("--- Frame #%d (%d octets) ---\n  %s\n",
+					_, _ = fmt.Fprintf(out, "--- Frame #%d (%d octets) ---\n  %s\n",
 						i+1, len(frame), hex.EncodeToString(frame))
 				}
 			case "json":
@@ -143,7 +146,7 @@ func pxscSyncCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			default:
 				return fmt.Errorf("unknown format: %s (use 'text', 'hex', or 'json')", outputFmt)
 			}
@@ -200,13 +203,14 @@ func pxscEncodeCmd() *cobra.Command {
 
 			symbols := pxsc.NewConvolutionalEncoder().Encode(input)
 
-			return writeOctets(symbols, outputFmt, func() {
+			out := cmd.OutOrStdout()
+			return writeOctets(out, symbols, outputFmt, func() {
 				if flush {
-					fmt.Printf("Encoded %d octet(s) plus a %d-octet tail into %d code symbol(s)\n",
+					_, _ = fmt.Fprintf(out, "Encoded %d octet(s) plus a %d-octet tail into %d code symbol(s)\n",
 						len(data), flushOctets, len(symbols))
 					return
 				}
-				fmt.Printf("Encoded %d octet(s) into %d code symbol(s)\n", len(data), len(symbols))
+				_, _ = fmt.Fprintf(out, "Encoded %d octet(s) into %d code symbol(s)\n", len(data), len(symbols))
 			})
 		},
 	}
@@ -244,8 +248,9 @@ func pxscDecodeCmd() *cobra.Command {
 				return fmt.Errorf("decoding the symbols: %w", err)
 			}
 
-			return writeOctets(decoded, outputFmt, func() {
-				fmt.Printf("Decoded %d symbol(s) into %d octet(s)\n", len(data), len(decoded))
+			out := cmd.OutOrStdout()
+			return writeOctets(out, decoded, outputFmt, func() {
+				_, _ = fmt.Fprintf(out, "Decoded %d symbol(s) into %d octet(s)\n", len(data), len(decoded))
 			})
 		},
 	}
@@ -260,20 +265,20 @@ func pxscDecodeCmd() *cobra.Command {
 //
 // summary is called for the text format, before the octets, so each command
 // can say what it did in its own terms.
-func writeOctets(data []byte, format string, summary func()) error {
+func writeOctets(out io.Writer, data []byte, format string, summary func()) error {
 	switch format {
 	case "hex":
-		fmt.Println(hex.EncodeToString(data))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(data))
 	case "bin":
-		if _, err := os.Stdout.Write(data); err != nil {
+		if _, err := out.Write(data); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}
 	case "text":
 		if summary != nil {
 			summary()
 		}
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Print(hexDump(data, "  "))
+		_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+		_, _ = fmt.Fprint(out, hexDump(data, "  "))
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'hex', or 'bin')", format)
 	}

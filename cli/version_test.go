@@ -6,6 +6,7 @@ import (
 )
 
 func TestVersionCommand(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "version")
 	if err != nil {
 		t.Fatalf("version: %v", err)
@@ -24,6 +25,7 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestVersionFlag(t *testing.T) {
+	t.Parallel()
 	out, err := runCLI(t, nil, "--version")
 	if err != nil {
 		t.Fatalf("--version: %v", err)
@@ -38,6 +40,7 @@ func TestVersionFlag(t *testing.T) {
 }
 
 func TestVersionTakesNoArguments(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, nil, "version", "extra"); err == nil {
 		t.Error("version accepted a positional argument")
 	}

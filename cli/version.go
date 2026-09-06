@@ -122,15 +122,15 @@ func versionCmd() *cobra.Command {
 			info := buildInfo()
 
 			var b strings.Builder
-			fmt.Fprintf(&b, "astro %s\n", info.Version)
+			_, _ = fmt.Fprintf(&b, "astro %s\n", info.Version)
 			if info.Commit != "" {
-				fmt.Fprintf(&b, "  commit:   %s\n", info.Commit)
+				_, _ = fmt.Fprintf(&b, "  commit:   %s\n", info.Commit)
 			}
 			if info.Date != "" {
-				fmt.Fprintf(&b, "  built:    %s\n", info.Date)
+				_, _ = fmt.Fprintf(&b, "  built:    %s\n", info.Date)
 			}
-			fmt.Fprintf(&b, "  go:       %s\n", info.GoVersion)
-			fmt.Fprintf(&b, "  platform: %s\n", info.Platform)
+			_, _ = fmt.Fprintf(&b, "  go:       %s\n", info.GoVersion)
+			_, _ = fmt.Fprintf(&b, "  platform: %s\n", info.Platform)
 
 			_, err := cmd.OutOrStdout().Write([]byte(b.String()))
 			return err

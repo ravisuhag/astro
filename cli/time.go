@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -139,9 +140,10 @@ func timeDecodeCmd() *cobra.Command {
   echo "1e0c22f380" | astro time decode --input hex --format json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			// ASCII formats are text input, not hex/bin
 			if codec == "ascii-a" || codec == "ascii-b" {
-				return decodeASCII(args, codec, outputFmt)
+				return decodeASCII(out, args, codec, outputFmt)
 			}
 
 			data, err := readInput(args, inputFmt)
@@ -156,7 +158,7 @@ func timeDecodeCmd() *cobra.Command {
 				}
 			}
 
-			return decodeTimeCode(data, codec, outputFmt)
+			return decodeTimeCode(out, data, codec, outputFmt)
 		},
 	}
 
@@ -184,35 +186,35 @@ func detectTimeCodec(data []byte) (string, error) {
 	}
 }
 
-func decodeTimeCode(data []byte, codec, outputFmt string) error {
+func decodeTimeCode(out io.Writer, data []byte, codec, outputFmt string) error {
 	switch codec {
 	case "cuc":
 		c, err := tcf.DecodeCUC(data, time.Time{})
 		if err != nil {
 			return fmt.Errorf("decoding CUC: %w", err)
 		}
-		return printTime(c.Humanize(), cucToJSON(c, data), outputFmt)
+		return printTime(out, c.Humanize(), cucToJSON(c, data), outputFmt)
 
 	case "cds":
 		c, err := tcf.DecodeCDS(data, time.Time{})
 		if err != nil {
 			return fmt.Errorf("decoding CDS: %w", err)
 		}
-		return printTime(c.Humanize(), cdsToJSON(c, data), outputFmt)
+		return printTime(out, c.Humanize(), cdsToJSON(c, data), outputFmt)
 
 	case "ccs":
 		c, err := tcf.DecodeCCS(data)
 		if err != nil {
 			return fmt.Errorf("decoding CCS: %w", err)
 		}
-		return printTime(c.Humanize(), ccsToJSON(c, data), outputFmt)
+		return printTime(out, c.Humanize(), ccsToJSON(c, data), outputFmt)
 
 	default:
 		return fmt.Errorf("unknown codec: %s (use cuc, cds, ccs, ascii-a, or ascii-b)", codec)
 	}
 }
 
-func decodeASCII(args []string, codec, outputFmt string) error {
+func decodeASCII(out io.Writer, args []string, codec, outputFmt string) error {
 	raw, err := readRawInput(args)
 	if err != nil {
 		return err
@@ -239,7 +241,7 @@ func decodeASCII(args []string, codec, outputFmt string) error {
 	}
 
 	textOut := fmt.Sprintf("ASCII Time Code (Type %s):\n  Input: %s\n  Time:  %s", typ, s, t.UTC().Format(time.RFC3339Nano))
-	return printTime(textOut, asciiToJSON(s, t), outputFmt)
+	return printTime(out, textOut, asciiToJSON(s, t), outputFmt)
 }
 
 func timeEncodeCmd() *cobra.Command {
@@ -279,6 +281,7 @@ func timeEncodeCmd() *cobra.Command {
   # Encode with JSON output
   astro time encode --codec cuc --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			t, err := parseTimestamp(timestamp)
 			if err != nil {
 				return err
@@ -286,15 +289,15 @@ func timeEncodeCmd() *cobra.Command {
 
 			switch codec {
 			case "cuc":
-				return encodeCUC(t, coarseBytes, fineBytes, outputFmt)
+				return encodeCUC(out, t, coarseBytes, fineBytes, outputFmt)
 			case "cds":
-				return encodeCDS(t, dayBytes, submsBytes, outputFmt)
+				return encodeCDS(out, t, dayBytes, submsBytes, outputFmt)
 			case "ccs":
-				return encodeCCS(t, monthDay, subSecBytes, outputFmt)
+				return encodeCCS(out, t, monthDay, subSecBytes, outputFmt)
 			case "ascii-a":
-				return encodeASCII(t, tcf.ASCIITypeA, precision, outputFmt)
+				return encodeASCII(out, t, tcf.ASCIITypeA, precision, outputFmt)
 			case "ascii-b":
-				return encodeASCII(t, tcf.ASCIITypeB, precision, outputFmt)
+				return encodeASCII(out, t, tcf.ASCIITypeB, precision, outputFmt)
 			default:
 				return fmt.Errorf("unknown codec: %s (use cuc, cds, ccs, ascii-a, or ascii-b)", codec)
 			}
@@ -334,7 +337,7 @@ func parseTimestamp(s string) (time.Time, error) {
 	return t, nil
 }
 
-func encodeCUC(t time.Time, coarseBytes, fineBytes uint8, outputFmt string) error {
+func encodeCUC(out io.Writer, t time.Time, coarseBytes, fineBytes uint8, outputFmt string) error {
 	opts := []tcf.CUCOption{
 		tcf.WithCUCCoarseBytes(coarseBytes),
 		tcf.WithCUCFineBytes(fineBytes),
@@ -347,10 +350,10 @@ func encodeCUC(t time.Time, coarseBytes, fineBytes uint8, outputFmt string) erro
 	if err != nil {
 		return fmt.Errorf("encoding CUC: %w", err)
 	}
-	return printTimeEncoded(c.Humanize(), cucToJSON(c, encoded), encoded, outputFmt)
+	return printTimeEncoded(out, c.Humanize(), cucToJSON(c, encoded), encoded, outputFmt)
 }
 
-func encodeCDS(t time.Time, dayBytes, submsBytes uint8, outputFmt string) error {
+func encodeCDS(out io.Writer, t time.Time, dayBytes, submsBytes uint8, outputFmt string) error {
 	opts := []tcf.CDSOption{
 		tcf.WithCDSDayBytes(dayBytes),
 		tcf.WithCDSSubmsBytes(submsBytes),
@@ -363,10 +366,10 @@ func encodeCDS(t time.Time, dayBytes, submsBytes uint8, outputFmt string) error 
 	if err != nil {
 		return fmt.Errorf("encoding CDS: %w", err)
 	}
-	return printTimeEncoded(c.Humanize(), cdsToJSON(c, encoded), encoded, outputFmt)
+	return printTimeEncoded(out, c.Humanize(), cdsToJSON(c, encoded), encoded, outputFmt)
 }
 
-func encodeCCS(t time.Time, monthDay bool, subSecBytes uint8, outputFmt string) error {
+func encodeCCS(out io.Writer, t time.Time, monthDay bool, subSecBytes uint8, outputFmt string) error {
 	var opts []tcf.CCSOption
 	if monthDay {
 		opts = append(opts, tcf.WithCCSMonthDay())
@@ -382,10 +385,10 @@ func encodeCCS(t time.Time, monthDay bool, subSecBytes uint8, outputFmt string) 
 	if err != nil {
 		return fmt.Errorf("encoding CCS: %w", err)
 	}
-	return printTimeEncoded(c.Humanize(), ccsToJSON(c, encoded), encoded, outputFmt)
+	return printTimeEncoded(out, c.Humanize(), ccsToJSON(c, encoded), encoded, outputFmt)
 }
 
-func encodeASCII(t time.Time, typ string, precision int, outputFmt string) error {
+func encodeASCII(out io.Writer, t time.Time, typ string, precision int, outputFmt string) error {
 	a, err := tcf.NewASCIITime(typ, tcf.WithASCIIPrecision(precision))
 	if err != nil {
 		return fmt.Errorf("encoding ASCII: %w", err)
@@ -404,12 +407,12 @@ func encodeASCII(t time.Time, typ string, precision int, outputFmt string) error
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "text":
-		fmt.Println(textOut)
+		_, _ = fmt.Fprintln(out, textOut)
 	case "hex":
 		// For ASCII, output the string itself (not hex bytes)
-		fmt.Println(s)
+		_, _ = fmt.Fprintln(out, s)
 	default:
 		return fmt.Errorf("unknown format: %s", outputFmt)
 	}
@@ -430,6 +433,7 @@ func timeInspectCmd() *cobra.Command {
   echo "4400614b4093e0" | astro time inspect --codec cds --input hex`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -442,7 +446,7 @@ func timeInspectCmd() *cobra.Command {
 				}
 			}
 
-			return inspectTimeCode(data, codec)
+			return inspectTimeCode(out, data, codec)
 		},
 	}
 
@@ -452,38 +456,38 @@ func timeInspectCmd() *cobra.Command {
 	return cmd
 }
 
-func inspectTimeCode(data []byte, codec string) error {
-	fmt.Println("Time Code Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+func inspectTimeCode(out io.Writer, data []byte, codec string) error {
+	_, _ = fmt.Fprintln(out, "Time Code Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// P-field
 	var pf tcf.PField
 	if err := pf.Decode(data); err != nil {
 		return fmt.Errorf("decoding P-field: %w", err)
 	}
-	fmt.Printf("P-Field (%d byte%s)\n", pf.Size(), pluralS(pf.Size()))
-	fmt.Printf("  Extension ............ %v\n", pf.Extension)
-	fmt.Printf("  Time Code ID ......... %d (%s)\n", pf.TimeCodeID, timeCodeIDName(pf.TimeCodeID))
-	fmt.Printf("  Detail Bits .......... 0x%X\n", pf.Detail)
+	_, _ = fmt.Fprintf(out, "P-Field (%d byte%s)\n", pf.Size(), pluralS(pf.Size()))
+	_, _ = fmt.Fprintf(out, "  Extension ............ %v\n", pf.Extension)
+	_, _ = fmt.Fprintf(out, "  Time Code ID ......... %d (%s)\n", pf.TimeCodeID, timeCodeIDName(pf.TimeCodeID))
+	_, _ = fmt.Fprintf(out, "  Detail Bits .......... 0x%X\n", pf.Detail)
 	if pf.Extension {
-		fmt.Printf("  Extension Detail ..... 0x%02X\n", pf.ExtDetail)
+		_, _ = fmt.Fprintf(out, "  Extension Detail ..... 0x%02X\n", pf.ExtDetail)
 	}
 
-	fmt.Println(strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	switch codec {
 	case "cuc":
-		return inspectCUC(data)
+		return inspectCUC(out, data)
 	case "cds":
-		return inspectCDS(data)
+		return inspectCDS(out, data)
 	case "ccs":
-		return inspectCCS(data)
+		return inspectCCS(out, data)
 	default:
 		return fmt.Errorf("unknown codec: %s", codec)
 	}
 }
 
-func inspectCUC(data []byte) error {
+func inspectCUC(out io.Writer, data []byte) error {
 	c, err := tcf.DecodeCUC(data, time.Time{})
 	if err != nil {
 		return fmt.Errorf("decoding CUC: %w", err)
@@ -494,48 +498,48 @@ func inspectCUC(data []byte) error {
 		level = "Level 2 (agency-defined epoch)"
 	}
 
-	fmt.Println("CUC T-Field")
-	fmt.Printf("  Level ................ %s\n", level)
-	fmt.Printf("  Coarse Octets ........ %d\n", c.CoarseBytes)
-	fmt.Printf("  Fine Octets .......... %d\n", c.FineBytes)
-	fmt.Printf("  Coarse Time .......... %d s\n", c.CoarseTime)
+	_, _ = fmt.Fprintln(out, "CUC T-Field")
+	_, _ = fmt.Fprintf(out, "  Level ................ %s\n", level)
+	_, _ = fmt.Fprintf(out, "  Coarse Octets ........ %d\n", c.CoarseBytes)
+	_, _ = fmt.Fprintf(out, "  Fine Octets .......... %d\n", c.FineBytes)
+	_, _ = fmt.Fprintf(out, "  Coarse Time .......... %d s\n", c.CoarseTime)
 	if c.FineBytes > 0 {
-		fmt.Printf("  Fine Time ............ %d\n", c.FineTime)
+		_, _ = fmt.Fprintf(out, "  Fine Time ............ %d\n", c.FineTime)
 	}
-	fmt.Printf("  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
+	_, _ = fmt.Fprintf(out, "  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw (%d bytes)\n", len(data))
-	fmt.Print(hexDump(data, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw (%d bytes)\n", len(data))
+	_, _ = fmt.Fprint(out, hexDump(data, "  "))
 	return nil
 }
 
-func inspectCDS(data []byte) error {
+func inspectCDS(out io.Writer, data []byte) error {
 	c, err := tcf.DecodeCDS(data, time.Time{})
 	if err != nil {
 		return fmt.Errorf("decoding CDS: %w", err)
 	}
 
-	fmt.Println("CDS T-Field")
-	fmt.Printf("  Day Octets ........... %d\n", c.DayBytes)
-	fmt.Printf("  Day .................. %d\n", c.Day)
-	fmt.Printf("  Milliseconds ......... %d\n", c.Milliseconds)
+	_, _ = fmt.Fprintln(out, "CDS T-Field")
+	_, _ = fmt.Fprintf(out, "  Day Octets ........... %d\n", c.DayBytes)
+	_, _ = fmt.Fprintf(out, "  Day .................. %d\n", c.Day)
+	_, _ = fmt.Fprintf(out, "  Milliseconds ......... %d\n", c.Milliseconds)
 	if c.SubmsBytes > 0 {
 		label := "Microseconds"
 		if c.SubmsBytes == 4 {
 			label = "Picoseconds"
 		}
-		fmt.Printf("  %s ...... %d\n", label, c.Submilliseconds)
+		_, _ = fmt.Fprintf(out, "  %s ...... %d\n", label, c.Submilliseconds)
 	}
-	fmt.Printf("  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
+	_, _ = fmt.Fprintf(out, "  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw (%d bytes)\n", len(data))
-	fmt.Print(hexDump(data, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw (%d bytes)\n", len(data))
+	_, _ = fmt.Fprint(out, hexDump(data, "  "))
 	return nil
 }
 
-func inspectCCS(data []byte) error {
+func inspectCCS(out io.Writer, data []byte) error {
 	c, err := tcf.DecodeCCS(data)
 	if err != nil {
 		return fmt.Errorf("decoding CCS: %w", err)
@@ -546,26 +550,26 @@ func inspectCCS(data []byte) error {
 		variant = "Month-Day"
 	}
 
-	fmt.Println("CCS T-Field")
-	fmt.Printf("  Variant .............. %s\n", variant)
-	fmt.Printf("  Year ................. %d\n", c.Year)
+	_, _ = fmt.Fprintln(out, "CCS T-Field")
+	_, _ = fmt.Fprintf(out, "  Variant .............. %s\n", variant)
+	_, _ = fmt.Fprintf(out, "  Year ................. %d\n", c.Year)
 	if c.MonthDay {
-		fmt.Printf("  Month ................ %d\n", c.Month)
-		fmt.Printf("  Day .................. %d\n", c.DayOfMonth)
+		_, _ = fmt.Fprintf(out, "  Month ................ %d\n", c.Month)
+		_, _ = fmt.Fprintf(out, "  Day .................. %d\n", c.DayOfMonth)
 	} else {
-		fmt.Printf("  Day of Year .......... %d\n", c.DayOfYear)
+		_, _ = fmt.Fprintf(out, "  Day of Year .......... %d\n", c.DayOfYear)
 	}
-	fmt.Printf("  Hour ................. %d\n", c.Hour)
-	fmt.Printf("  Minute ............... %d\n", c.Minute)
-	fmt.Printf("  Second ............... %d\n", c.Second)
+	_, _ = fmt.Fprintf(out, "  Hour ................. %d\n", c.Hour)
+	_, _ = fmt.Fprintf(out, "  Minute ............... %d\n", c.Minute)
+	_, _ = fmt.Fprintf(out, "  Second ............... %d\n", c.Second)
 	if c.SubSecBytes > 0 {
-		fmt.Printf("  Sub-second Octets .... %d\n", c.SubSecBytes)
+		_, _ = fmt.Fprintf(out, "  Sub-second Octets .... %d\n", c.SubSecBytes)
 	}
-	fmt.Printf("  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
+	_, _ = fmt.Fprintf(out, "  Resolved Time ........ %s\n", c.Time().UTC().Format(time.RFC3339Nano))
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw (%d bytes)\n", len(data))
-	fmt.Print(hexDump(data, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw (%d bytes)\n", len(data))
+	_, _ = fmt.Fprint(out, hexDump(data, "  "))
 	return nil
 }
 
@@ -588,13 +592,14 @@ func timeNowCmd() *cobra.Command {
   # JSON output
   astro time now --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			now := time.Now().UTC()
 
 			if codec != "" {
-				return encodeSingleNow(now, codec, outputFmt)
+				return encodeSingleNow(out, now, codec, outputFmt)
 			}
 
-			return encodeAllNow(now, outputFmt)
+			return encodeAllNow(out, now, outputFmt)
 		},
 	}
 
@@ -604,26 +609,26 @@ func timeNowCmd() *cobra.Command {
 	return cmd
 }
 
-func encodeSingleNow(t time.Time, codec, outputFmt string) error {
+func encodeSingleNow(out io.Writer, t time.Time, codec, outputFmt string) error {
 	switch codec {
 	case "cuc":
-		return encodeCUC(t, 4, 2, outputFmt)
+		return encodeCUC(out, t, 4, 2, outputFmt)
 	case "cds":
-		return encodeCDS(t, 2, 0, outputFmt)
+		return encodeCDS(out, t, 2, 0, outputFmt)
 	case "ccs":
-		return encodeCCS(t, false, 2, outputFmt)
+		return encodeCCS(out, t, false, 2, outputFmt)
 	case "ascii-a":
-		return encodeASCII(t, tcf.ASCIITypeA, 3, outputFmt)
+		return encodeASCII(out, t, tcf.ASCIITypeA, 3, outputFmt)
 	case "ascii-b":
-		return encodeASCII(t, tcf.ASCIITypeB, 3, outputFmt)
+		return encodeASCII(out, t, tcf.ASCIITypeB, 3, outputFmt)
 	default:
 		return fmt.Errorf("unknown codec: %s", codec)
 	}
 }
 
-func encodeAllNow(t time.Time, outputFmt string) error {
-	fmt.Printf("Current UTC: %s\n", t.Format(time.RFC3339Nano))
-	fmt.Println(strings.Repeat("─", 60))
+func encodeAllNow(w io.Writer, t time.Time, outputFmt string) error {
+	_, _ = fmt.Fprintf(w, "Current UTC: %s\n", t.Format(time.RFC3339Nano))
+	_, _ = fmt.Fprintln(w, strings.Repeat("─", 60))
 
 	// CUC
 	cuc, err := tcf.NewCUC(t, tcf.WithCUCCoarseBytes(4), tcf.WithCUCFineBytes(2))
@@ -674,46 +679,46 @@ func encodeAllNow(t time.Time, outputFmt string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(w, string(b))
 		return nil
 	}
 
-	fmt.Printf("CUC .... %s\n", hex.EncodeToString(cucBytes))
-	fmt.Printf("CDS .... %s\n", hex.EncodeToString(cdsBytes))
-	fmt.Printf("CCS .... %s\n", hex.EncodeToString(ccsBytes))
-	fmt.Printf("ASCII-A  %s\n", ascAStr)
-	fmt.Printf("ASCII-B  %s\n", ascBStr)
+	_, _ = fmt.Fprintf(w, "CUC .... %s\n", hex.EncodeToString(cucBytes))
+	_, _ = fmt.Fprintf(w, "CDS .... %s\n", hex.EncodeToString(cdsBytes))
+	_, _ = fmt.Fprintf(w, "CCS .... %s\n", hex.EncodeToString(ccsBytes))
+	_, _ = fmt.Fprintf(w, "ASCII-A  %s\n", ascAStr)
+	_, _ = fmt.Fprintf(w, "ASCII-B  %s\n", ascBStr)
 	return nil
 }
 
-func printTime(text string, j timeJSON, outputFmt string) error {
+func printTime(out io.Writer, text string, j timeJSON, outputFmt string) error {
 	switch outputFmt {
 	case "json":
 		b, err := json.MarshalIndent(j, "", "  ")
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "text":
-		fmt.Println(text)
+		_, _ = fmt.Fprintln(out, text)
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text' or 'json')", outputFmt)
 	}
 	return nil
 }
 
-func printTimeEncoded(text string, j timeJSON, encoded []byte, outputFmt string) error {
+func printTimeEncoded(out io.Writer, text string, j timeJSON, encoded []byte, outputFmt string) error {
 	switch outputFmt {
 	case "hex":
-		fmt.Println(hex.EncodeToString(encoded))
+		_, _ = fmt.Fprintln(out, hex.EncodeToString(encoded))
 	case "json":
 		b, err := json.MarshalIndent(j, "", "  ")
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		_, _ = fmt.Fprintln(out, string(b))
 	case "text":
-		fmt.Println(text)
+		_, _ = fmt.Fprintln(out, text)
 	default:
 		return fmt.Errorf("unknown format: %s (use 'text', 'json', or 'hex')", outputFmt)
 	}

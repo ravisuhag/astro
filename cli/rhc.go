@@ -97,21 +97,22 @@ func rhcCompressCmd() *cobra.Command {
 					len(data), width, vectorBits)
 			}
 
+			out := cmd.OutOrStdout()
 			inBits, outBits := 0, 0
 
 			for offset := 0; offset < len(data); offset += width {
-				out, bitLen, err := compressor.Compress(data[offset : offset+width])
+				coded, bitLen, err := compressor.Compress(data[offset : offset+width])
 				if err != nil {
 					return fmt.Errorf("compressing cycle %d: %w", offset/width, err)
 				}
-				fmt.Printf("%d %s\n", bitLen, hex.EncodeToString(out))
+				_, _ = fmt.Fprintf(out, "%d %s\n", bitLen, hex.EncodeToString(coded))
 
 				inBits += vectorBits
 				outBits += bitLen
 			}
 
 			ratio := float64(inBits) / float64(outBits)
-			fmt.Fprintf(os.Stderr, "%d cycle(s), %d bits in, %d bits out (%.2fx)\n",
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%d cycle(s), %d bits in, %d bits out (%.2fx)\n",
 				len(data)/width, inBits, outBits, ratio)
 			return nil
 		},
@@ -171,6 +172,7 @@ func rhcDecompressCmd() *cobra.Command {
 			scanner := bufio.NewScanner(source)
 			scanner.Buffer(make([]byte, 0, 64*1024), maxStreamUnit)
 
+			out := cmd.OutOrStdout()
 			cycle := 0
 			for scanner.Scan() {
 				line := strings.TrimSpace(scanner.Text())
@@ -190,11 +192,11 @@ func rhcDecompressCmd() *cobra.Command {
 
 				switch outputFmt {
 				case "bin":
-					if _, err := os.Stdout.Write(vector); err != nil {
+					if _, err := out.Write(vector); err != nil {
 						return fmt.Errorf("writing output: %w", err)
 					}
 				case "hex":
-					fmt.Println(hex.EncodeToString(vector))
+					_, _ = fmt.Fprintln(out, hex.EncodeToString(vector))
 				default:
 					return fmt.Errorf("unknown format: %s (use 'bin' or 'hex')", outputFmt)
 				}

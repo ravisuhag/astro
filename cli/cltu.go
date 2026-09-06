@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ravisuhag/astro/pkg/tcsc"
@@ -48,6 +49,7 @@ func cltuWrapCmd() *cobra.Command {
   astro tc encode --scid 26 --vcid 1 --data 0102030405 | astro cltu wrap --input hex --randomize`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -60,24 +62,24 @@ func cltuWrapCmd() *cobra.Command {
 
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(cltu))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(cltu))
 			case "json":
 				j := cltuToJSON(cltu, randomize)
 				b, err := json.MarshalIndent(j, "", "  ")
 				if err != nil {
 					return err
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
 				startSeq := tcsc.DefaultStartSequence()
 				tailSeq := tcsc.DefaultTailSequence()
 				bodyLen := len(cltu) - len(startSeq) - len(tailSeq)
 				numBlocks := bodyLen / tcsc.CodeblockBytes
-				fmt.Printf("CLTU (%d bytes)\n", len(cltu))
-				fmt.Printf("  Start Sequence: %s\n", hex.EncodeToString(cltu[:len(startSeq)]))
-				fmt.Printf("  Codeblocks: %d (%d bytes each)\n", numBlocks, tcsc.CodeblockBytes)
-				fmt.Printf("  Tail Sequence: %s\n", hex.EncodeToString(cltu[len(cltu)-len(tailSeq):]))
-				fmt.Printf("  Randomized: %v\n", randomize)
+				_, _ = fmt.Fprintf(out, "CLTU (%d bytes)\n", len(cltu))
+				_, _ = fmt.Fprintf(out, "  Start Sequence: %s\n", hex.EncodeToString(cltu[:len(startSeq)]))
+				_, _ = fmt.Fprintf(out, "  Codeblocks: %d (%d bytes each)\n", numBlocks, tcsc.CodeblockBytes)
+				_, _ = fmt.Fprintf(out, "  Tail Sequence: %s\n", hex.EncodeToString(cltu[len(cltu)-len(tailSeq):]))
+				_, _ = fmt.Fprintf(out, "  Randomized: %v\n", randomize)
 			default:
 				return fmt.Errorf("unknown format: %s", outputFmt)
 			}
@@ -110,6 +112,7 @@ func cltuUnwrapCmd() *cobra.Command {
   cat cltu.hex | astro cltu unwrap --input hex --derandomize`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			data, err := readInput(args, inputFmt)
 			if err != nil {
 				return err
@@ -122,7 +125,7 @@ func cltuUnwrapCmd() *cobra.Command {
 
 			switch outputFmt {
 			case "hex":
-				fmt.Println(hex.EncodeToString(frame))
+				_, _ = fmt.Fprintln(out, hex.EncodeToString(frame))
 			case "json":
 				j := map[string]any{
 					"frame_data":   hex.EncodeToString(frame),
@@ -134,12 +137,12 @@ func cltuUnwrapCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Printf("Extracted Frame (%d bytes)\n", len(frame))
-				fmt.Printf("  BCH Corrections: %d\n", corrections)
-				fmt.Printf("  Derandomized: %v\n", derandomize)
-				fmt.Print(hexDump(frame, "  "))
+				_, _ = fmt.Fprintf(out, "Extracted Frame (%d bytes)\n", len(frame))
+				_, _ = fmt.Fprintf(out, "  BCH Corrections: %d\n", corrections)
+				_, _ = fmt.Fprintf(out, "  Derandomized: %v\n", derandomize)
+				_, _ = fmt.Fprint(out, hexDump(frame, "  "))
 			default:
 				return fmt.Errorf("unknown format: %s", outputFmt)
 			}
@@ -170,7 +173,7 @@ func cltuInspectCmd() *cobra.Command {
 				return err
 			}
 
-			printCLTUInspect(data)
+			printCLTUInspect(cmd.OutOrStdout(), data)
 			return nil
 		},
 	}
@@ -205,39 +208,39 @@ func cltuToJSON(cltu []byte, randomized bool) cltuJSON {
 	}
 }
 
-func printCLTUInspect(data []byte) {
+func printCLTUInspect(out io.Writer, data []byte) {
 	startSeq := tcsc.DefaultStartSequence()
 	tailSeq := tcsc.DefaultTailSequence()
 
-	fmt.Println("CLTU Inspector")
-	fmt.Println(strings.Repeat("─", 60))
+	_, _ = fmt.Fprintln(out, "CLTU Inspector")
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
 
 	// Start sequence
 	if len(data) < len(startSeq) {
-		fmt.Println("Data too short for start sequence")
+		_, _ = fmt.Fprintln(out, "Data too short for start sequence")
 		return
 	}
 
 	startMatch := hex.EncodeToString(data[:len(startSeq)]) == hex.EncodeToString(startSeq)
-	fmt.Printf("Start Sequence (%d bytes): %s", len(startSeq), hex.EncodeToString(data[:len(startSeq)]))
+	_, _ = fmt.Fprintf(out, "Start Sequence (%d bytes): %s", len(startSeq), hex.EncodeToString(data[:len(startSeq)]))
 	if startMatch {
-		fmt.Println(" [VALID]")
+		_, _ = fmt.Fprintln(out, " [VALID]")
 	} else {
-		fmt.Printf(" [MISMATCH, expected %s]\n", hex.EncodeToString(startSeq))
+		_, _ = fmt.Fprintf(out, " [MISMATCH, expected %s]\n", hex.EncodeToString(startSeq))
 	}
 
 	// Tail sequence
 	if len(data) < len(startSeq)+len(tailSeq) {
-		fmt.Println("Data too short for tail sequence")
+		_, _ = fmt.Fprintln(out, "Data too short for tail sequence")
 		return
 	}
 
 	tailMatch := hex.EncodeToString(data[len(data)-len(tailSeq):]) == hex.EncodeToString(tailSeq)
-	fmt.Printf("Tail Sequence (%d bytes): %s", len(tailSeq), hex.EncodeToString(data[len(data)-len(tailSeq):]))
+	_, _ = fmt.Fprintf(out, "Tail Sequence (%d bytes): %s", len(tailSeq), hex.EncodeToString(data[len(data)-len(tailSeq):]))
 	if tailMatch {
-		fmt.Println(" [VALID]")
+		_, _ = fmt.Fprintln(out, " [VALID]")
 	} else {
-		fmt.Printf(" [MISMATCH, expected %s]\n", hex.EncodeToString(tailSeq))
+		_, _ = fmt.Fprintf(out, " [MISMATCH, expected %s]\n", hex.EncodeToString(tailSeq))
 	}
 
 	// Codeblocks
@@ -245,22 +248,22 @@ func printCLTUInspect(data []byte) {
 	numBlocks := len(body) / tcsc.CodeblockBytes
 	remainder := len(body) % tcsc.CodeblockBytes
 
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Codeblocks: %d (%d bytes each = %d info + 1 parity)\n",
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Codeblocks: %d (%d bytes each = %d info + 1 parity)\n",
 		numBlocks, tcsc.CodeblockBytes, tcsc.InfoBytes)
 	if remainder > 0 {
-		fmt.Printf("  Warning: %d trailing bytes after codeblocks\n", remainder)
+		_, _ = fmt.Fprintf(out, "  Warning: %d trailing bytes after codeblocks\n", remainder)
 	}
 
 	for i := range numBlocks {
 		cb := body[i*tcsc.CodeblockBytes : (i+1)*tcsc.CodeblockBytes]
 		info := cb[:tcsc.InfoBytes]
 		parity := cb[tcsc.InfoBytes]
-		fmt.Printf("  Block %d: info=%s parity=%02x\n", i+1, hex.EncodeToString(info), parity)
+		_, _ = fmt.Fprintf(out, "  Block %d: info=%s parity=%02x\n", i+1, hex.EncodeToString(info), parity)
 	}
 
 	// Full dump
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Printf("Raw CLTU (%d bytes)\n", len(data))
-	fmt.Print(hexDump(data, "  "))
+	_, _ = fmt.Fprintln(out, strings.Repeat("─", 60))
+	_, _ = fmt.Fprintf(out, "Raw CLTU (%d bytes)\n", len(data))
+	_, _ = fmt.Fprint(out, hexDump(data, "  "))
 }

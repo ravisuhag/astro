@@ -73,6 +73,7 @@ func sdlsInspectCmd() *cobra.Command {
 				remainder = remainder[:len(remainder)-macLen]
 			}
 
+			out := cmd.OutOrStdout()
 			switch outputFmt {
 			case "json":
 				b, err := json.MarshalIndent(sdlsHeaderJSON{
@@ -87,24 +88,24 @@ func sdlsInspectCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("encoding JSON output: %w", err)
 				}
-				fmt.Println(string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			case "text":
-				fmt.Println("SDLS Security Header")
-				fmt.Printf("  SPI ............... %d\n", header.SPI)
+				_, _ = fmt.Fprintln(out, "SDLS Security Header")
+				_, _ = fmt.Fprintf(out, "  SPI ............... %d\n", header.SPI)
 				if len(header.IV) > 0 {
-					fmt.Printf("  IV ................ %s\n", hex.EncodeToString(header.IV))
+					_, _ = fmt.Fprintf(out, "  IV ................ %s\n", hex.EncodeToString(header.IV))
 				}
 				if len(header.SeqNum) > 0 {
-					fmt.Printf("  Sequence number ... %s\n", hex.EncodeToString(header.SeqNum))
+					_, _ = fmt.Fprintf(out, "  Sequence number ... %s\n", hex.EncodeToString(header.SeqNum))
 				}
 				if len(header.PadLength) > 0 {
-					fmt.Printf("  Pad length ........ %s\n", hex.EncodeToString(header.PadLength))
+					_, _ = fmt.Fprintf(out, "  Pad length ........ %s\n", hex.EncodeToString(header.PadLength))
 				}
-				fmt.Printf("  Header ............ %d octets\n", consumed)
-				fmt.Printf("  Protected data .... %d octets (not decrypted: no keys here)\n",
+				_, _ = fmt.Fprintf(out, "  Header ............ %d octets\n", consumed)
+				_, _ = fmt.Fprintf(out, "  Protected data .... %d octets (not decrypted: no keys here)\n",
 					len(remainder))
 				if len(mac) > 0 {
-					fmt.Printf("  MAC ............... %s (not verified: no keys here)\n",
+					_, _ = fmt.Fprintf(out, "  MAC ............... %s (not verified: no keys here)\n",
 						hex.EncodeToString(mac))
 				}
 			default:

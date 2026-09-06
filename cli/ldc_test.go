@@ -20,6 +20,7 @@ func ramp(count int) []byte {
 // The property that matters: what goes in comes out, exactly. Lossless means
 // lossless, so anything short of byte-identical is a bug.
 func TestLDCRoundTripIsExact(t *testing.T) {
+	t.Parallel()
 	original := ramp(512)
 
 	coded, err := runCLI(t, []byte(hex.EncodeToString(original)), "ldc", "compress",
@@ -46,6 +47,7 @@ func TestLDCRoundTripIsExact(t *testing.T) {
 // A slowly changing ramp should actually get smaller, or the coder is not
 // doing its job.
 func TestLDCCompressesARamp(t *testing.T) {
+	t.Parallel()
 	original := ramp(512)
 
 	out, err := runCLI(t, []byte(hex.EncodeToString(original)), "ldc", "compress",
@@ -70,6 +72,7 @@ func TestLDCCompressesARamp(t *testing.T) {
 // The file carries its own parameters, which is what lets decompress take no
 // flags at all.
 func TestLDCInspectReadsTheHeader(t *testing.T) {
+	t.Parallel()
 	coded, err := runCLI(t, []byte(hex.EncodeToString(ramp(128))), "ldc", "compress",
 		"--input", "hex", "--format", "hex",
 		"--resolution", "8", "--block-size", "32", "--reference-interval", "64")
@@ -111,6 +114,7 @@ func TestLDCInspectReadsTheHeader(t *testing.T) {
 // A 12-bit sample travels in two octets, so a round trip has to preserve the
 // width as well as the values.
 func TestLDCWiderSamples(t *testing.T) {
+	t.Parallel()
 	// Two-octet samples, each below 4096.
 	var original []byte
 	for i := 0; i < 256; i++ {
@@ -143,6 +147,7 @@ func TestLDCWiderSamples(t *testing.T) {
 // A sample that does not fit the stated resolution is a mismatch between the
 // flag and the data. Coding it would truncate silently, so it is refused.
 func TestLDCRejectsSamplesTooWideForTheResolution(t *testing.T) {
+	t.Parallel()
 	// 0x0FFF does not fit 8 bits, and at --resolution 8 each octet is a
 	// sample, so use a value above 255 in a two-octet reading instead.
 	if _, err := runCLI(t, []byte("0fff0001"), "ldc", "compress",
@@ -154,6 +159,7 @@ func TestLDCRejectsSamplesTooWideForTheResolution(t *testing.T) {
 // Input that is not a whole number of samples means the resolution and the
 // data disagree, which is worth saying rather than dropping a trailing octet.
 func TestLDCRejectsPartialSample(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("010203"), "ldc", "compress",
 		"--input", "hex", "--format", "hex", "--resolution", "16"); err == nil {
 		t.Error("compress accepted three octets as 16-bit samples")
@@ -161,6 +167,7 @@ func TestLDCRejectsPartialSample(t *testing.T) {
 }
 
 func TestLDCRejectsBadParameters(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][]string{
 		"block size not in the standard's set": {
 			"ldc", "compress", "--input", "hex", "--resolution", "8", "--block-size", "10"},
@@ -182,6 +189,7 @@ func TestLDCRejectsBadParameters(t *testing.T) {
 }
 
 func TestLDCEmptyInput(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte(""), "ldc", "compress",
 		"--input", "hex", "--resolution", "8"); err == nil {
 		t.Error("compress accepted empty input")
@@ -189,6 +197,7 @@ func TestLDCEmptyInput(t *testing.T) {
 }
 
 func TestLDCDecompressRejectsRubbish(t *testing.T) {
+	t.Parallel()
 	if _, err := runCLI(t, []byte("deadbeef"), "ldc", "decompress", "--input", "hex"); err == nil {
 		t.Error("decompress accepted a file with no valid header")
 	}

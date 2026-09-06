@@ -3,6 +3,7 @@ package cli
 import (
 	"embed"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/raystack/salt/cli/printer"
@@ -46,17 +47,18 @@ func manualCmd(docsFS embed.FS) *cobra.Command {
 		ValidArgs: protocolNames(),
 		Args:      cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
 			if len(args) == 0 {
-				return printManualIndex()
+				return printManualIndex(out)
 			}
-			return printManual(docsFS, args[0])
+			return printManual(out, docsFS, args[0])
 		},
 	}
 
 	return cmd
 }
 
-func printManualIndex() error {
+func printManualIndex(out io.Writer) error {
 	var sb strings.Builder
 	sb.WriteString("# Astro Manual\n\n")
 	sb.WriteString("Available protocol manuals:\n\n")
@@ -85,15 +87,15 @@ func printManualIndex() error {
 	sb.WriteString("| Optical Coding | `astro manual ocsc` |\n")
 	sb.WriteString("| Space Data Link Security | `astro manual sdls` |\n")
 
-	out, err := printer.Markdown(sb.String())
+	rendered, err := printer.Markdown(sb.String())
 	if err != nil {
 		return err
 	}
-	fmt.Print(out)
+	_, _ = fmt.Fprint(out, rendered)
 	return nil
 }
 
-func printManual(docsFS embed.FS, protocol string) error {
+func printManual(out io.Writer, docsFS embed.FS, protocol string) error {
 	filename, ok := protocols[protocol]
 	if !ok {
 		return fmt.Errorf("unknown protocol %q, run 'astro manual' to see available topics", protocol)
@@ -104,11 +106,11 @@ func printManual(docsFS embed.FS, protocol string) error {
 		return fmt.Errorf("reading manual for %s: %w", protocol, err)
 	}
 
-	out, err := printer.Markdown(stripFrontmatter(string(content)))
+	rendered, err := printer.Markdown(stripFrontmatter(string(content)))
 	if err != nil {
 		return err
 	}
-	fmt.Print(out)
+	_, _ = fmt.Fprint(out, rendered)
 	return nil
 }
 
