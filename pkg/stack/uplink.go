@@ -154,21 +154,28 @@ type Commander struct {
 
 	fops map[uint8]*cop.FOP
 
-	// backlog holds encoded frames FOP-1 has not taken yet.
+	// adBacklog and bdBacklog hold encoded frames FOP-1 has not taken yet,
+	// one queue per channel per delivery mode.
 	//
-	// FOP-1 refuses a frame once its sliding window is full, because that is
-	// what sequence control means. But a caller offering a command wants it
-	// queued, not refused. The window is a transmission constraint, not a
-	// limit on how much a pass may hold. So the frames wait here and are
-	// offered again whenever the window might have moved.
-	backlog map[uint8][]pendingFrame
-}
-
-// pendingFrame is one encoded frame waiting for FOP-1 to have room, and
-// whether it bypasses the sequence check.
-type pendingFrame struct {
-	data      []byte
-	expedited bool
+	// FOP-1 refuses an AD frame once its sliding window is full, because
+	// that is what sequence control means. But a caller offering a command
+	// wants it queued, not refused. The window is a transmission
+	// constraint, not a limit on how much a pass may hold. So the frames
+	// wait here and are offered again whenever the window might have moved.
+	//
+	// AD and BD get separate queues rather than sharing one, because they
+	// are refused for different reasons and on different schedules. A
+	// blocked AD frame stays refused until a CLCW moves the window, which
+	// can be a long wait; a BD frame is never refused for want of window at
+	// all (TransmitBDFrame takes it in any state). Sharing one queue walked
+	// in order means a stalled AD frame at the front leaves every BD frame
+	// behind it stalled too, which is exactly backwards from "[Type-BD
+	// frames] arrive whatever state FOP-1 is in" above. Two queues let pump
+	// drain BD unconditionally while AD waits its turn, and AD frames never
+	// share a queue with anything that could jump ahead of them, so their
+	// relative order is never at risk.
+	adBacklog map[uint8][][]byte
+	bdBacklog map[uint8][][]byte
 }
 
 // channelService pairs a packet service with the frame buffer it fills.
@@ -204,7 +211,8 @@ func NewCommander(config Uplink) (*Commander, error) {
 		sequenced: make(map[uint8]*channelService, len(config.Channels)),
 		expedited: make(map[uint8]*channelService, len(config.Channels)),
 		fops:      make(map[uint8]*cop.FOP, len(config.Channels)),
-		backlog:   make(map[uint8][]pendingFrame, len(config.Channels)),
+		adBacklog: make(map[uint8][][]byte, len(config.Channels)),
+		bdBacklog: make(map[uint8][][]byte, len(config.Channels)),
 	}
 
 	for _, channel := range config.Channels {
@@ -289,7 +297,7 @@ func (c *Commander) SendPacket(vcid uint8, packet *spp.SpacePacket) error {
 }
 
 // enqueue takes the frames the packet service just built and puts them on the
-// channel's backlog.
+// channel's backlog for the given delivery mode.
 func (c *Commander) enqueue(vcid uint8, virtual *tcdl.VirtualChannel, expedited bool) error {
 	for virtual.HasFrames() {
 		frame, err := virtual.Next()
@@ -301,40 +309,50 @@ func (c *Commander) enqueue(vcid uint8, virtual *tcdl.VirtualChannel, expedited 
 		if err != nil {
 			return fmt.Errorf("encoding frame: %w", err)
 		}
-		c.backlog[vcid] = append(c.backlog[vcid], pendingFrame{data: encoded, expedited: expedited})
+		if expedited {
+			c.bdBacklog[vcid] = append(c.bdBacklog[vcid], encoded)
+		} else {
+			c.adBacklog[vcid] = append(c.adBacklog[vcid], encoded)
+		}
 	}
 	return nil
 }
 
 // pump offers as much of a channel's backlog to FOP-1 as it will take.
 //
-// It stops at the first frame FOP-1 refuses for want of window, leaving that
-// frame and everything after it queued in order. Any other refusal is a real
-// error: the channel is in a state that needs the operator, not more frames.
+// The BD queue is offered first and drained in full: TransmitBDFrame takes a
+// frame in any state, so nothing on the AD side should ever be able to hold
+// a BD frame back. The AD queue is then offered in order and stops at the
+// first frame FOP-1 refuses for want of window, leaving that frame and
+// everything after it queued in order — sequence control means AD frames
+// are never reordered among themselves. Any other refusal, on either queue,
+// is a real error: the channel is in a state that needs the operator, not
+// more frames.
 func (c *Commander) pump(vcid uint8, fop *cop.FOP) error {
-	queue := c.backlog[vcid]
-
-	for len(queue) > 0 {
-		next := queue[0]
-
-		var err error
-		if next.expedited {
-			err = fop.TransmitBDFrame(next.data)
-		} else {
-			err = fop.TransmitFrame(next.data)
+	bd := c.bdBacklog[vcid]
+	for len(bd) > 0 {
+		if err := fop.TransmitBDFrame(bd[0]); err != nil {
+			c.bdBacklog[vcid] = bd
+			return fmt.Errorf("offering an expedited frame on channel %d: %w", vcid, err)
 		}
+		bd = bd[1:]
+	}
+	c.bdBacklog[vcid] = bd
 
+	ad := c.adBacklog[vcid]
+	for len(ad) > 0 {
+		err := fop.TransmitFrame(ad[0])
 		if errors.Is(err, cop.ErrFOPWindowFull) {
 			break
 		}
 		if err != nil {
-			c.backlog[vcid] = queue
+			c.adBacklog[vcid] = ad
 			return fmt.Errorf("offering a frame on channel %d: %w", vcid, err)
 		}
-		queue = queue[1:]
+		ad = ad[1:]
 	}
+	c.adBacklog[vcid] = ad
 
-	c.backlog[vcid] = queue
 	return nil
 }
 
@@ -429,7 +447,7 @@ func (c *Commander) Pending(vcid uint8) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return fop.PendingCount() + len(c.backlog[vcid]), nil
+	return fop.PendingCount() + len(c.adBacklog[vcid]) + len(c.bdBacklog[vcid]), nil
 }
 
 // Onboard is the spacecraft side of an uplink: CLTUs in, packets out, CLCWs
