@@ -1,11 +1,24 @@
+# Dependabot is configured but deliberately does not open pull requests.
+#
+# open-pull-requests-limit: 0 turns off version-update PRs while leaving the
+# ecosystems declared, so the config still records what is watched and the
+# switch is one line away if that changes. Dependency bumps are made
+# deliberately instead, in a single reviewed change — see the goldmark and
+# bluemonday work for why: both needed a judgement about what the bump was
+# actually fixing, which a stream of one-line PRs does not carry.
+#
+# This does not affect Dependabot security alerts, which are a repository
+# setting rather than part of this file.
 version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
