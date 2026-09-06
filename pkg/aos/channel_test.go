@@ -1,6 +1,7 @@
 package aos_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/aos"
@@ -58,7 +59,7 @@ func TestMasterChannel_SCIDMismatch(t *testing.T) {
 	vc := aos.NewVirtualChannel(1, 10)
 	mc.AddVirtualChannel(vc, 1)
 	frame, _ := aos.NewTransferFrame(99, 1, []byte{0x01})
-	if err := mc.AddFrame(frame); err != aos.ErrSCIDMismatch {
+	if err := mc.AddFrame(frame); !errors.Is(err, aos.ErrSCIDMismatch) {
 		t.Errorf("expected ErrSCIDMismatch, got %v", err)
 	}
 }
@@ -68,7 +69,7 @@ func TestMasterChannel_VCNotFound(t *testing.T) {
 	vc := aos.NewVirtualChannel(1, 10)
 	mc.AddVirtualChannel(vc, 1)
 	frame, _ := aos.NewTransferFrame(100, 5, []byte{0x01})
-	if err := mc.AddFrame(frame); err != aos.ErrVirtualChannelNotFound {
+	if err := mc.AddFrame(frame); !errors.Is(err, aos.ErrVirtualChannelNotFound) {
 		t.Errorf("expected ErrVirtualChannelNotFound, got %v", err)
 	}
 }

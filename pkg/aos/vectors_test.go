@@ -3,6 +3,7 @@ package aos_test
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/internal/vectors"
@@ -202,7 +203,7 @@ func TestFHECDetectsHeaderCorruption(t *testing.T) {
 	bad[len(bad)-2] = byte(sum >> 8)
 	bad[len(bad)-1] = byte(sum)
 
-	if _, err := aos.DecodeTransferFrameWithConfig(bad, config); err != aos.ErrFHECMismatch {
+	if _, err := aos.DecodeTransferFrameWithConfig(bad, config); !errors.Is(err, aos.ErrFHECMismatch) {
 		t.Errorf("corrupted protected header: got %v, want ErrFHECMismatch", err)
 	}
 }

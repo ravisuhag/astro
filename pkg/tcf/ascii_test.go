@@ -1,6 +1,7 @@
 package tcf
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -146,7 +147,7 @@ func TestASCIIOptionalZ(t *testing.T) {
 
 func TestASCIIInvalidType(t *testing.T) {
 	_, err := NewASCIITime("C")
-	if err != ErrInvalidASCIIFormat {
+	if !errors.Is(err, ErrInvalidASCIIFormat) {
 		t.Errorf("expected ErrInvalidASCIIFormat, got %v", err)
 	}
 }
@@ -162,7 +163,7 @@ func TestASCIIDecodeInvalidFormat(t *testing.T) {
 	}
 
 	for _, s := range tests {
-		if _, err := a.Decode(s); err != ErrInvalidASCIIFormat {
+		if _, err := a.Decode(s); !errors.Is(err, ErrInvalidASCIIFormat) {
 			t.Errorf("Decode(%q): expected ErrInvalidASCIIFormat, got %v", s, err)
 		}
 	}
@@ -172,19 +173,19 @@ func TestASCIITypeBDecodeInvalidFormat(t *testing.T) {
 	a, _ := NewASCIITime(ASCIITypeB)
 
 	// Type B expects YYYY-DDD, not YYYY-MM-DD
-	if _, err := a.Decode("2024-01-01T00:00:00Z"); err != ErrInvalidASCIIFormat {
+	if _, err := a.Decode("2024-01-01T00:00:00Z"); !errors.Is(err, ErrInvalidASCIIFormat) {
 		t.Errorf("expected ErrInvalidASCIIFormat for Type B with Type A format, got %v", err)
 	}
 }
 
 func TestASCIIInvalidPrecision(t *testing.T) {
 	_, err := NewASCIITime(ASCIITypeA, WithASCIIPrecision(10))
-	if err != ErrInvalidCalendarTime {
+	if !errors.Is(err, ErrInvalidCalendarTime) {
 		t.Errorf("expected ErrInvalidCalendarTime, got %v", err)
 	}
 
 	_, err = NewASCIITime(ASCIITypeA, WithASCIIPrecision(-1))
-	if err != ErrInvalidCalendarTime {
+	if !errors.Is(err, ErrInvalidCalendarTime) {
 		t.Errorf("expected ErrInvalidCalendarTime, got %v", err)
 	}
 }

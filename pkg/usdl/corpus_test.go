@@ -2,6 +2,7 @@ package usdl_test
 
 import (
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/internal/vectors"
@@ -188,7 +189,7 @@ func TestDecodeRejectsAnInvalidFECSize(t *testing.T) {
 	if input == nil {
 		t.Fatal("non-truncated-inverse vector not found")
 	}
-	if _, err := usdl.DecodeTransferFrame(input, 3, 0); err != usdl.ErrInvalidFECSize {
+	if _, err := usdl.DecodeTransferFrame(input, 3, 0); !errors.Is(err, usdl.ErrInvalidFECSize) {
 		t.Errorf("DecodeTransferFrame with fecSize 3: got %v, want ErrInvalidFECSize", err)
 	}
 }

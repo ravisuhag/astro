@@ -3,6 +3,7 @@ package usdl_test
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/usdl"
@@ -331,7 +332,7 @@ func TestTransferFrame_CRCMismatch(t *testing.T) {
 	encoded[len(encoded)-3] ^= 0xFF
 
 	_, err = usdl.DecodeTransferFrameWithConfig(encoded, usdl.ChannelConfig{HasFECF: true})
-	if err != usdl.ErrCRCMismatch {
+	if !errors.Is(err, usdl.ErrCRCMismatch) {
 		t.Errorf("expected ErrCRCMismatch, got %v", err)
 	}
 }
@@ -398,19 +399,19 @@ func TestTransferFrame_WithInsertZone(t *testing.T) {
 func TestNewTruncatedFrame_RejectsTrailers(t *testing.T) {
 	_, err := usdl.NewTruncatedFrame(1, 1, 0, []byte{0x01},
 		usdl.WithOCF(make([]byte, 4)))
-	if err != usdl.ErrTruncatedFrameFields {
+	if !errors.Is(err, usdl.ErrTruncatedFrameFields) {
 		t.Errorf("expected ErrTruncatedFrameFields for OCF, got %v", err)
 	}
 	_, err = usdl.NewTruncatedFrame(1, 1, 0, []byte{0x01},
 		usdl.WithConstructionRule(usdl.RulePacketsSpanning))
-	if err != usdl.ErrTruncatedFrameFields {
+	if !errors.Is(err, usdl.ErrTruncatedFrameFields) {
 		t.Errorf("expected ErrTruncatedFrameFields for pointer rule, got %v", err)
 	}
 }
 
 func TestNewTruncatedFrame_LengthBounds(t *testing.T) {
 	// Annex D1.3.2 note 2: minimum 6 octets, headers plus one TFDZ octet.
-	if _, err := usdl.NewTruncatedFrame(1, 1, 0, nil); err != usdl.ErrTruncatedFrameTooShort {
+	if _, err := usdl.NewTruncatedFrame(1, 1, 0, nil); !errors.Is(err, usdl.ErrTruncatedFrameTooShort) {
 		t.Errorf("empty TFDZ: expected ErrTruncatedFrameTooShort, got %v", err)
 	}
 
@@ -428,7 +429,7 @@ func TestNewTruncatedFrame_LengthBounds(t *testing.T) {
 		t.Errorf("frame length = %d, want %d", len(encoded), usdl.MaxTruncatedFrameLen)
 	}
 
-	if _, err := usdl.NewTruncatedFrame(1, 1, 0, make([]byte, 28)); err != usdl.ErrTruncatedFrameTooLong {
+	if _, err := usdl.NewTruncatedFrame(1, 1, 0, make([]byte, 28)); !errors.Is(err, usdl.ErrTruncatedFrameTooLong) {
 		t.Errorf("28-octet TFDZ: expected ErrTruncatedFrameTooLong, got %v", err)
 	}
 }
@@ -507,7 +508,7 @@ func TestNewIdleFrame_PNFillContinues(t *testing.T) {
 // rather than fabricating an all-zero Type-1 report.
 func TestNewIdleFrame_OCFRequired(t *testing.T) {
 	config := usdl.ChannelConfig{FrameLength: 64, HasFECF: true, HasOCF: true}
-	if _, err := usdl.NewIdleFrame(100, config, nil, nil); err != usdl.ErrNoOCFSupplier {
+	if _, err := usdl.NewIdleFrame(100, config, nil, nil); !errors.Is(err, usdl.ErrNoOCFSupplier) {
 		t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
 	}
 	clcw := []byte{0x01, 0x02, 0x03, 0x04}

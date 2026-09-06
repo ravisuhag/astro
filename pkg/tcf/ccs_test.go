@@ -296,7 +296,7 @@ func TestCCSHumanize(t *testing.T) {
 
 func TestCCSDataTooShort(t *testing.T) {
 	_, err := DecodeCCS([]byte{0x50})
-	if err != ErrDataTooShort {
+	if !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("expected ErrDataTooShort, got %v", err)
 	}
 }
@@ -305,7 +305,7 @@ func TestCCSInvalidTimeCodeID(t *testing.T) {
 	// P-field with CUC time code ID (001)
 	data := []byte{0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	_, err := DecodeCCS(data)
-	if err != ErrInvalidTimeCodeID {
+	if !errors.Is(err, ErrInvalidTimeCodeID) {
 		t.Errorf("expected ErrInvalidTimeCodeID, got %v", err)
 	}
 }

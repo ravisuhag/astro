@@ -2,6 +2,7 @@ package tcf
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 )
@@ -180,7 +181,7 @@ func TestCDSLevel2RequiresEpoch(t *testing.T) {
 	}
 
 	_, err = DecodeCDS(encoded, time.Time{})
-	if err != ErrEpochRequired {
+	if !errors.Is(err, ErrEpochRequired) {
 		t.Errorf("expected ErrEpochRequired, got %v", err)
 	}
 }
@@ -216,14 +217,14 @@ func TestCDSRoundTrip(t *testing.T) {
 func TestCDSOverflow(t *testing.T) {
 	// Time before epoch
 	_, err := NewCDS(CCSDSEpoch.Add(-1 * time.Hour))
-	if err != ErrOverflow {
+	if !errors.Is(err, ErrOverflow) {
 		t.Errorf("expected ErrOverflow, got %v", err)
 	}
 }
 
 func TestCDSInvalidMilliseconds(t *testing.T) {
 	c := &CDS{DayBytes: 2, Milliseconds: 86400000}
-	if err := c.Validate(); err != ErrInvalidMilliseconds {
+	if err := c.Validate(); !errors.Is(err, ErrInvalidMilliseconds) {
 		t.Errorf("expected ErrInvalidMilliseconds, got %v", err)
 	}
 }
@@ -243,7 +244,7 @@ func TestCDSHumanize(t *testing.T) {
 
 func TestCDSDataTooShort(t *testing.T) {
 	_, err := DecodeCDS([]byte{0x40}, time.Time{})
-	if err != ErrDataTooShort {
+	if !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("expected ErrDataTooShort, got %v", err)
 	}
 }
@@ -252,7 +253,7 @@ func TestCDSInvalidTimeCodeID(t *testing.T) {
 	// P-field with CUC time code ID (001)
 	data := []byte{0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	_, err := DecodeCDS(data, time.Time{})
-	if err != ErrInvalidTimeCodeID {
+	if !errors.Is(err, ErrInvalidTimeCodeID) {
 		t.Errorf("expected ErrInvalidTimeCodeID, got %v", err)
 	}
 }

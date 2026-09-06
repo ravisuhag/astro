@@ -12,17 +12,7 @@ linters:
   enable:
     # Flags direct == / != / switch comparisons against sentinel errors, and
     # %v or %s used to format an error where %w would let a caller unwrap
-    # it. Fixed under plan 018 for pkg/xtce and cli/stream.go, and under
-    # plan 023 for internal/ndm; see the exclusion rule below for what
-    # remains as deliberate follow-up.
+    # it. Fixed under plan 018 for pkg/xtce and cli/stream.go, under plan
+    # 023 for internal/ndm, and as follow-up to plan 018 across every test
+    # file in the repo (no exclusions remain).
     - errorlint
-
-  exclusions:
-    rules:
-      # Tests intentionally compare errors they construct directly against
-      # a sentinel, which is precise and does not need errors.Is.
-      # Pre-existing across many packages (pkg/aos, pkg/tcf, pkg/usdl, and
-      # more); not part of plan 018's scope.
-      - path: _test\.go
-        linters:
-          - errorlint

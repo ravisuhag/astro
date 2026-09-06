@@ -2,6 +2,7 @@ package usdl_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/spp"
@@ -60,7 +61,7 @@ func TestMAPPacketService_EmptyData(t *testing.T) {
 	config := usdl.ChannelConfig{HasFECF: true}
 	svc := usdl.NewMAPPacketService(100, 1, 0, vc, config, nil)
 
-	if err := svc.Send([]byte{}); err != usdl.ErrEmptyData {
+	if err := svc.Send([]byte{}); !errors.Is(err, usdl.ErrEmptyData) {
 		t.Errorf("expected ErrEmptyData, got %v", err)
 	}
 }
@@ -240,7 +241,7 @@ func TestMAPAccessService_SizeMismatch(t *testing.T) {
 	config := usdl.ChannelConfig{HasFECF: true}
 	svc := usdl.NewMAPAccessService(100, 1, 0, 8, vc, config, nil)
 
-	if err := svc.Send([]byte{0x01}); err != usdl.ErrSizeMismatch {
+	if err := svc.Send([]byte{0x01}); !errors.Is(err, usdl.ErrSizeMismatch) {
 		t.Errorf("expected ErrSizeMismatch, got %v", err)
 	}
 }
@@ -387,7 +388,7 @@ func TestMAPOctetStreamService_RejectsFixedLength(t *testing.T) {
 	svc := usdl.NewMAPOctetStreamService(100, 1, 0, vc, config, nil)
 
 	// Clause 4.2.4.1 note 1: octet streams cannot ride fixed-length frames.
-	if err := svc.Send([]byte{0x01}); err != usdl.ErrOctetStreamFixedLength {
+	if err := svc.Send([]byte{0x01}); !errors.Is(err, usdl.ErrOctetStreamFixedLength) {
 		t.Errorf("expected ErrOctetStreamFixedLength, got %v", err)
 	}
 }
@@ -397,7 +398,7 @@ func TestMAPOctetStreamService_EmptyData(t *testing.T) {
 	config := usdl.ChannelConfig{HasFECF: true}
 	svc := usdl.NewMAPOctetStreamService(100, 1, 0, vc, config, nil)
 
-	if err := svc.Send([]byte{}); err != usdl.ErrEmptyData {
+	if err := svc.Send([]byte{}); !errors.Is(err, usdl.ErrEmptyData) {
 		t.Errorf("expected ErrEmptyData, got %v", err)
 	}
 }
@@ -556,7 +557,7 @@ func TestMAPServices_OCFSupplier(t *testing.T) {
 	t.Run("MAPP", func(t *testing.T) {
 		vc := usdl.NewVirtualChannel(1, 10)
 		svc := usdl.NewMAPPacketService(100, 1, 0, vc, config, nil)
-		if err := svc.Send([]byte{0x01}); err != usdl.ErrNoOCFSupplier {
+		if err := svc.Send([]byte{0x01}); !errors.Is(err, usdl.ErrNoOCFSupplier) {
 			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
 		}
 		svc.SetOCFSupplier(func() []byte { return clcw })
@@ -572,7 +573,7 @@ func TestMAPServices_OCFSupplier(t *testing.T) {
 	t.Run("MAPA", func(t *testing.T) {
 		vc := usdl.NewVirtualChannel(1, 10)
 		svc := usdl.NewMAPAccessService(100, 1, 0, 4, vc, config, nil)
-		if err := svc.Send([]byte{1, 2, 3, 4}); err != usdl.ErrNoOCFSupplier {
+		if err := svc.Send([]byte{1, 2, 3, 4}); !errors.Is(err, usdl.ErrNoOCFSupplier) {
 			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
 		}
 		svc.SetOCFSupplier(func() []byte { return clcw })
@@ -588,7 +589,7 @@ func TestMAPServices_OCFSupplier(t *testing.T) {
 	t.Run("MAPO", func(t *testing.T) {
 		vc := usdl.NewVirtualChannel(1, 10)
 		svc := usdl.NewMAPOctetStreamService(100, 1, 0, vc, config, nil)
-		if err := svc.Send([]byte{0x01}); err != usdl.ErrNoOCFSupplier {
+		if err := svc.Send([]byte{0x01}); !errors.Is(err, usdl.ErrNoOCFSupplier) {
 			t.Fatalf("expected ErrNoOCFSupplier, got %v", err)
 		}
 		svc.SetOCFSupplier(func() []byte { return clcw })

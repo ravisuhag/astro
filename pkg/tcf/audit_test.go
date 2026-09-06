@@ -192,7 +192,7 @@ func TestCUCFineTimeExtWireFidelity(t *testing.T) {
 }
 
 func TestCUCFineBytesCap(t *testing.T) {
-	if _, err := NewCUC(CCSDSEpoch.Add(time.Second), WithCUCFineBytes(11)); err != ErrInvalidFineOctets {
+	if _, err := NewCUC(CCSDSEpoch.Add(time.Second), WithCUCFineBytes(11)); !errors.Is(err, ErrInvalidFineOctets) {
 		t.Errorf("FineBytes=11: err = %v, want ErrInvalidFineOctets", err)
 	}
 }
@@ -203,7 +203,7 @@ func TestPFieldFurtherExtensionBitRejected(t *testing.T) {
 	// First octet: extension set, CUC Level 1. Second octet: bit 0 set
 	// (a third P-field octet is not defined by CCSDS 301.0-B-4).
 	var p PField
-	if err := p.Decode([]byte{0x9C, 0x84}); err != ErrInvalidPField {
+	if err := p.Decode([]byte{0x9C, 0x84}); !errors.Is(err, ErrInvalidPField) {
 		t.Errorf("err = %v, want ErrInvalidPField", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestPFieldFurtherExtensionBitRejected(t *testing.T) {
 func TestCUCReservedExtensionBitsRejected(t *testing.T) {
 	// Valid extended CUC P-field except reserved bits 6-7 of octet 2 set.
 	data := []byte{0x9C, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	if _, err := DecodeCUC(data, time.Time{}); err != ErrInvalidPField {
+	if _, err := DecodeCUC(data, time.Time{}); !errors.Is(err, ErrInvalidPField) {
 		t.Errorf("err = %v, want ErrInvalidPField for reserved ext bits", err)
 	}
 }
@@ -221,7 +221,7 @@ func TestCUCReservedExtensionBitsRejected(t *testing.T) {
 func TestCDSReservedSubmsCodeRejected(t *testing.T) {
 	// P-field 0x43: CDS, Level 1, 16-bit day, sub-ms code '11' (reserved).
 	data := []byte{0x43, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00}
-	if _, err := DecodeCDS(data, time.Time{}); err != ErrReservedSubmsCode {
+	if _, err := DecodeCDS(data, time.Time{}); !errors.Is(err, ErrReservedSubmsCode) {
 		t.Errorf("err = %v, want ErrReservedSubmsCode", err)
 	}
 }
@@ -231,17 +231,17 @@ func TestCDSReservedSubmsCodeRejected(t *testing.T) {
 func TestCDSSubmsRangeChecked(t *testing.T) {
 	// 16-bit field is microseconds 0-999: 1000 must be rejected.
 	c := &CDS{DayBytes: 2, SubmsBytes: 2, Submilliseconds: 1000}
-	if err := c.Validate(); err != ErrInvalidSubmilliseconds {
+	if err := c.Validate(); !errors.Is(err, ErrInvalidSubmilliseconds) {
 		t.Errorf("us=1000: err = %v, want ErrInvalidSubmilliseconds", err)
 	}
 	// 32-bit field is picoseconds 0-999999999.
 	c = &CDS{DayBytes: 2, SubmsBytes: 4, Submilliseconds: 1000000000}
-	if err := c.Validate(); err != ErrInvalidSubmilliseconds {
+	if err := c.Validate(); !errors.Is(err, ErrInvalidSubmilliseconds) {
 		t.Errorf("ps=1e9: err = %v, want ErrInvalidSubmilliseconds", err)
 	}
 	// On the wire too: 0x03E8 = 1000 microseconds.
 	data := []byte{0x41, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01, 0x03, 0xE8}
-	if _, err := DecodeCDS(data, time.Time{}); err != ErrInvalidSubmilliseconds {
+	if _, err := DecodeCDS(data, time.Time{}); !errors.Is(err, ErrInvalidSubmilliseconds) {
 		t.Errorf("decode us=1000: err = %v, want ErrInvalidSubmilliseconds", err)
 	}
 	// Boundary values are accepted.
@@ -254,7 +254,7 @@ func TestCDSSubmsRangeChecked(t *testing.T) {
 func TestCDSExtensionFlagRejected(t *testing.T) {
 	// CDS P-field is a single octet; a set extension flag is invalid.
 	data := []byte{0xC0, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x01}
-	if _, err := DecodeCDS(data, time.Time{}); err != ErrInvalidPField {
+	if _, err := DecodeCDS(data, time.Time{}); !errors.Is(err, ErrInvalidPField) {
 		t.Errorf("err = %v, want ErrInvalidPField", err)
 	}
 }
@@ -303,7 +303,7 @@ func TestCCSLeapSecondFlagged(t *testing.T) {
 	}
 	// Second 60 anywhere but 23:59 is invalid.
 	bad := &CCS{Year: 2016, DayOfYear: 100, Hour: 12, Minute: 0, Second: 60}
-	if err := bad.Validate(); err != ErrInvalidCalendarTime {
+	if err := bad.Validate(); !errors.Is(err, ErrInvalidCalendarTime) {
 		t.Errorf("second=60 at 12:00: err = %v, want ErrInvalidCalendarTime", err)
 	}
 }
@@ -360,7 +360,7 @@ func TestASCIIStrictDecodeRejects(t *testing.T) {
 		" 2024-01-01T00:00:00",           // leading space
 	}
 	for _, s := range badA {
-		if _, err := a.Decode(s); err != ErrInvalidASCIIFormat {
+		if _, err := a.Decode(s); !errors.Is(err, ErrInvalidASCIIFormat) {
 			t.Errorf("Type A Decode(%q): err = %v, want ErrInvalidASCIIFormat", s, err)
 		}
 	}
@@ -374,7 +374,7 @@ func TestASCIIStrictDecodeRejects(t *testing.T) {
 		"2024-367T00:00:00",   // DOY 367
 	}
 	for _, s := range badB {
-		if _, err := b.Decode(s); err != ErrInvalidASCIIFormat {
+		if _, err := b.Decode(s); !errors.Is(err, ErrInvalidASCIIFormat) {
 			t.Errorf("Type B Decode(%q): err = %v, want ErrInvalidASCIIFormat", s, err)
 		}
 	}
@@ -438,10 +438,10 @@ func TestCUCTFieldOnlyRoundTrip(t *testing.T) {
 		t.Errorf("Level 2 CoarseTime = %d, want 42", d2.CoarseTime)
 	}
 
-	if _, err := DecodeCUCTField([]byte{0x01}, 4, 0, time.Time{}); err != ErrDataTooShort {
+	if _, err := DecodeCUCTField([]byte{0x01}, 4, 0, time.Time{}); !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("short data: err = %v, want ErrDataTooShort", err)
 	}
-	if _, err := DecodeCUCTField(tf, 0, 2, time.Time{}); err != ErrInvalidCoarseOctets {
+	if _, err := DecodeCUCTField(tf, 0, 2, time.Time{}); !errors.Is(err, ErrInvalidCoarseOctets) {
 		t.Errorf("coarse=0: err = %v, want ErrInvalidCoarseOctets", err)
 	}
 }
@@ -468,7 +468,7 @@ func TestCDSTFieldOnlyRoundTrip(t *testing.T) {
 			decoded.Day, decoded.Milliseconds, decoded.Submilliseconds,
 			c.Day, c.Milliseconds, c.Submilliseconds)
 	}
-	if _, err := DecodeCDSTField(tf, 4, 2, time.Time{}); err != ErrInvalidDaySegment {
+	if _, err := DecodeCDSTField(tf, 4, 2, time.Time{}); !errors.Is(err, ErrInvalidDaySegment) {
 		t.Errorf("dayBytes=4: err = %v, want ErrInvalidDaySegment", err)
 	}
 }
@@ -499,7 +499,7 @@ func TestCCSTFieldOnlyRoundTrip(t *testing.T) {
 		decoded.Hour != c.Hour || decoded.SubSecond != c.SubSecond {
 		t.Error("CCS T-field round trip mismatch")
 	}
-	if _, err := DecodeCCSTField(tf[:5], false, 1); err != ErrDataTooShort {
+	if _, err := DecodeCCSTField(tf[:5], false, 1); !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("short data: err = %v, want ErrDataTooShort", err)
 	}
 }
