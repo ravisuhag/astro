@@ -275,7 +275,7 @@ func isClosed(err error) bool {
 func TestRCFLoopbackDeliversAFrame(t *testing.T) {
 	now := testTime
 
-	frame, err := tmdl.NewTMTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x55}, 80), nil, nil)
+	frame, err := tmdl.NewTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x55}, 80), nil, nil)
 	if err != nil {
 		t.Fatalf("NewTMTransferFrame() = %v", err)
 	}
