@@ -224,6 +224,39 @@ func TestAssignmentChecksKeywordRules(t *testing.T) {
 	}
 }
 
+// TestLineErrorFormat pins the wording LineError's doc comment promises: "a
+// caller reading a 10,000-line ephemeris is told where the problem is rather
+// than only what it was." That means the line number and the underlying
+// error both have to appear in Error(), and Unwrap has to reach the
+// underlying error for errors.Is/errors.As.
+func TestLineErrorFormat(t *testing.T) {
+	err := At(10042, ErrKeywordNotUppercase)
+
+	const want = "ndm: line 10042: ndm: keyword must be uppercase and contain no blanks"
+	if got := err.Error(); got != want {
+		t.Errorf("LineError.Error() = %q, want %q", got, want)
+	}
+	if !errors.Is(err, ErrKeywordNotUppercase) {
+		t.Errorf("errors.Is(err, ErrKeywordNotUppercase) = false, want true")
+	}
+
+	var lineErr *LineError
+	if !errors.As(err, &lineErr) {
+		t.Fatalf("errors.As(err, &lineErr) = false, want true")
+	}
+	if lineErr.Line != 10042 {
+		t.Errorf("lineErr.Line = %d, want 10042", lineErr.Line)
+	}
+}
+
+// At with a nil error returns nil, so a caller can wrap every return value
+// without checking for nil first.
+func TestAtWithNilError(t *testing.T) {
+	if err := At(5, nil); err != nil {
+		t.Errorf("At(5, nil) = %v, want nil", err)
+	}
+}
+
 func TestUnread(t *testing.T) {
 	s := NewScanner([]byte("A = 1\nB = 2\n"), true)
 
