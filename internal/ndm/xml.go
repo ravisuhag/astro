@@ -544,18 +544,6 @@ func FindBlock(elements []Element, name string) ([]Element, bool) {
 	return nil, false
 }
 
-// FindBlocks returns the children of every block with this name, for the
-// blocks a message may repeat.
-func FindBlocks(elements []Element, name string) [][]Element {
-	var out [][]Element
-	for _, e := range elements {
-		if e.Name == name && len(e.Children) > 0 {
-			out = append(out, e.Children)
-		}
-	}
-	return out
-}
-
 // CollectComments returns the values of the COMMENT elements among these.
 func CollectComments(elements []Element) []string {
 	var out []string

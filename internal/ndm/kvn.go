@@ -1,6 +1,7 @@
 package ndm
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -222,7 +223,7 @@ type LineError struct {
 }
 
 func (e *LineError) Error() string {
-	return "ndm: line " + itoa(e.Line) + ": " + e.Err.Error()
+	return "ndm: line " + strconv.Itoa(e.Line) + ": " + e.Err.Error()
 }
 
 func (e *LineError) Unwrap() error { return e.Err }
@@ -233,21 +234,6 @@ func At(line int, err error) error {
 		return nil
 	}
 	return &LineError{Line: line, Err: err}
-}
-
-// itoa formats a non-negative int without pulling in strconv for one call.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
 }
 
 // Writer builds a navigation data message.
