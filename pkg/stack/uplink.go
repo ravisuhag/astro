@@ -461,6 +461,69 @@ func (c *Commander) Pending(vcid uint8) (int, error) {
 	return fop.PendingCount() + len(c.adBacklog[vcid]) + len(c.bdBacklog[vcid]), nil
 }
 
+// Initialize starts, or restarts, the AD service on a channel at the given
+// sequence number, without a CLCW check. It is the directive NewCommander
+// itself uses to bring every channel up at sequence number zero, exposed
+// here so an operator can bring a channel back the same way after an Alert
+// has left it in the Initial state.
+//
+// Anything still waiting in the channel's own backlog is untouched and is
+// offered to FOP-1 again the next time a frame is sent or a CLCW arrives.
+func (c *Commander) Initialize(vcid uint8, initialVS uint8) error {
+	_, fop, err := c.channel(vcid, false)
+	if err != nil {
+		return err
+	}
+	fop.Initialize(initialVS)
+	return nil
+}
+
+// InitiateADWithUnlock recovers a channel from a lockout by transmitting the
+// given encoded BC Unlock frame. FOP-1 serves it ahead of any AD or BD frame
+// and retransmits it on T1 expiry until a CLCW confirms the unlock; see
+// cop.FOP.InitiateADWithUnlock.
+func (c *Commander) InitiateADWithUnlock(vcid uint8, bcFrame []byte) error {
+	_, fop, err := c.channel(vcid, false)
+	if err != nil {
+		return err
+	}
+	return fop.InitiateADWithUnlock(bcFrame)
+}
+
+// InitiateADWithSetVR recovers a channel by transmitting the given encoded
+// BC Set V(R) frame: V(S) and NN(R) are set to vr once a CLCW confirms it.
+// See cop.FOP.InitiateADWithSetVR.
+func (c *Commander) InitiateADWithSetVR(vcid uint8, vr uint8, bcFrame []byte) error {
+	_, fop, err := c.channel(vcid, false)
+	if err != nil {
+		return err
+	}
+	return fop.InitiateADWithSetVR(vr, bcFrame)
+}
+
+// TerminateAD terminates the AD service on a channel: FOP-1's own queues are
+// purged and it returns to the Initial state, ready for one of the Initiate
+// directives above. The channel's backlog here in the Commander is a
+// separate thing and is not touched.
+func (c *Commander) TerminateAD(vcid uint8) error {
+	_, fop, err := c.channel(vcid, false)
+	if err != nil {
+		return err
+	}
+	fop.TerminateAD()
+	return nil
+}
+
+// ResumeAD resumes a channel's AD service after a T1 timeout suspended it
+// (timeout type TT1). See cop.FOP.ResumeAD.
+func (c *Commander) ResumeAD(vcid uint8) error {
+	_, fop, err := c.channel(vcid, false)
+	if err != nil {
+		return err
+	}
+	return fop.ResumeAD()
+}
+
 // Onboard is the spacecraft side of an uplink: CLTUs in, packets out, CLCWs
 // to send back.
 //
