@@ -191,10 +191,20 @@ func DecodeXMLAPM(data []byte) (*APM, error) {
 		}
 		switch e.Name {
 		case "OBJECT_NAME":
-			m.Metadata.ObjectName = ndm.ParseText(e.Value)
+			name, err := ndm.ParseTextRequired(e.Value)
+			if err != nil {
+				return nil, err
+			}
+			m.Metadata.ObjectName = name
 		case "OBJECT_ID":
-			m.Metadata.ObjectID = ndm.ParseText(e.Value)
+			id, err := ndm.ParseTextRequired(e.Value)
+			if err != nil {
+				return nil, err
+			}
+			m.Metadata.ObjectID = id
 		case "CENTER_NAME":
+			// Table 3-2 leaves CENTER_NAME optional, so a blank value here is
+			// not refused the way the mandatory fields above are.
 			m.Metadata.CenterName = ndm.ParseText(e.Value)
 		case "TIME_SYSTEM":
 			m.Metadata.TimeSystem = e.Value

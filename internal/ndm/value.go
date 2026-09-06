@@ -178,6 +178,24 @@ func ParseText(value string) string {
 	return b.String()
 }
 
+// ParseTextRequired reads a free-text value exactly as ParseText does, but
+// refuses one that parses to nothing but blanks (or nothing at all).
+//
+// A mandatory field calls this instead of ParseText. The distinction matters
+// because of what happens next, not what came in: an encoder writes a
+// free-text value verbatim, so the single blank a lone underscore parses to
+// is written back as an empty field, and a mandatory keyword with an empty
+// field fails on the next decode. Catching it here, at the point where the
+// value is first read, gives ErrBlankTextValue instead of a "mandatory
+// keyword is missing" that points at the wrong line.
+func ParseTextRequired(value string) (string, error) {
+	parsed := ParseText(value)
+	if strings.TrimSpace(parsed) == "" {
+		return "", ErrBlankTextValue
+	}
+	return parsed, nil
+}
+
 // ParseEpoch reads an absolute time (clause 7.5.10).
 //
 // Both forms are allowed in one file, so which one this is comes from the

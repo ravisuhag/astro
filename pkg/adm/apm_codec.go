@@ -137,10 +137,20 @@ func readAPMBody(s *ndm.Scanner, m *APM) error {
 
 		switch keyword {
 		case "OBJECT_NAME":
-			m.Metadata.ObjectName = ndm.ParseText(value)
+			name, err := ndm.ParseTextRequired(value)
+			if err != nil {
+				return ndm.At(line.Number, err)
+			}
+			m.Metadata.ObjectName = name
 		case "OBJECT_ID":
-			m.Metadata.ObjectID = ndm.ParseText(value)
+			id, err := ndm.ParseTextRequired(value)
+			if err != nil {
+				return ndm.At(line.Number, err)
+			}
+			m.Metadata.ObjectID = id
 		case "CENTER_NAME":
+			// Table 3-2 leaves CENTER_NAME optional, so a blank value here is
+			// not refused the way the mandatory fields above are.
 			m.Metadata.CenterName = ndm.ParseText(value)
 		case "TIME_SYSTEM":
 			m.Metadata.TimeSystem = value
