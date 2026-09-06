@@ -2,6 +2,7 @@ package tcf
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 )
@@ -123,7 +124,7 @@ func TestCUCLevel2RequiresEpoch(t *testing.T) {
 
 	// Decoding Level 2 without an epoch should fail
 	_, err = DecodeCUC(encoded, time.Time{})
-	if err != ErrEpochRequired {
+	if !errors.Is(err, ErrEpochRequired) {
 		t.Errorf("expected ErrEpochRequired, got %v", err)
 	}
 }
@@ -132,7 +133,7 @@ func TestCUCOverflow(t *testing.T) {
 	// Time before epoch
 	beforeEpoch := CCSDSEpoch.Add(-1 * time.Second)
 	_, err := NewCUC(beforeEpoch)
-	if err != ErrOverflow {
+	if !errors.Is(err, ErrOverflow) {
 		t.Errorf("expected ErrOverflow for time before epoch, got %v", err)
 	}
 }
@@ -181,7 +182,7 @@ func TestCUCHumanize(t *testing.T) {
 
 func TestCUCDataTooShort(t *testing.T) {
 	_, err := DecodeCUC([]byte{0x1C}, time.Time{})
-	if err != ErrDataTooShort {
+	if !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("expected ErrDataTooShort, got %v", err)
 	}
 }
@@ -190,7 +191,7 @@ func TestCUCInvalidTimeCodeID(t *testing.T) {
 	// Build a P-field with CDS time code ID (100 = 0x04)
 	data := []byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	_, err := DecodeCUC(data, time.Time{})
-	if err != ErrInvalidTimeCodeID {
+	if !errors.Is(err, ErrInvalidTimeCodeID) {
 		t.Errorf("expected ErrInvalidTimeCodeID, got %v", err)
 	}
 }

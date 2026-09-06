@@ -2,6 +2,7 @@ package aos_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/aos"
@@ -103,7 +104,7 @@ func TestMultiplexingService_VariableLength_Rejected(t *testing.T) {
 	config := aos.ChannelConfig{} // FrameLength=0, invalid for AOS
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewMultiplexingService(50, 1, vc, config, nil)
-	if err := tx.Send([]byte{0x01}); err != aos.ErrDataFieldTooSmall {
+	if err := tx.Send([]byte{0x01}); !errors.Is(err, aos.ErrDataFieldTooSmall) {
 		t.Errorf("expected ErrDataFieldTooSmall on variable-length, got %v", err)
 	}
 }
@@ -120,7 +121,7 @@ func TestMultiplexingService_NoSizer(t *testing.T) {
 	if err := vc.Add(frame); err != nil {
 		t.Fatalf("vc.Add() error = %v", err)
 	}
-	if _, err := rx.Receive(); err != aos.ErrNoPacketSizer {
+	if _, err := rx.Receive(); !errors.Is(err, aos.ErrNoPacketSizer) {
 		t.Errorf("expected ErrNoPacketSizer, got %v", err)
 	}
 }
@@ -129,7 +130,7 @@ func TestMultiplexingService_EmptyData(t *testing.T) {
 	config := aos.ChannelConfig{FrameLength: 64, HasFECF: true}
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewMultiplexingService(50, 1, vc, config, nil)
-	if err := tx.Send(nil); err != aos.ErrEmptyData {
+	if err := tx.Send(nil); !errors.Is(err, aos.ErrEmptyData) {
 		t.Errorf("expected ErrEmptyData, got %v", err)
 	}
 }
@@ -234,7 +235,7 @@ func TestVirtualChannelAccessService_FixedLength_RejectsShortSDU(t *testing.T) {
 	config := aos.ChannelConfig{FrameLength: 64, HasFECF: true}
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewVirtualChannelAccessService(50, 1, 16, vc, config, nil)
-	if err := tx.Send(make([]byte, 16)); err != aos.ErrSizeMismatch {
+	if err := tx.Send(make([]byte, 16)); !errors.Is(err, aos.ErrSizeMismatch) {
 		t.Errorf("expected ErrSizeMismatch for short SDU, got %v", err)
 	}
 }
@@ -243,7 +244,7 @@ func TestVirtualChannelAccessService_SizeMismatch(t *testing.T) {
 	config := aos.ChannelConfig{} // variable
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewVirtualChannelAccessService(50, 1, 8, vc, config, nil)
-	if err := tx.Send([]byte{0x01}); err != aos.ErrSizeMismatch {
+	if err := tx.Send([]byte{0x01}); !errors.Is(err, aos.ErrSizeMismatch) {
 		t.Errorf("expected ErrSizeMismatch, got %v", err)
 	}
 }
@@ -253,7 +254,7 @@ func TestVirtualChannelAccessService_TooLarge(t *testing.T) {
 	vc := aos.NewVirtualChannel(1, 10)
 	tx := aos.NewVirtualChannelAccessService(50, 1, 4, vc, config, nil)
 	huge := make([]byte, 256)
-	if err := tx.Send(huge); err != aos.ErrDataTooLarge {
+	if err := tx.Send(huge); !errors.Is(err, aos.ErrDataTooLarge) {
 		t.Errorf("expected ErrDataTooLarge, got %v", err)
 	}
 }

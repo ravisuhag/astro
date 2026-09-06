@@ -1,6 +1,9 @@
 package tcf
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestPFieldEncodeDecodeNoExtension(t *testing.T) {
 	p := PField{
@@ -82,7 +85,7 @@ func TestPFieldSize(t *testing.T) {
 
 func TestPFieldDecodeDataTooShort(t *testing.T) {
 	var p PField
-	if err := p.Decode(nil); err != ErrDataTooShort {
+	if err := p.Decode(nil); !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("expected ErrDataTooShort, got %v", err)
 	}
 }
@@ -90,7 +93,7 @@ func TestPFieldDecodeDataTooShort(t *testing.T) {
 func TestPFieldDecodeExtensionDataTooShort(t *testing.T) {
 	// Extension flag set but only 1 byte provided
 	var p PField
-	if err := p.Decode([]byte{0x80}); err != ErrDataTooShort {
+	if err := p.Decode([]byte{0x80}); !errors.Is(err, ErrDataTooShort) {
 		t.Errorf("expected ErrDataTooShort, got %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 package usdl_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/pkg/usdl"
@@ -65,7 +66,7 @@ func TestMasterChannel_SCIDMismatch(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 
 	frame, _ := usdl.NewTransferFrame(999, 1, 0, []byte{0x01})
-	if err := mc.AddFrame(frame); err != usdl.ErrSCIDMismatch {
+	if err := mc.AddFrame(frame); !errors.Is(err, usdl.ErrSCIDMismatch) {
 		t.Errorf("expected ErrSCIDMismatch, got %v", err)
 	}
 }
@@ -77,7 +78,7 @@ func TestMasterChannel_VCNotFound(t *testing.T) {
 	mc.AddVirtualChannel(vc, 1)
 
 	frame, _ := usdl.NewTransferFrame(100, 5, 0, []byte{0x01})
-	if err := mc.AddFrame(frame); err != usdl.ErrVirtualChannelNotFound {
+	if err := mc.AddFrame(frame); !errors.Is(err, usdl.ErrVirtualChannelNotFound) {
 		t.Errorf("expected ErrVirtualChannelNotFound, got %v", err)
 	}
 }

@@ -253,7 +253,7 @@ func TestTransferFrame_FECF_CRCMismatch(t *testing.T) {
 		t.Fatalf("Encode() error = %v", err)
 	}
 	encoded[len(encoded)/2] ^= 0xFF
-	if _, err := aos.DecodeTransferFrame(encoded, 0, false, true); err != aos.ErrCRCMismatch {
+	if _, err := aos.DecodeTransferFrame(encoded, 0, false, true); !errors.Is(err, aos.ErrCRCMismatch) {
 		t.Errorf("expected ErrCRCMismatch, got %v", err)
 	}
 }
