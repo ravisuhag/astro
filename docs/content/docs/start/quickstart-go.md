@@ -128,5 +128,5 @@ If the two disagree, the receiver reads the last two bytes as payload. That mism
 This built one packet by hand. Real systems use the service layer, which handles sequence counting, packing packets into frames, and filling the leftover space correctly.
 
 - [Downlink guide](/docs/guides/downlink), the same chain with services, two virtual channels, and a ground-side receiver
-- [SPP protocol page](/protocols/transport/spp), the field map and the rules that bite
-- [SPP Go API](/protocols/transport/spp), the service layer, secondary headers, options
+- [SPP protocol page](/protocols/transport/spp), the field map and [the rules that bite](/protocols/transport/spp#gotchas)
+- [The SPP service layer](/protocols/transport/spp#service-layer), which does the sequence counting and packing for you

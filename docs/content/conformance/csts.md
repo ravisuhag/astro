@@ -169,11 +169,11 @@ annex G prints files, and it is stated rather than glossed over.
 
 ## Wire test vectors
 
-The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/csts) — 10 vectors, 5 encode and 5 decode.
+The files backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/csts) — 22 vectors, 11 encode and 11 decode.
 
 | File | |
 |---|---|
-| [`csts/framework.json`](https://github.com/ravisuhag/astro/blob/main/vectors/csts/framework.json) | 10 vectors |
+| [`csts/framework.json`](https://github.com/ravisuhag/astro/blob/main/vectors/csts/framework.json) | 22 vectors |
 
 These are **derived, not published**, and the corpus note says so. CCSDS 921.1-B-2 prints no octets at all. Each vector's note carries its derivation from annex F octet by octet, which is the most a reader can be given: it lets the derivation be checked against the module instead of against this package.
 

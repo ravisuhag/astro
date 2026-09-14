@@ -2,7 +2,7 @@
 title: Packet Utilization Standard
 short: PUS
 description: "PICS proforma: what this package implements, clause by clause."
-order: 210
+order: 205
 ---
 
 ## Conformance Statement for `pkg/pus`, ECSS-E-ST-70-41C
@@ -243,10 +243,11 @@ and TM destination ID, all 16 bits (Figures 7-7 and 7-9).
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/pus) — 10 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/pus) — 13 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
+| [`pus/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/pus/interop.json) | 3 vectors, captured from spacepackets 0.32.0 |
 | [`pus/tc-header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/pus/tc-header.json) | 10 vectors |
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

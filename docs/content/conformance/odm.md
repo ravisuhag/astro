@@ -2,7 +2,7 @@
 title: Orbit Data Messages
 short: ODM
 description: "ICS proforma: what this package implements, item by item."
-order: 210
+order: 215
 ---
 
 ## Conformance Statement for `pkg/odm`, CCSDS 502.0-B-3
@@ -351,8 +351,6 @@ The files backing this statement live in the [vector corpus](https://github.com/
 | File | |
 |---|---|
 | [`odm/messages.json`](https://github.com/ravisuhag/astro/blob/main/vectors/odm/messages.json) | 11 vectors |
-| `odm/opm-*.kvn`, `odm/omm-*.kvn`, `odm/oem-*.kvn`, `odm/ocm-*.kvn` | the annex G examples as readable files |
-| `odm/ocm-xml.xml` | figure G-20, the same OCM in the XML form of section 8 |
 
 Both are **published text rather than derived values**: annex G of the Blue Book prints them, so a second working group wrote them.
 

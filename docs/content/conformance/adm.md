@@ -2,7 +2,7 @@
 title: Attitude Data Messages
 short: ADM
 description: "Coverage matrix: what this package implements, clause by clause."
-order: 220
+order: 217
 ---
 
 ## Conformance Statement for `pkg/adm`, CCSDS 504.0-B-2
@@ -193,8 +193,6 @@ The files backing this statement live in the [vector corpus](https://github.com/
 | File | |
 |---|---|
 | [`adm/attitude.json`](https://github.com/ravisuhag/astro/blob/main/vectors/adm/attitude.json) | 8 vectors |
-| `adm/apm-*.kvn`, `adm/aem-*.kvn`, `adm/acm-*.kvn` | the annex G examples as readable files |
-| `adm/acm-xml.xml` | the ACM of figure G-12 in the XML form of section 7 |
 
 All are **published text rather than derived values**: annex G of the Blue Book prints them.
 

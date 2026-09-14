@@ -200,10 +200,12 @@ proxy, so proxy runs `0x00`-`0x09` and resumes at `0x0B`.
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/cfdp) — 14 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/cfdp) — 25 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
+| [`cfdp/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cfdp/interop.json) | 7 vectors, captured from spacepackets 0.32.0 |
+| [`cfdp/transaction.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cfdp/transaction.json) | 4 vectors |
 | [`cfdp/wire.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cfdp/wire.json) | 14 vectors |
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

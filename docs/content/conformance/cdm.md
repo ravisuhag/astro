@@ -2,7 +2,7 @@
 title: Conjunction Data Message
 short: CDM
 description: "Coverage matrix: what this package implements, clause by clause."
-order: 225
+order: 218
 ---
 
 ## Conformance Statement for `pkg/cdm`, CCSDS 508.0-B-1
@@ -144,7 +144,6 @@ The files backing this statement live in the [vector corpus](https://github.com/
 | File | |
 |---|---|
 | [`cdm/conjunction.json`](https://github.com/ravisuhag/astro/blob/main/vectors/cdm/conjunction.json) | 1 vector |
-| `cdm/obligatory-keywords.kvn` | the clause 3.6.2 example as a readable file |
 
 Both are **published text rather than derived values**: clause 3.6.2 prints the example.
 

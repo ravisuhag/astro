@@ -221,6 +221,22 @@ Frame length is a managed parameter, fixed for a mission phase, so a real
 receiver always knows it. Pass it and the fill is trimmed. Pass zero and each
 frame runs to the next sync marker, leaving the fill attached to the last one.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the optical field being read |
+| `ErrInvalidASM` | Attached sync marker is not `1ACFFC1D` |
+| `ErrInvalidCodeRate` | Code rate is not 1/3, 1/2 or 2/3 |
+| `ErrInvalidBlockLength` | Code block is not the length its code rate requires |
+| `ErrInvalidTermination` | Termination bits are not zero |
+| `ErrCRCMismatch` | CRC-32 does not match, so the code block is corrupt |
+| `ErrEmptyFrame` | A sync marker was asked for on an empty transfer frame |
+| `ErrFrameTooLong` | Transfer frame is past the 65536-octet managed-parameter bound |
+| `ErrConditionerClosed` | The conditioner is closed because transmission closure has been declared |
+
 ## Reference
 
 - [CCSDS 142.0-B-1](https://public.ccsds.org/Pubs/142x0b1.pdf), Optical Communications Coding and Synchronization

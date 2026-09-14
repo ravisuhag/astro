@@ -25,7 +25,7 @@ So the decoders are the attack surface, and this page is what is done about that
 make fuzz-smoke
 ```
 
-runs a short burst — 15 seconds per target by default — over nearly the whole corpus: almost every target above has its own `go test -run '^$' -fuzz` line in the Makefile. A handful of older targets are not yet wired into that list and still have to be run by hand with `go test -fuzz`. A new decoder is expected to arrive with a target already in `fuzz-smoke`, per [the contributing guide](/docs/contribute/adding-a-protocol).
+runs a short burst — 15 seconds per target by default — over 74 of them, each with its own `go test -run '^$' -fuzz` line in the Makefile. The remaining 10 are extra targets in `pkg/pus`, `pkg/pxsc` and `pkg/xtce` that are not yet wired into that list, and still have to be run by hand with `go test -fuzz`. A new decoder is expected to arrive with a target already in `fuzz-smoke`, per [the contributing guide](/docs/contribute/adding-a-protocol).
 
 ## Resource limits
 
@@ -33,21 +33,33 @@ A length field in a header is a number an attacker picks. Where a standard sets 
 
 | Package | Limit | Value | Why |
 |---|---|---|---|
-| `pkg/bp` | none | — | Version 7 decodes from a caller-supplied slice rather than a stream, so a length field can only claim what is already in memory. The caller's own bound is the ceiling |
+| `pkg/bp` | `MaxReassembledADU` | 64 MiB | `TotalADULength` arrives on the wire, so without a ceiling one small fragment claiming a huge total makes `Reassemble` allocate it. RFC 9171 sets no limit. Decoding a whole bundle needs no limit: it reads from a caller-supplied slice, so a length field can only claim what is already in memory |
 | `pkg/ltp` | `DefaultMaxBlockSize` | 64 MiB | Not in RFC 5326: a segment offset is an SDNV reaching 2^64, so one corrupt segment could claim a huge offset |
+| `pkg/ltp` | `DefaultMaxOutstandingReports` | 1024 | A sender that never acknowledges a report would otherwise let the receiver's per-checkpoint state grow without end |
+| `pkg/cfdp` | `DefaultMaxFileSize` | 64 MiB | A peer declares the file size, and the receiver allocates for it |
+| `pkg/cfdp` | `DefaultMaxSegments` | 65536 | Bounds the received-data set a lossy transfer builds, well above what an ordinary one fragments into |
+| `pkg/cfdp` | `MaxIDWidth` | 8 | Entity ID widths are caller-declared |
+| `pkg/cfdp` | `MaxSegmentMetadataSize` | 63 | The widest a 6-bit length field can describe, per clause 5.3 table 5-14 |
+| `pkg/pxdl` | `DefaultMaxPacketSize` | 64 KiB | The standard sets no ceiling on a reassembled packet, so a stream that never ends one grows it forever |
+| `pkg/pxdl` | `DefaultMaxPending` | 32 | How many routing IDs may hold a partial packet at once |
+| `pkg/ldc` | `WithMaxSamples` | 2^28 samples | A zero-block run costs a handful of input bits and yields thousands of samples, so an unbounded `Decompress` can grow output for as long as the input lasts |
 | `pkg/xtce` | `MaxDocumentSize` | 64 MiB | A very large database file |
 | `pkg/xtce` | `MaxDepth` | 100 | A deeply nested document. The check runs as a token scan before any decoding, so deep input is refused rather than recursed into |
+| `pkg/xtce` | `MaxFields` | 2^18 | How many fields one `Layout` may hold, once repeats and inheritance have been spliced together |
+| `pkg/xtce` | `MaxRepeatCount` | 2^16 | On the dynamic path a repeat count comes straight out of the packet being parsed |
 | `pkg/sle` | `DefaultMaxMessageSize` | 16 MiB | A TML header promising more than exists |
+| `pkg/sle` | `DefaultMaxLength` | 16 MiB | What one BER decoder accepts from a length field |
 | `pkg/sle` | `MaxSpaceLinkDataUnit` | 65536 | Ceiling on a delivered frame |
 | `pkg/sle` | `MaxEventQualifier` | 1024 | Bounded opaque field |
 | `pkg/sdnv` | `MaxEncodedSize` | 10 | A 64-bit value needs at most 10 octets; more is a malformed or padded encoding |
-| `pkg/cfdp` | `MaxIDWidth` | 8 | Entity ID widths are caller-declared |
 
 Where the limit is a `Default`, it is a configurable field: set it to what your mission actually sends rather than leaving headroom you do not need.
 
 ## XML, and why the usual attacks do not apply
 
 `pkg/xtce` reads XML, which normally means worrying about external entities. Go's `encoding/xml` does not fetch DTDs and does not expand external entities, so XXE, entity expansion bombs and network callbacks from a document are not reachable. What remains is plain resource abuse, and that is what `MaxDocumentSize` and `MaxDepth` bound.
+
+`pkg/ndm` reads XML too, through its own reader rather than a struct unmarshal, and caps element nesting at 64 levels. That cap is not configurable: a conforming navigation message nests about six levels, and without a ceiling a few tens of megabytes of repeated open tags would drive the goroutine stack past its limit, which no `recover` catches.
 
 There is no XSD validation. The standard library has no XSD validator and this library takes no dependencies, so `Validate` runs semantic checks written in Go: references resolve, inheritance does not loop, names do not collide. A file that breaks the schema in a way those checks miss will load. Run `xmllint` over it first if that matters.
 

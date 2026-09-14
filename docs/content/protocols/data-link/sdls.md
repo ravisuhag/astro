@@ -284,6 +284,29 @@ that one.
 
 Setting `SeqWindow` to 0 turns the check off. Only do that in tests.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the security header or trailer |
+| `ErrInvalidSPI` | SPI is 0 or 65535, both reserved by CCSDS |
+| `ErrInvalidKey` | Key is not the 32 bytes AES-256 requires |
+| `ErrInvalidMode` | Mode is not Authentication, Encryption or AuthenticatedEncryption |
+| `ErrUnsupportedMode` | Encryption without authentication, which this package does not implement |
+| `ErrInvalidFieldLengths` | Field lengths do not describe a usable header or trailer |
+| `ErrHeaderTooLong` | Security header is past the maximum of 64 octets |
+| `ErrInvalidIVCounter` | IV counter length does not match `FieldLengths.IV` |
+| `ErrMaskTooShort` | Authentication bit mask is shorter than the data it must cover |
+| `ErrUnknownSPI` | No security association is registered for that SPI |
+| `ErrSAChannelMismatch` | The security association is not bound to this channel |
+| `ErrNoAntiReplayCounter` | Anti-replay was asked for, but the SA has no IV or sequence number to check |
+| `ErrAuthenticationFailed` | The MAC or tag does not verify |
+| `ErrReplayDetected` | Sequence number was rejected as a replay |
+| `ErrIVExhausted` | The IV space for this key is used up |
+| `ErrInvalidPadLength` | Pad length is past the recovered data field |
+
 ## Reference
 
 - [CCSDS 355.0-B-2](https://public.ccsds.org/Pubs/355x0b2.pdf), Space Data Link Security Protocol

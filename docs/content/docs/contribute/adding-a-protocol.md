@@ -86,7 +86,19 @@ Put them under `## Gotchas` on a page with a handful, or give each one its own n
 
 The guides use `## Things that will bite you` for the same job. That is deliberate: a guide is read start to finish, a protocol page is scanned.
 
-**`## Using the package`**: quick start, the types and options that matter, and an error table. Sits between Gotchas and Notes. Name the sections for what they do (`## Quick start`, `## Errors`) rather than nesting them all under one heading; the page's table of contents is the navigation.
+**The Go API**: the quick start, the types and options that matter, and an error table. It sits between the gotchas and Notes. Give each part its own `##` heading named for what it does — `## Quick start`, `## Errors`, or whatever the package needs — rather than nesting them all under one `## Using the package`. The page's table of contents is the navigation, so a reader looking for the error list should see it there.
+
+**`## Errors`** is the one part of the API section every page with exported errors owes the reader. A table, one row per exported `Err*` variable, with what makes it happen:
+
+```markdown
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrInvalidAPID` | APID outside 0-2047 |
+```
+
+Keep the wording in the table short and say what the caller did wrong, not what the code checked. If the package wraps errors from another one, say so under the table.
 
 **`## Notes`**: optional. Commentary on why the format looks the way it does. Say plainly that it is commentary, or cite the Green Book where it explains the choice. Do not present a plausible reconstruction as fact; people build spacecraft from this.
 

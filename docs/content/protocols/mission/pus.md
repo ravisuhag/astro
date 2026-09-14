@@ -489,6 +489,33 @@ the original.
 The repetition number is always there. Clause 6.12.3.3j item 1 makes it part
 of every check definition, whatever Figure 8-114's bracket suggests.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the PUS field being read |
+| `ErrInvalidVersion` | PUS version is not 2, and this package speaks PUS-C only |
+| `ErrInvalidProfile` | The mission profile does not describe a usable header |
+| `ErrHeaderTooLarge` | Secondary header is past the 63-octet mission profile limit |
+| `ErrHeaderNotWordAligned` | Secondary header is not a whole number of mission words |
+| `ErrUnknownMessageType` | No decoder is registered for that service and subservice |
+| `ErrDuplicateMessageType` | That message type is already registered |
+| `ErrWrongMessageType` | The message type does not match the decoder being used |
+| `ErrValueTooLarge` | A value does not fit the width the mission profile declares |
+| `ErrFieldWidthMismatch` | Value length does not match the width the parameter layout declares |
+| `ErrInvalidParameterLayout` | The parameter layout is not usable |
+| `ErrNoParameterResolver` | This ST[12] message type needs a `ParameterResolver` and none was given |
+| `ErrUnsupportedTimeFormat` | Time format is not one this package writes |
+| `ErrInvalidSeverity` | Event severity is not one ST[05] defines |
+| `ErrInvalidTimeWindow` | ST[11] time window is not usable |
+| `ErrCapabilityNotSupported` | The mission profile does not declare that ST[11] capability |
+| `ErrInvalidCheckType` | ST[12] check type is not one the standard defines |
+| `ErrCheckCriteriaMismatch` | ST[12] check criteria do not match the check type |
+| `ErrPacketLengthMismatch` | An embedded packet's length field disagrees with the octets given |
+| `ErrTrailingBytes` | Octets remain after a fixed-size message body |
+
 ## Reference
 
 - [ECSS-E-ST-70-41C](https://ecss.nl/standard/ecss-e-st-70-41c-space-engineering-telemetry-and-telecommand-packet-utilization-15-april-2016/), Telemetry and telecommand packet utilization

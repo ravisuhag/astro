@@ -139,10 +139,12 @@ behavior, so no claim is made against the profile itself, see A1.5.
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/ltp) — 9 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/ltp) — 19 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
-| [`ltp/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ltp/header.json) | 9 vectors |
+| [`ltp/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ltp/header.json) | 10 vectors |
+| [`ltp/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ltp/interop.json) | 5 vectors, captured from ION-DTN |
+| [`ltp/session.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ltp/session.json) | 4 vectors |
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

@@ -158,6 +158,89 @@ byte string whose contents are themselves CBOR. A Bundle Age block carrying
 300 ms encodes as `0x43` — a three-octet byte string — wrapping `0x19012c`.
 astro's constructors and accessors peel both layers.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`. There are enough of them that they are grouped here by what was being read when the error came back.
+
+### Endpoint IDs, timestamps and CRCs
+
+| Error | Meaning |
+|---|---|
+| `ErrUnknownURIScheme` | URI scheme code in an endpoint ID is not one BPv7 defines |
+| `ErrMalformedEID` | Endpoint ID does not decode |
+| `ErrIPNComponentTooLarge` | An `ipn` allocator or node number does not fit in 32 bits |
+| `ErrMalformedTimestamp` | Creation timestamp does not decode |
+| `ErrInvalidCRCType` | CRC type code is not one BPv7 defines |
+| `ErrWrongCRCWidth` | CRC field width does not match the CRC type |
+| `ErrCRCMismatch` | The CRC does not match the block contents |
+
+### The primary block
+
+| Error | Meaning |
+|---|---|
+| `ErrUnsupportedVersion` | The bundle is not version 7 |
+| `ErrMalformedPrimaryBlock` | Primary block does not decode |
+| `ErrPrimaryBlockLengthMismatch` | Primary block length disagrees with its flags and CRC type |
+| `ErrAdminRecordWantsReports` | An administrative record asks for status reports |
+| `ErrAnonymousBundleFragmentable` | An anonymous bundle does not set the must-not-fragment flag |
+| `ErrAnonymousBundleWantsReports` | An anonymous bundle asks for status reports |
+
+### Canonical blocks
+
+| Error | Meaning |
+|---|---|
+| `ErrMalformedCanonicalBlock` | Canonical block does not decode |
+| `ErrCanonicalBlockLengthMismatch` | Canonical block length disagrees with its CRC type |
+| `ErrMalformedBlockData` | Block-type-specific data does not decode |
+| `ErrWrongBlockType` | The block is not the type this accessor reads |
+| `ErrReservedBlockType` | Block type code 0, which is reserved |
+| `ErrReservedBlockNumber` | Block number 0 or 1 used for something other than the primary or payload block |
+| `ErrPayloadBlockNumber` | The payload block is not block number 1 |
+| `ErrHopLimitOutOfRange` | Hop limit is outside 1-255 |
+
+### The bundle as a whole
+
+| Error | Meaning |
+|---|---|
+| `ErrDefiniteLengthBundle` | The bundle is not a CBOR indefinite-length array |
+| `ErrTrailingBytes` | Octets remain after the end of the bundle |
+| `ErrNoPrimaryBlock` | The bundle has no primary block |
+| `ErrNoPayloadBlock` | The bundle has no payload block |
+| `ErrPayloadBlockCount` | The bundle has more than one payload block |
+| `ErrPayloadBlockNotLast` | The payload block is not the last block |
+| `ErrDuplicateBlockNumber` | Two blocks share a block number |
+| `ErrDuplicateExtensionBlock` | More than one of an extension block that may appear once |
+| `ErrMissingBundleAgeBlock` | Creation time is unknown and no Bundle Age block is present |
+
+### Fragmentation and reassembly
+
+| Error | Meaning |
+|---|---|
+| `ErrMustNotFragment` | The bundle sets the must-not-fragment flag |
+| `ErrFragmentSizeTooSmall` | Fragment payload size is below one octet |
+| `ErrNotAFragment` | The bundle is not a fragment |
+| `ErrNoFragments` | Nothing was given to reassemble |
+| `ErrFragmentsDoNotMatch` | The fragments do not belong to the same bundle |
+| `ErrFragmentPastEnd` | A fragment extends past the total ADU length |
+| `ErrADUTooLarge` | The declared ADU length is past the reassembly ceiling |
+| `ErrIncompleteReassembly` | The fragments do not cover the whole ADU |
+
+### Administrative records
+
+| Error | Meaning |
+|---|---|
+| `ErrNotAnAdminRecord` | The bundle payload is not an administrative record |
+| `ErrMalformedAdminRecord` | Administrative record does not decode |
+| `ErrUnknownAdminRecordType` | Administrative record type is not one this package reads |
+| `ErrMalformedStatusReport` | Bundle status report does not decode |
+| `ErrStatusTimeWithoutAssertion` | A status item carries a time without asserting the status |
+
+Six more come from the shared CBOR decoder and surface whenever the octets are
+not valid deterministic CBOR at all: `ErrTruncated`, `ErrInvalidCBOR`,
+`ErrNotDeterministic`, `ErrWrongCBORType`, `ErrIndefiniteByteString` and
+`ErrExpectedBreak`. They are re-exported here, so `errors.Is` against the `bp`
+name is the right check.
+
 ## Reference
 
 [Package documentation](https://pkg.go.dev/github.com/ravisuhag/astro/pkg/bp) ·

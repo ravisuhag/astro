@@ -54,9 +54,12 @@ astro cadu sync --input bin --frame-len 1115 examples/capture/capture.bin
 --- CADU #2 (offset 1437, 1115 bytes) ---
   ASM: 1acffc1d
   Frame: 1111 bytes
+--- CADU #3 (offset 2737, 1115 bytes) ---
+  ASM: 1acffc1d
+  Frame: 1111 bytes
 ```
 
-1115 was a guess, and it is wrong. Two CADUs from a 4000-octet file, at offsets 137 and 1437, which is 1300 apart rather than 1115. Irregular spacing means the frame length is wrong.
+1115 was a guess, and it is wrong. Three CADUs from a 4000-octet file, at offsets 137, 1437 and 2737. They are 1300 apart, and you asked for 1115. **When the stride does not match the length you guessed, the guess is wrong.** The scan is stepping past markers it never looks at.
 
 1300 is a hint though: it is five times 260. Try that:
 
@@ -73,7 +76,7 @@ astro cadu sync --input bin --frame-len 260 examples/capture/capture.bin
 
 Fifteen CADUs, evenly spaced 260 apart. That is the frame length: 260 octets of CADU, so 4 of sync marker and 256 of frame.
 
-**Even spacing is the test.** A wrong frame length finds only the markers that happen to fall where it looks. The right one finds them all, at a constant stride.
+**The stride is the test, not the spacing on its own.** A wrong length still finds markers at an even stride, as 1115 did: it just skips the ones in between, so the stride comes out as some multiple of the real frame length. The right length is the one where the stride and the length you asked for are the same number. Divide the stride you got by small integers and try those.
 
 ## 2. Get the frames out
 
@@ -244,7 +247,7 @@ of the command.
 
 When a capture will not decode, in the order worth trying:
 
-1. **Frame length.** Wrong length finds sync markers at irregular offsets, or none.
+1. **Frame length.** Wrong length finds too few markers, or none. If the stride between the ones it found is a multiple of what you asked for, divide and try again.
 2. **Randomization.** Wrong guess gives a garbage frame header. Try both.
 3. **Frame error control.** Present when it is not expected eats two octets of data; expected when absent fails every CRC.
 4. **The OCF.** Same problem, four octets. `astro tm inspect` reports the flag, and the flag is in the frame, so this one you can read rather than guess.
@@ -257,7 +260,7 @@ When a capture will not decode, in the order worth trying:
 
 **A wrong guess rarely errors.** It produces plausible garbage. A frame header with version 0 and a sensible spacecraft ID is the strongest evidence you will get that the guess was right.
 
-**Sync marker spacing is your best diagnostic.** Even stride means the frame length is right. Nothing else about a capture is that unambiguous.
+**Sync marker stride is your best diagnostic.** The frame length is right when the stride between markers equals the length you asked for. An even stride on its own proves nothing: a length that is half or a fifth of the real one gives an even stride too.
 
 **Count corrupted frames once.** They report as both a CRC failure and a counter gap.
 

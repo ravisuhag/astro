@@ -16,7 +16,7 @@ tool is the exception: it uses a few libraries of its own.
 
 **New to CCSDS**: read [the stack](/docs/start/concepts). It explains how a sensor reading becomes radio symbols, and which package does which part. Every protocol page assumes you have read it.
 
-**Looking for a specific standard**: the [protocol index](/protocols) lists all 22, grouped by layer.
+**Looking for a specific standard**: the [protocol index](/protocols) lists all 29, grouped by layer.
 
 **Lost in the acronyms**: the [glossary](/docs/reference/glossary) expands every one, grouped by layer.
 
@@ -41,7 +41,7 @@ Then, depending on what you are building:
 
 ## What is covered
 
-22 protocols across transport, data link, coding and synchronization, ground-to-ground transfer, compression, time, packet utilization, and mission databases. Every one has a scope statement saying what Astro implements and what it leaves to you, plus a conformance page.
+29 standards across transport, data link, coding and synchronization, ground-to-ground transfer, compression, time, packet utilization, and mission databases. Every one has a scope statement saying what Astro implements and what it leaves to you, plus a conformance page.
 
 Before you trust any of it, read [how this is verified](/docs/reference/verification): it says which claims rest on a published test vector and which rest on a reading of the standard. [Performance](/docs/reference/performance) has the measured throughput of every layer, and [security](/docs/reference/security) covers what happens when the octets are hostile.
 

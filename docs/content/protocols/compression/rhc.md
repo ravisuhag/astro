@@ -232,6 +232,23 @@ produces ST[03] reports; feed their data fields in as fixed-length vectors, one
 per cycle, and carry the compressed output in space packets with `pkg/spp`.
 The two ends need only agree on `VectorLength`.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrInvalidVectorLength` | Vector length is outside 1-65535 bits |
+| `ErrInvalidRobustness` | Robustness level is outside 0-7 |
+| `ErrInvalidInterval` | Flag interval is negative |
+| `ErrInvalidPacketLength` | Input packet is not the configured vector length |
+| `ErrDataTooShort` | The coded bit stream ended early |
+| `ErrInvalidCount` | Counter codeword is not one the format defines |
+| `ErrInvalidRunLength` | A run-length codeword runs past the end of the vector |
+| `ErrVectorLengthMismatch` | The coded vector length disagrees with the configured one |
+| `ErrNotSynchronized` | The decompressor is still waiting for an uncompressed output vector |
+| `ErrMaskUnavailable` | The mask is not known because an earlier output vector carrying it was lost |
+
 ## Reference
 
 - [CCSDS 124.0-B-1](https://public.ccsds.org/Pubs/124x0b1.pdf), Robust

@@ -509,6 +509,49 @@ Authentication has three levels, picked by the service agreement and set on
 checks every PDU, each `HandlePDU` path verifies the credentials, transfer
 buffer entries included, before the machine acts on the PDU.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`. They are listed here in the order of the layers above: the framing first, then credentials, then the association and the services.
+
+| Error | Meaning |
+|---|---|
+| `ErrInvalidMessageType` | TML message type is not one ISP1 defines |
+| `ErrInvalidProtocolID` | TML protocol identification is not `ISP1` |
+| `ErrInvalidProtocolVersion` | TML protocol version is not one this package speaks |
+| `ErrInvalidContextLength` | TML context message body is not 12 octets |
+| `ErrInvalidContextParameters` | TML context parameters do not describe a usable heartbeat setup |
+| `ErrNonEmptyHeartbeat` | A TML heartbeat arrived with a body |
+| `ErrMessageTooLarge` | TML message body is past the maximum this reader accepts |
+| `ErrInvalidCredentials` | Credentials do not decode |
+| `ErrAuthenticationFailed` | The credential hash does not verify |
+| `ErrCredentialsExpired` | Credentials are outside the acceptable time window |
+| `ErrInvalidIdentifier` | Authority identifier is not one this association knows |
+| `ErrInvalidVersionNumber` | Version number is outside 1-65535 |
+| `ErrWrongState` | The operation is not allowed in the current association state |
+| `ErrNotBound` | The association is not bound |
+| `ErrAlreadyBound` | The association is already bound |
+| `ErrBindRejected` | The peer rejected the bind |
+| `ErrDuplicateInstance` | That service instance is already configured |
+| `ErrUnknownInstance` | No such service instance |
+| `ErrInstanceInUse` | That service instance is already in use |
+| `ErrVersionNotSupported` | The instance does not support that service version |
+| `ErrNotStarted` | The service instance is not started |
+| `ErrAlreadyStarted` | The service instance is already started |
+| `ErrInvalidReportingCycle` | Reporting cycle is outside 2-600 seconds |
+| `ErrInvalidProductionConfig` | Production configuration is not usable |
+| `ErrProductionNotRunning` | Production is not running |
+| `ErrUnexpectedPDU` | The PDU is not allowed in the current service state |
+| `ErrUnknownInvokeId` | A return does not match any outstanding invocation |
+| `ErrDuplicateInvokeId` | That invoke identifier is already used on this association |
+| `ErrInvokeIdExhausted` | Too many confirmed operations are outstanding, so no invoke identifier is free |
+| `ErrCltuOutOfSequence` | CLTU identification arrived out of sequence |
+
+Seven more come from the shared BER decoder and surface whenever a PDU will not
+parse at all: `ErrDataTooShort`, `ErrInvalidTag`, `ErrInvalidLength`,
+`ErrIndefiniteLength`, `ErrInvalidObjectIdentifier`, `ErrLengthTooLarge` and
+`ErrIntegerOverflow`. They are re-exported here, so `errors.Is` against the
+`sle` name is the right check.
+
 ## Reference
 
 - [CCSDS 913.1-B-2](https://public.ccsds.org/Pubs/913x1b2.pdf), Internet Protocol for Transfer Services

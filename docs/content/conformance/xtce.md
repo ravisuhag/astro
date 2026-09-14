@@ -2,7 +2,7 @@
 title: XTCE
 short: XTCE
 description: "Element coverage matrix: what pkg/xtce does with each schema element, and why XTCE has no PICS."
-order: 220
+order: 210
 ---
 
 ## Element coverage for `pkg/xtce`, XTCE 1.2 (OMG), CCSDS 660.1-G-2

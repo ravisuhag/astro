@@ -150,11 +150,12 @@ order: 50
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/bp) — 18 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/bp) — 24 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
 | [`bp/bundle.json`](https://github.com/ravisuhag/astro/blob/main/vectors/bp/bundle.json) | 18 vectors |
+| [`bp/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/bp/interop.json) | 6 vectors, captured from dtn7-go v0.10.2 |
 
 Four of them are **published octets rather than derived values**. RFC 9173 appendix A prints worked example bundles beside their hex, and the primary block, payload block, Bundle Age block and whole-bundle vectors are those bytes. A different working group wrote them, which is corroboration almost nothing else in this corpus has.
 

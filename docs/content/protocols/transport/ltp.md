@@ -262,6 +262,27 @@ than wrapping or guessing. It also caps an encoding at ten octets: RFC 6256
 allows leading `0x80` padding octets, but a padded encoding running past ten
 octets is refused with `ErrTooLong` even when the value itself is small.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the LTP field being read |
+| `ErrInvalidVersion` | LTP version is not 0, the only one defined |
+| `ErrUndefinedSegmentType` | Segment type code is not one the standard defines |
+| `ErrWrongSegmentType` | The segment type does not match the decoder being used |
+| `ErrTooManyExtensions` | More than 15 extensions in a header or trailer |
+| `ErrInvalidSerialNumber` | A checkpoint or report serial number is zero |
+| `ErrInvalidBounds` | A report segment's upper bound is below its lower bound |
+| `ErrInvalidClaim` | A reception claim does not describe a usable range |
+| `ErrInvalidReasonCode` | Cancel reason code is not one the standard defines |
+| `ErrSessionClosed` | The session is closed |
+| `ErrBlockTooLarge` | A data segment reaches past the maximum block size |
+| `ErrRedGreenOrder` | The red and green parts of a miscolored block overlap out of order |
+| `ErrReportOutOfRange` | A report segment claims coverage beyond the red part |
+| `ErrTooManyOutstandingReports` | Too many reports are outstanding, so the receiver cancelled the session |
+
 ## Reference
 
 - [RFC 5326](https://www.rfc-editor.org/rfc/rfc5326.txt), LTP specification, the wire format

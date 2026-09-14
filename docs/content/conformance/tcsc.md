@@ -142,10 +142,11 @@ NOTE: CCSDS 231.0-B-4 publishes no PICS proforma; its annex A is the service def
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tcsc) — 7 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tcsc) — 13 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
 | [`tcsc/bch.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tcsc/bch.json) | 7 vectors |
+| [`tcsc/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tcsc/interop.json) | 6 vectors, captured from Yamcs 5.13.5 |
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

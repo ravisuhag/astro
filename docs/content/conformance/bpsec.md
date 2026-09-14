@@ -230,7 +230,6 @@ The octets backing this statement live in the [vector corpus](https://github.com
 | File | |
 |---|---|
 | [`bpsec/security.json`](https://github.com/ravisuhag/astro/blob/main/vectors/bpsec/security.json) | 13 vectors |
-| [`keywrap/keywrap.json`](https://github.com/ravisuhag/astro/blob/main/vectors/keywrap/keywrap.json) | 6 vectors |
 
 Nearly all of them are **published octets rather than derived values.** RFC 9173 appendix A prints four worked examples with their keys, their intermediate canonical forms and the blocks that come out; RFC 3394 clause 4 prints six key wrap cases. Both are outside corroboration — different working groups wrote those bytes.
 

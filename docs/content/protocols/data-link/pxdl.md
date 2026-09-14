@@ -240,6 +240,30 @@ here means you wanted `NewTransferFrame`. The same check runs on `Encode`,
 because `PDUType` and `PortID` are exported and can be set past the
 constructor.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the Proximity-1 field being read |
+| `ErrInvalidVersion` | Transfer frame version is not `10`, which is what Version-3 requires |
+| `ErrInvalidFrameLength` | Frame length is outside 5-2048 octets |
+| `ErrDataTooLarge` | Data field is past the maximum of 2043 octets |
+| `ErrInvalidSCID` | Spacecraft ID does not fit 10 bits |
+| `ErrInvalidPortID` | Port ID does not fit 3 bits |
+| `ErrPortIDOnSupervisoryFrame` | Port ID is not zero on a supervisory frame |
+| `ErrInvalidPCID` | Physical channel ID is not 0 or 1 |
+| `ErrInvalidDFCID` | Data field construction ID is not one the standard defines |
+| `ErrNotUserFrame` | The frame carries supervisory data, not user data |
+| `ErrNotSupervisoryFrame` | The frame carries user data, not supervisory data |
+| `ErrInvalidQoS` | A supervisory PDU was sent on a service other than Expedited |
+| `ErrInvalidSPDU` | Supervisory PDU does not decode |
+| `ErrSPDUDataTooLarge` | Supervisory PDU data field is past 15 octets |
+| `ErrInvalidSegment` | Packet segment does not decode |
+| `ErrSegmentOutOfOrder` | A segment arrived before the first segment of its packet |
+| `ErrReassemblyTooLarge` | The reassembled packet is past the maximum size |
+
 ## Reference
 
 - [CCSDS 211.0-B-6](https://public.ccsds.org/Pubs/211x0b6e1.pdf), Proximity-1 Space Link Protocol, Data Link Layer

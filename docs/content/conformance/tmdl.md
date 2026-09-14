@@ -295,10 +295,11 @@ All 78 mandatory items are fully supported. Key implementations:
 
 ## Wire test vectors
 
-The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) — 20 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
+The octets backing this statement live in the [vector corpus](https://github.com/ravisuhag/astro/tree/main/vectors/tmdl) — 29 vectors. Each vector names the clause it comes from and carries the derivation that produced it.
 
 | File | |
 |---|---|
-| [`tmdl/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmdl/header.json) | 20 vectors |
+| [`tmdl/header.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmdl/header.json) | 21 vectors |
+| [`tmdl/interop.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tmdl/interop.json) | 8 vectors, captured from spacepackets 0.32.0 |
 
 These are data files, so any implementation can check itself against the same octets. See [`CONTRACT.md`](https://github.com/ravisuhag/astro/blob/main/vectors/CONTRACT.md) for how, and [how this is verified](/docs/reference/verification) for what rests on a published vector versus a reading of the clause.

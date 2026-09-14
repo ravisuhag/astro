@@ -13,10 +13,11 @@ table to fill in. What follows is a coverage matrix written against the
 normative text: each row names a feature, the clause that defines it, and what
 this package does with it.
 
-Rows marked **derived** were checked against the standard's text rather than a
-published test vector, because the standard publishes none for that item. The
-distinction matters: a derived row is one implementer's reading, and a
-round-trip test cannot tell you it is wrong.
+Every row here was checked against the standard's text rather than against a
+published test vector, because CCSDS 301.0-B-4 publishes none. That is worth
+saying plainly: each row is one implementer's reading of a clause, and a
+round-trip test cannot tell you it is wrong. The 14 vectors listed at the
+bottom pin the octets, but their derivations come from the same reading.
 
 ---
 
@@ -37,7 +38,6 @@ round-trip test cannot tell you it is wrong.
 |---|---|---|---|
 | First octet: extension flag, 3-bit ID, 4 detail bits | clause 3.2.2 and per-format | Y | `PField` |
 | Second octet when the extension flag is set | clause 3.2.2 | Y | 7 detail bits |
-| Implicit P-field (bare T-field) |: | Y | `EncodeTField`, `DecodeCUCTField`, `DecodeCDSTField`, `DecodeCCSTField`. The standard permits an agreed format without a preamble; the octet counts, variant, and epoch are then caller-supplied. |
 | Time code ID `001`, CUC Level 1 | clause 3.2 | Y | `TimeCodeCUCLevel1` |
 | Time code ID `010`, CUC Level 2 | clause 3.2 | Y | `TimeCodeCUCLevel2` |
 | Time code ID `100`, CDS | clause 3.3 | Y | `TimeCodeCDS`; level from detail bit 4 |

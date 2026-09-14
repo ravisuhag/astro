@@ -171,7 +171,7 @@ fmt.Printf("Corrected %d bit errors\n", corrections)
 
 **Note:** The caller must know the original data length to strip any padding, as the fill pattern is not self-describing.
 
-## BCH(63,56) Error Correction
+## BCH(63,56) error correction
 
 Each codeblock uses a BCH code that encodes 56 information bits (7 bytes) into 64 bits (8 bytes):
 

@@ -410,7 +410,7 @@ frame, err := pc.GetNextFrameOrIdle()  // Idle frame if no data
 err := pc.AddFrame(frame)
 ```
 
-### Composing with tmsc for Sync and Channel Coding
+### Composing with tmsc for sync and channel coding
 
 The `tmsc` package (CCSDS 131.0-B-5) handles the sync layer: ASM, pseudo-randomization, and CADU framing. Use it alongside `tmdl` for a complete send/receive pipeline:
 

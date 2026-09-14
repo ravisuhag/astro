@@ -145,6 +145,27 @@ The vectors are therefore **derived**, and the corpus says so. Each one carries
 its derivation from annex F octet by octet in its note, so a reader can check
 the derivation against the module rather than against this package.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrMalformedPDU` | Framework PDU does not decode |
+| `ErrMalformedHeader` | Standard operation header does not decode |
+| `ErrUnknownOperation` | Not an operation the framework defines |
+| `ErrMissingField` | A mandatory field is absent |
+| `ErrTrailingContent` | Octets remain after the structure ended |
+| `ErrMalformedCredentials` | Credentials do not decode |
+| `ErrCredentialsLength` | Credentials are outside 8-256 octets |
+| `ErrMalformedDiagnostic` | Diagnostic does not decode |
+| `ErrInvalidProcedureName` | Procedure name is not one the framework defines |
+| `ErrAppellationLength` | An appellation is outside 1-128 characters |
+| `ErrIdentifierLength` | Identifier is outside the length the standard allows |
+| `ErrIdentifierHasBlank` | An identifier contains a blank |
+| `ErrInvalidVersion` | Version number is below 1 |
+| `ErrIntegerRange` | Integer is outside the range its type allows |
+
 ## Reference
 
 - [CCSDS 921.1-B-2, Cross Support Transfer Service—Specification Framework](https://public.ccsds.org/Pubs/921x1b2e1.pdf)

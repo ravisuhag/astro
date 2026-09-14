@@ -2,7 +2,7 @@
 title: Tracking Data Message
 short: TDM
 description: "Coverage matrix: what this package implements, clause by clause."
-order: 215
+order: 216
 ---
 
 ## Conformance Statement for `pkg/tdm`, CCSDS 503.0-B-2
@@ -159,7 +159,6 @@ The files backing this statement live in the [vector corpus](https://github.com/
 | File | |
 |---|---|
 | [`tdm/tracking.json`](https://github.com/ravisuhag/astro/blob/main/vectors/tdm/tracking.json) | 1 vector |
-| `tdm/two-way-range.kvn` | the annex E example as a readable file |
 
 Both are **published text rather than derived values**: annex E of the Blue Book prints the example.
 

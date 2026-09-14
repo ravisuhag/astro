@@ -293,6 +293,38 @@ the header, and its two octets count toward the PDU data field length
 Whether you need it depends on what is underneath. If your frames already carry
 a Frame Error Control Field, this is a second layer.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the PDU field being read |
+| `ErrInvalidVersion` | PDU version is not 1, the one this package speaks |
+| `ErrInvalidEntityIDWidth` | Entity ID or sequence number width is outside 1-8 octets |
+| `ErrEntityIDOverflow` | An entity ID or sequence number does not fit its declared width |
+| `ErrValueTooLong` | An LV or TLV value is past 255 octets |
+| `ErrSegmentTooLarge` | Segment metadata is past 63 octets |
+| `ErrReservedBitsSet` | A field reserved for future use is not zero |
+| `ErrInvalidDirectiveCode` | File directive code is invalid or reserved |
+| `ErrWrongDirectiveCode` | The directive code does not match the PDU being decoded |
+| `ErrNotFileDirective` | The PDU carries file data, not a file directive |
+| `ErrNotFileData` | The PDU carries a file directive, not file data |
+| `ErrDataLengthMismatch` | The PDU's data field length disagrees with the data supplied |
+| `ErrCRCMismatch` | The PDU CRC does not match what was computed |
+| `ErrUnsupportedChecksumType` | Checksum type is one this package does not compute |
+| `ErrChecksumFailure` | The file checksum does not match |
+| `ErrFileSizeError` | Data extends past the declared file size |
+| `ErrInvalidTransmissionMode` | The transmission mode is wrong for this operation |
+| `ErrTransactionFinished` | The transaction has already finished |
+| `ErrSuspended` | The transaction is suspended |
+| `ErrInvalidFaultHandler` | Fault handler code is not one the standard defines |
+| `ErrFileNotFound` | The filestore has no such file |
+| `ErrFilestoreRejection` | The filestore refused the operation |
+| `ErrUnsupportedAction` | Filestore action is one this package does not perform |
+| `ErrFileTooLarge` | A file write ran past the filestore's size ceiling |
+| `ErrNotUserMessage` | A message to user is not a Reserved CFDP Message |
+
 ## Reference
 
 - [CCSDS 727.0-B-5](https://public.ccsds.org/Pubs/727x0b5e1.pdf), CCSDS File Delivery Protocol

@@ -229,6 +229,28 @@ Annex A of the Green Book names a fuller vector set at
 login and returned 403, so it is not used here. Anyone with access should run
 it against this package.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrInvalidBlockSize` | Block size is not 8, 16, 32 or 64 samples |
+| `ErrInvalidResolution` | Sample resolution is outside 1-32 bits |
+| `ErrInvalidReferenceInterval` | Reference sample interval is outside 1-4096 blocks |
+| `ErrInvalidWordSize` | Output word size is outside 1-8 octets |
+| `ErrRestrictedNotAllowed` | The restricted code option set needs a resolution of 4 bits or fewer |
+| `ErrSampleOutOfRange` | A sample does not fit the configured resolution |
+| `ErrTooManySamples` | More samples than the file header can count |
+| `ErrDataTooShort` | The coded bit stream ended early |
+| `ErrInvalidOptionID` | Code option identifier is not one the standard defines |
+| `ErrTruncatedFile` | Compressed file is shorter than its own header |
+| `ErrReservedFieldSet` | A reserved header field is not zero |
+| `ErrUnsupportedPredictor` | Header names a predictor type this package does not implement |
+| `ErrUnsupportedMapper` | Header names a mapper type this package does not implement |
+| `ErrSampleCountMismatch` | The coded data did not yield the number of samples the header promised |
+| `ErrOutputTooLarge` | Decompressed output is past the configured sample ceiling |
+
 ## Reference
 
 - [CCSDS 121.0-B-3](https://public.ccsds.org/Pubs/121x0b3.pdf), Lossless Data

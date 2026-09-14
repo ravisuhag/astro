@@ -235,6 +235,19 @@ recover every message and hard decisions about half.
 the layer this library works at. `Decode` treats each received bit as a
 full-confidence decision, which is the best it can do from octets alone.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`:
+
+| Error | Meaning |
+|---|---|
+| `ErrDataTooShort` | Input ends before the PLTU field being read |
+| `ErrInvalidASM` | Attached sync marker is not `FAF320` |
+| `ErrCRCMismatch` | CRC-32 does not match, so the PLTU is corrupt |
+| `ErrEmptyFrame` | A PLTU was asked for around an empty transfer frame |
+| `ErrFrameTooLarge` | Transfer frame is past the maximum length |
+| `ErrInvalidLength` | Symbol stream is not a whole number of coded input bits |
+
 ## Reference
 
 - [CCSDS 211.2-B-3](https://public.ccsds.org/Pubs/211x2b3.pdf), Coding and Synchronization Sublayer

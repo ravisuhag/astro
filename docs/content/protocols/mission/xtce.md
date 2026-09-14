@@ -443,6 +443,33 @@ field is a `*bool` and reading it directly is a mistake. `power` and
 `changeThreshold` are pointers for the same reason: an absent power is not a
 power of zero, and an absent threshold means any change is significant.
 
+## Errors
+
+All errors are exported package-level variables, suitable for use with `errors.Is`. The first group comes from loading a document, the second from using the model it produced.
+
+| Error | Meaning |
+|---|---|
+| `ErrMalformedXML` | The document is not well-formed XML |
+| `ErrNotSpaceSystem` | Root element is not an XTCE 1.2 `SpaceSystem` |
+| `ErrInputTooLarge` | Document is past the maximum size this loader accepts |
+| `ErrTooDeep` | Document nests deeper than this loader accepts |
+| `ErrInvalidValue` | A value cannot be read as its schema type |
+| `ErrInvalidEncoding` | A data encoding attribute is not a legal value |
+| `ErrInvalidReference` | A name reference is malformed |
+| `ErrUnresolvedReference` | A name reference does not resolve |
+| `ErrDuplicateName` | Two things share a name inside one `SpaceSystem` |
+| `ErrContainerCycle` | Container inheritance forms a cycle |
+| `ErrNotFound` | No entry by that name |
+| `ErrNoMatch` | No container matches the packet |
+| `ErrPacketTooShort` | Packet is shorter than the container layout needs |
+| `ErrDynamicSize` | The field's size or position depends on the packet contents, so it has no static layout |
+| `ErrUnsupportedEntry` | The entry cannot be placed in a layout |
+| `ErrUnsupportedEncoding` | The data encoding is one this package does not decode |
+| `ErrUnsupportedCalibrator` | The calibrator is one this package does not apply |
+| `ErrUnsupportedCriteria` | The restriction criteria are ones this package does not evaluate |
+| `ErrInvalidComparison` | A comparison value cannot be parsed |
+| `ErrInvalidMathOperation` | A math operation cannot be evaluated |
+
 ## Reference
 
 - [XTCE 1.2](https://www.omg.org/spec/XTCE/), the OMG specification and its

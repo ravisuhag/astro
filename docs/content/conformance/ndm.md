@@ -2,7 +2,7 @@
 title: NDM Combined Instantiation
 short: NDM
 description: "Coverage matrix: what this package implements, clause by clause."
-order: 226
+order: 219
 ---
 
 ## Conformance Statement for `pkg/ndm`, CCSDS 505.0-B-3 clause 4.11
@@ -111,8 +111,6 @@ The files backing this statement live in the [vector corpus](https://github.com/
 | File | |
 |---|---|
 | [`ndm/combined.json`](https://github.com/ravisuhag/astro/blob/main/vectors/ndm/combined.json) | 2 vectors |
-| `ndm/combined-omm.xml` | figure G-21 of CCSDS 502.0-B-3, published text |
-| `ndm/combined-mixed.xml` | an orbit and an attitude message in one file — **derived**, not published |
 
 The first is published text: figure G-21 of CCSDS 502.0-B-3 prints it. The second is this package's own output, and is marked as derived in the corpus note, because no figure in either standard prints a file that mixes the standards even though clause 4.11.7 allows one.
 

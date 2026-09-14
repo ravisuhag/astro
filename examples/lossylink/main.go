@@ -13,8 +13,8 @@
 //
 // The transmission chain per CCSDS 131.0-B-5:
 //
-//	Frame (128 bytes) -> RS encode (128->160 bytes) -> Randomize -> ASM -> CADU
-//	CADU -> ASM strip -> De-randomize -> RS decode (160->128 bytes) -> Frame
+//	Frame (128 bytes) -> pad to 223 -> RS(255,223) (255 bytes) -> Randomize -> ASM -> CADU (259 bytes)
+//	CADU (259 bytes) -> ASM strip -> De-randomize -> RS decode (255->223 bytes) -> Frame (128 bytes)
 //
 // Run with: go run ./examples/lossylink/
 package main

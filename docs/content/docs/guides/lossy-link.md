@@ -31,8 +31,14 @@ They are layered on purpose. RS fixes what it can. CRC rejects what RS could not
 Smaller frames than [the downlink guide](/docs/guides/downlink), to make packets span more often:
 
 ```
-Frame (128 B) -> RS encode (128->160 B) -> randomize -> ASM -> CADU (259 B)
+Frame (128 B) -> pad to 223 -> RS(255,223) (255 B) -> randomize -> ASM -> CADU (259 B)
 ```
+
+RS(255,223) always takes 223 octets in and gives 255 out, so a 128-octet frame
+is zero-padded to fill the codeword. The parity is charged on the whole 255
+either way. Short frames buy their error correction at a worse rate than long
+ones, which is one reason a real mission picks a frame length close to the
+codeword.
 
 and backwards on the ground.
 

@@ -13,6 +13,22 @@ The complete program is [`examples/composed`](https://github.com/ravisuhag/astro
 go run ./examples/composed/
 ```
 
+```
+2 CADUs of 260 octets crossed the link
+
+VC0 (APID 100)
+  "battery ok"
+  "thermal nominal"
+  "attitude locked"
+VC1 (APID 200)
+  "spectrum frame 1"
+  "spectrum frame 2"
+
+Every packet came back byte for byte, from one configuration.
+```
+
+Five packets on two virtual channels, packed into two frames, wrapped, sent, unwrapped and read back. Both ends were built from the one `stack.Downlink` value below.
+
 ## Why it exists
 
 Wiring a downlink by hand is about forty lines: a channel configuration, a physical channel, a master channel, then a virtual channel and a packet service for each stream, a shared frame counter, a packet sizer on every service, and the CADU wrapping at the end.
@@ -26,7 +42,7 @@ A ground station configured with a frame length two octets different from the sp
 ```go
 config := stack.Downlink{
     SpacecraftID: 42,
-    FrameLength:  1115,
+    FrameLength:  256,
     FECF:         true,
     Channels: []stack.VC{
         {ID: 0, Priority: 3}, // housekeeping
@@ -83,7 +99,7 @@ One setting needs more than a boolean. `OCF: true` reserves four octets in every
 ```go
 config := stack.Downlink{
     SpacecraftID: 42,
-    FrameLength:  1115,
+    FrameLength:  256,
     FECF:         true,
     OCF:          true,
     Channels:     []stack.VC{{ID: 0, Priority: 1}},
@@ -184,6 +200,46 @@ The composer holds the backlog itself. FOP-1 refuses a frame outright once its w
 `SendExpedited` bypasses the sequence check. Type BD frames are not counted, not retransmitted and not acknowledged, and they arrive whatever state FOP-1 is in, which is what you use when the sequence machinery is the thing that is broken, such as an unlock after a lockout.
 
 They need their own packet service, because the bypass flag is stamped into the frame header when the frame is built, not chosen when it is transmitted. Sending an AD-shaped frame down FOP-1's BD path gets it rejected on arrival.
+
+### Getting a wedged channel back
+
+FOP-1 can stop a channel for good reasons: the spacecraft raised Lockout, a
+retransmission ran past its limit, or a CLCW came back that the procedure
+calls an Alert. When that happens the channel drops to the Initial state and
+`CLTUs` yields nothing more for it, while the other channels keep going.
+`State` is what tells you, and it is the first thing to look at when commands
+stop leaving.
+
+Clearing it is a decision an operator makes, so the composer forwards the five
+COP-1 directives rather than acting on its own:
+
+```go
+state, _ := commander.State(0)
+if state == cop.FOPInitial {
+    // Lockout: send a BC Unlock and wait for the flag to clear.
+    unlock, _ := tcdl.NewUnlockFrame(42, 0)
+    encoded, _ := unlock.Encode()
+    commander.InitiateADWithUnlock(0, encoded)
+}
+```
+
+| Directive | What it does |
+|---|---|
+| `Initialize(vcid, initialVS)` | Sets V(S) and starts the channel without a BC frame. What `NewCommander` does for you, exposed so you can do it again |
+| `InitiateADWithUnlock(vcid, bcFrame)` | Transmits a BC Unlock and completes when the CLCW's Lockout flag clears |
+| `InitiateADWithSetVR(vcid, vr, bcFrame)` | Transmits a BC Set V(R) and completes when a CLCW reports that value. Use it when the two ends disagree about where the sequence is |
+| `TerminateAD(vcid)` | Gives up: purges the queues, stops the timer, returns the channel to Initial |
+| `ResumeAD(vcid)` | Restarts a channel that was suspended rather than terminated. Returns `ErrFOPNotSuspended` if it was not |
+
+Two things to know. The BC frame is built by you, with
+[`tcdl.NewUnlockFrame`](/protocols/data-link/tcdl) or `tcdl.NewSetVRFrame`,
+because the composer does not know which spacecraft ID and channel a recovery
+frame should name. And a recovery does not lose the backlog: whatever the
+channel was holding is offered to FOP-1 again once it is running, so the
+commands queued before the wedge still go out.
+
+An unconfigured VCID returns `ErrUnknownChannel` from any of them, the same as
+`Send` and `State`.
 
 ### Rejection is not failure
 
