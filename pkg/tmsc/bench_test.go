@@ -128,7 +128,7 @@ func BenchmarkRSDecodeInterleaved(b *testing.B) {
 			copy(corrupted, clean)
 			for d := 0; d < depth; d++ {
 				for e := 0; e < errors; e++ {
-					pos := (e*13 % 255) * depth
+					pos := (e * 13 % 255) * depth
 					corrupted[pos+d] ^= 0xFF
 				}
 			}
