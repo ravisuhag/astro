@@ -235,3 +235,53 @@ func TestOIDSequenceIsContinuousAcrossFills(t *testing.T) {
 		t.Errorf("split fills = % X, want % X", split, whole)
 	}
 }
+
+// TestLongSequencePeriod checks the long TM sequence repeats after exactly
+// LongPeriod octets. 2^17-1 is prime, so the bit sequence can only have period
+// 1 or 131071; a sequence that is not constant and repeats at 131071 octets
+// therefore has the full period.
+func TestLongSequencePeriod(t *testing.T) {
+	seq := pn.TMLongSequence(pn.LongPeriod + 64)
+	for i := range 64 {
+		if seq[i] != seq[i+pn.LongPeriod] {
+			t.Fatalf("octet %d differs from octet %d: %02X vs %02X",
+				i, i+pn.LongPeriod, seq[i], seq[i+pn.LongPeriod])
+		}
+	}
+	if bytes.Count(seq[:pn.LongPeriod], seq[:1]) == pn.LongPeriod {
+		t.Fatal("the long sequence is constant")
+	}
+}
+
+// TestLongSequenceRecurrence regenerates the long TM sequence bit by bit from
+// the recurrence b(n+17) = b(n) + b(n+14) of h(x) = x^17 + x^14 + 1, starting
+// from the reversed preset, and checks the tiled output against it past the
+// first period boundary.
+func TestLongSequenceRecurrence(t *testing.T) {
+	const length = pn.LongPeriod + 37
+	got := pn.TMLongSequence(length)
+
+	b := make([]byte, length*8)
+	for i, c := range "00011100011100011" {
+		b[i] = byte(c - '0')
+	}
+	for n := 0; n+17 < len(b); n++ {
+		b[n+17] = b[n] ^ b[n+14]
+	}
+	for i := range got {
+		var want byte
+		for _, bit := range b[i*8 : i*8+8] {
+			want = want<<1 | bit
+		}
+		if got[i] != want {
+			t.Fatalf("first difference at octet %d: got %02X, want %02X", i, got[i], want)
+		}
+	}
+}
+
+func TestLongApplyIsItsOwnInverse(t *testing.T) {
+	data := []byte("the long randomizer, applied twice")
+	if got := pn.TMLongApply(pn.TMLongApply(data)); !bytes.Equal(got, data) {
+		t.Fatalf("applying twice gave %x, want %x", got, data)
+	}
+}

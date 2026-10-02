@@ -29,6 +29,8 @@ func TestSequenceVectors(t *testing.T) {
 				return pn.TMSequence(int(n)), nil
 			case "tc":
 				return pn.TCSequence(int(n)), nil
+			case "tm-long":
+				return pn.TMLongSequence(int(n)), nil
 			case "oid":
 				out := make([]byte, n)
 				pn.NewOIDSequence().Fill(out)

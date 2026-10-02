@@ -1,6 +1,11 @@
 // Package pn generates the CCSDS pseudo-randomizer sequences used by the TM
 // and TC synchronization and channel coding layers.
 //
+// TM has two randomizers. CCSDS 131.0-B-5 clause 10.4.1 defines a 131071-bit
+// sequence, which Issue 5 prefers, and clause 10.4.2 keeps a 255-bit one for
+// legacy systems. TMLongSequence is the first and TMSequence the second. The
+// rest of this comment is about the 255-bit pair.
+//
 // TM and TC do NOT share a randomizer. Both are 8-bit linear feedback shift
 // registers preset to all ones, and both repeat after 255 bits, but the
 // polynomials differ:
@@ -134,6 +139,81 @@ func TCSequence(length int) []byte { return tc.sequence(length) }
 // input untouched. Like TMApply it is its own inverse, and like TMApply that
 // property proves nothing about the taps being right.
 func TCApply(data []byte) []byte { return tc.apply(data) }
+
+// LongPeriod is the length in octets after which the long TM sequence
+// repeats. The register is 17 bits with a maximal-length polynomial, so the bit
+// sequence has period 2^17-1 = 131071. That is odd, so the octet sequence only
+// realigns after 131071 octets.
+const LongPeriod = 131071
+
+// The long TM randomizer of CCSDS 131.0-B-5 clause 10.4.1, h(x) = x^17 + x^14 + 1.
+//
+// It uses the same Fibonacci form as the 8-bit generators: the output is the
+// register's top bit (bit 16), and the register shifts left with the feedback
+// entering at bit 0. A tap at bit k then contributes output bit b(n+16-k), so
+// taps at bits 16 and 2 give b(n+17) = b(n) + b(n+14), which is the polynomial.
+//
+// Clause 10.4.3 presets the generator to '11000111000111000'. Figure 10-2 reads
+// that state into the cells in the opposite order to this register, so the
+// preset here is the same seventeen digits reversed. Clause 10.4.3 note 2 prints
+// the first 40 output bits, which fix the order: they open with the reversed
+// seed, 0001 1100 0111 0001 1. TestSequenceVectors checks all 40.
+const (
+	tmLongTaps   = 1<<16 | 1<<2
+	tmLongPreset = 0b0_0011_1000_1110_0011
+)
+
+var tmLong struct {
+	once   sync.Once
+	period []byte
+}
+
+// buildTMLong runs the 17-bit register once over a full period.
+func buildTMLong() {
+	period := make([]byte, LongPeriod)
+	reg := uint32(tmLongPreset)
+	for i := range period {
+		var b byte
+		for range 8 {
+			b = b<<1 | byte(reg>>16&1)
+			feedback := uint32(bits.OnesCount32(reg&tmLongTaps) & 1)
+			reg = (reg<<1 | feedback) & 0x1FFFF
+		}
+		period[i] = b
+	}
+	tmLong.period = period
+}
+
+// TMLongSequence returns the first length octets of the long TM randomizer
+// sequence of CCSDS 131.0-B-5 clause 10.4.1. It opens 1C 71 B9 1B A9.
+//
+// This is the sequence Issue 5 prefers. The 255-bit one of TMSequence is kept for
+// legacy systems, and clause 10.4.2 warns it can put spectral lines at 1/255
+// of the symbol rate. Like TMSequence, the period is computed once and tiled.
+func TMLongSequence(length int) []byte {
+	if length <= 0 {
+		return nil
+	}
+	tmLong.once.Do(buildTMLong)
+
+	out := make([]byte, length)
+	for i := 0; i < length; i += LongPeriod {
+		copy(out[i:], tmLong.period)
+	}
+	return out
+}
+
+// TMLongApply XORs data with the long TM sequence and returns a new slice,
+// leaving the input untouched. It is its own inverse.
+func TMLongApply(data []byte) []byte {
+	tmLong.once.Do(buildTMLong)
+
+	out := make([]byte, len(data))
+	for i, b := range data {
+		out[i] = b ^ tmLong.period[i%LongPeriod]
+	}
+	return out
+}
 
 // OIDSequence generates the Pseudo Noise sequence that fills the data field of
 // Only Idle Data transfer frames. CCSDS 132.0-B-3 clause 4.1.4.6.2 (TM, annex D) and

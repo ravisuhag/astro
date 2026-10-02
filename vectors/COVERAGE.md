@@ -25,7 +25,7 @@ evidence of conformance.
 | `ndm` | CCSDS 505.0-B-3 clause 4.11 (combined instantiation) | 2 | 2 |
 | `ocsc` | CCSDS 142.0-B-1 | 1 | — |
 | `odm` | CCSDS 502.0-B-3 (OPM, OMM, OEM, OCM) | 11 | 11 |
-| `pn` | CCSDS 131.0-B-5 clause 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 4 | — |
+| `pn` | CCSDS 131.0-B-5 clauses 10.4.1 and 10.4.2 (TM), CCSDS 231.0-B-4 clause 6.2 (TC), CCSDS 132.0-B-3 clause 4.1.4.6.2 (OID) | 5 | — |
 | `pus` | ECSS-E-ST-70-41C (PUS-C) | 13 | — |
 | `pxsc` | CCSDS 211.2-B-3 (Proximity-1 coding and synchronization), code per CCSDS 131.0 | 6 | — |
 | `sdls` | CCSDS 355.0-B-2 | 7 | — |
@@ -40,9 +40,9 @@ evidence of conformance.
 | `tmsc` | CCSDS 131.0-B-5 | 7 | — |
 | `usdl` | CCSDS 732.1-B-3 | 20 | — |
 | `xtce` | CCSDS 660.0-B-2 (XTCE) | — | 8 |
-| **Total** | | **412** | **138** |
+| **Total** | | **413** | **138** |
 
-412 vectors and 138 referenced corpus files across 32 packages.
+413 vectors and 138 referenced corpus files across 32 packages.
 Every value is traced to a clause or a published corpus; none is marked unverified.
 
 ## What is not covered

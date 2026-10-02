@@ -183,3 +183,36 @@ func TestPNSequencePeriodIs255(t *testing.T) {
 		t.Error("the sequence does not repeat after 255 octets; the taps are wrong")
 	}
 }
+
+func TestLongPNSequenceMatchesTheCCSDSVector(t *testing.T) {
+	// CCSDS 131.0-B-5 clause 10.4.3 note 2 prints the first 40 digits of the
+	// 131071-bit sequence:
+	//
+	//   0001 1100 0111 0001 1011 1001 0001 1011 1010 1001
+	//
+	// As with the 255-bit sequence, only these digits can catch a wrong tap
+	// or a preset loaded in the wrong order.
+	want := []byte{0x1C, 0x71, 0xB9, 0x1B, 0xA9}
+
+	got := tmsc.GenerateLongPNSequence(len(want))
+	if !bytes.Equal(got, want) {
+		t.Errorf("long PN sequence = % X, want % X", got, want)
+	}
+}
+
+func TestRandomizeLong(t *testing.T) {
+	data := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0xFF}
+	got := tmsc.RandomizeLong(data)
+	if want := []byte{0x1C, 0x71, 0xB9, 0x1B, 0xA9}; !bytes.Equal(got[:5], want) {
+		t.Errorf("randomized zeros = % X, want the sequence % X", got[:5], want)
+	}
+	if !bytes.Equal(tmsc.RandomizeLong(got), data) {
+		t.Error("RandomizeLong is not its own inverse")
+	}
+	if data[0] != 0x00 {
+		t.Error("RandomizeLong modified its input")
+	}
+	if bytes.Equal(got, tmsc.Randomize(data)) {
+		t.Error("RandomizeLong gave the 255-bit sequence's output")
+	}
+}

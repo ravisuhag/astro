@@ -18,7 +18,7 @@ That distinction matters more than any coverage number. A hand-derived vector ca
 | | |
 |---|---|
 | Test functions | 2111 |
-| Wire test vectors | 412, across 32 packages, of which 57 came from other implementations |
+| Wire test vectors | 413, across 32 packages, of which 57 came from other implementations |
 | Fuzz targets | 84 |
 | Benchmarks | 38 |
 | Numbered PICS items | 540 |
@@ -50,7 +50,7 @@ Every vector carries the clause it comes from and the arithmetic that
 produced it. A vector without a derivation does not load, and one without a
 clause is marked `unverified` instead, which says plainly that agreeing with
 it proves an implementation matches the corpus rather than the standard.
-None of the 412 carry that marker today.
+None of the 413 carry that marker today.
 [`COVERAGE.md`](https://github.com/ravisuhag/astro/blob/main/vectors/COVERAGE.md)
 explains the one case that did, until the clause was found, alongside what
 the corpus does not cover at all.
@@ -80,6 +80,7 @@ These are the cases where somebody outside this project published the expected a
 | RFC 5050 clause 4.1, reaffirmed by RFC 5326 clause 1.6 | The worked SDNV examples both DTN standards depend on | `vectors/sdnv/sdnv.json` |
 | CCSDS 211.2-B-3 annex C | The Proximity-1 CRC-32, its polynomial, preset and syndrome behaviour | `vectors/crc/crc32.json` |
 | CCSDS 142.0-B-1 clause 3.5.2.1 | The first 40 digits of the pseudo-randomizer sequence | `vectors/pn/sequences.json` |
+| CCSDS 131.0-B-5 clause 10.4.3 note 2 | The first 40 digits of the 131071-bit pseudo-randomizer sequence | `vectors/pn/sequences.json` |
 | CCSDS 132.0-B-3 clause 4.1.4.6.2.2, CCSDS 732.1-B-3 annex H | The Only Idle Data fill sequence, published by two standards independently | `vectors/pn/sequences.json`, `vectors/usdl/frame.json` |
 | RFC 4493 section 4, NIST SP 800-38B | The CMAC-AES128 and CMAC-AES256 example sets | `vectors/cmac/aes.json` |
 | libfec / gr-satellites | The rate-1/2 convolutional code, in the convention deployed receivers use | `vectors/pxsc/convolutional.json` |

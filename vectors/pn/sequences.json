@@ -17,6 +17,17 @@
       "want": "ff480ec09a"
     },
     {
+      "name": "tm-long-sequence-first-five-octets",
+      "clause": "10.4.3",
+      "doc": "CCSDS 131.0-B-5",
+      "note": "h(x) = x^17 + x^14 + 1 (clause 10.4.1), preset to '11000111000111000' (clause 10.4.3). Clause 10.4.3 note 2 prints the first 40 digits: 0001 1100 0111 0001 1011 1001 0001 1011 1010 1001, which as octets is 1c 71 b9 1b a9. The digits open with the preset reversed, which is what fixes the order the preset is loaded in.",
+      "fields": {
+        "sequence": "tm-long",
+        "length": 5
+      },
+      "want": "1c71b91ba9"
+    },
+    {
       "name": "tc-sequence-first-five-octets",
       "clause": "6.2",
       "doc": "CCSDS 231.0-B-4",

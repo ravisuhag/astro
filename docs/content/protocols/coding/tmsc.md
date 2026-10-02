@@ -18,9 +18,9 @@ Everything here is undone at the other end. The data link layer never knows it h
 
 ## Scope
 
-**Implemented.** The Attached Sync Marker and CADU wrap and unwrap, the 255-bit pseudo-randomizer, and Reed-Solomon RS(255,223) and RS(255,239) with interleaving, dual-basis conversion, and shortened codeblocks.
+**Implemented.** The Attached Sync Marker and CADU wrap and unwrap, both pseudo-randomizers (the 131,071-bit one of clause 10.4.1 and the 255-bit legacy one of clause 10.4.2), and Reed-Solomon RS(255,223) and RS(255,239) with interleaving, dual-basis conversion, and shortened codeblocks.
 
-**Not here.** The long 131,071-bit randomizer added in Issue 5 (clause 10.4.1) for high-rate links. Also no convolutional or LDPC/Turbo codes. The RS codes are what `pkg/tmsc` covers.
+**Not here.** Convolutional, LDPC, and Turbo codes. The RS codes are what `pkg/tmsc` covers.
 
 **Also handles AOS.** [AOS frames](/protocols/data-link/aos) use this same sublayer. So do [USLP](/protocols/data-link/usdl) frames on a downlink.
 
@@ -47,7 +47,7 @@ Interleave depths: 1, 2, 3, 4, 5, and 8. Depth 5 with RS(255,223) is common for 
 
 **The ASM is never randomized.** Only the frame content is XORed. Randomizing the marker would defeat the point of having one, since the receiver has to find it before it can de-randomize anything.
 
-**Astro implements the 255-bit randomizer, not the long one.** Clause 10.4.2, the legacy sequence: LFSR polynomial `x^8 + x^7 + x^5 + x^3 + 1`, seeded all ones, period 255 bits. Issue 5 added a 131,071-bit sequence (`x^17 + x^14 + 1`, clause 10.4.1) to avoid spectral spikes at high data rates. Which randomizer a channel uses is a managed parameter, check yours matches.
+**There are two randomizers, and `WrapCADU` uses the old one.** `Randomize` is the 255-bit legacy sequence of clause 10.4.2: polynomial `x^8 + x^7 + x^5 + x^3 + 1`, seeded all ones. `RandomizeLong` is the 131,071-bit sequence Issue 5 prefers (clause 10.4.1): polynomial `x^17 + x^14 + 1`, seeded `11000111000111000`. The short one can put spectral lines at 1/255 of the symbol rate. Which one a channel uses is a managed parameter, so check both ends match. `WrapCADU` and `UnwrapCADU` only apply the 255-bit one. For the long one, call `RandomizeLong` yourself and pass `randomize=false`.
 
 **`Randomize` is its own inverse.** XOR twice with the same sequence gives you back what you started with, so the same function serves transmit and receive. There is no `Derandomize`.
 

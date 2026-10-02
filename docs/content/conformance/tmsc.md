@@ -44,7 +44,7 @@ order: 130
 | Specification | CCSDS 131.0-B-5 (TM Synchronization and Channel Coding, Blue Book, Issue 5, September 2023) |
 | Have any exceptions been required? | Yes [X] No [ ] |
 
-NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (section 3), concatenated (section 5), turbo (section 6), and LDPC (sections 7 and 8) coding are not implemented. Of the two pseudo-randomizer sequences, only the 255-bit legacy sequence (10.4.2) is implemented; the 131071-bit sequence (10.4.1) is not. Non-supported capabilities are identified in section A2.2.
+NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (section 3), concatenated (section 5), turbo (section 6), and LDPC (sections 7 and 8) coding are not implemented. Both pseudo-randomizer sequences are implemented: the 131071-bit sequence (10.4.1) and the 255-bit legacy sequence (10.4.2). Non-supported capabilities are identified in section A2.2.
 
 ### Status Notation
 
@@ -76,7 +76,7 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 |---|---|---|---|---|---|
 | TMSC-7 | Randomization method: exclusive-OR of each bit of the codeblock/frame with a standard pseudo-random sequence | 10.2.1, 10.2.2 | M | Yes | `Randomize(data)` XORs data with the PN sequence. Returns a new slice; input not modified. Applied after RS encoding, ASM excluded. |
 | TMSC-8 | Synchronization and application: sequence starts at the first bit after the ASM; generator reinitialized for each codeblock/frame; ASM itself never randomized | 10.3, 10.4.3 | M | Yes | `WrapCADU()` randomizes before prepending the ASM; `UnwrapCADU()` de-randomizes after stripping it. The generator restarts on every call. |
-| TMSC-9 | 131071-bit pseudo-random sequence, h(x) = x^17 + x^14 + 1 | 10.4.1 | O.2 | No | Not implemented. This is the preferred sequence in Issue 5 for obviating spectral spikes on high-data-rate links. |
+| TMSC-9 | 131071-bit pseudo-random sequence, h(x) = x^17 + x^14 + 1 | 10.4.1, 10.4.3 | O.2 | Yes | `GenerateLongPNSequence(length)` implements the 17-bit LFSR, preset to '11000111000111000'; `RandomizeLong()` applies it. Checked against the 40 digits of 10.4.3 note 2. `WrapCADU()` and `UnwrapCADU()` apply only the 255-bit sequence, so a channel using this one randomizes before wrapping and passes `randomize=false`. |
 | TMSC-10 | 255-bit legacy pseudo-random sequence, h(x) = x^8 + x^7 + x^5 + x^3 + 1, initialized to all ones | 10.4.2, 10.4.3 | O.2 | Yes | `GeneratePNSequence(length)` implements the 8-bit LFSR; `Randomize()` applies it. Kept in Issue 5 for backward compatibility with legacy systems. |
 | TMSC-11 | De-randomization (receive) using the same sequence | 10.3.3, 10.3.4 | M | Yes | Same `Randomize()` function, XOR is self-inverse. Integrated into `UnwrapCADU()` when randomize=true. |
 
@@ -121,16 +121,16 @@ NOTE: Of the coding methods, only Reed-Solomon is implemented. Convolutional (se
 |---|---|---|---|
 | Mandatory within supported options (M) | 18 | 18 | 0 |
 | Coding methods (O.1) | 8 | 1 | 7 |
-| Randomizer sequences (O.2) | 2 | 1 | 1 |
+| Randomizer sequences (O.2) | 2 | 2 | 0 |
 | Shortened codeblock (O.3) | 1 | 1 | 0 |
 | Other optional (O) | 1 | 0 | 1 |
-| **Total** | **30** | **21** | **9** |
+| **Total** | **30** | **22** | **8** |
 
 NOTE, TMSC-5 is counted with the coding methods it belongs to.
 
 ### Non-Conformances (Mandatory Items Not Supported)
 
-None. Every mandatory requirement of the supported options (Reed-Solomon coding with the 255-bit randomizer) is implemented, including the dual basis representation (4.3.9) and the virtual fill rules (4.3.8.2).
+None. Every mandatory requirement of the supported options (Reed-Solomon coding with either randomizer) is implemented, including the dual basis representation (4.3.9) and the virtual fill rules (4.3.8.2).
 
 ### Non-Supported Optional Items
 
@@ -138,7 +138,6 @@ None. Every mandatory requirement of the supported options (Reed-Solomon coding 
 |---|---|---|
 | TMSC-5 | Scheme-specific ASMs | The turbo/LDPC schemes they belong to are not implemented. |
 | TMSC-6 | Embedded data stream ASM | Not implemented; custom ASMs can be supplied by the caller. |
-| TMSC-9 | 131071-bit pseudo-randomizer | Not implemented; the legacy 255-bit sequence is provided. Missions requiring ITU power-flux-density compliance at high data rates should note 10.4.2's caveats. |
 | TMSC-26/27 | Convolutional coding | Not implemented. |
 | TMSC-29 | Concatenated coding | Requires the convolutional inner code. |
 | TMSC-30 | Turbo coding | Not implemented. Specialized application. |
