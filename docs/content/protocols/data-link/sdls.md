@@ -80,8 +80,9 @@ GCM baselines, same cipher, same key and IV layout, nothing encrypted.
 **Not here, on purpose.** Encryption without authentication. Clause 2.3.3 warns
 against it, and so do we. Asking for it gives you `ErrUnsupportedMode`.
 
-**Not here yet.** A CLI. `astro sdls apply` and friends are a follow-up, once
-this API has seen some use. And the SDLS Extended Procedures of CCSDS 355.1:
+**Not here yet.** CLI commands that protect or verify a frame. Today
+`astro sdls inspect` only decodes a Security Header; `apply` and `process`
+are a follow-up, once this API has seen some use. And the SDLS Extended Procedures of CCSDS 355.1:
 key management and over-the-air rekeying are a separate standard.
 
 **Left to you.** Key storage and distribution. An SA takes a 32-byte key and

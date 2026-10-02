@@ -67,7 +67,6 @@ The library owns no clock. You drive every timer yourself, see below.
   session each. Managing many is the caller's job for now.
 - **The authentication and cookie extensions**: the TLVs encode and decode,
   but nothing acts on them.
-- **CLI subcommands**: a follow-up once the API settles.
 
 ## Segments
 

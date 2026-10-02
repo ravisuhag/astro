@@ -58,7 +58,6 @@ delivers each with its quality indicator (clause 3.14.2) and sequence indicator
   sequence indicator) are here, in `Recover`.)
 - **HPE beacon and optional accompanying data transmission signaling** of clause 4,
   the uplink beacon carrying LDPC-coded AOS or USLP transfer frames.
-- **CLI subcommands**: a follow-up once the API settles.
 
 ## Everything is bits
 

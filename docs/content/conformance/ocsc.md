@@ -123,7 +123,6 @@ order: 160
 | Iterative SCPPM decoding | clause 2 | N | Decoding SCPPM is a research-grade soft-decision problem. This library ships no soft-decision decoder in any package, and a wire-format library is the wrong home for one. The post-decoder steps of clause 3.14, ASM synchronization, frame recovery, the quality indicator, and the clause 3.15 sequence indicator are implemented in `Recover`. |
 | Slot and symbol synchronization, channel estimation | clause 2 | N | Receiver signal processing, not data format. |
 | HPE beacon and optional accompanying data transmission signaling (uplink beacon, AOS or USLP transfer frames, LDPC-coded) | clause 4 | N | A separate signaling scheme using different codes and a different CSM. A follow-up. |
-| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

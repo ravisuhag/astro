@@ -58,7 +58,7 @@ Control Word.
 carried, but the state machine that acts on them is a follow-up. The contents of
 directives and status reports from annex B: variable-length SPDUs encode and
 decode, and this package moves the payload without reading it. The MAC and PHY
-sublayers, and session establishment. A CLI, once the API settles.
+sublayers, and session establishment.
 
 **Somewhere else.** Coding and synchronization are
 [`pkg/pxsc`](/protocols/coding/pxsc).

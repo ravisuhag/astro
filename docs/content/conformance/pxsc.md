@@ -110,7 +110,6 @@ order: 150
 | Reed-Solomon codes | clause 3.4.1 note | N | Not specified in the CCSDS Proximity-1 standards, and clause 3.4.1 states their use is not intended for cross support. |
 | Concatenated convolutional and Reed-Solomon | clause 3.4.2.2 note 2 | N | Explicitly not specified by the standard. |
 | Physical layer, modulation, rate control | CCSDS 211.1-B | N | A separate specification. |
-| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

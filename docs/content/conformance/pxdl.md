@@ -119,7 +119,6 @@ order: 100
 | MAC sublayer, session establishment | clause 5, clause 6 | N | Out of scope for the frame layer. |
 | Physical layer, transceiver control | CCSDS 211.1-B | N | A separate specification. |
 | Coding and synchronization | CCSDS 211.2-B-3 | N | A separate specification; `pkg/pxsc`. |
-| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

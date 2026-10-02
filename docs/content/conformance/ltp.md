@@ -121,7 +121,6 @@ behavior, so no claim is made against the profile itself, see A1.5.
 | Cookie extension | clause 3.1.4, [LTPEXT] | P | Same. |
 | Random serial number generation | clause 3.2.1, clause 3.2.2 | N by design | The spec says the first serials must be random. The caller supplies them; a zero is rejected. A library should not pick a mission's randomness source. |
 | Deferred transmission and link-state cues | clause 6.5 | N | Scheduling policy the caller owns. |
-| CLI subcommands | - | N | A follow-up once the API settles. |
 
 ---
 

@@ -44,7 +44,6 @@ bursts with gaps between them, and the receiver re-acquires for each one.
   pseudo-randomizer of clause 3.4.5, which applies only when LDPC is used.
 - **Reed-Solomon**, which some transceivers add but clause 3.4.1 notes is not part of
   the CCSDS Proximity-1 standards and is not intended for cross support.
-- **CLI subcommands**: a follow-up once the API settles.
 
 ## The CRC-32 is not the one you expect
 

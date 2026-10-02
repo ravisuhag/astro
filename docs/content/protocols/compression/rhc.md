@@ -41,7 +41,6 @@ last few can still catch up.
 
 **Not here yet.**
 
-- **A CLI.** `astro rhc compress|decompress` is the natural follow-up.
 - **Loss-adaptive scheduling.** Raising the robustness level or shortening the
   uncompressed interval when the link degrades is a mission heuristic on top of
   `Config`, deliberately not built in.
