@@ -221,3 +221,61 @@ func TestCMACAntiReplay(t *testing.T) {
 		t.Error("a replayed frame was accepted")
 	}
 }
+
+// TestSeqCounterRoundTrip checks a restarted sender restored from SeqCounter
+// carries on past the last sequence number it sent, so a receiver that kept
+// running accepts its next frame instead of discarding it as a replay.
+func TestSeqCounterRoundTrip(t *testing.T) {
+	sender := newCMACSA(t)
+	receiver := newCMACSA(t)
+	lookup := sdls.StaticLookup(receiver)
+
+	for i := range 3 {
+		protected, err := sender.ApplySecurity(nil, []byte("cmd"))
+		if err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+		if _, _, err := sdls.ProcessSecurity(protected, nil, lookup); err != nil {
+			t.Fatalf("call %d: receiver refused: %v", i, err)
+		}
+	}
+
+	checkpoint := sender.SeqCounter()
+	if want := []byte{0, 0, 0, 3}; !bytes.Equal(checkpoint, want) {
+		t.Fatalf("SeqCounter() = %x, want %x", checkpoint, want)
+	}
+
+	restarted := newCMACSA(t)
+	if err := restarted.SetSeqCounter(checkpoint); err != nil {
+		t.Fatalf("SetSeqCounter: %v", err)
+	}
+	protected, err := restarted.ApplySecurity(nil, []byte("cmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sdls.ProcessSecurity(protected, nil, lookup); err != nil {
+		t.Fatalf("receiver refused the restored sender's frame: %v", err)
+	}
+
+	// Without the checkpoint the restarted sender repeats sequence number 1.
+	fresh := newCMACSA(t)
+	protected, err = fresh.ApplySecurity(nil, []byte("cmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sdls.ProcessSecurity(protected, nil, lookup); !errors.Is(err, sdls.ErrReplayDetected) {
+		t.Fatalf("a fresh sender's frame: got %v, want ErrReplayDetected", err)
+	}
+}
+
+func TestSetSeqCounterRejectsWrongWidth(t *testing.T) {
+	sa := newCMACSA(t)
+	for _, width := range []int{0, 3, 5} {
+		if err := sa.SetSeqCounter(make([]byte, width)); !errors.Is(err, sdls.ErrInvalidSeqCounter) {
+			t.Errorf("width %d: SetSeqCounter() = %v, want ErrInvalidSeqCounter", width, err)
+		}
+	}
+	if sa.SeqCounter() != nil {
+		t.Error("SeqCounter() is not nil before first use")
+	}
+}

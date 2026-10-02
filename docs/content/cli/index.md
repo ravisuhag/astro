@@ -33,7 +33,7 @@ If you have not used it yet, start with the [CLI quickstart](/docs/start/quickst
 | [`astro pxdl`](/cli/pxdl) | Proximity-1 data link | encode, decode, spdu |
 | [`astro pxsc`](/cli/pxsc) | Proximity-1 coding | wrap, unwrap, sync, encode, decode |
 | [`astro ocsc`](/cli/ocsc) | Optical coding | condition, randomize |
-| [`astro sdls`](/cli/sdls) | Space Data Link Security | inspect |
+| [`astro sdls`](/cli/sdls) | Space Data Link Security | inspect, apply, process |
 
 ## Shared flags
 

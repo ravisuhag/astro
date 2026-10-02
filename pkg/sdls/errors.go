@@ -60,6 +60,10 @@ var (
 	// match the SA's configured IV width.
 	ErrInvalidIVCounter = errors.New("invalid IV counter: length does not match FieldLengths.IV")
 
+	// ErrInvalidSeqCounter indicates a value passed to SetSeqCounter does not
+	// match the SA's configured Sequence Number width.
+	ErrInvalidSeqCounter = errors.New("invalid sequence counter: length does not match FieldLengths.SeqNum")
+
 	// ErrNoAntiReplayCounter indicates an SA requests anti-replay protection
 	// (SeqWindow > 0) but carries no counter a receiver could check: both the
 	// IV and the Sequence Number fields are zero octets wide. Such an SA

@@ -331,6 +331,29 @@ func (sa *SecurityAssociation) SetIVCounter(v []byte) error {
 	return nil
 }
 
+// SeqCounter returns a copy of the sender's current Sequence Number counter,
+// or nil when this SA has no Sequence Number field or has not yet protected a
+// frame. Like IVCounter, checkpoint it so a restarted sender resumes past the
+// last value it sent: a receiver that already accepted that value discards a
+// repeat of it as a replay (clause 2.3.2.3.2).
+func (sa *SecurityAssociation) SeqCounter() []byte {
+	return copySlice(sa.seqCounter)
+}
+
+// SetSeqCounter restores the sender's Sequence Number counter, typically from
+// a checkpoint taken via SeqCounter. v must be exactly sa.FieldLengths.SeqNum
+// octets long; otherwise SetSeqCounter returns ErrInvalidSeqCounter and leaves
+// the SA unchanged.
+//
+// As with SetIVCounter, pass the last value actually sent, not the next one.
+func (sa *SecurityAssociation) SetSeqCounter(v []byte) error {
+	if len(v) != sa.FieldLengths.SeqNum {
+		return ErrInvalidSeqCounter
+	}
+	sa.seqCounter = copySlice(v)
+	return nil
+}
+
 // nextSeqNum advances the sender's explicit sequence number, per clause 4.2.3.4 a).
 // It returns nil when the SA has no Sequence Number field.
 func (sa *SecurityAssociation) nextSeqNum() ([]byte, error) {

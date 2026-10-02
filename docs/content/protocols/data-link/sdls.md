@@ -80,10 +80,8 @@ GCM baselines, same cipher, same key and IV layout, nothing encrypted.
 **Not here, on purpose.** Encryption without authentication. Clause 2.3.3 warns
 against it, and so do we. Asking for it gives you `ErrUnsupportedMode`.
 
-**Not here yet.** CLI commands that protect or verify a frame. Today
-`astro sdls inspect` only decodes a Security Header; `apply` and `process`
-are a follow-up, once this API has seen some use. And the SDLS Extended Procedures of CCSDS 355.1:
-key management and over-the-air rekeying are a separate standard.
+**Not here yet.** The SDLS Extended Procedures of CCSDS 355.1: key management
+and over-the-air rekeying are a separate standard.
 
 **Left to you.** Key storage and distribution. An SA takes a 32-byte key and
 does not care where it came from.
@@ -153,6 +151,12 @@ Every call advances the IV counter. It will never hand out the same IV twice
 for one key, when the counter space runs out it returns `ErrIVExhausted`
 rather than wrapping. Reusing an IV under one GCM key is catastrophic, so this
 is a refusal, not a warning.
+
+The counters live in the SA, so they are gone when the process exits. Save
+`IVCounter()` and `SeqCounter()` before shutdown, and restore them with
+`SetIVCounter` and `SetSeqCounter` before the next frame. A sender that starts
+again from one reuses every IV it already sent, and a receiver that kept
+running drops its frames as replays.
 
 ## Receiving
 
@@ -299,6 +303,7 @@ All errors are exported package-level variables, suitable for use with `errors.I
 | `ErrInvalidFieldLengths` | Field lengths do not describe a usable header or trailer |
 | `ErrHeaderTooLong` | Security header is past the maximum of 64 octets |
 | `ErrInvalidIVCounter` | IV counter length does not match `FieldLengths.IV` |
+| `ErrInvalidSeqCounter` | Sequence counter length does not match `FieldLengths.SeqNum` |
 | `ErrMaskTooShort` | Authentication bit mask is shorter than the data it must cover |
 | `ErrUnknownSPI` | No security association is registered for that SPI |
 | `ErrSAChannelMismatch` | The security association is not bound to this channel |
