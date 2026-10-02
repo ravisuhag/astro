@@ -11,22 +11,6 @@ var (
 	// expected start sequence.
 	ErrStartSequenceMismatch = errors.New("CLTU start sequence mismatch")
 
-	// ErrTailSequenceMismatch indicates the CLTU does not end with the
-	// expected tail sequence.
-	//
-	// Deprecated: UnwrapCLTU now terminates on the tail sequence or on the
-	// first codeblock that fails to decode, per CCSDS 231.0-B-4, so an
-	// exact tail match is no longer required and this error is not returned.
-	ErrTailSequenceMismatch = errors.New("CLTU tail sequence mismatch")
-
-	// ErrInvalidCLTULength indicates the CLTU body length (excluding start
-	// and tail sequences) is not a multiple of the codeblock size (8 bytes).
-	//
-	// Deprecated: UnwrapCLTU now tolerates trailing octets after the last
-	// decodable codeblock, per CCSDS 231.0-B-4, and no longer returns this
-	// error.
-	ErrInvalidCLTULength = errors.New("CLTU body length is not a multiple of codeblock size")
-
 	// ErrUncorrectable indicates that a codeblock contains more errors
 	// than the BCH code can correct (more than 1 bit error).
 	ErrUncorrectable = errors.New("uncorrectable error in codeblock: exceeds BCH correction capability")

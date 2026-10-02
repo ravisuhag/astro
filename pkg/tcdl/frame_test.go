@@ -119,7 +119,7 @@ func TestTCFrame_NewAndEncode(t *testing.T) {
 // TestTCFrame_EncodeRefreshesFrameLengthAfterMutation reproduces B2:
 // DataField is exported, so a caller can grow or shrink it after
 // construction. Encode must recompute Header.FrameLength from what is
-// actually there, not reuse the value NewTCTransferFrame set once, or the
+// actually there, not reuse the value NewTransferFrame set once, or the
 // receiver reads the CRC from the wrong offset and rejects the frame.
 func TestTCFrame_EncodeRefreshesFrameLengthAfterMutation(t *testing.T) {
 	frame, err := tcdl.NewTransferFrame(42, 5, []byte("short"))
@@ -261,7 +261,7 @@ func TestTCFrame_DecodeWithSegmentHeaderRoundTrip(t *testing.T) {
 }
 
 func TestTCFrame_DecodeWithoutSegmentHeader(t *testing.T) {
-	// Ensure the original DecodeTCTransferFrame still works as before.
+	// Ensure the original DecodeTransferFrame still works as before.
 	data := []byte("test")
 	frame, _ := tcdl.NewTransferFrame(42, 5, data)
 	encoded, _ := frame.Encode()

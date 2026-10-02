@@ -380,7 +380,7 @@ func TestFrameEncoding(t *testing.T) {
 	// right. The refusal is asserted by TestNewTMTransferFrameRejectsAnOutOfRangeSCID.
 	frame, err := tmdl.NewTransferFrame(261, 3, data, nil, nil)
 	if err != nil {
-		t.Fatalf("NewTMTransferFrame failed: %v", err)
+		t.Fatalf("NewTransferFrame failed: %v", err)
 	}
 	encodedFrame, err := frame.Encode()
 	if err != nil {
@@ -870,7 +870,7 @@ func TestTMFrame_EncodeRecomputesCRCAfterMutation(t *testing.T) {
 // which already protects it. Clause 5.6.1c then requires the choice to hold for the
 // whole physical channel.
 //
-// Before this, Encode always appended the field and DecodeTMTransferFrame
+// Before this, Encode always appended the field and DecodeTransferFrame
 // always demanded it, so a Reed-Solomon mission that omitted it could not use
 // the package at all.
 func TestFECFOptionalUnderReedSolomon(t *testing.T) {
@@ -1021,7 +1021,7 @@ func TestDecodeLenientFHPWithSyncFlag(t *testing.T) {
 // spacecraft than the caller named, with nothing on the wire to show it.
 func TestNewTMTransferFrameRejectsAnOutOfRangeSCID(t *testing.T) {
 	if _, err := tmdl.NewTransferFrame(1285, 3, []byte("x"), nil, nil); err == nil {
-		t.Error("NewTMTransferFrame accepted a spacecraft identifier above the 10-bit maximum")
+		t.Error("NewTransferFrame accepted a spacecraft identifier above the 10-bit maximum")
 	}
 }
 
@@ -1029,6 +1029,6 @@ func TestNewTMTransferFrameRejectsAnOutOfRangeSCID(t *testing.T) {
 // 3-bit virtual channel identifier.
 func TestNewTMTransferFrameRejectsAnOutOfRangeVCID(t *testing.T) {
 	if _, err := tmdl.NewTransferFrame(261, 8, []byte("x"), nil, nil); err == nil {
-		t.Error("NewTMTransferFrame accepted a virtual channel identifier above the 3-bit maximum")
+		t.Error("NewTransferFrame accepted a virtual channel identifier above the 3-bit maximum")
 	}
 }

@@ -277,7 +277,7 @@ func TestRCFLoopbackDeliversAFrame(t *testing.T) {
 
 	frame, err := tmdl.NewTransferFrame(0x2A, 1, bytes.Repeat([]byte{0x55}, 80), nil, nil)
 	if err != nil {
-		t.Fatalf("NewTMTransferFrame() = %v", err)
+		t.Fatalf("NewTransferFrame() = %v", err)
 	}
 	frameBytes, err := frame.Encode()
 	if err != nil {

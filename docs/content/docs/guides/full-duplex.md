@@ -158,7 +158,7 @@ One frame carried both. The telemetry packet is what the pass was for; the CLCW 
 On the ground, getting it out is two steps:
 
 ```go
-frame, err := tmdl.DecodeTMTransferFrameWithConfig(frameBytes, downlinkConfig)
+frame, err := tmdl.DecodeTransferFrameWithConfig(frameBytes, downlinkConfig)
 
 var clcw cop.CLCW
 if err := clcw.Decode(frame.OperationalControl); err != nil {
@@ -167,7 +167,7 @@ if err := clcw.Decode(frame.OperationalControl); err != nil {
 l.fop.ProcessCLCW(&clcw)
 ```
 
-`DecodeTMTransferFrameWithConfig` rather than plain `DecodeTMTransferFrame`. The plain one does not know the channel has an OCF, so it reads those four octets as data. Nothing errors; you just get a frame whose payload has four extra octets on the end and an empty `OperationalControl`.
+`DecodeTransferFrameWithConfig` rather than plain `DecodeTransferFrame`. The plain one does not know the channel has an OCF, so it reads those four octets as data. Nothing errors; you just get a frame whose payload has four extra octets on the end and an empty `OperationalControl`.
 
 ## Round two
 
@@ -209,7 +209,7 @@ A FOP with `T1Initial` at its default of zero has the timer disabled. Combine th
 
 **The COP-1 windows must match.** FOP-1's `windowWidth` and FARM-1's are the same number in the standard, and they are set separately here. A mismatch produces frames the ground thinks are in the window and the spacecraft puts into lockout.
 
-**Use `DecodeTMTransferFrameWithConfig` on an OCF channel.** See above.
+**Use `DecodeTransferFrameWithConfig` on an OCF channel.** See above.
 
 **Set V(R) will not clear a lockout.** Only Unlock does. If a CLCW reports `Lockout: true`, send an Unlock BC frame first, read V(R) from the next CLCW, then set V(S) to match. Doing it in the other order looks like it should work.
 

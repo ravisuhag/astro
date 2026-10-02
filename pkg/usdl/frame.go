@@ -674,20 +674,6 @@ func (f *TransferFrame) Encode() ([]byte, error) {
 	return append(buf, f.FECF...), nil
 }
 
-// DecodeTransferFrame parses a byte slice into a USLP Transfer Frame.
-//
-// Deprecated: use DecodeTransferFrameWithConfig, which is the name every
-// data-link package now uses. This forwarder will be removed in v1.0.
-func DecodeTransferFrame(data []byte, fecSize int, insertZoneLen int) (*TransferFrame, error) {
-	if fecSize != 0 && fecSize != FECSize16 {
-		return nil, ErrInvalidFECSize
-	}
-	return DecodeTransferFrameWithConfig(data, ChannelConfig{
-		HasFECF:       fecSize == FECSize16,
-		InsertZoneLen: insertZoneLen,
-	})
-}
-
 // DecodeTransferFrameWithConfig parses a byte slice into a USLP Transfer Frame.
 //
 // config.HasFECF selects the managed FECF presence for the physical channel

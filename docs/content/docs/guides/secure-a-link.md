@@ -25,7 +25,7 @@ frame header ...  │ Security Header │ ciphertext │ MAC (trailer) │
                   └──────────────────────────────────────────────┘
 ```
 
-So the shape of the work is: build the protected data field with `pkg/sdls`, then hand it to `tmdl.NewTMTransferFrame` as ordinary octets.
+So the shape of the work is: build the protected data field with `pkg/sdls`, then hand it to `tmdl.NewTransferFrame` as ordinary octets.
 
 ## A Security Association is the agreement
 
@@ -115,7 +115,7 @@ header := tmdl.PrimaryHeader{
 headerBytes, err := header.Encode()
 
 protected, err := transmit.ApplySecurity(headerBytes, telemetry)
-frame, err := tmdl.NewTMTransferFrame(spacecraftID, vcidSecure, protected, nil, nil)
+frame, err := tmdl.NewTransferFrame(spacecraftID, vcidSecure, protected, nil, nil)
 ```
 
 It works because the frame length is fixed for the physical channel, so the header is knowable before its contents exist.

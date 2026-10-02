@@ -85,7 +85,7 @@ import (
 )
 
 // Spacecraft 42, virtual channel 0.
-frame, err := tmdl.NewTMTransferFrame(42, 0, raw, nil, nil)
+frame, err := tmdl.NewTransferFrame(42, 0, raw, nil, nil)
 if err != nil {
     log.Fatal(err)
 }

@@ -84,7 +84,7 @@ The 5-bit UPID names what is inside. Constants are in the package. The common on
 
 **Octet streams need a variable-length channel.** Clause 4.2.4.1. Calling MAPO on a fixed-length channel gives `ErrOctetStreamFixedLength`.
 
-**The FECF is 16 bits or nothing.** USLP has no 32-bit variant, unlike some other CCSDS links. `ErrInvalidFECSize` if you ask for one.
+**The FECF is 16 bits or nothing.** USLP has no 32-bit variant, unlike some other CCSDS links. `ChannelConfig.HasFECF` is a yes or no, so there is no size to get wrong.
 
 **Two MAPs on one VC both get their traffic.** The virtual channel keeps a per-MAP receive demultiplexer, so a service pulling its own MAP's frames does not consume and discard another MAP's. That is a real bug in naive implementations.
 
@@ -111,7 +111,7 @@ fmt.Println(back.Header.SCID, back.Header.VCID, back.Header.MAPID, back.Header.V
 // 100 1 0 42
 ```
 
-USLP signals OCF presence with a header flag, so the decoder works that one out for itself and the config only carries FECF presence and insert zone length. `DecodeTransferFrame(data, fecSize, insertZoneLen)` still works as a deprecated positional form of the same call.
+USLP signals OCF presence with a header flag, so the decoder works that one out for itself and the config only carries FECF presence and insert zone length.
 
 ## Construction rules
 
@@ -250,7 +250,6 @@ det := usdl.NewFrameGapDetector(config.VCFCountLen)
 | `ErrInvalidVCFCount` | Exceeds the configured field width |
 | `ErrInvalidConstructionRule` | Outside 0-7 |
 | `ErrInvalidPointer` | Exceeds the data zone length |
-| `ErrInvalidFECSize` | Not 0 or 2, USLP has only the 16-bit FECF |
 | `ErrTruncatedFrameFields` | Truncated frame asked for an insert zone, OCF, FECF, or pointer |
 | `ErrTruncatedFrameTooShort` | Data zone under 1 octet |
 | `ErrTruncatedFrameTooLong` | Frame over 32 octets |

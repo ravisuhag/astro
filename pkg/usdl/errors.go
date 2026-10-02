@@ -43,10 +43,6 @@ var (
 	// cannot have (insert zone, OCF, FECF, or a pointer-carrying rule).
 	ErrTruncatedFrameFields = errors.New("truncated frame cannot carry insert zone, OCF, FECF, or a pointer")
 
-	// ErrInvalidFECSize indicates the FECF size is not 0 or 2 octets. The
-	// USLP FECF, when present, is always the 16-bit CRC of clause 4.1.6.2.2.
-	ErrInvalidFECSize = errors.New("invalid FECF size: must be 0 or 2 octets (USLP has only the 16-bit FECF)")
-
 	// ErrTruncatedFrameTooShort indicates a truncated frame with an empty
 	// TFDZ (annex D1.3.2 note 2: minimum 6 octets in total).
 	ErrTruncatedFrameTooShort = errors.New("truncated frame TFDZ must carry at least one octet (minimum frame length 6)")

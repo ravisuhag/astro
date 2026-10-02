@@ -250,14 +250,6 @@ func WithSequenceNumber(n uint8) FrameOption {
 	}
 }
 
-// NewTCTransferFrame creates a new TC Transfer Frame.
-//
-// Deprecated: use NewTransferFrame, which is the name every data-link
-// package now uses. This forwarder will be removed in v1.0.
-func NewTCTransferFrame(scid uint16, vcid uint8, data []byte, opts ...FrameOption) (*TCTransferFrame, error) {
-	return NewTransferFrame(scid, vcid, data, opts...)
-}
-
 // NewTransferFrame creates a new TC Transfer Frame.
 // The frame length is automatically computed. CRC is auto-calculated.
 // A VCID wider than the 6-bit field is stored as given and refused on
@@ -365,14 +357,6 @@ func (tf *TCTransferFrame) EncodeWithoutFEC() ([]byte, error) {
 
 	frameData = append(frameData, tf.DataField...)
 	return frameData, nil
-}
-
-// DecodeTCTransferFrame parses a byte slice into a TC Transfer Frame.
-//
-// Deprecated: use DecodeTransferFrame, which is the name every data-link
-// package now uses. This forwarder will be removed in v1.0.
-func DecodeTCTransferFrame(data []byte) (*TCTransferFrame, error) {
-	return DecodeTransferFrame(data)
 }
 
 // DecodeTransferFrame parses a byte slice into a TC Transfer Frame.

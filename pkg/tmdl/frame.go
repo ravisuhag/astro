@@ -253,14 +253,6 @@ type TMTransferFrame struct {
 	FrameErrorControl  uint16 // 16-bit CRC (Error Control)
 }
 
-// NewTMTransferFrame initializes a new TM Transfer Frame.
-//
-// Deprecated: use NewTransferFrame, which is the name every data-link
-// package now uses. This forwarder will be removed in v1.0.
-func NewTMTransferFrame(scid uint16, vcid uint8, data []byte, secondaryHeaderData []byte, ocf []byte) (*TMTransferFrame, error) {
-	return NewTransferFrame(scid, vcid, data, secondaryHeaderData, ocf)
-}
-
 // NewTransferFrame initializes a new TM Transfer Frame.
 // A VCID wider than the 3-bit field is stored as given and refused on
 // encode rather than masked: masking would route the frame to a different
@@ -515,15 +507,6 @@ func IsIdleFrame(frame *TMTransferFrame) bool {
 	return !frame.Header.SyncFlag && frame.Header.FirstHeaderPtr == FHPOnlyIdleData
 }
 
-// DecodeTMTransferFrame parses a byte slice into a TM Transfer Frame, treating
-// the last two octets as a Frame Error Control Field and verifying them.
-//
-// Deprecated: use DecodeTransferFrame, which is the name every data-link
-// package now uses. This forwarder will be removed in v1.0.
-func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
-	return DecodeTransferFrame(data)
-}
-
 // DecodeTransferFrame parses a byte slice into a TM Transfer Frame, treating
 // the last two octets as a Frame Error Control Field and verifying them.
 //
@@ -531,15 +514,6 @@ func DecodeTMTransferFrame(data []byte) (*TMTransferFrame, error) {
 // field, which clause 5.6.1b permits under Reed-Solomon coding.
 func DecodeTransferFrame(data []byte) (*TMTransferFrame, error) {
 	return DecodeTransferFrameWithConfig(data, ChannelConfig{HasFEC: true})
-}
-
-// DecodeTMTransferFrameWithConfig parses a frame, verifying the Frame Error
-// Control Field only when the channel carries one.
-//
-// Deprecated: use DecodeTransferFrameWithConfig, which is the name every
-// data-link package now uses. This forwarder will be removed in v1.0.
-func DecodeTMTransferFrameWithConfig(data []byte, config ChannelConfig) (*TMTransferFrame, error) {
-	return DecodeTransferFrameWithConfig(data, config)
 }
 
 // DecodeTransferFrameWithConfig parses a frame, verifying the Frame Error

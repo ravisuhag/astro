@@ -1,8 +1,6 @@
 package usdl_test
 
 import (
-	"encoding/hex"
-	"errors"
 	"testing"
 
 	"github.com/ravisuhag/astro/internal/vectors"
@@ -162,38 +160,4 @@ func TestFrameVectorsFromCorpus(t *testing.T) {
 			}, nil
 		},
 	})
-}
-
-// TestDecodeRejectsAnInvalidFECSize is deliberately not a vector. The FECF
-// is either absent or 16 bits (clause 4.1.6.2.2), so any other managed
-// size is a caller mistake rather than a wire condition — no octet string
-// expresses it. It checks this API's parameter contract, which is a
-// property of this package rather than of the standard.
-func TestDecodeRejectsAnInvalidFECSize(t *testing.T) {
-	frame, err := vectors.Load("usdl/frame.json")
-	if err != nil {
-		t.Fatalf("loading vectors: %v", err)
-	}
-	// Reuse a known-good frame so only the size argument is wrong.
-	var input []byte
-	for _, v := range frame.Decode {
-		if v.Name == "non-truncated-inverse" {
-			var err error
-			input, err = hexDecode(v.Input)
-			if err != nil {
-				t.Fatal(err)
-			}
-			break
-		}
-	}
-	if input == nil {
-		t.Fatal("non-truncated-inverse vector not found")
-	}
-	if _, err := usdl.DecodeTransferFrame(input, 3, 0); !errors.Is(err, usdl.ErrInvalidFECSize) {
-		t.Errorf("DecodeTransferFrame with fecSize 3: got %v, want ErrInvalidFECSize", err)
-	}
-}
-
-func hexDecode(s string) ([]byte, error) {
-	return hex.DecodeString(s)
 }

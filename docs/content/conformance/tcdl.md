@@ -57,7 +57,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 | TC-1 | MAP Packet SDU | 3.2.2 | M | Yes | `MAPPacketService` accepts packet data via `Send()`, segments across multiple frames when data exceeds capacity, pushes frames into `VirtualChannel`, and reassembles via `Receive()`. |
 | TC-2 | MAP Access SDU | 3.2.3 | M | Yes | `MAPAccessService` accepts raw data via `Send()`, wraps in unsegmented frame with segment header, delivers via `Receive()`. |
 | TC-3 | VC Frame SDU | 3.2.4 | M | Yes | `VCFrameService` accepts pre-encoded frame bytes via `Send()`, decodes and buffers, delivers encoded bytes via `Receive()`. |
-| TC-4 | TC Transfer Frame | 3.2.5 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTCTransferFrame()` round-trip support. Composed of Primary Header, optional Segment Header, Data Field, and Frame Error Control. |
+| TC-4 | TC Transfer Frame | 3.2.5 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTransferFrame()` round-trip support. Composed of Primary Header, optional Segment Header, Data Field, and Frame Error Control. |
 
 ### Table A-2: Service Parameters
 
@@ -93,12 +93,12 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 
 | Item | Description | Reference | Status | Support | Notes |
 |---|---|---|---|---|---|
-| TC-19 | TC Transfer Frame | 4.1.1 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTCTransferFrame()` round-trip. Variable length up to 1024 bytes. |
+| TC-19 | TC Transfer Frame | 4.1.1 | M | Yes | `TCTransferFrame` struct with `Encode()` / `DecodeTransferFrame()` round-trip. Variable length up to 1024 bytes. |
 | TC-20 | Transfer Frame Primary Header | 4.1.2 | M | Yes | `PrimaryHeader`, 5 octets (40 bits). All fields per CCSDS: Transfer Frame Version Number (2 bits, enforced as `00`), Bypass Flag (1 bit), Control Command Flag (1 bit), Reserved (2 bits, enforced as `00`), Spacecraft ID (10 bits), Virtual Channel ID (6 bits), Frame Length (10 bits, total-1), Frame Sequence Number (8 bits). Big-endian encoding. The invalid type Bypass=0 + Control Command=1 is rejected (`ErrInvalidFrameType`, 4.1.2.3); Type-B frames are forced to N(S)=0 on construction (4.1.2.7). Octets beyond the declared frame length are ignored on decode (CLTU fill, 4.1.2.7.2). |
 | TC-20a | BC Frame Contents (Unlock, Set V(R)) | 4.1.3.3 | M | Yes | `BuildUnlockCommand()` (`0x00`), `BuildSetVRCommand(vr)` (`0x82 0x00 <V(R)>`), `ParseControlCommand()`, plus frame-level builders `NewUnlockFrame()` / `NewSetVRFrame()` producing Type-BC frames (Bypass=1, CC=1, N(S)=0, no segment header). Malformed contents return `ErrInvalidControlCommand`. |
 | TC-21 | Segment Header | 4.1.4.1 | M | Yes | `SegmentHeader`, 1 octet: Sequence Flags (2 bits), MAP ID (6 bits). Present when MAP sublayer is used. `Encode()` / `Decode()` / `Validate()` methods. Constants: `SegUnsegmented`, `SegFirst`, `SegContinuation`, `SegLast`. |
 | TC-22 | Transfer Frame Data Field | 4.1.4.2 | M | Yes | `TCTransferFrame.DataField`, variable-length telecommand payload. |
-| TC-23 | Frame Error Control Field | 4.1.5 | M | Yes | `TCTransferFrame.FrameErrorControl`, 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on construction via `NewTCTransferFrame()`. Verified on decode; CRC mismatch returns `ErrCRCMismatch`. |
+| TC-23 | Frame Error Control Field | 4.1.5 | M | Yes | `TCTransferFrame.FrameErrorControl`, 16-bit CRC-16-CCITT (polynomial 0x1021, init 0xFFFF). Auto-computed on construction via `NewTransferFrame()`. Verified on decode; CRC mismatch returns `ErrCRCMismatch`. |
 
 ### Table A-5: Protocol Procedures
 
@@ -106,13 +106,13 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 |---|---|---|---|---|---|
 | TC-24 | MAP Packet Processing Function | 4.2.2 | M | Yes | `MAPPacketService.Send()` segments packets into frames using Segment Header flags. Small packets produce unsegmented frames. Large packets use First/Continuation/Last segmentation. Frame Sequence Number assigned via `FrameCounter`. |
 | TC-25 | MAP Access Processing Function | 4.2.3 | M | Yes | `MAPAccessService.Send()` wraps raw data in unsegmented frame with MAP sublayer. |
-| TC-26 | VC Generation Function | 4.2.4 | M | Yes | `NewTCTransferFrame()` generates frames with SCID, VCID, data, optional Segment Header. CRC auto-computed. Frame Sequence Number configurable via `WithSequenceNumber()`. |
+| TC-26 | VC Generation Function | 4.2.4 | M | Yes | `NewTransferFrame()` generates frames with SCID, VCID, data, optional Segment Header. CRC auto-computed. Frame Sequence Number configurable via `WithSequenceNumber()`. |
 | TC-27 | VC Multiplexing Function | 4.2.5 | M | Yes | `VirtualChannelMultiplexer` schedules frames from multiple Virtual Channels using weighted round-robin. Integrated into `MasterChannel`. |
 | TC-28 | MC Generation Function | 4.2.6 | M | Yes | `MasterChannel.AddFrame()` routes inbound frames to Virtual Channels by VCID with SCID validation. |
 | TC-29 | MC Multiplexing Function | 4.2.7 | M | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing across registered `MasterChannel`s via `GetNextFrame()`. |
 | TC-30 | MAP Packet Extraction Function | 4.3.2 | M | Yes | `MAPPacketService.Receive()` reassembles segmented packets and delimits multiple packets per frame with the `PacketSizer` (invoked on every delivery). Reports segment-sequence gaps via `ErrIncompleteSegment` instead of silently dropping them. |
 | TC-31 | MAP Access Extraction Function | 4.3.3 | M | Yes | `MAPAccessService.Receive()` returns data field of next frame. |
-| TC-32 | VC Reception Function | 4.3.4 | M | Yes | `DecodeTCTransferFrame()` parses raw octets into `TCTransferFrame`, verifying CRC and extracting all fields. `MasterChannel.AddFrame()` routes received frames to the appropriate `VirtualChannel` by VCID. |
+| TC-32 | VC Reception Function | 4.3.4 | M | Yes | `DecodeTransferFrame()` parses raw octets into `TCTransferFrame`, verifying CRC and extracting all fields. `MasterChannel.AddFrame()` routes received frames to the appropriate `VirtualChannel` by VCID. |
 | TC-33 | VC Demultiplexing Function | 4.3.5 | M | Yes | `MasterChannel.AddFrame()` demultiplexes inbound frames to Virtual Channels by VCID. |
 | TC-34 | MC Reception Function | 4.3.6 | M | Yes | `MasterChannel.GetNextFrame()` pulls next frame from the multiplexer. |
 | TC-35 | MC Demultiplexing Function | 4.3.7 | M | Yes | `PhysicalChannel.AddFrame()` demultiplexes inbound frames to the correct `MasterChannel` by SCID. |
@@ -123,7 +123,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 |---|---|---|---|---|---|---|
 | | **Managed Parameters for a Physical Channel** | | | | | |
 | TC-36 | Physical Channel Name | Table 5-1 | M | Character String | Yes | `PhysicalChannel.Name`, configured at construction via `NewPhysicalChannel(name)`. |
-| TC-37 | Maximum Frame Length (octets) | Table 5-1 | M | Integer (up to 1024) | Yes | `MaxFrameLength` constant = 1024. Enforced in `NewTCTransferFrame()` via `ErrDataTooLarge`. |
+| TC-37 | Maximum Frame Length (octets) | Table 5-1 | M | Integer (up to 1024) | Yes | `MaxFrameLength` constant = 1024. Enforced in `NewTransferFrame()` via `ErrDataTooLarge`. |
 | TC-38 | Transfer Frame Version Number (TFVN) | Table 5-1 | M | '00' binary | Yes | `PrimaryHeader.VersionNumber`, enforced as `0` in `Validate()`. |
 | TC-39 | Valid Spacecraft IDs | Table 5-1 | M | Integers | Yes | `PrimaryHeader.SpacecraftID`, 10 bits (0-1023). Validated in `Validate()`. |
 | TC-40 | MC Multiplexing Scheme | Table 5-1 | M | Mission Specific | Yes | `PhysicalChannel` implements weighted round-robin MC multiplexing. |
@@ -133,7 +133,7 @@ NOTE, Non-supported optional capabilities are identified in section A2.2 with ex
 | TC-43 | Valid VCIDs | Table 5-2 | M | Selectable set of integers (0-63) | Yes | `PrimaryHeader.VirtualChannelID`, 6 bits (0-63). `MasterChannel.channels` maps registered VCIDs. |
 | TC-44 | VC Multiplexing Scheme | Table 5-2 | M | Mission Specific | Yes | `VirtualChannelMultiplexer` implements weighted round-robin scheduling. |
 | | **Managed Parameters for a Virtual Channel** | | | | | |
-| TC-45 | SCID | Table 5-3 | M | Integer | Yes | `PrimaryHeader.SpacecraftID`. Set via `NewTCTransferFrame()`. |
+| TC-45 | SCID | Table 5-3 | M | Integer | Yes | `PrimaryHeader.SpacecraftID`. Set via `NewTransferFrame()`. |
 | TC-46 | VCID | Table 5-3 | M | 0 to 63 | Yes | `PrimaryHeader.VirtualChannelID`. `VirtualChannel.ID` configured at construction. |
 | TC-47 | Presence of Segment Header | Table 5-3 | M | Present ('1') / Absent ('0') | Yes | Controlled via `WithSegmentHeader()` option. `SegmentHeader` struct with encode/decode. |
 | TC-48 | Service Type | Table 5-3 | M | MAP Packet, MAP Access, or VC Frame | Yes | Three service implementations: `MAPPacketService`, `MAPAccessService`, `VCFrameService`. Registered via `TCServiceManager.RegisterVirtualService()`. |
@@ -184,7 +184,7 @@ Key implementations:
 | VC Frame Service | TC-11-12, TC-17-18 | `VCFrameService` pass-through via `VirtualChannel`. |
 | Protocol Data Unit | TC-19-23 | `PrimaryHeader` (40-bit) with frame-type validation and Type-B N(S)=0, BC contents (TC-20a: Unlock / Set V(R)), `SegmentHeader` (8-bit), CRC-16-CCITT. |
 | Packet Processing | TC-24-25, TC-30-31 | MAP Packet segmentation/reassembly, MAP Access raw delivery. |
-| VC Functions | TC-26-27, TC-32-33 | `NewTCTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
+| VC Functions | TC-26-27, TC-32-33 | `NewTransferFrame()`, `VirtualChannelMultiplexer` (weighted round-robin), `MasterChannel` demux by VCID. |
 | MC Functions | TC-28-29, TC-34-35 | `MasterChannel.AddFrame()` routes by VCID. `PhysicalChannel` MC mux/demux by SCID. |
 | Management Params | TC-36-48 | Physical channel name, max frame length 1024, TFVN enforced, SCID/VCID validated, segment header support, all service types. |
 

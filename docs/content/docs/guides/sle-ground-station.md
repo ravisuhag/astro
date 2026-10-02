@@ -170,7 +170,7 @@ The `Data` is the frame content, so it comes apart the same way it would at the 
 
 ```go
 recovered, err := tmsc.UnwrapCADU(frame.Data, tmsc.DefaultASM(), true)
-decoded, err := tmdl.DecodeTMTransferFrame(recovered)
+decoded, err := tmdl.DecodeTransferFrame(recovered)
 ```
 
 ## Then close it properly

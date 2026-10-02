@@ -267,8 +267,6 @@ All errors are exported package-level variables, suitable for use with `errors.I
 |---|---|
 | `ErrDataTooShort` | CLTU too short to contain start sequence, codeblock, and tail |
 | `ErrStartSequenceMismatch` | CLTU does not start with the expected start sequence |
-| `ErrTailSequenceMismatch` | CLTU does not end with the expected tail sequence |
-| `ErrInvalidCLTULength` | CLTU body is not a multiple of the codeblock size (8 bytes) |
 | `ErrUncorrectable` | Codeblock has more than 1 bit error (exceeds BCH capability) |
 | `ErrEmptyData` | Empty data provided for encoding |
 
