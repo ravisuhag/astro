@@ -1,5 +1,5 @@
 {
   "framework": null,
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build"
+  "buildCommand": "npx @raystack/chronicle@0.16.3 build --preset=vercel",
+  "installCommand": "echo 'skip'"
 }
